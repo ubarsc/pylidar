@@ -1,0 +1,4 @@
+
+"""
+Install script for PyLidar
+"""
