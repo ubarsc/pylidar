@@ -86,18 +86,25 @@ class SPDV3File(generic.LiDARFile):
     @staticmethod
     def convertIdxCount(start_idx_array, count_array):
         """
+        Convert SPD's default regular spatial index of 
         Needs to be numpy magic??
         """
-        out = numpy.empty(count_array.sum(), numpy.int)
-        inidx = 0
-        outidx = 0
-        while indx < start_idx_array.shape[0]:
-            cnt = count_array[indx]
-            startidx = start_idx_array[inidx]
-            for i in range(cnt):
-                out[outidx] = startidx + x
-                outidx += 1
-            indx += 1
+        idx = start_idx_array.flatten()
+        cnt = count_array.flatten()
+        
+        numBins = len(cnt)
+        numPulses = cnt.sum()
+        out = numpy.empty(numPulses, dtype=numpy.int64)
+        nextPulse = 0
+        for i in range(numBins):
+            offsetsForBin = numpy.arange(idx[i], idx[i] + cnt[i])
+            out[nextPulse:nestPulse+cnt[i]] = offsetsForBin
+            nextPulse += cnt[i]
+        # I believe that this calculation we have just done is also the perfect
+        # place to assemble some sort of array showing which bin each pulse belongs with,
+        # so it might be that we should return two things from this function. I don't yet 
+        # know what such an array would look like, though....
+        return out
     
     def readPointsForExtent(self, extent):
         # returned cached if possible
