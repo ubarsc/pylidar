@@ -28,6 +28,15 @@ class SPDV3File(generic.LiDARFile):
             # always seems to through an OSError
             raise LiDARFormatNotUnderstood(str(err))
             
+        # check that it is indeed the right version
+        if not 'VERSION_MAJOR_SPD' in self.fileHandle['HEADER'].keys():
+            msg = "File appears not to be SPD"
+            raise LiDARFormatNotUnderstood(msg)
+        elif self.fileHandle['HEADER']['VERSION_MAJOR_SPD'] != 2:
+            msg = "File seems to be wrong version for this driver"
+            raise LiDARFormatNotUnderstood(msg)
+
+        # read in the bits I need            
         if mode == generic.READ:
             self.si_cnt = self.fileHandle['INDEX']['PLS_PER_BIN'][...]
             self.si_idx = self.fileHandle['INDEX']['BIN_OFFSETS'][...]
@@ -121,6 +130,15 @@ class SPDV3File(generic.LiDARFile):
         tlybin = int((extent.maxy - self.si_maxy) / self.si_binSize)
         brxbin = int(numpy.ceil((extent.maxx - self.si_minx) / self.si_binSize))
         brybin = int(numpy.ceil((extent.miny - self.si_miny) / self.si_binSize))
+        
+        if tlxbin < 0:
+            tlxbin = 0
+        if tlybin < 0:
+            tlybin = 0
+        if brxbin > self.si_cnt.shape[0]:
+            brxbin = self.si_cnt.shape[0]
+        if brybin > self.si_cnt.shape[1]:
+            brybin = self.si_cnt.shape[1]
         
         cnt_subset = self.si_cnt[tlxbin:tlybin+1, brxbin:brybin+1]
         idx_subset = self.si_idx[tlxbin:tlybin+1, brxbin:brybin+1]

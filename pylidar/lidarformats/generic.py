@@ -20,22 +20,22 @@ class Extent(object):
     """
     Class that defines an extent of an area to read or write
     """
-    def __init__(self, minx=None, maxx=None, miny=None, maxy=None, 
+    def __init__(self, xMin=None, xMax=None, yMin=None, yMax=None, 
                     binsize=None):
-        self.minx = minx
-        self.maxx = max
-        self.miny = miny
-        self.maxy = maxy
+        self.xMin = xMin
+        self.xmax = xMax
+        self.yMin = yMin
+        self.yMax = yMax
         self.binsize = binsize
         
     def __eq__(self, other):
-        return (self.minx == other.minx and self.maxx == other.maxx and
-            self.miny == other.miny and self.maxy == other.maxy and
+        return (self.xMin == other.xMin and self.xMax == other.xMax and
+            self.yMin == other.yMin and self.yMax == other.yMax and
             self.binSize == other.binSize)
             
     def __ne__(self, other):
-        return (self.minx != other.minx or self.maxx != other.maxx or
-            self.miny != other.miny or self.maxy != other.maxy or
+        return (self.xMin != other.xMin or self.xMax != other.xMax or
+            self.yMin != other.yMin or self.yMax != other.yMax or
             self.binSize != other.binSize)
         
 

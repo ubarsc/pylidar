@@ -12,9 +12,9 @@ class DataContainer(object):
     self.info = UserInfo()
 
 class LidarData(object):
-    def __init__(self, mode, fileObj):
+    def __init__(self, mode, driver):
         self.mode = mode
-        self.fileObj = fileObj
+        self.driver = driver
         self.extent = None
         
     def setExtent(self, extent):
@@ -22,12 +22,12 @@ class LidarData(object):
         
     def getPoints(self):
         "as a structured array"
-        points = fileObj.readPointsForExtent(self.extent)
+        points = driver.readPointsForExtent(self.extent)
         return points
         
     def getPulses(self):
         "as a structured array"
-        pulses = fileObj.readPulsesForExtent(self.extent)
+        pulses = driver.readPulsesForExtent(self.extent)
         return pulses
         
     def regridData(self, data):
@@ -35,11 +35,15 @@ class LidarData(object):
         
     def setPoints(self, pts):
         "as a structured array"
-        fileObj.writePointsForExtent(self.extent, points)
+        driver.writePointsForExtent(self.extent, points)
         
     def setPulses(self, pulses):
         "as a structured array"
-        fileObj.writePulsesForExtent(self.extent, pulses)
+        driver.writePulsesForExtent(self.extent, pulses)
+        
+    def close(self):
+        "close the driver"
+        self.driver.close()
 
 class ImageData(object):
     def __init__(self, mode):
