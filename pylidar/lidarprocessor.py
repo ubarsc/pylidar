@@ -4,11 +4,16 @@ Classes that are passed to the doProcessing function.
 And the doProcessing function itself
 """
 
+from rios import imageio
 from .lidarformats import generic
 
 READ = generic.READ
 UPDATE = generic.UPDATE
 CREATE = generic.CREATE
+
+INTERSECTION = imageio.INTERSECTION
+UNION = imageio.UNION
+BOUNDS_FROM_REFERENCE = imageio.BOUNDS_FROM_REFERENCE
 
 # inputs to the doProcessing
 
@@ -20,7 +25,11 @@ class OtherArgs(object):
     
 class Controls(objects):
     # stuff to come
-    pass
+    def __init__(self):
+        self.footprint = INTERSECTION
+        
+    def setFootprint(self, footprint):
+        self.footprint = footprint
     
 class LidarFile(object):
     pass
