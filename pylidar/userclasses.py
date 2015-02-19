@@ -9,7 +9,8 @@ class UserInfo(object):
 
 class DataContainer(object):
     "UserInfo object plus instances of LidarData and ImageData"
-    self.info = UserInfo()
+    def __init__(self):
+        self.info = UserInfo()
 
 class LidarData(object):
     def __init__(self, mode, driver):

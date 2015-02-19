@@ -7,7 +7,7 @@ READ = 0
 UPDATE = 1
 CREATE = 2
 
-class LiDARFileException(exception):
+class LiDARFileException(Exception):
     "Base class for LiDAR format reader/writers"
     
 class LiDARFormatNotUnderstood(LiDARFileException):

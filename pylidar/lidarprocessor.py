@@ -27,7 +27,7 @@ class DataFiles(object):
 class OtherArgs(object):
     pass
     
-class Controls(objects):
+class Controls(object):
     # stuff to come
     def __init__(self):
         self.footprint = INTERSECTION
