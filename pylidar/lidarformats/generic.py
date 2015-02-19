@@ -82,6 +82,7 @@ def getReaderForLiDARFile(fname, mode):
     """
     # try each subclass
     for cls in LiDARFile.__subclasses__():
+        print('trying', cls)
         try:
             # attempt to create it
             inst = cls(fname, mode)

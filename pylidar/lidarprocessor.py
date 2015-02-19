@@ -59,7 +59,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
 
     # First Open all the files
     gridList = []
-    for name in dataFiles.__dict__keys():
+    for name in dataFiles.__dict__.keys():
         inputFile = getattr(dataFiles, name)
         if isinstance(inputFile, LidarFile):
             driver = generic.getReaderForLiDARFile(inputFile.fname,
@@ -95,7 +95,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         # update the user classes with the new extent
         # we get the keys from the input rather than userContainer
         # since userContainer may have other things in it
-        for name in dataFiles.__dict__keys():
+        for name in dataFiles.__dict__.keys():
             userClass = getattr(userContainer, name)
             userClass.setExtent(currentExtent)
             
@@ -121,7 +121,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
 
 
     # close all the files
-    for name in dataFiles.__dict__keys():
+    for name in dataFiles.__dict__.keys():
         userClass = getattr(userContainer, name)
         userClass.close()
                 
