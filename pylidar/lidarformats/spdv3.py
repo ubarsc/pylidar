@@ -86,8 +86,10 @@ class SPDV3File(generic.LiDARFile):
     @staticmethod
     def convertIdxCount(start_idx_array, count_array):
         """
-        Convert SPD's default regular spatial index of 
-        Needs to be numpy magic??
+        Convert SPD's default regular spatial index of pulse offsets and pulse counts
+        per bin into a single array of pulse offsets for every pulse in the given
+        subset of the spatial index. 
+
         """
         idx = start_idx_array.flatten()
         cnt = count_array.flatten()
