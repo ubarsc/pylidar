@@ -21,12 +21,12 @@ class Extent(object):
     Class that defines an extent of an area to read or write
     """
     def __init__(self, xMin=None, xMax=None, yMin=None, yMax=None, 
-                    binsize=None):
+                    binSize=None):
         self.xMin = xMin
-        self.xmax = xMax
+        self.xMax = xMax
         self.yMin = yMin
         self.yMax = yMax
-        self.binsize = binsize
+        self.binSize = binSize
         
     def __eq__(self, other):
         return (self.xMin == other.xMin and self.xMax == other.xMax and
@@ -38,7 +38,10 @@ class Extent(object):
             self.yMin != other.yMin or self.yMax != other.yMax or
             self.binSize != other.binSize)
         
-
+    def __str__(self):
+        s = "xMin:%s,xMax:%s,yMin:%s,yMax:%s,binSize:%s" % (self.xMin, self.xMax,
+                      self.yMin, self.yMax, self.binSize)
+        return s
 
 class LiDARFile(object):
     """
@@ -48,30 +51,38 @@ class LiDARFile(object):
         pass
         
     def getPixelGrid(self):
-        pass
+        raise NotImplementedError()
+        
     def setPixelGrid(self, pixGrid):
-        pass
+        raise NotImplementedError()
         
     def readPointsForExtent(self, extent):
-        pass
+        raise NotImplementedError()
+        
     def readPulsesForExtent(self, extent):
-        pass
+        raise NotImplementedError()
+        
     def writePointsForExtent(self, extent, points):
-        pass
+        raise NotImplementedError()
+        
     def writePulsesForExtent(self, extent, pulses):
-        pass
+        raise NotImplementedError()
+        
     # see below for no spatial index
     def readPoints(self, n):
-        pass
+        raise NotImplementedError()
+        
     def readPulses(self, n):
-        pass
+        raise NotImplementedError()
+        
     def writePoints(self, points):
-        pass
+        raise NotImplementedError()
+        
     def writePulses(self, pulses):
-        pass
+        raise NotImplementedError()
         
     def close(self, headerInfo=None):
-        pass
+        raise NotImplementedError()
 
 
 def getReaderForLiDARFile(fname, mode):

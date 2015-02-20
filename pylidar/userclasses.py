@@ -23,12 +23,12 @@ class LidarData(object):
         
     def getPoints(self):
         "as a structured array"
-        points = driver.readPointsForExtent(self.extent)
+        points = self.driver.readPointsForExtent(self.extent)
         return points
         
     def getPulses(self):
         "as a structured array"
-        pulses = driver.readPulsesForExtent(self.extent)
+        pulses = self.driver.readPulsesForExtent(self.extent)
         return pulses
         
     def regridData(self, data):
@@ -36,11 +36,11 @@ class LidarData(object):
         
     def setPoints(self, pts):
         "as a structured array"
-        driver.writePointsForExtent(self.extent, points)
+        self.driver.writePointsForExtent(self.extent, points)
         
     def setPulses(self, pulses):
         "as a structured array"
-        driver.writePulsesForExtent(self.extent, pulses)
+        self.driver.writePulsesForExtent(self.extent, pulses)
         
     def close(self):
         "close the driver"

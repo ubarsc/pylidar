@@ -7,6 +7,7 @@ And the doProcessing function itself
 from rios import imageio
 from rios import pixelgrid
 from .lidarformats import generic
+from .lidarformats import spdv3
 from . import userclasses
 
 READ = generic.READ
@@ -42,6 +43,7 @@ class Controls(object):
     
 class LidarFile(object):
     def __init__(self, fname, mode):
+        # TODO: extra driver options passed as GDAL style list of strings??
         self.fname = fname
         self.mode = mode
     
@@ -90,8 +92,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
                         workingPixGrid.yMax, workingPixGrid.xRes)
                         
     # loop while we haven't fallen off the bottom of the pixelgrid region
-    while currentExtent.yMin < workingPixGrid.yMin:
-        
+    while currentExtent.yMax > workingPixGrid.yMin:
         # update the user classes with the new extent
         # we get the keys from the input rather than userContainer
         # since userContainer may have other things in it

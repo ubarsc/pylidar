@@ -4,7 +4,10 @@ import sys
 from pylidar import lidarprocessor
 
 def readFunc(data):
-    print(data)
+    pulses = data.input1.getPulses()
+    print('pulses', len(pulses))
+    points = data.input1.getPoints()
+    print('points', len(points))
     
 def testRead(infile):
     dataFiles = lidarprocessor.DataFiles()
