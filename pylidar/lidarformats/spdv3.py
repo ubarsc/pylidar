@@ -5,8 +5,33 @@ SPD V3
 import copy
 import numpy
 import h5py
+from numba import jit
 from rios import pixelgrid
 from . import generic
+
+@jit
+def convertIdxCount(start_idx_array, count_array, out):
+    """
+    Convert SPD's default regular spatial index of pulse offsets and pulse counts
+    per bin into a single array of pulse offsets for every pulse in the given
+    subset of the spatial index. 
+
+    Written to use numba - numpy version was very slow. Anyone any ideas
+    on how to do this quickly in normal numpy?
+    """
+    inidx = 0
+    outidx = 0
+    while inidx < start_idx_array.shape[0]:
+        cnt = count_array[inidx]
+        startidx = start_idx_array[inidx]
+        for i in range(cnt):
+            out[outidx] = startidx + i
+            outidx += 1
+        inidx += 1        
+    # I believe that this calculation we have just done is also the perfect
+    # place to assemble some sort of array showing which bin each pulse belongs with,
+    # so it might be that we should return two things from this function. I don't yet 
+    # know what such an array would look like, though....
 
 class SPDV3File(generic.LiDARFile):
     def __init__(self, fname, mode):
@@ -86,31 +111,6 @@ class SPDV3File(generic.LiDARFile):
         self.si_cnt = numpy.zeros((ncols, nrows), dtype=numpy.int)
         self.si_idx = numpy.zeros((ncols, nrows), dtype=numpy.int)
     
-    @staticmethod
-    def convertIdxCount(start_idx_array, count_array):
-        """
-        Convert SPD's default regular spatial index of pulse offsets and pulse counts
-        per bin into a single array of pulse offsets for every pulse in the given
-        subset of the spatial index. 
-
-        """
-        idx = start_idx_array.flatten()
-        cnt = count_array.flatten()
-        
-        numBins = len(cnt)
-        numPulses = cnt.sum()
-        out = numpy.empty(numPulses, dtype=numpy.int64)
-        nextPulse = 0
-        for i in range(numBins):
-            offsetsForBin = numpy.arange(idx[i], idx[i] + cnt[i])
-            out[nextPulse:nextPulse+cnt[i]] = offsetsForBin
-            nextPulse += cnt[i]
-        # I believe that this calculation we have just done is also the perfect
-        # place to assemble some sort of array showing which bin each pulse belongs with,
-        # so it might be that we should return two things from this function. I don't yet 
-        # know what such an array would look like, though....
-        return out
-    
     def readPointsForExtent(self, extent):
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == extent and 
@@ -122,9 +122,9 @@ class SPDV3File(generic.LiDARFile):
         
         nReturns = pulses['NUMBER_OF_RETURNS']
         startIdxs = pulses['PTS_START_IDX']
-        points_idx = numpy.empty(nReturns.sum(), dtype=numpy.int)
         
-        pulse_idx = self.convertIdxCount(startIdxs, nReturns)
+        pulse_idx = numpy.empty(nReturns.sum(), dtype=numpy.int)
+        convertIdxCount(startIdxs, nReturns, pulse_idx)
 
         # TODO: h5py doesn't seem to be able to use indices
         # directly from an array. Sigh.
@@ -163,7 +163,8 @@ class SPDV3File(generic.LiDARFile):
         
         cnt_subset = self.si_cnt[tlxbin:brxbin+1, tlybin:brybin+1].flatten()
         idx_subset = self.si_idx[tlxbin:brxbin+1, tlybin:brybin+1].flatten()
-        all_idx = self.convertIdxCount(idx_subset, cnt_subset)
+        all_idx = numpy.empty(cnt_subset.sum(), dtype=numpy.int)
+        convertIdxCount(idx_subset, cnt_subset, all_idx)
         
         # TODO: h5py doesn't seem to be able to use indices
         # directly from an array. Sigh.
