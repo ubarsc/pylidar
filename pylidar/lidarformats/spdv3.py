@@ -10,24 +10,24 @@ from rios import pixelgrid
 from . import generic
 
 @jit
-def convertIdxCount(start_idx_array, count_array, out):
+def convertIdxBool(start_idx_array, count_array, out):
     """
     Convert SPD's default regular spatial index of pulse offsets and pulse counts
-    per bin into a single array of pulse offsets for every pulse in the given
-    subset of the spatial index. 
+    per bin into a single boolean array. It is assumed that out is already
+    set to all False
 
     Written to use numba - numpy version was very slow. Anyone any ideas
     on how to do this quickly in normal numpy?
     """
-    inidx = 0
-    outidx = 0
-    while inidx < start_idx_array.shape[0]:
+    for inidx in range(start_idx_array.shape[0]):
         cnt = count_array[inidx]
         startidx = start_idx_array[inidx]
         for i in range(cnt):
-            out[outidx] = startidx + i
-            outidx += 1
-        inidx += 1        
+            # seems a strange bug in numba/llvm where the
+            # result of this add gets promoted to a double
+            # so cast it back
+            outidx = int(startidx + i)
+            out[outidx] = True
     # I believe that this calculation we have just done is also the perfect
     # place to assemble some sort of array showing which bin each pulse belongs with,
     # so it might be that we should return two things from this function. I don't yet 
@@ -127,17 +127,16 @@ class SPDV3File(generic.LiDARFile):
         nReturns = pulses['NUMBER_OF_RETURNS']
         startIdxs = pulses['PTS_START_IDX']
         
-        outSize = nReturns.sum()
-        if outSize == 0:
-            points = self.fileHandle['DATA']['POINTS'][0:0]
-        else:
-            pulse_idx = numpy.empty(nReturns.sum(), dtype=numpy.int)
-            convertIdxCount(startIdxs, nReturns, pulse_idx)
-
-            # TODO: h5py doesn't seem to be able to use indices
-            # directly from an array. Sigh.
-            pulse_idx = list(pulse_idx)
-            points = self.fileHandle['DATA']['POINTS'][pulse_idx]
+        # h5py prefers to take it's index by numpy bool array
+        # of the same shape as the dataset
+        # so we do this. If you give it the indices themselves
+        # this must be done as a list which is slow
+        pulse_bool = numpy.zeros(self.fileHandle['DATA']['POINTS'].shape,
+                            numpy.bool)
+    
+        if len(startIdxs) > 0:    
+            convertIdxBool(startIdxs, nReturns, pulse_bool)
+        points = self.fileHandle['DATA']['POINTS'][pulse_bool]
         
         self.lastExtent = copy.copy(self.extent)
         self.lastPoints = points
@@ -174,19 +173,16 @@ class SPDV3File(generic.LiDARFile):
         cnt_subset = self.si_cnt[tlxbin:brxbin+1, tlybin:brybin+1].flatten()
         idx_subset = self.si_idx[tlxbin:brxbin+1, tlybin:brybin+1].flatten()
         
-        outSize = cnt_subset.sum()
-        if outSize == 0:
-            # just an empty array with all the right fields
-            pulses = self.fileHandle['DATA']['PULSES'][0:0]
-        else:            
-            all_idx = numpy.empty(cnt_subset.sum(), dtype=numpy.int)
-            convertIdxCount(idx_subset, cnt_subset, all_idx)
-        
-            # TODO: h5py doesn't seem to be able to use indices
-            # directly from an array. Sigh.
-            all_idx = list(all_idx)
-            pulses = self.fileHandle['DATA']['PULSES'][all_idx]
-            
+        # h5py prefers to take it's index by numpy bool array
+        # of the same shape as the dataset
+        # so we do this. If you give it the indices themselves
+        # this must be done as a list which is slow
+        pulse_bool = numpy.zeros(self.fileHandle['DATA']['PULSES'].shape,
+                                numpy.bool)
+        if len(idx_subset) > 0:
+            convertIdxBool(idx_subset, cnt_subset, pulse_bool)
+        pulses = self.fileHandle['DATA']['PULSES'][pulse_bool]
+                                
         self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
         self.lastPoints = None # are now invalid
