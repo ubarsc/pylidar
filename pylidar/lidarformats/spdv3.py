@@ -127,17 +127,17 @@ class SPDV3File(generic.LiDARFile):
         nReturns = pulses['NUMBER_OF_RETURNS']
         startIdxs = pulses['PTS_START_IDX']
         
-        pulse_idx = numpy.empty(nReturns.sum(), dtype=numpy.int)
-        convertIdxCount(startIdxs, nReturns, pulse_idx)
-
-        # TODO: h5py doesn't seem to be able to use indices
-        # directly from an array. Sigh.
-        pulse_idx = list(pulse_idx)
-                
-        if len(pulse_idx) > 0:
-            points = self.fileHandle['DATA']['POINTS'][pulse_idx]
-        else:
+        outSize = nReturns.sum()
+        if outSize == 0:
             points = self.fileHandle['DATA']['POINTS'][0:0]
+        else:
+            pulse_idx = numpy.empty(nReturns.sum(), dtype=numpy.int)
+            convertIdxCount(startIdxs, nReturns, pulse_idx)
+
+            # TODO: h5py doesn't seem to be able to use indices
+            # directly from an array. Sigh.
+            pulse_idx = list(pulse_idx)
+            points = self.fileHandle['DATA']['POINTS'][pulse_idx]
         
         self.lastExtent = copy.copy(self.extent)
         self.lastPoints = points
@@ -173,18 +173,20 @@ class SPDV3File(generic.LiDARFile):
         
         cnt_subset = self.si_cnt[tlxbin:brxbin+1, tlybin:brybin+1].flatten()
         idx_subset = self.si_idx[tlxbin:brxbin+1, tlybin:brybin+1].flatten()
-        all_idx = numpy.empty(cnt_subset.sum(), dtype=numpy.int)
-        convertIdxCount(idx_subset, cnt_subset, all_idx)
         
-        # TODO: h5py doesn't seem to be able to use indices
-        # directly from an array. Sigh.
-        all_idx = list(all_idx)
-        
-        if len(all_idx) > 0:
-            pulses = self.fileHandle['DATA']['PULSES'][all_idx]
-        else:
+        outSize = cnt_subset.sum()
+        if outSize == 0:
             # just an empty array with all the right fields
             pulses = self.fileHandle['DATA']['PULSES'][0:0]
+        else:            
+            all_idx = numpy.empty(cnt_subset.sum(), dtype=numpy.int)
+            convertIdxCount(idx_subset, cnt_subset, all_idx)
+        
+            # TODO: h5py doesn't seem to be able to use indices
+            # directly from an array. Sigh.
+            all_idx = list(all_idx)
+            pulses = self.fileHandle['DATA']['PULSES'][all_idx]
+            
         self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
         self.lastPoints = None # are now invalid
