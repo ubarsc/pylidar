@@ -34,8 +34,8 @@ def convertIdxCount(start_idx_array, count_array, out):
     # know what such an array would look like, though....
 
 class SPDV3File(generic.LiDARFile):
-    def __init__(self, fname, mode):
-        self.mode = mode
+    def __init__(self, fname, mode, controls):
+        generic.LiDARFile.__init__(self, fname, mode, controls)
     
         # convert mode into h5py mode string
         if mode == generic.READ:
@@ -89,6 +89,7 @@ class SPDV3File(generic.LiDARFile):
         self.lastExtent = None
         self.lastPoints = None
         self.lastPulses = None
+        self.extent = None
 
     def getPixelGrid(self):
         pixGrid = pixelgrid.PixelGridDefn(projection=self.wkt,
@@ -111,14 +112,17 @@ class SPDV3File(generic.LiDARFile):
         self.si_cnt = numpy.zeros((ncols, nrows), dtype=numpy.int)
         self.si_idx = numpy.zeros((ncols, nrows), dtype=numpy.int)
     
-    def readPointsForExtent(self, extent):
+    def setExtent(self, extent):
+        self.extent = extent    
+    
+    def readPointsForExtent(self):
         # returned cached if possible
-        if (self.lastExtent is not None and self.lastExtent == extent and 
+        if (self.lastExtent is not None and self.lastExtent == self.extent and 
                         not self.lastPoints is None):
             return self.lastPoints
             
         # this should also return anything cached
-        pulses = self.readPulsesForExtent(extent)
+        pulses = self.readPulsesForExtent()
         
         nReturns = pulses['NUMBER_OF_RETURNS']
         startIdxs = pulses['PTS_START_IDX']
@@ -135,22 +139,28 @@ class SPDV3File(generic.LiDARFile):
         else:
             points = self.fileHandle['DATA']['POINTS'][0:0]
         
-        self.lastExtent = copy.copy(extent)
+        self.lastExtent = copy.copy(self.extent)
         self.lastPoints = points
         return points
             
-    def readPulsesForExtent(self, extent):
+    def readPulsesForExtent(self):
         """
         """
         # returned cached if possible
-        if (self.lastExtent is not None and self.lastExtent == extent and 
+        if (self.lastExtent is not None and self.lastExtent == self.extent and 
                         not self.lastPulses is None):
             return self.lastPulses
         
-        tlxbin = int((extent.xMin - self.si_xMin) / self.si_binSize)
-        tlybin = int((extent.yMax - self.si_yMax) / self.si_binSize)
-        brxbin = int(numpy.ceil((extent.xMax - self.si_xMin) / self.si_binSize))
-        brybin = int(numpy.ceil((self.si_yMax - extent.yMin) / self.si_binSize))
+        tlxbin = int((self.extent.xMin - self.si_xMin) / self.si_binSize)
+        tlybin = int((self.extent.yMax - self.si_yMax) / self.si_binSize)
+        brxbin = int(numpy.ceil((self.extent.xMax - self.si_xMin) / self.si_binSize))
+        brybin = int(numpy.ceil((self.si_yMax - self.extent.yMin) / self.si_binSize))
+        
+        # adjust for overlap
+        tlxbin -= self.controls.overlap
+        tlybin += self.controls.overlap
+        brxbin += self.controls.overlap
+        brybin -= self.controls.overlap
         
         if tlxbin < 0:
             tlxbin = 0
@@ -175,27 +185,29 @@ class SPDV3File(generic.LiDARFile):
         else:
             # just an empty array with all the right fields
             pulses = self.fileHandle['DATA']['PULSES'][0:0]
-        self.lastExtent = copy.copy(extent)
+        self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
         self.lastPoints = None # are now invalid
         return pulses
     
     
-    def writePointsForExtent(self, extent, points):
-        pass
-    def writePulsesForExtent(self, extent, pulses):
-        pass
+    def writePointsForExtent(self, points):
+        # TODO: must remove points in overlap area
+        raise NotImplementedError()
+    def writePulsesForExtent(self, pulses):
+        # TODO: must remove points in overlap area
+        raise NotImplementedError()
     # see below for no spatial index
     def readPoints(self, n):
-        pass
+        raise NotImplementedError()
     def readPulses(self, n):
-        pass
+        raise NotImplementedError()
     def writePoints(self, points):
-        pass
+        raise NotImplementedError()
     def writePulses(self, pulses):
-        pass
+        raise NotImplementedError()
 
-    def close(self, headerInfo=None):
+    def close(self):
         if self.mode != generic.READ:
             # write out to file
             self.fileHandle['INDEX']['PLS_PER_BIN'] = self.si_cnt

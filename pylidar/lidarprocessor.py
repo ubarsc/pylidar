@@ -6,6 +6,7 @@ And the doProcessing function itself
 
 from rios import imageio
 from rios import pixelgrid
+from . import basedriver
 from .lidarformats import generic
 from .lidarformats import spdv3
 from . import userclasses
@@ -19,6 +20,7 @@ UNION = imageio.UNION
 BOUNDS_FROM_REFERENCE = imageio.BOUNDS_FROM_REFERENCE
 
 DEFAULT_WINDOW_SIZE = 100 # metres
+DEFAULT_RASTER_DRIVER = 'KEA'
 
 # inputs to the doProcessing
 
@@ -33,6 +35,9 @@ class Controls(object):
     def __init__(self):
         self.footprint = INTERSECTION
         self.windowSize = DEFAULT_WINDOW_SIZE
+        self.overlap = 0
+        self.rasterDriver = DEFAULT_RASTER_DRIVER
+        self.rasterIgnore = 0
         
     def setFootprint(self, footprint):
         self.footprint = footprint
@@ -40,6 +45,16 @@ class Controls(object):
     def setWindowSize(self, size):
         "in metres"
         self.windowSize = size
+        
+    def setOverlap(self, overlap):
+        "in bins"
+        self.overlap = overlap
+        
+    def setRasterDriver(self, driverName):
+        self.RasterDriver = driverName
+        
+    def setRasterIgnore(self, ignore):
+        self.rasterIgnore = ignore
     
 class LidarFile(object):
     def __init__(self, fname, mode):
@@ -48,7 +63,10 @@ class LidarFile(object):
         self.mode = mode
     
 class ImageFile(object):
-    pass
+    def __init__(self, fname, mode):
+        # TODO: extra driver options passed as GDAL style list of strings??
+        self.fname = fname
+        self.mode = mode
     
 def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
 
@@ -61,44 +79,82 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
 
     # First Open all the files
     gridList = []
+    driverList = []
     for name in dataFiles.__dict__.keys():
         inputFile = getattr(dataFiles, name)
         if isinstance(inputFile, LidarFile):
             driver = generic.getReaderForLiDARFile(inputFile.fname,
-                                inputFile.mode)
+                                inputFile.mode, controls)
+            driverList.append(driver)
                                 
             # create a class to wrap this for the users function
             userClass = userclasses.LidarData(inputFile.mode, driver)
             setattr(userContainer, name, userClass)
             
-            # grab the pixel grid while we are at it
-            pixGrid = driver.getPixelGrid()
-            gridList.append(pixGrid)
+            # grab the pixel grid while we are at it - if reading
+            if inputFile.mode != CREATE:
+                pixGrid = driver.getPixelGrid()
+                gridList.append(pixGrid)
+                
+        elif isinstance(inputFile, ImageFile):
+            driver = gdaldriver.GDALDriver(inputFile.fname,
+                                inputFile.mode)
+            driverList.append(driver)
+
+            # create a class to wrap this for the users function
+            userClass = userclasses.ImageData(inputFile.mode, driver)
+            setattr(userContainer, name, userClass)
+                        
+            # grab the pixel grid while we are at it - if reading
+            if inputFile.mode != CREATE:
+                pixGrid = driver.getPixelGrid()
+                gridList.append(pixGrid)
+                                                                                
         else:
-            msg = "image files not supported yet"
+            msg = "File type not understood"
             raise LiDARFileException(msg)
             
+    if len(gridList) == 0:
+        msg = 'No input files selected'
+        raise LiDARFileException(msg)
+        
+    # for now, check they all align
+    firstPixGrid = None
+    for pixGrid in gridList:
+        if firstPixGrid is None:
+            firstPixGrid = pixGrid
+        else:
+            if not firstPixGrid.alignedWith(pixGrid):
+                msg = 'Un-aligned datasets not yet supported'
+                raise LiDARFileException(msg)
             
     # work out common extent
     # TODO: user input reference grid
-    # should we allow reprojection at all (pixelgrid allows it)?
     workingPixGrid = pixelgrid.findCommonRegion(gridList, gridList[0], 
                             controls.footprint)
                             
+    # tell all drivers that are creating files what pixel grid is
+    for driver in driverList:
+        if driver.mode != READ:
+            driver.setPixelGrid(workingPixGrid)
+            
+    # info clas
+    userContainer.info.setPixGrid(workingPixGrid)
+                            
     # work out where the first block is
-    currentExtent = generic.Extent(workingPixGrid.xMin, 
+    currentExtent = basedriver.Extent(workingPixGrid.xMin, 
                         workingPixGrid.xMin + controls.windowSize,
                         workingPixGrid.yMax - controls.windowSize,
                         workingPixGrid.yMax, workingPixGrid.xRes)
                         
     # loop while we haven't fallen off the bottom of the pixelgrid region
     while currentExtent.yMax > workingPixGrid.yMin:
-        # update the user classes with the new extent
-        # we get the keys from the input rather than userContainer
-        # since userContainer may have other things in it
-        for name in dataFiles.__dict__.keys():
-            userClass = getattr(userContainer, name)
-            userClass.setExtent(currentExtent)
+        # update the driver classes with the new extent
+        for driver in driverList:
+                driver.setExtent(currentExtent)
+            
+        # info class
+        userContainer.info.setExtent(currentExtent)
             
         # build the function args which is one thing, unless
         # there is user data
@@ -122,10 +178,8 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
 
 
     # close all the files
-    for name in dataFiles.__dict__.keys():
-        userClass = getattr(userContainer, name)
-        userClass.close()
-                
+    for driver in driverList:
+        driver.close()
 
     # 1. Get Extent. Either from files for the controls
     # 2. Read the spatial indices (if being used)
