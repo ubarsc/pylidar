@@ -14,9 +14,15 @@ class UserInfo(object):
         # take a copy so the user can't change it
         self.pixGrid = copy.copy(pixGrid)
         
+    def getPixGrid(self):
+        return self.pixGrid
+        
     def setExtent(self, extent):
         # take a copy so the user can't change it
         self.extent = copy.copy(extent)
+        
+    def getExtent(self):
+        return self.extent
 
 class DataContainer(object):
     "UserInfo object plus instances of LidarData and ImageData"
@@ -38,6 +44,22 @@ class LidarData(object):
         "as a structured array"
         pulses = self.driver.readPulsesForExtent()
         return pulses
+        
+    # For a particular pulse
+    # TODO: should support a pulsearray with masking
+    def getTransmitted(self, pulse):
+        "as an integer array"
+        return self.driver.readTransmitted(pulse)
+        
+    def setTransmitted(self, pulse, transmitted):
+        "as an integer array"
+        
+    def getReceived(self, pulse):
+        "as an integer array"
+        return self.driver.readReceived(pulse)
+        
+    def setReceived(self, pulse, received):
+        "as an integer array"
         
     def regridData(self, data):
         "tdb"

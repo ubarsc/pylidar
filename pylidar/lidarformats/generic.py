@@ -40,10 +40,26 @@ class LiDARFile(basedriver.Driver):
     def readPulsesForExtent(self):
         raise NotImplementedError()
         
+    def readTransmitted(self, pulse):
+        raise NotImplementedError()
+        
+    def readReceived(self, pulse):
+        raise NotImplementedError()
+        
     def writePointsForExtent(self, points):
         raise NotImplementedError()
         
     def writePulsesForExtent(self, pulses):
+        raise NotImplementedError()
+        
+    def writeTransmitted(self, pulse, transmitted):
+        raise NotImplementedError()
+        
+    def writeReceived(self, pulse, received):
+        raise NotImplementedError()
+        
+
+    def hasSpatialIndex(self):
         raise NotImplementedError()
         
     # see below for no spatial index

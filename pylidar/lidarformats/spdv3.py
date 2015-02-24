@@ -188,13 +188,52 @@ class SPDV3File(generic.LiDARFile):
         self.lastPoints = None # are now invalid
         return pulses
     
+    def readTransmitted(self, pulse):
+        idx = pulse['TRANSMITTED_START_IDX']
+        cnt = pulse['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
+        transmitted = self.fileHandle['DATA']['TRANSMITTED'][idx:idx+cnt+1]
+        return transmitted
+        
+    def readReceived(self, pulse):
+        idx = pulse['RECEIVED_START_IDX']
+        cnt = pulse['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
+        received = self.fileHandle['DATA']['RECEIVED'][idx:idx+cnt+1]
+        return received
     
     def writePointsForExtent(self, points):
         # TODO: must remove points in overlap area
+        # somehow? Via Pulses?
         raise NotImplementedError()
+        
     def writePulsesForExtent(self, pulses):
         # TODO: must remove points in overlap area
+        # TODO: what happens when they have moved a pulse
+        # outside the block area? Should we know it isn't an overlap
+        # pulse and keep it?
+        
+        # self.extent is the size of the block without the overlap
+        # so just strip out everything outside of it
+        mask = ( (pulses['X_IDX'] >= self.extent.xMin) & 
+                    (pulses['X_IDX'] <= self.extent.xMax) & 
+                    (pulses['Y_IDX'] >= self.extent.yMin) &
+                    (pulses['Y_IDX'] <= self.extent.yMax))
+        pulses = pulses[mask]
+        
+        
+        
         raise NotImplementedError()
+        
+    def writeTransmitted(self, pulse, transmitted):
+        raise NotImplementedError()
+        
+    def writeReceived(self, pulse, received):
+        raise NotImplementedError()
+
+    def hasSpatialIndex(self):
+        # assume this format always does
+        # TODO: is this correct?
+        return True
+        
     # see below for no spatial index
     def readPoints(self, n):
         raise NotImplementedError()

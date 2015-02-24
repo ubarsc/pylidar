@@ -81,6 +81,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
     gridList = []
     driverList = []
     for name in dataFiles.__dict__.keys():
+        # TODO: lists, dictionaries etc
         inputFile = getattr(dataFiles, name)
         if isinstance(inputFile, LidarFile):
             driver = generic.getReaderForLiDARFile(inputFile.fname,
@@ -118,6 +119,8 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         msg = 'No input files selected'
         raise LiDARFileException(msg)
         
+    # TODO: need to determine if we have a spatial index for all LiDAR files
+        
     # for now, check they all align
     firstPixGrid = None
     for pixGrid in gridList:
@@ -151,7 +154,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
     while currentExtent.yMax > workingPixGrid.yMin:
         # update the driver classes with the new extent
         for driver in driverList:
-                driver.setExtent(currentExtent)
+            driver.setExtent(currentExtent)
             
         # info class
         userContainer.info.setExtent(currentExtent)
