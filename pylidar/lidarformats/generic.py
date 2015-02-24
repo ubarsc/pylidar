@@ -17,6 +17,9 @@ class LiDARFormatNotUnderstood(LiDARFileException):
     
 class LiDARFormatDriverNotFound(LiDARFileException):
     "None of the drivers can open the file"
+    
+class LiDARInvalidData(LiDARFileException):
+    "Something is wrong with the data read or given"
 
 class LiDARFile(basedriver.Driver):
     """

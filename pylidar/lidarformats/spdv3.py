@@ -9,6 +9,52 @@ from numba import jit
 from rios import pixelgrid
 from . import generic
 
+# so we can check the user has passed in expected array type
+PULSE_DTYPE = numpy.dtype([('GPS_TIME', '<u8'), ('PULSE_ID', '<u8'), 
+('X_ORIGIN', '<f8'), ('Y_ORIGIN', '<f8'), ('Z_ORIGIN', '<f4'), 
+('H_ORIGIN', '<f4'), ('X_IDX', '<f8'), ('Y_IDX', '<f8'), ('AZIMUTH', '<f4'), 
+('ZENITH', '<f4'), ('NUMBER_OF_RETURNS', 'u1'), 
+('NUMBER_OF_WAVEFORM_TRANSMITTED_BINS', '<u2'), 
+('NUMBER_OF_WAVEFORM_RECEIVED_BINS', '<u2'), ('RANGE_TO_WAVEFORM_START', '<f4'),
+('AMPLITUDE_PULSE', '<f4'), ('WIDTH_PULSE', '<f4'), ('USER_FIELD', '<u4'), 
+('SOURCE_ID', '<u2'), ('SCANLINE', '<u4'), ('SCANLINE_IDX', '<u2'), 
+('RECEIVE_WAVE_NOISE_THRES', '<f4'), ('TRANS_WAVE_NOISE_THRES', '<f4'), 
+('WAVELENGTH', '<f4'), ('RECEIVE_WAVE_GAIN', '<f4'), 
+('RECEIVE_WAVE_OFFSET', '<f4'), ('TRANS_WAVE_GAIN', '<f4'), 
+('TRANS_WAVE_OFFSET', '<f4'), ('PTS_START_IDX', '<u8'), 
+('TRANSMITTED_START_IDX', '<u8'), ('RECEIVED_START_IDX', '<u8')])
+
+POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'), 
+('X', '<f8'), ('Y', '<f8'), ('Z', '<f4'), ('HEIGHT', '<f4'), ('RANGE', '<f4'), 
+('AMPLITUDE_RETURN', '<f4'), ('WIDTH_RETURN', '<f4'), ('RED', '<u2'), 
+('GREEN', '<u2'), ('BLUE', '<u2'), ('CLASSIFICATION', 'u1'), 
+('USER_FIELD', '<u4'), ('IGNORE', 'u1'), ('WAVE_PACKET_DESC_IDX', '<i2'), 
+('WAVEFORM_OFFSET', '<u4')])
+
+@jit
+def updateSpatialIndex(pulses, newPulses, idx, cnt, xMin, yMax, binSize, startRow):
+    xsize = idx.shape[0]
+    ysize = idx.shape[1]
+    nPulses = pulses.shape[0]
+    newPulsesIdx = 0
+    
+    for y in range(ysize):
+        bin_yMax = yMax - (y * binSize)
+        bin_yMin = bin_yMax - binSize
+        for x in range(xsize):
+            bin_xMin = xMax + (x * binSize)
+            bin_xMax = bin_xMin + binSize
+            for n in range(nPulses):
+                if (pulses[n]['X_IDX'] >= bin_xMin and pulses[n]['X_IDX'] < bin_xMax
+                        and pulses[n]['Y_IDX'] > bin_yMin and 
+                        pulses[n]['Y_IDX'] <= bin_yMax):
+                        
+                    newPulses[newPulsesIdx] = pulses[n]
+                    if cnt[x, y] == 0:
+                        idx[x, y] = startRow + newPulsesIdx
+                    cnt[x, y] += 1
+                    newPulsesIdx += 1
+
 @jit
 def convertIdxBool(start_idx_array, count_array, out):
     """
@@ -182,6 +228,10 @@ class SPDV3File(generic.LiDARFile):
         if len(idx_subset) > 0:
             convertIdxBool(idx_subset, cnt_subset, pulse_bool)
         pulses = self.fileHandle['DATA']['PULSES'][pulse_bool]
+        
+        # TODO: PTS_START_IDX needs to be updated so user can access 
+        # the points of a particular pulse. Or is there another function that
+        # will handle this?
                                 
         self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
@@ -203,13 +253,22 @@ class SPDV3File(generic.LiDARFile):
     def writePointsForExtent(self, points):
         # TODO: must remove points in overlap area
         # somehow? Via Pulses?
+        assert self.mode != generic.READ
         raise NotImplementedError()
         
     def writePulsesForExtent(self, pulses):
+        assert self.mode != generic.READ
         # TODO: must remove points in overlap area
         # TODO: what happens when they have moved a pulse
         # outside the block area? Should we know it isn't an overlap
         # pulse and keep it?
+
+        # we are fussy here about the dtype - the format
+        # written must match the spec. Not such an issue for SPD v4?
+        if pulses.dtype != PULSE_DTYPE:
+            msg = ("Invalid pulse array. " +
+                "Fields and types must be the same as that read")
+            raise LiDARInvalidData(msg)
         
         # self.extent is the size of the block without the overlap
         # so just strip out everything outside of it
@@ -219,9 +278,43 @@ class SPDV3File(generic.LiDARFile):
                     (pulses['Y_IDX'] <= self.extent.yMax))
         pulses = pulses[mask]
         
+        # TODO: should PTS_START_IDX be translated from what the user
+        # has passed into file indices?
         
+        if self.mode == generic.CREATE:
+            # need to extend the hdf5 dataset before writing
+            oldSize = self.fileHandle['DATA']['PULSES'].shape[0]
+            nPulses = len(pulses)
+            newSize = oldSize + nPulses
+            self.fileHandle['DATA']['PULSES'].resize((newSize,))
+            
+            
+        else:
+            # mode == WRITE
+            # TODO: not totally sure what this means at the moment
+            pass
         
-        raise NotImplementedError()
+        # now update the spatial index
+        # TODO: do we assume that all the pulses can be neatly binned
+        # or will they need to be re-ordered? Looks like I am about
+        # to handle them having been moved about.
+        
+        #xBinIndex = (pulses['X_IDX'] - self.si_xMin) / self.si_binSize
+        #xBinIndex = xBinIndex.astype(numpy.int)
+        #yBinIndex = (self.si_yMax - pulses['Y_IDX']) / self.si_binSize
+        #yBinIndex = yBinIndex.astype(numpy.int)
+        tlxbin = int((self.extent.xMin - self.si_xMin) / self.si_binSize)
+        tlybin = int((self.extent.yMax - self.si_yMax) / self.si_binSize)
+        brxbin = int(numpy.ceil((self.extent.xMax - self.si_xMin) / self.si_binSize))
+        brybin = int(numpy.ceil((self.si_yMax - self.extent.yMin) / self.si_binSize))
+        cnt_subset = self.si_cnt[tlxbin:brxbin+1, tlybin:brybin+1]
+        idx_subset = self.si_idx[tlxbin:brxbin+1, tlybin:brybin+1]
+        orderedPulses = numpy.zeros_like(pulses)
+        
+        updateSpatialIndex(pulses, orderedPulses, idx_subset, cnt_subset, self.extent.xMin, 
+                self.extent.yMax, self.si_binSize, oldSize)
+
+        self.fileHandle['DATA']['PULSES'][oldSize:oldSize+nPulses+1] = orderedPulses
         
     def writeTransmitted(self, pulse, transmitted):
         raise NotImplementedError()
