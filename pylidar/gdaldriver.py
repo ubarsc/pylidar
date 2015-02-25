@@ -76,7 +76,9 @@ class GDALDriver(basedriver.Driver):
             
     def close(self):
         from rios import calcstats
-        calcstats.calcStats(self.ds, self.controls.rasterIgnore)
+        from rios.cuiprogress import SilentProgress
+        progress = SilentProgress()
+        calcstats.calcStats(self.ds, progress, self.controls.rasterIgnore)
         self.ds.FlushCache()
         self.ds = None
 

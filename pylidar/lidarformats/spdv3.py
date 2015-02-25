@@ -31,37 +31,19 @@ POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'),
 ('USER_FIELD', '<u4'), ('IGNORE', 'u1'), ('WAVE_PACKET_DESC_IDX', '<i2'), 
 ('WAVEFORM_OFFSET', '<u4')])
 
-def NeilsSpatialWrapper(coordOne, coordTwo, binSize, coordOneMin, coordTwoMin, nRows, nCols):
-    sortedIdx = numpy.empty_like(coordOne, dtype=numpy.int64)
-    (row, col) = numpy.mgrid[:nRows, :nCols]
-    #binNum = 
     
-
-
 @jit
-def updateSpatialIndex(pulses, newPulses, idx, cnt, xMin, yMax, binSize, startRow):
-    xsize = idx.shape[0]
-    ysize = idx.shape[1]
-    nPulses = pulses.shape[0]
-    newPulsesIdx = 0
+def BuildSpatialIndex(binNum, sortedBinNumNdx, si_start, si_count):
+    nCols = si_start.shape[1]
+    nThings = binNum.shape[0]
+    for i in range(nThings):
+        bn = binNum[sortedBinNumNdx[i]]
+        row = bn // nCols
+        col = bn % nCols
+        if si_count[row, col] == 0:
+            si_start[row, col] = i
+        si_count[row, col] += 1
     
-    for y in range(ysize):
-        bin_yMax = yMax - (y * binSize)
-        bin_yMin = bin_yMax - binSize
-        for x in range(xsize):
-            bin_xMin = xMax + (x * binSize)
-            bin_xMax = bin_xMin + binSize
-            for n in range(nPulses):
-                if (pulses[n]['X_IDX'] >= bin_xMin and pulses[n]['X_IDX'] < bin_xMax
-                        and pulses[n]['Y_IDX'] > bin_yMin and 
-                        pulses[n]['Y_IDX'] <= bin_yMax):
-                        
-                    newPulses[newPulsesIdx] = pulses[n]
-                    if cnt[x, y] == 0:
-                        idx[x, y] = startRow + newPulsesIdx
-                    cnt[x, y] += 1
-                    newPulsesIdx += 1
-
 @jit
 def convertIdxBool(start_idx_array, count_array, outBool, outRow, outCol, outIdx, counts, outMask):
     """
@@ -353,26 +335,23 @@ class SPDV3File(generic.LiDARFile):
             pass
         
         # now update the spatial index
-        # TODO: do we assume that all the pulses can be neatly binned
-        # or will they need to be re-ordered? Looks like I am about
-        # to handle them having been moved about.
-        
-        #xBinIndex = (pulses['X_IDX'] - self.si_xMin) / self.si_binSize
-        #xBinIndex = xBinIndex.astype(numpy.int)
-        #yBinIndex = (self.si_yMax - pulses['Y_IDX']) / self.si_binSize
-        #yBinIndex = yBinIndex.astype(numpy.int)
-        tlxbin = int((self.extent.xMin - self.si_xMin) / self.si_binSize)
-        tlybin = int((self.extent.yMax - self.si_yMax) / self.si_binSize)
-        brxbin = int(numpy.ceil((self.extent.xMax - self.si_xMin) / self.si_binSize))
-        brybin = int(numpy.ceil((self.si_yMax - self.extent.yMin) / self.si_binSize))
-        cnt_subset = self.si_cnt[tlxbin:brxbin+1, tlybin:brybin+1]
-        idx_subset = self.si_idx[tlxbin:brxbin+1, tlybin:brybin+1]
-        orderedPulses = numpy.zeros_like(pulses)
-        
-        updateSpatialIndex(pulses, orderedPulses, idx_subset, cnt_subset, self.extent.xMin, 
-                self.extent.yMax, self.si_binSize, oldSize)
+        raise NotImplementedError()
 
-        self.fileHandle['DATA']['PULSES'][oldSize:oldSize+nPulses+1] = orderedPulses
+    @staticmethod
+    def NeilsSpatialWrapper(coordOne, coordTwo, binSize, coordOneMin, coordTwoMin, nRows, nCols):
+        # coordOne is the coordinate corresponding to bin row. CoordTwo corresponds to bin col.
+        # Note that coordOne will always be reversed??????
+        sortedIdx = numpy.empty_like(coordOne, dtype=numpy.int64)
+        row = numpy.floor((coordOneMax - coordOne) / binSize).astype(numpy.uint32)
+        col = numpy.floor((coordTwo - coordTwoMin) / binSize).astype(numpy.uint32)
+        binNum = col * nCols + row
+        sortedBinNumNdx = numpy.argsort(binNum)
+    
+        si_start = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
+        si_count = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
+    
+        BuildSpatialIndex(binNum, sortedBinNumNdx, si_start, si_count)
+        return sortedBinNumNdx, si_start, si_count
         
     def writeTransmitted(self, pulse, transmitted):
         raise NotImplementedError()
