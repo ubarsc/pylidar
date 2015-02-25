@@ -45,6 +45,25 @@ class LidarData(object):
         pulses = self.driver.readPulsesForExtent()
         return pulses
         
+    def getPulsesByBins(self):
+        import numpy
+        pulses = self.getPulses()
+        idx = self.driver.lastPulses_Idx
+        idxMask = self.driver.lastPulses_IdxMask 
+        pulsesByBins = pulses[idx]
+        return numpy.ma.array(pulsesByBins, mask=idxMask)
+        
+    def getPointsByPulse(self):
+        import numpy
+        points = self.getPoints()
+        idx = self.driver.lastPoints_Idx
+        idxMask = self.driver.lastPoints_IdxMask
+        pointsByBins = points[idx]
+        return numpy.ma.array(pointsByBins, mask=idxMask)
+        
+    def convertPointsTo2D(self, points):
+        pass
+        
     # For a particular pulse
     # TODO: should support a pulsearray with masking
     def getTransmitted(self, pulse):

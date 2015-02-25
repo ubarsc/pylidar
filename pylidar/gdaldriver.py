@@ -2,12 +2,12 @@
 """
 Driver for GDAL supported files
 """
-
+import numpy
 from osgeo import gdal
 from rios import pixelgrid
 from rios import imageio
 from rios.imagereader import ImageReader
-from .lidardrivers import generic
+from .lidarformats import generic
 from . import basedriver
 
 class GDALException(Exception):
@@ -48,18 +48,20 @@ class GDALDriver(basedriver.Driver):
             self.nullValList = None # not used in write case
             
         # to read/write at. Set by setExtent()
-        self.xcoord = None
-        self.ycoord = None
-        self.xsize = None
-        self.ysize = None
+        self.blockxcoord = None
+        self.blockycoord = None
+        self.blockxsize = None
+        self.blockysize = None
                 
     def setExtent(self, extent):
     
-        (self.xcoord, self.ycoord) = gdal.ApplyGeoTransform(self.geoTrans,
+        self.blockxcoord, self.blockycoord = gdal.ApplyGeoTransform(self.invGeoTrans,
                                     extent.xMin, extent.yMax)
+        self.blockxcoord = int(self.blockxcoord)                            
+        self.blockycoord = int(self.blockycoord)                            
                                     
-        self.xsize = (self.extent.xMax - self.extent.xMin) / extent.binSize
-        self.ysize = (self.extent.yMax - self.extent.yMin) / extent.binSize
+        self.blockxsize = int(numpy.ceil((extent.xMax - extent.xMin) / extent.binSize))
+        self.blockysize = int(numpy.ceil((extent.yMax - extent.yMin) / extent.binSize))
                     
     def getPixelGrid(self):
         pixGrid = pixelgrid.pixelGridFromFile(self.fname)
@@ -69,27 +71,30 @@ class GDALDriver(basedriver.Driver):
         # so we can use it in setData to create
         # the dataset when we know the type, bands etc
         self.pixGrid = pixGrid
-        self.geoTrans = self.pixGrid.makeGeoTransform
+        self.geoTrans = self.pixGrid.makeGeoTransform()
+        success, self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
             
     def close(self):
+        from rios import calcstats
+        calcstats.calcStats(self.ds, self.controls.rasterIgnore)
         self.ds.FlushCache()
         self.ds = None
 
     def getData(self):
     
         numpyType = imageio.GDALTypeToNumpyType(self.gdalType)
-        data = ImageReader.readBlockWithMargin(self.ds, self.xcoord, 
-                        self.ycoord, self.xsize, self.ysize, numpyType,
+        data = ImageReader.readBlockWithMargin(self.ds, self.blockxcoord, 
+                        self.blockycoord, self.blockxsize, self.blockysize, numpyType,
                         self.controls.overlap, self.nullValList)
         return data
         
     def setData(self, data):
-        if data.ndims != 3:
+        if data.ndim != 3:
             msg = 'Only 3d arrays can be written'
             raise GDALException(msg)
-            
-        assert(data.shape[-1] == self.xsize)
-        assert(data.shape[-2] == self.ysize)
+
+        assert(data.shape[-1] == self.blockxsize)
+        assert(data.shape[-2] == self.blockysize)
             
         if self.ds is None:
             # need to create output file first
@@ -115,17 +120,19 @@ class GDALDriver(basedriver.Driver):
             self.ds.SetProjection(projection)
             self.nullValList = []
             for band in range(self.ds.RasterCount):
-                band.SetNoDataValue(self.controls.rasterIgnore)
+                bh = self.ds.GetRasterBand(band+1)
+                bh.SetNoDataValue(self.controls.rasterIgnore)
                 self.nullValList.append(self.controls.rasterIgnore)
         
         for band in range(self.ds.RasterCount):
         
             bh = self.ds.GetRasterBand(band + 1)
-            slice_bottomMost = data.shape[-2] - self.controls.overlap
-            slice_rightMost = data.shape[-1] - self.controls.overlap
-                                                        
             # take off overlap if present
-            outblock = data[band, self.overlap:slice_bottomMost, self.overlap:slice_rightMost]
+            overlap = self.controls.overlap
+            slice_bottomMost = data.shape[-2] - overlap
+            slice_rightMost = data.shape[-1] - overlap
+                                                        
+            outblock = data[band, overlap:slice_bottomMost, overlap:slice_rightMost]
                                                                                                 
-            bh.WriteArray(outblock, self.xcoord, self.ycoord)
+            bh.WriteArray(outblock, self.blockxcoord, self.blockycoord)
             

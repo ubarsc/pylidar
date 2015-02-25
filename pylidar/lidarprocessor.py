@@ -7,6 +7,7 @@ And the doProcessing function itself
 from rios import imageio
 from rios import pixelgrid
 from . import basedriver
+from . import gdaldriver
 from .lidarformats import generic
 from .lidarformats import spdv3
 from . import userclasses
@@ -49,7 +50,8 @@ class Controls(object):
     def setOverlap(self, overlap):
         "in bins"
         self.overlap = overlap
-        
+
+    # TODO: raster driver and ignor to be per file        
     def setRasterDriver(self, driverName):
         self.RasterDriver = driverName
         
@@ -69,6 +71,11 @@ class ImageFile(object):
         self.mode = mode
     
 def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
+
+    # TODO: update so we can handle no spatial index
+    # -requested via the controls
+    # - or file doesn't have one
+    # when no spatial index - read 1000 PULSES per time
 
     if controls is None:
         # default values
@@ -99,7 +106,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
                 
         elif isinstance(inputFile, ImageFile):
             driver = gdaldriver.GDALDriver(inputFile.fname,
-                                inputFile.mode)
+                                inputFile.mode, controls)
             driverList.append(driver)
 
             # create a class to wrap this for the users function
@@ -172,12 +179,21 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         # try going accross first
         currentExtent.xMin += controls.windowSize
         currentExtent.xMax += controls.windowSize
+        
+        # partial block
+        if currentExtent.xMax > workingPixGrid.xMax:
+            currentExtent.xMax = workingPixGrid.xMax
+        
         if currentExtent.xMin > workingPixGrid.xMax:
             # start next line down
             currentExtent.xMin = workingPixGrid.xMin
             currentExtent.xMax = workingPixGrid.xMin + controls.windowSize
             currentExtent.yMax -= controls.windowSize
             currentExtent.yMin -= controls.windowSize
+            
+        # partial block
+        if currentExtent.yMin < workingPixGrid.yMin:
+            currentExtent.yMin = workingPixGrid.yMin
 
 
     # close all the files

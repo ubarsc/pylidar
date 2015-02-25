@@ -31,6 +31,13 @@ POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'),
 ('USER_FIELD', '<u4'), ('IGNORE', 'u1'), ('WAVE_PACKET_DESC_IDX', '<i2'), 
 ('WAVEFORM_OFFSET', '<u4')])
 
+def NeilsSpatialWrapper(coordOne, coordTwo, binSize, coordOneMin, coordTwoMin, nRows, nCols):
+    sortedIdx = numpy.empty_like(coordOne, dtype=numpy.int64)
+    (row, col) = numpy.mgrid[:nRows, :nCols]
+    #binNum = 
+    
+
+
 @jit
 def updateSpatialIndex(pulses, newPulses, idx, cnt, xMin, yMax, binSize, startRow):
     xsize = idx.shape[0]
@@ -56,7 +63,7 @@ def updateSpatialIndex(pulses, newPulses, idx, cnt, xMin, yMax, binSize, startRo
                     newPulsesIdx += 1
 
 @jit
-def convertIdxBool(start_idx_array, count_array, out):
+def convertIdxBool(start_idx_array, count_array, outBool, outRow, outCol, outIdx, counts, outMask):
     """
     Convert SPD's default regular spatial index of pulse offsets and pulse counts
     per bin into a single boolean array. It is assumed that out is already
@@ -65,15 +72,44 @@ def convertIdxBool(start_idx_array, count_array, out):
     Written to use numba - numpy version was very slow. Anyone any ideas
     on how to do this quickly in normal numpy?
     """
-    for inidx in range(start_idx_array.shape[0]):
-        cnt = count_array[inidx]
-        startidx = start_idx_array[inidx]
-        for i in range(cnt):
-            # seems a strange bug in numba/llvm where the
-            # result of this add gets promoted to a double
-            # so cast it back
-            outidx = int(startidx + i)
-            out[outidx] = True
+    # start_idx_array - array of start indexes
+    # count_array - array of counts
+    # outBool - same shape as the dataset size, but bool inited to False
+    # outIdx 3d - (max(count_array), nRows, nCols) int32 inited to 0
+    # outMask 3d - bool same shape as outIdx inited to True
+    # outRow same shape as outBool but int64 cerate with numpy.empty()
+    # outCol same shape as outBool but int64 empty()
+    # counts (nRows, nCols) int32 inited to 0
+    
+    nRows = start_idx_array.shape[0]
+    nCols = start_idx_array.shape[1]
+    
+    for col in range(nCols):
+        for row in range(nRows):
+        
+            cnt = count_array[row, col]
+            startidx = start_idx_array[row, col]
+            for i in range(cnt):
+                # seems a strange bug in numba/llvm where the
+                # result of this add gets promoted to a double
+                # so cast it back
+                idx = int(startidx + i)
+                outBool[idx] = True
+                outRow[idx] = row
+                outCol[idx] = col
+                
+    n = outBool.shape[0]
+    counter = 0
+    for i in range(n):
+        if outBool[i]:
+            row = outRow[i]
+            col = outCol[i]
+            c = counts[row, col]
+            outIdx[c, row, col] = counter
+            outMask[c, row, col] = False
+            counts[row, col] += 1
+            counter += 1
+                
     # I believe that this calculation we have just done is also the perfect
     # place to assemble some sort of array showing which bin each pulse belongs with,
     # so it might be that we should return two things from this function. I don't yet 
@@ -112,13 +148,18 @@ class SPDV3File(generic.LiDARFile):
 
         # read in the bits I need            
         if mode == generic.READ:
+            # TODO: handle when the spatial index does not exist
             self.si_cnt = self.fileHandle['INDEX']['PLS_PER_BIN'][...]
             self.si_idx = self.fileHandle['INDEX']['BIN_OFFSETS'][...]
             self.si_binSize = self.fileHandle['HEADER']['BIN_SIZE'][0]
             self.si_xMin = self.fileHandle['HEADER']['X_MIN'][0]
             self.si_yMax = self.fileHandle['HEADER']['Y_MAX'][0]
-            self.si_xMax = self.fileHandle['HEADER']['X_MAX'][0]
-            self.si_yMin = self.fileHandle['HEADER']['Y_MIN'][0]
+            # bottom right coords don't seem right (of data rather than si)
+            self.si_xMax = self.si_xMin + (self.si_idx.shape[1] * self.si_binSize)
+            self.si_yMin = self.si_yMax - (self.si_idx.shape[0] * self.si_binSize)
+            
+            #self.si_xMax = self.fileHandle['HEADER']['X_MAX'][0]
+            #self.si_yMin = self.fileHandle['HEADER']['Y_MIN'][0]
             self.wkt = self.fileHandle['HEADER']['SPATIAL_REFERENCE'][0].decode()
         else:
             # set on setPixelGrid
@@ -177,15 +218,16 @@ class SPDV3File(generic.LiDARFile):
         # of the same shape as the dataset
         # so we do this. If you give it the indices themselves
         # this must be done as a list which is slow
-        pulse_bool = numpy.zeros(self.fileHandle['DATA']['POINTS'].shape,
-                            numpy.bool)
-    
-        if len(startIdxs) > 0:    
-            convertIdxBool(startIdxs, nReturns, pulse_bool)
-        points = self.fileHandle['DATA']['POINTS'][pulse_bool]
+        point_bool, point_idx, point_idx_mask = self.convertIdxToUsefulStuff(startIdxs,
+                    nReturns, self.fileHandle['DATA']['POINTS'].shape[0])
+        
+        points = self.fileHandle['DATA']['POINTS'][point_bool]
         
         self.lastExtent = copy.copy(self.extent)
         self.lastPoints = points
+        # TODO: set to None in constructor
+        self.lastPoints_Idx = points_idx
+        self.lastPoints_IdxMask = points_idx_mask
         return points
             
     def readPulsesForExtent(self):
@@ -195,9 +237,9 @@ class SPDV3File(generic.LiDARFile):
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
                         not self.lastPulses is None):
             return self.lastPulses
-        
+
         tlxbin = int((self.extent.xMin - self.si_xMin) / self.si_binSize)
-        tlybin = int((self.extent.yMax - self.si_yMax) / self.si_binSize)
+        tlybin = int((self.si_yMax - self.extent.yMax) / self.si_binSize)
         brxbin = int(numpy.ceil((self.extent.xMax - self.si_xMin) / self.si_binSize))
         brybin = int(numpy.ceil((self.si_yMax - self.extent.yMin) / self.si_binSize))
         
@@ -211,40 +253,60 @@ class SPDV3File(generic.LiDARFile):
             tlxbin = 0
         if tlybin < 0:
             tlybin = 0
-        if brxbin > self.si_cnt.shape[0]:
-            brxbin = self.si_cnt.shape[0]
-        if brybin > self.si_cnt.shape[1]:
-            brybin = self.si_cnt.shape[1]
+        if brxbin > self.si_cnt.shape[1]:
+            brxbin = self.si_cnt.shape[1]
+        if brybin > self.si_cnt.shape[0]:
+            brybin = self.si_cnt.shape[0]
         
-        cnt_subset = self.si_cnt[tlxbin:brxbin+1, tlybin:brybin+1].flatten()
-        idx_subset = self.si_idx[tlxbin:brxbin+1, tlybin:brybin+1].flatten()
+        cnt_subset = self.si_cnt[tlybin:brybin, tlxbin:brxbin]
+        idx_subset = self.si_idx[tlybin:brybin, tlxbin:brxbin]
         
         # h5py prefers to take it's index by numpy bool array
         # of the same shape as the dataset
         # so we do this. If you give it the indices themselves
         # this must be done as a list which is slow
-        pulse_bool = numpy.zeros(self.fileHandle['DATA']['PULSES'].shape,
-                                numpy.bool)
-        if len(idx_subset) > 0:
-            convertIdxBool(idx_subset, cnt_subset, pulse_bool)
+        pulse_bool, pulse_idx, pulse_idx_mask = self.convertIdxToUsefulStuff(idx_subset, cnt_subset, 
+                self.fileHandle['DATA']['PULSES'].shape[0])
         pulses = self.fileHandle['DATA']['PULSES'][pulse_bool]
         
-        # TODO: PTS_START_IDX needs to be updated so user can access 
-        # the points of a particular pulse. Or is there another function that
-        # will handle this?
-                                
         self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
+        self.lastPulses_Idx = pulse_idx
+        self.lastPulses_IdxMask = pulse_idx_mask
         self.lastPoints = None # are now invalid
         return pulses
+
+    @staticmethod
+    def convertIdxToUsefulStuff(start_idx_array, count_array, outSize):
+        outBool = numpy.zeros((outSize,), dtype=numpy.bool)
+        maxCount = count_array.max()
+        nRows, nCols = count_array.shape
+        outIdx = numpy.zeros((maxCount, nRows, nCols), dtype=numpy.int32)
+        outMask = numpy.ones((maxCount, nRows, nCols), numpy.bool)
+        outRow = numpy.empty((outSize,), dtype=numpy.int64)
+        outCol = numpy.empty((outSize,), dtype=numpy.int64)
+        counts = numpy.zeros((nRows, nCols), dtype=numpy.int32)
+        
+        convertIdxBool(start_idx_array, count_array, outBool, outRow, outCol, outIdx, counts, outMask)
+        
+        return outBool, outIdx, outMask
+
+        # TODO: a method to create a ragged array of points-by-pulses using PTS_START_IDX 
+        
+        # TODO: a method to create 2-d ragged array of points by pixel
+        # TODO: a method to create 2-d ragged array of pulses by pixel
     
     def readTransmitted(self, pulse):
+        # TODO: update so an array of pulses is taken
+        # and a masked array is returned
         idx = pulse['TRANSMITTED_START_IDX']
         cnt = pulse['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
         transmitted = self.fileHandle['DATA']['TRANSMITTED'][idx:idx+cnt+1]
         return transmitted
         
     def readReceived(self, pulse):
+        # TODO: update so an array of pulses is taken
+        # and a masked array is returned
         idx = pulse['RECEIVED_START_IDX']
         cnt = pulse['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
         received = self.fileHandle['DATA']['RECEIVED'][idx:idx+cnt+1]
@@ -256,13 +318,9 @@ class SPDV3File(generic.LiDARFile):
         assert self.mode != generic.READ
         raise NotImplementedError()
         
+    # TODO: write both at once 
     def writePulsesForExtent(self, pulses):
         assert self.mode != generic.READ
-        # TODO: must remove points in overlap area
-        # TODO: what happens when they have moved a pulse
-        # outside the block area? Should we know it isn't an overlap
-        # pulse and keep it?
-
         # we are fussy here about the dtype - the format
         # written must match the spec. Not such an issue for SPD v4?
         if pulses.dtype != PULSE_DTYPE:
@@ -278,8 +336,8 @@ class SPDV3File(generic.LiDARFile):
                     (pulses['Y_IDX'] <= self.extent.yMax))
         pulses = pulses[mask]
         
-        # TODO: should PTS_START_IDX be translated from what the user
-        # has passed into file indices?
+        # TOOD: Points must be written at the same time so 
+        # we can set PTS_START_IDX
         
         if self.mode == generic.CREATE:
             # need to extend the hdf5 dataset before writing
