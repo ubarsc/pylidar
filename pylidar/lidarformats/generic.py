@@ -20,33 +20,43 @@ class LiDARFormatDriverNotFound(LiDARFileException):
     
 class LiDARInvalidData(LiDARFileException):
     "Something is wrong with the data read or given"
+    
+class LiDARInvalidSetting(LiDARFileException):
+    "Setting does not make sense"
 
 class LiDARFile(basedriver.Driver):
     """
     Base class for all LiDAR Format reader/writers
     """
-    def __init__(self, fname, mode, controls):
-        basedriver.Driver.__init__(self, fname, mode, controls)
-        
-    def getPixelGrid(self):
-        raise NotImplementedError()
-        
-    def setPixelGrid(self, pixGrid):
-        raise NotImplementedError()
-        
-    def setExtent(self, extent):
-        raise NotImplementedError()
+    def __init__(self, fname, mode, controls, userClass):
+        basedriver.Driver.__init__(self, fname, mode, controls, userClass)
         
     def readPointsForExtent(self):
+        """
+        Read all the points within the given extent
+        as 1d strcutured array
+        """
         raise NotImplementedError()
         
     def readPulsesForExtent(self):
+        """
+        Read all the pulses within the given extent
+        as 1d strcutured array
+        """
         raise NotImplementedError()
         
-    def readTransmitted(self, pulse):
+    def readTransmitted(self, pulses):
+        """
+        Read the transmitted waveform for the given (1d) array of pulses
+        returns a 2d masked array
+        """
         raise NotImplementedError()
         
     def readReceived(self, pulse):
+        """
+        Read the received waveform for the given (1d) array of pulses
+        returns a 2d masked array
+        """
         raise NotImplementedError()
         
     def writePointsForExtent(self, points):
@@ -55,14 +65,16 @@ class LiDARFile(basedriver.Driver):
     def writePulsesForExtent(self, pulses):
         raise NotImplementedError()
         
-    def writeTransmitted(self, pulse, transmitted):
+    def writeTransmitted(self, pulses, transmitted):
         raise NotImplementedError()
         
-    def writeReceived(self, pulse, received):
+    def writeReceived(self, pulses, received):
         raise NotImplementedError()
         
-
     def hasSpatialIndex(self):
+        """
+        Returns True if file has a spatial index defined
+        """
         raise NotImplementedError()
         
     # see below for no spatial index
@@ -82,7 +94,7 @@ class LiDARFile(basedriver.Driver):
         raise NotImplementedError()
 
 
-def getReaderForLiDARFile(fname, mode, controls):
+def getReaderForLiDARFile(fname, mode, controls, userClass):
     """
     Returns an instance of a LiDAR format
     reader/writer or raises an exception if none
@@ -93,7 +105,7 @@ def getReaderForLiDARFile(fname, mode, controls):
         #print('trying', cls)
         try:
             # attempt to create it
-            inst = cls(fname, mode, controls)
+            inst = cls(fname, mode, controls, userClass)
             # worked - return it
             return inst
         except LiDARFileException:

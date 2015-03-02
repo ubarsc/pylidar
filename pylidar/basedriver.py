@@ -2,6 +2,9 @@
 """
 Generic 'driver' class. To be subclassed by both 
 LiDAR and raster drivers.
+
+Also contains the Extent class which defines the extent
+to use for reading or writing the current block.
 """
 
 class Extent(object):
@@ -33,21 +36,45 @@ class Extent(object):
 
 
 class Driver(object):
-    def __init__(self, fname, mode, controls):
+    """
+    Base Driver object to be subclassed be both the LiDAR and raster drivers
+    """
+    def __init__(self, fname, mode, controls, userClass):
+        """
+        fname is the file to open or create
+        mode is READ, UPDATE or CREATE
+        controls is an instance of lidarprocessing.Controls
+        userClass is the instance of userclass.LidarFile or userclass.ImageFile
+            used to define the file.
+        """
         self.fname = fname 
         self.mode = mode
         self.controls = controls
+        self.userClass = userClass
         
     def setExtent(self, extent):
+        """
+        Set the extent for reading or writing
+        """
         raise NotImplementedError()
         
     def getPixelGrid(self):
+        """
+        Return the PixelGridDefn for this file
+        """
         raise NotImplementedError()
         
     def setPixelGrid(self, pixGrid):
+        """
+        Set the PixelGridDefn for the reading or 
+        writing we will do
+        """
         raise NotImplementedError()
         
     def close(self):
+        """
+        Close all open file handles
+        """
         raise NotImplementedError()
         
         

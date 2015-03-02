@@ -98,8 +98,8 @@ def convertIdxBool(start_idx_array, count_array, outBool, outRow, outCol, outIdx
     # know what such an array would look like, though....
 
 class SPDV3File(generic.LiDARFile):
-    def __init__(self, fname, mode, controls):
-        generic.LiDARFile.__init__(self, fname, mode, controls)
+    def __init__(self, fname, mode, controls, userClass):
+        generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
     
         # convert mode into h5py mode string
         if mode == generic.READ:

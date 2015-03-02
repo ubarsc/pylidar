@@ -4,8 +4,10 @@ Classes that are passed to the doProcessing function.
 And the doProcessing function itself
 """
 
+import os
 from rios import imageio
 from rios import pixelgrid
+from rios import cuiprogress
 from . import basedriver
 from . import gdaldriver
 from .lidarformats import generic
@@ -20,55 +22,214 @@ INTERSECTION = imageio.INTERSECTION
 UNION = imageio.UNION
 BOUNDS_FROM_REFERENCE = imageio.BOUNDS_FROM_REFERENCE
 
-DEFAULT_WINDOW_SIZE = 100 # metres
-DEFAULT_RASTER_DRIVER = 'KEA'
+DEFAULT_WINDOW_SIZE = 200 # bins
+
+def setDefaultDrivers():
+    """
+    Adapted from RIOS
+    Sets some default values into global variables, defining
+    what defaults we should use for GDAL and LiDAR  drivers. On any given
+    output file these can be over-ridden, and can be over-ridden globally
+    using the environment variables (for GDAL):
+        $PYLIDAR_DFLT_RASTERDRIVER
+        $PYLIDAR_DFLT_RASTERDRIVEROPTIONS
+    (And for LiDAR):
+        $PYLIDAR_DFLT_LIDARDRIVER
+        $PYLIDAR_DFLT_LIDARDRIVEROPTIONS
+    
+    If PYLIDAR_DFLT_RASTERDRIVER is set, then it should be a gdal short driver name
+    If PYLIDAR_DFLT_RASTERDRIVEROPTIONS is set, it should be a space-separated list
+    of driver creation options, e.g. "COMPRESS=LZW TILED=YES", and should
+    be appropriate for the selected GDAL driver. This can also be 'None'
+    in which case an empty list of creation options is passed to the driver.
+    
+    If not otherwise supplied, the default is to use the HFA driver, with compression. 
+        
+    If PYLIDAR_DFLT_LIDARDRIVER is set, then is should be a LiDAR driver anme
+    If PYLIDAR_DFLT_LIDARDRIVEROPTIONS is set it should be a space-separated list
+    of driver creation options and should be appropriate for the selected LiDAR
+    driver. This can also be 'None' in which case an empty list of creation 
+    options is passed to the driver.
+        
+    If not otherwise supplied, the default is to use the SPDV3 driver.
+    """
+    global DEFAULT_RASTERDRIVERNAME, DEFAULT_RASTERCREATIONOPTIONS
+    global DEFAULT_LIDARDRIVERNAME, DEFAULT_LIDARCREATIONOPTIONS
+    DEFAULT_RASTERDRIVERNAME = os.getenv('PYLIDAR_DFLT_RASTERDRIVER', default='HFA')
+    DEFAULT_RASTERCREATIONOPTIONS = ['COMPRESSED=TRUE','IGNOREUTM=TRUE']
+    creationOptionsStr = os.getenv('PYLIDAR_DFLT_RASTERDRIVEROPTIONS')
+    if creationOptionsStr is not None:
+        if creationOptionsStr == 'None':
+            # hack for KEA which needs no creation options
+            # and LoadLeveler which deletes any env variables
+            # set to an empty values
+            DEFAULT_RASTERCREATIONOPTIONS = []
+        else:
+            DEFAULT_RASTERCREATIONOPTIONS = creationOptionsStr.split()
+            
+    DEFAULT_LIDARDRIVERNAME = os.getenv('PYLIDAR_DFLT_LIDARDRIVER', default='SPDV3')
+    DEFAULT_LIDARCREATIONOPTIONS = []
+    creationOptionsStr = os.getenv('PYLIDAR_DFLT_LIDARDRIVEROPTIONS')
+    if creationOptionsStr is not None:
+        if creationOptionsStr == 'None':
+            DEFAULT_LIDARCREATIONOPTIONS = []
+        else:
+            DEFAULT_LIDARCREATIONOPTIONS = creationOptionsStr.split()
+
+setDefaultDrivers()
 
 # inputs to the doProcessing
 
 class DataFiles(object):
+    """
+    Container class that has all instances of LidarFile and ImageFile
+    insterted into it as the names they are to be used inside the users
+    function.
+    """
     pass
     
 class OtherArgs(object):
+    """
+    Container class that has any arbitary information that the user function
+    requires. Set in the same form as DataFiles above, but no conversion of the
+    contents happens.
+    """
     pass
     
 class Controls(object):
-    # stuff to come
+    """
+    The controls object. This is passed to the doProcessing function 
+    and contains methods for controling the behaviour of the processing.
+    """
     def __init__(self):
         self.footprint = INTERSECTION
         self.windowSize = DEFAULT_WINDOW_SIZE
         self.overlap = 0
-        self.rasterDriver = DEFAULT_RASTER_DRIVER
-        self.rasterIgnore = 0
+        self.spatialProcessing = True 
+        self.referenceImage = None
+        self.referencePixgrid = None
+        self.progress = cuiprogress.SilentProgress()
         
     def setFootprint(self, footprint):
+        """
+        Set the footprint of the processing area. This should be
+        either INTERSECTION, UNION or BOUNDS_FROM_REFERENCE.
+        """
         self.footprint = footprint
         
     def setWindowSize(self, size):
-        "in metres"
+        """
+        Size of the window in bins/pixels that the processing is to be
+        performed in. Same in the X and Y direction.
+        If doing non spatial processing 'size' pulses are read in at
+        each iteration.
+        """
         self.windowSize = size
         
     def setOverlap(self, overlap):
-        "in bins"
+        """
+        Sets the overlap between each window. In bins.
+        """
         self.overlap = overlap
 
-    # TODO: raster driver and ignor to be per file        
-    def setRasterDriver(self, driverName):
-        self.RasterDriver = driverName
+    def setSpatialProcessing(self, spatial):
+        """
+        Set whether to do processing in a spatial manner. If set to True
+        and if one of more LiDAR inputs do not support spatial indexing
+        will be reset to False and warning printed.
+        """
+        self.spatialProcessing = spatial
         
-    def setRasterIgnore(self, ignore):
-        self.rasterIgnore = ignore
+    def setReferenceImage(self, referenceImage):
+        """
+        The path to a reference GDAL image to use when the footprint is
+        set to BOUNDS_FROM_REFERENCE. Set only one of this or referencePixgrid
+        not both.
+        """
+        self.referenceImage = referenceImage
+        
+    def setReferencePixgrid(self, referencePixgrid):
+        """
+        The instance of rios.pixelgrid.PixelGridDefn to use as a reference
+        when footprint is set to BOUNDS_FROM_REFERENCE. Set only one of this
+        or referenceImage, not both.
+        """
+        self.referencePixgrid = referencePixgrid
+        
+    def setProgress(self, progress):
+        """
+        Set the progress instance to use. Usually one of rios.cuiprogress.*
+        Default is silent progress
+        """
+        self.progress = progress
     
 class LidarFile(object):
+    """
+    Create an instance of this to process a LiDAR file. Set it to a 
+    field within your instance of DataFiles.
+    The mode is one of: READ, UPDATE or CREATE.
+    """
     def __init__(self, fname, mode):
-        # TODO: extra driver options passed as GDAL style list of strings??
         self.fname = fname
         self.mode = mode
+        self.lidarDriver = DEFAULT_LIDARDRIVERNAME
+        self.lidarDriverOptions = DEFAULT_LIDARCREATIONOPTIONS
+        
+    def setLiDARDriver(self, driverName):
+        """
+        Set the name of the Lidar driver to use for creaton
+        """
+        if self.mode != CREATE:
+            msg = 'Only valid for creation'
+            raise generic.LiDARInvalidSetting(msg)
+        self.lidarDriver = driverName
+        
+    def setLiDARDriverOptions(self, options):
+        """
+        Set a list of strings in driver specific format
+        """
+        if self.mode != CREATE:
+            msg = 'Only valid for creation'
+            raise generic.LiDARInvalidSetting(msg)
+        self.lidarDriverOptions = options
     
 class ImageFile(object):
     def __init__(self, fname, mode):
-        # TODO: extra driver options passed as GDAL style list of strings??
         self.fname = fname
         self.mode = mode
+        self.rasterDriver = DEFAULT_RASTERDRIVERNAME
+        self.rasterDriverOptions = DEFAULT_RASTERCREATIONOPTIONS
+        self.rasterIgnore = 0
+
+    def setRasterDriver(self, driverName):
+        """
+        Set GDAL driver short name to use for output format.
+        """
+        if self.mode != CREATE:
+            msg = 'Only valid for creation'
+            raise generic.LiDARInvalidSetting(msg)
+        self.RasterDriver = driverName
+        
+    def setRasterDriverOptions(self, options):
+        """
+        Set a list of strings in driver specific format. See GDAL
+        documentation.
+        """
+        if self.mode != CREATE:
+            msg = 'Only valid for creation'
+            raise generic.LiDARInvalidSetting(msg)
+        self.rasterDriverOptions = options
+        
+    def setRasterIgnore(self, ignore):
+        """
+        Set the ignore value for calculating statistics
+        """
+        # TODO: maybe should be valid for read for area outside
+        # footprint?
+        if self.mode == READ:
+            msg = 'Only valid for creation or update'
+            raise generic.LiDARInvalidSetting(msg)
+        self.rasterIgnore = ignore
     
 def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
 
@@ -92,7 +253,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         inputFile = getattr(dataFiles, name)
         if isinstance(inputFile, LidarFile):
             driver = generic.getReaderForLiDARFile(inputFile.fname,
-                                inputFile.mode, controls)
+                                inputFile.mode, controls, inputFile)
             driverList.append(driver)
                                 
             # create a class to wrap this for the users function
@@ -106,7 +267,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
                 
         elif isinstance(inputFile, ImageFile):
             driver = gdaldriver.GDALDriver(inputFile.fname,
-                                inputFile.mode, controls)
+                                inputFile.mode, controls, inputFile)
             driverList.append(driver)
 
             # create a class to wrap this for the users function
@@ -195,19 +356,9 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         if currentExtent.yMin < workingPixGrid.yMin:
             currentExtent.yMin = workingPixGrid.yMin
 
+        # TODO: progress
 
     # close all the files
     for driver in driverList:
         driver.close()
-
-    # 1. Get Extent. Either from files for the controls
-    # 2. Read the spatial indices (if being used)
-    # 3. Work out where the first block is
-    # 4. Loop through each block doing:
-    #   4a Read data and assemble objects for user function
-    #   4b call user function
-    #   4c Write any output data
-    #   4d update output spatial index
-        
-
 
