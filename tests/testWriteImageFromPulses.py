@@ -3,6 +3,7 @@
 import sys
 import numpy
 from pylidar import lidarprocessor
+from rios import cuiprogress
 
 def writeImageFunc(data):
 
@@ -19,7 +20,11 @@ def testWrite(infile, imageFile):
     dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
     dataFiles.imageOut1 = lidarprocessor.ImageFile(imageFile, lidarprocessor.CREATE)
     
-    lidarprocessor.doProcessing(writeImageFunc, dataFiles)
+    controls = lidarprocessor.Controls()
+    progress = cuiprogress.GDALProgressBar()
+    controls.setProgress(progress)
+    
+    lidarprocessor.doProcessing(writeImageFunc, dataFiles, controls=controls)
     
 if __name__ == '__main__':
     testWrite(sys.argv[1], sys.argv[2])

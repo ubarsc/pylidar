@@ -20,6 +20,7 @@ And the doProcessing function itself
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import numpy
 from rios import imageio
 from rios import pixelgrid
 from rios import cuiprogress
@@ -247,7 +248,18 @@ class ImageFile(object):
         self.rasterIgnore = ignore
     
 def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
-
+    """
+    Main function in PyLidar. Calls function userFunc with each block
+    of data. dataFiles to be an instance of DataFiles with fields of instances
+    of LidarFile and ImageFile. The names of the fields are re-used in the 
+    object passed to userFunc that contains the actual data.
+    
+    If otherArgs (an instance of OtherArgs) is not None, this is passed as
+        the second param to userFunc.
+        
+    If controls (an instance of Controls) is not None then these controls
+        are used for changing the behaviour of reading and writing.
+    """
     # TODO: update so we can handle no spatial index
     # -requested via the controls
     # - or file doesn't have one
@@ -302,36 +314,59 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         msg = 'No input files selected'
         raise LiDARFileException(msg)
         
-    # TODO: need to determine if we have a spatial index for all LiDAR files
+    # need to determine if we have a spatial index for all LiDAR files
+    if controls.spatialProcessing:
+        for driver in driverList:
+            if isinstance(driver, generic.LiDARFile):
+                if not driver.hasSpatialIndex():
+                    print("""Warning: Not all LiDAR files have a spatial index. 
+Non-spatial processing will now occur. 
+To suppress this message call Controls.setSpatialProcessing(False)""")
+                    controls.spatialProcessing = False
+                    break
         
-    # for now, check they all align
-    firstPixGrid = None
+    # work out the reference pixgrid. This is used when the footprint
+    # is BOUNDS_FROM_REFERENCE            
+    referenceGrid = controls.referencePixgrid
+    if referenceGrid is None and controls.referenceImage is not None:
+        referenceGrid = pixelgrid.pixelGridFromFile(controls.referenceImage)
+    if referenceGrid is None:
+        # default to first
+        referenceGrid = gridList[0]
+
+    # for now, check they all align. We may support reprojection in the future
     for pixGrid in gridList:
-        if firstPixGrid is None:
-            firstPixGrid = pixGrid
-        else:
-            if not firstPixGrid.alignedWith(pixGrid):
-                msg = 'Un-aligned datasets not yet supported'
-                raise LiDARFileException(msg)
-            
+        if not referenceGrid.alignedWith(pixGrid):
+            msg = 'Un-aligned datasets not yet supported'
+            raise LiDARFileException(msg)
+        
     # work out common extent
-    # TODO: user input reference grid
-    workingPixGrid = pixelgrid.findCommonRegion(gridList, gridList[0], 
+    workingPixGrid = pixelgrid.findCommonRegion(gridList, referenceGrid, 
                             controls.footprint)
                             
     # tell all drivers that are creating files what pixel grid is
     for driver in driverList:
+        # TODO: is this only for create?
         if driver.mode != READ:
             driver.setPixelGrid(workingPixGrid)
             
-    # info clas
+    # tell info class
     userContainer.info.setPixGrid(workingPixGrid)
                             
     # work out where the first block is
+    # controls.windowSize is in bins. Convert to meters
+    windowSizeWorld = controls.windowSize * workingPixGrid.xRes
     currentExtent = basedriver.Extent(workingPixGrid.xMin, 
-                        workingPixGrid.xMin + controls.windowSize,
-                        workingPixGrid.yMax - controls.windowSize,
+                        workingPixGrid.xMin + windowSizeWorld,
+                        workingPixGrid.yMax - windowSizeWorld,
                         workingPixGrid.yMax, workingPixGrid.xRes)
+                        
+    controls.progress.setProgress(0)
+    nTotalBlocks = int(numpy.ceil(
+            (workingPixGrid.xMax - workingPixGrid.xMin) / workingPixGrid.xRes) +
+            numpy.ceil(
+            (workingPixGrid.yMax - workingPixGrid.yMin) / workingPixGrid.yRes))
+    nBlocksSoFar = 0
                         
     # loop while we haven't fallen off the bottom of the pixelgrid region
     while currentExtent.yMax > workingPixGrid.yMin:
@@ -339,7 +374,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         for driver in driverList:
             driver.setExtent(currentExtent)
             
-        # info class
+        # update info class
         userContainer.info.setExtent(currentExtent)
             
         # build the function args which is one thing, unless
@@ -353,8 +388,8 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         
         # update to read in next block
         # try going accross first
-        currentExtent.xMin += controls.windowSize
-        currentExtent.xMax += controls.windowSize
+        currentExtent.xMin += windowSizeWorld
+        currentExtent.xMax += windowSizeWorld
         
         # partial block
         if currentExtent.xMax > workingPixGrid.xMax:
@@ -363,16 +398,21 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         if currentExtent.xMin > workingPixGrid.xMax:
             # start next line down
             currentExtent.xMin = workingPixGrid.xMin
-            currentExtent.xMax = workingPixGrid.xMin + controls.windowSize
-            currentExtent.yMax -= controls.windowSize
-            currentExtent.yMin -= controls.windowSize
+            currentExtent.xMax = workingPixGrid.xMin + windowSizeWorld
+            currentExtent.yMax -= windowSizeWorld
+            currentExtent.yMin -= windowSizeWorld
             
         # partial block
         if currentExtent.yMin < workingPixGrid.yMin:
             currentExtent.yMin = workingPixGrid.yMin
 
-        # TODO: progress
+        # progress
+        nBlocksSoFar += 1
+        percentProgress = int((nBlocksSoFar / nTotalBlocks) * 100)
+        controls.progress.setProgress(percentProgress)
 
+    controls.progress.reset()
+    
     # close all the files
     for driver in driverList:
         driver.close()
