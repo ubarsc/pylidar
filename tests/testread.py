@@ -6,8 +6,12 @@ from pylidar import lidarprocessor
 def readFunc(data):
     pulses = data.input1.getPulses()
     print('pulses', len(pulses))
-    #points = data.input1.getPoints()
-    #print('points', len(points))
+    points = data.input1.getPoints()
+    print('points', len(points))
+    #trans = data.input1.getTransmitted(pulses)
+    #print(trans)
+    #recv = data.input1.getReceived(pulses)
+    #print(recv)
     
 def testRead(infile):
     dataFiles = lidarprocessor.DataFiles()

@@ -68,6 +68,9 @@ class LidarData(object):
         return pulses
         
     def getPulsesByBins(self):
+        # TODO: move into driver
+        # maybe driver should return object 
+        # with other info from getPulses()
         import numpy
         pulses = self.getPulses()
         idx = self.driver.lastPulses_Idx
@@ -75,29 +78,41 @@ class LidarData(object):
         pulsesByBins = pulses[idx]
         return numpy.ma.array(pulsesByBins, mask=idxMask)
         
-    def getPointsByPulse(self):
+    def getPointsByBins(self):
+        # have to spatially index the points
         import numpy
         points = self.getPoints()
-        idx = self.driver.lastPoints_Idx
-        idxMask = self.driver.lastPoints_IdxMask
-        pointsByBins = points[idx]
-        return numpy.ma.array(pointsByBins, mask=idxMask)
+        extent = self.driver.lastExtent
+        nrows = int((extent.yMax - extent.yMin) / extent.binSize)
+        ncols = int((extent.xMax - extent.xMin) / extent.binSize)
+        sortedbins, idx, cnt = self.driver.CreateSpatialIndex(
+                points['Y'], points['X'], extent.binSize, extent.yMax,
+                extent.xMin, nrows, ncols)
+        
+        # TODO: don't really want the bool array returned - need
+        # to make it optional
+        nOut = (idx + cnt).max() + 1
+        pts_bool, pts_idx, pts_idx_mask = self.driver.convertIdxToUsefulStuff(
+                                idx, cnt, nOut)
+        
+        pointsByBins = points[pts_idx]
+        return numpy.ma.array(pointsByBins, mask=pts_idx_mask)
         
     def convertPointsTo2D(self, points):
         pass
         
     # For a particular pulse
     # TODO: should support a pulsearray with masking
-    def getTransmitted(self, pulse):
-        "as an integer array"
-        return self.driver.readTransmitted(pulse)
+    def getTransmitted(self, pulses):
+        "as a masked 2d integer array"
+        return self.driver.readTransmitted(pulses)
         
     def setTransmitted(self, pulse, transmitted):
-        "as an integer array"
+        "as a masked 2d integer array"
         
-    def getReceived(self, pulse):
+    def getReceived(self, pulses):
         "as an integer array"
-        return self.driver.readReceived(pulse)
+        return self.driver.readReceived(pulses)
         
     def setReceived(self, pulse, received):
         "as an integer array"

@@ -49,35 +49,49 @@ POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'),
 
     
 @jit
-def BuildSpatialIndex(binNum, sortedBinNumNdx, si_start, si_count):
+def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
+    """
+    binNum is col * nCols + row
+    sortedBinNumNdx is argsorted binNum    
+    si_start and si_count are output spatial indices
+    """
     nCols = si_start.shape[1]
+    nRows = si_start.shape[0]
     nThings = binNum.shape[0]
     for i in range(nThings):
         bn = binNum[sortedBinNumNdx[i]]
         row = bn // nCols
         col = bn % nCols
-        if si_count[row, col] == 0:
-            si_start[row, col] = i
-        si_count[row, col] += 1
+        if row >= 0 and col >= 0 and row < nRows and col < nCols:    
+            if si_count[row, col] == 0:
+                si_start[row, col] = i
+            si_count[row, col] += 1
     
 @jit
-def convertIdxBool(start_idx_array, count_array, outBool, outRow, outCol, outIdx, counts, outMask):
+def convertIdxBool2D(start_idx_array, count_array, outBool, outRow, outCol, 
+                        outIdx, counts, outMask):
     """
     Convert SPD's default regular spatial index of pulse offsets and pulse counts
     per bin into a single boolean array. It is assumed that out is already
     set to all False
 
-    Written to use numba - numpy version was very slow. Anyone any ideas
-    on how to do this quickly in normal numpy?
     """
-    # start_idx_array - array of start indexes
-    # count_array - array of counts
-    # outBool - same shape as the dataset size, but bool inited to False
+    # start_idx_array 2d - array of start indexes
+    #   input
+    # count_array 2d - array of counts
+    #   input
+    # outBool 1d - same shape as the dataset size, but bool inited to False
+    #   for passing to h5py for reading data
     # outIdx 3d - (max(count_array), nRows, nCols) int32 inited to 0
+    #   for constructing a masked array
     # outMask 3d - bool same shape as outIdx inited to True
-    # outRow same shape as outBool but int64 cerate with numpy.empty()
-    # outCol same shape as outBool but int64 empty()
+    #   for constructing a masked array
+    # outRow same shape as outBool but uint32 created with numpy.empty()
+    #   used internally only
+    # outCol same shape as outBool but uint32 empty()
+    #   used internally only
     # counts (nRows, nCols) int32 inited to 0
+    #   used internally only
     
     nRows = start_idx_array.shape[0]
     nCols = start_idx_array.shape[1]
@@ -107,12 +121,56 @@ def convertIdxBool(start_idx_array, count_array, outBool, outRow, outCol, outIdx
             outMask[c, row, col] = False
             counts[row, col] += 1
             counter += 1
-                
-    # I believe that this calculation we have just done is also the perfect
-    # place to assemble some sort of array showing which bin each pulse belongs with,
-    # so it might be that we should return two things from this function. I don't yet 
-    # know what such an array would look like, though....
 
+@jit
+def convertIdxBool1D(start_idx_array, count_array, outBool, outRow, outIdx, 
+                        counts, outMask):
+    """
+    Convert SPD's indexing of points from pulses, or waveforms from pulses
+    into a single boolean array. It is assumed that out is already
+    set to all False
+
+    """
+    # start_idx_array 1d - array of start indexes
+    #   input
+    # count_array 1d - array of counts
+    #   input
+    # outBool 1d - same shape as the dataset size, but bool inited to False
+    #   for passing to h5py for reading data
+    # outIdx 2d - (max(count_array), nRows) int32 inited to 0
+    #   for constructing a masked array
+    # outMask 2d - bool same shape as outIdx inited to True
+    #   for constructing a masked array
+    # outRow same shape as outBool but uint32 created with numpy.empty()
+    #   used internally only
+    # counts (nRows,) int32 inited to 0
+    #   used internally only
+    
+    nRows = start_idx_array.shape[0]
+    
+    for row in range(nRows):
+        
+        cnt = count_array[row]
+        startidx = start_idx_array[row]
+        for i in range(cnt):
+            # seems a strange bug in numba/llvm where the
+            # result of this add gets promoted to a double
+            # so cast it back
+            idx = int(startidx + i)
+            outBool[idx] = True
+            outRow[idx] = row
+                
+    n = outBool.shape[0]
+    counter = 0
+    for i in range(n):
+        if outBool[i]:
+            row = outRow[i]
+            c = counts[row]
+            outIdx[c, row] = counter
+            outMask[c, row] = False
+            counts[row] += 1
+            counter += 1
+                
 class SPDV3File(generic.LiDARFile):
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
@@ -210,8 +268,8 @@ class SPDV3File(generic.LiDARFile):
         
         # create spatial index
         (nrows, ncols) = pixGrid.getDimensions()
-        self.si_cnt = numpy.zeros((ncols, nrows), dtype=numpy.int)
-        self.si_idx = numpy.zeros((ncols, nrows), dtype=numpy.int)
+        self.si_cnt = numpy.zeros((ncols, nrows), dtype=numpy.uint32)
+        self.si_idx = numpy.zeros((ncols, nrows), dtype=numpy.uint64)
     
     def setExtent(self, extent):
         if not self.hasSpatialIndex():
@@ -235,16 +293,17 @@ class SPDV3File(generic.LiDARFile):
         # of the same shape as the dataset
         # so we do this. If you give it the indices themselves
         # this must be done as a list which is slow
-        point_bool, point_idx, point_idx_mask = self.convertIdxToUsefulStuff(startIdxs,
-                    nReturns, self.fileHandle['DATA']['POINTS'].shape[0])
+        point_bool, point_idx, point_idx_mask = self.convertIdxToUsefulStuff(
+            startIdxs, nReturns, self.fileHandle['DATA']['POINTS'].shape[0])
         
         points = self.fileHandle['DATA']['POINTS'][point_bool]
         
         # self.lastExtent updated in readPulsesForExtent()
         self.lastPoints = points
         # TODO: set to None in constructor
-        self.lastPoints_Idx = points_idx
-        self.lastPoints_IdxMask = points_idx_mask
+        self.lastPoints_Idx = point_idx
+        self.lastPoints_IdxMask = point_idx_mask
+        # TODO: should return idx info in object along with points?
         return points
             
     def readPulsesForExtent(self):
@@ -282,7 +341,8 @@ class SPDV3File(generic.LiDARFile):
         # of the same shape as the dataset
         # so we do this. If you give it the indices themselves
         # this must be done as a list which is slow
-        pulse_bool, pulse_idx, pulse_idx_mask = self.convertIdxToUsefulStuff(idx_subset, cnt_subset, 
+        pulse_bool, pulse_idx, pulse_idx_mask = self.convertIdxToUsefulStuff(
+                idx_subset, cnt_subset, 
                 self.fileHandle['DATA']['PULSES'].shape[0])
         pulses = self.fileHandle['DATA']['PULSES'][pulse_bool]
         
@@ -291,20 +351,40 @@ class SPDV3File(generic.LiDARFile):
         self.lastPulses_Idx = pulse_idx
         self.lastPulses_IdxMask = pulse_idx_mask
         self.lastPoints = None # are now invalid
+        # TODO: should return idx info in object along with pulses?
         return pulses
 
     @staticmethod
     def convertIdxToUsefulStuff(start_idx_array, count_array, outSize):
         outBool = numpy.zeros((outSize,), dtype=numpy.bool)
-        maxCount = count_array.max()
-        nRows, nCols = count_array.shape
-        outIdx = numpy.zeros((maxCount, nRows, nCols), dtype=numpy.int32)
-        outMask = numpy.ones((maxCount, nRows, nCols), numpy.bool)
-        outRow = numpy.empty((outSize,), dtype=numpy.int64)
-        outCol = numpy.empty((outSize,), dtype=numpy.int64)
-        counts = numpy.zeros((nRows, nCols), dtype=numpy.int32)
+        if len(count_array) > 0:
+            maxCount = count_array.max()
+        else:
+            maxCount = 0
         
-        convertIdxBool(start_idx_array, count_array, outBool, outRow, outCol, outIdx, counts, outMask)
+        if count_array.ndim == 2:
+            nRows, nCols = count_array.shape
+            outIdx = numpy.zeros((maxCount, nRows, nCols), dtype=numpy.uint32)
+            outMask = numpy.ones((maxCount, nRows, nCols), numpy.bool)
+            outRow = numpy.empty((outSize,), dtype=numpy.uint32)
+            outCol = numpy.empty((outSize,), dtype=numpy.uint32)
+            counts = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
+        
+            convertIdxBool2D(start_idx_array, count_array, outBool, outRow, 
+                            outCol, outIdx, counts, outMask)
+                            
+        elif count_array.ndim == 1:
+            nRows = count_array.shape[0]
+            outIdx = numpy.zeros((maxCount, nRows), dtype=numpy.uint32)
+            outMask = numpy.ones((maxCount, nRows), numpy.bool)
+            outRow = numpy.empty((outSize,), dtype=numpy.uint32)
+            counts = numpy.zeros((nRows,), dtype=numpy.uint32)
+            
+            convertIdxBool1D(start_idx_array, count_array, outBool, outRow,
+                                outIdx, counts, outMask)
+        else:
+            msg = 'only 1 or 2d indexing supported'
+            raise ValueError(msg)
         
         return outBool, outIdx, outMask
 
@@ -314,20 +394,45 @@ class SPDV3File(generic.LiDARFile):
         # TODO: a method to create 2-d ragged array of pulses by pixel
     
     def readTransmitted(self, pulses):
-        # TODO: update so an array of pulses is taken
-        # and a masked array is returned
-        idx = pulse['TRANSMITTED_START_IDX']
-        cnt = pulse['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
-        transmitted = self.fileHandle['DATA']['TRANSMITTED'][idx:idx+cnt+1]
-        return transmitted
+        # TODO: this takes a parameter of pulses
+        # which is the subset you are interested in
+        # is this ok, or should it always do all pulses?
+        if pulses.ndim != 1:
+            msg = 'function only works on 1d pulses array'
+            raise ValueError(msg)
+        
+        idx = pulses['TRANSMITTED_START_IDX']
+        cnt = pulses['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
+        
+        nOut = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
+        trans_bool, trans_idx, trans_idx_mask = self.convertIdxToUsefulStuff(
+                    idx, cnt, nOut)
+        
+        transmitted = self.fileHandle['DATA']['TRANSMITTED'][trans_bool]
+        
+        transByPulse = transmitted[trans_idx]
+        trans_masked = numpy.ma.array(transByPulse, mask=trans_idx_mask)
+        
+        return trans_masked
         
     def readReceived(self, pulses):
-        # TODO: update so an array of pulses is taken
-        # and a masked array is returned
-        idx = pulse['RECEIVED_START_IDX']
-        cnt = pulse['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
-        received = self.fileHandle['DATA']['RECEIVED'][idx:idx+cnt+1]
-        return received
+        if pulses.ndim != 1:
+            msg = 'function only works on 1d pulses array'
+            raise ValueError(msg)
+            
+        idx = pulses['RECEIVED_START_IDX']
+        cnt = pulses['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
+        
+        nOut = self.fileHandle['DATA']['RECEIVED'].shape[0]
+        recv_bool, recv_idx, recv_idx_mask = self.convertIdxToUsefulStuff(
+                    idx, cnt, nOut)
+        
+        received = self.fileHandle['DATA']['RECEIVED'][recv_bool]
+        
+        recvByPulse = received[recv_idx]
+        recv_masked = numpy.ma.array(recvByPulse, mask=recv_idx_mask)
+        
+        return recv_masked
     
     def writePointsForExtent(self, points):
         # TODO: must remove points in overlap area
@@ -373,19 +478,25 @@ class SPDV3File(generic.LiDARFile):
         raise NotImplementedError()
 
     @staticmethod
-    def NeilsSpatialWrapper(coordOne, coordTwo, binSize, coordOneMin, coordTwoMin, nRows, nCols):
-        # coordOne is the coordinate corresponding to bin row. CoordTwo corresponds to bin col.
+    def CreateSpatialIndex(coordOne, coordTwo, binSize, coordOneMax, 
+                    coordTwoMin, nRows, nCols):
+        # coordOne is the coordinate corresponding to bin row. 
+        # coordTwo corresponds to bin col.
         # Note that coordOne will always be reversed??????
+        # binSize is the size (in world coords) of each bin
+        # coordOneMax and coordTwoMin define the top left of the 
+        #   spatial index to be built
+        # nRows, nCols - size of the spatial index
         sortedIdx = numpy.empty_like(coordOne, dtype=numpy.int64)
         row = numpy.floor((coordOneMax - coordOne) / binSize).astype(numpy.uint32)
         col = numpy.floor((coordTwo - coordTwoMin) / binSize).astype(numpy.uint32)
         binNum = col * nCols + row
         sortedBinNumNdx = numpy.argsort(binNum)
     
-        si_start = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
+        si_start = numpy.zeros((nRows, nCols), dtype=numpy.uint64)
         si_count = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
-    
-        BuildSpatialIndex(binNum, sortedBinNumNdx, si_start, si_count)
+        
+        BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count)
         return sortedBinNumNdx, si_start, si_count
         
     def writeTransmitted(self, pulse, transmitted):
