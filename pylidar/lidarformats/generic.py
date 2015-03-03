@@ -38,6 +38,24 @@ class LiDARInvalidData(LiDARFileException):
     
 class LiDARInvalidSetting(LiDARFileException):
     "Setting does not make sense"
+    
+class PulseRange(object):
+    """
+    Class for setting the range of pulses to read/write
+    for non spatial mode.
+    Note: range does not include endPulse
+    """
+    def __init__(self, startPulse, endPulse):
+        self.startPulse = startPulse
+        self.endPulse = endPulse
+        
+    def __eq__(self, other):
+        return (self.startPulse == other.startPulse and 
+                self.endPulse == other.endPulse)
+                
+    def __ne__(self, other):
+        return (self.startPulse != other.startPulse or
+                self.endPulse != other.endPulse)
 
 class LiDARFile(basedriver.Driver):
     """
@@ -45,6 +63,12 @@ class LiDARFile(basedriver.Driver):
     """
     def __init__(self, fname, mode, controls, userClass):
         basedriver.Driver.__init__(self, fname, mode, controls, userClass)
+        
+    def getDriverName(self):
+        """
+        Return name of driver
+        """
+        raise NotImplementedError()
         
     def readPointsForExtent(self):
         """
@@ -67,7 +91,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
-    def readReceived(self, pulse):
+    def readReceived(self, pulses):
         """
         Read the received waveform for the given (1d) array of pulses
         returns a 2d masked array
@@ -93,10 +117,20 @@ class LiDARFile(basedriver.Driver):
         raise NotImplementedError()
         
     # see below for no spatial index
-    def readPoints(self, n):
+    def setPulseRange(self, pulseRange):
+        """
+        Sets the PulseRange object to use for non spatial
+        reads/writes.
+        """
+        raise NotImplementedError()
+    
+    def readPointsForRange(self):
         raise NotImplementedError()
         
-    def readPulses(self, n):
+    def readPulsesForRange(self):
+        raise NotImplementedError()
+        
+    def getTotalNumberPulses(self):
         raise NotImplementedError()
         
     def writePoints(self, points):
@@ -105,7 +139,7 @@ class LiDARFile(basedriver.Driver):
     def writePulses(self, pulses):
         raise NotImplementedError()
         
-    def close(self, headerInfo=None):
+    def close(self):
         raise NotImplementedError()
 
 

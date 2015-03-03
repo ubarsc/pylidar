@@ -53,12 +53,18 @@ class LidarData(object):
         
     def getPoints(self):
         "as a structured array"
-        points = self.driver.readPointsForExtent()
+        if self.driver.controls.spatialProcessing:
+            points = self.driver.readPointsForExtent()
+        else:
+            points = self.driver.readPointsForRange()
         return points
         
     def getPulses(self):
         "as a structured array"
-        pulses = self.driver.readPulsesForExtent()
+        if self.driver.controls.spatialProcessing:
+            pulses = self.driver.readPulsesForExtent()
+        else:
+            pulses = self.driver.readPulsesForRange()
         return pulses
         
     def getPulsesByBins(self):

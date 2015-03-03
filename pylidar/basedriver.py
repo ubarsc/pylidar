@@ -24,10 +24,10 @@ to use for reading or writing the current block.
 
 class Extent(object):
     """
-    Class that defines an extent of an area to read or write
+    Class that defines the extent in world coords
+    of an area to read or write
     """
-    def __init__(self, xMin=None, xMax=None, yMin=None, yMax=None, 
-                    binSize=None):
+    def __init__(self, xMin, xMax, yMin, yMax, binSize):
         self.xMin = xMin
         self.xMax = xMax
         self.yMin = yMin

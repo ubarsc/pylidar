@@ -308,11 +308,11 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
                                                                                 
         else:
             msg = "File type not understood"
-            raise LiDARFileException(msg)
+            raise generic.LiDARFileException(msg)
             
     if len(gridList) == 0:
         msg = 'No input files selected'
-        raise LiDARFileException(msg)
+        raise generic.LiDARFileException(msg)
         
     # need to determine if we have a spatial index for all LiDAR files
     if controls.spatialProcessing:
@@ -324,58 +324,87 @@ Non-spatial processing will now occur.
 To suppress this message call Controls.setSpatialProcessing(False)""")
                     controls.spatialProcessing = False
                     break
-        
-    # work out the reference pixgrid. This is used when the footprint
-    # is BOUNDS_FROM_REFERENCE            
-    referenceGrid = controls.referencePixgrid
-    if referenceGrid is None and controls.referenceImage is not None:
-        referenceGrid = pixelgrid.pixelGridFromFile(controls.referenceImage)
-    if referenceGrid is None:
-        # default to first
-        referenceGrid = gridList[0]
+                    
+    if not controls.spatialProcessing:
+        # need to check no image inputs in non spatial mode
+        # this is not an else to the above if since we may
+        # have just reset the mode above
+        for driver in driverList:
+            if isinstance(driver, gdaldriver.GDALDriver):
+                msg = 'Can only process image inputs when doing spatial processing'
+                raise generic.LiDARFileException(msg)
 
-    # for now, check they all align. We may support reprojection in the future
-    for pixGrid in gridList:
-        if not referenceGrid.alignedWith(pixGrid):
-            msg = 'Un-aligned datasets not yet supported'
-            raise LiDARFileException(msg)
+
+    # set up depending on if spatial or non spatial processing
+    if controls.spatialProcessing:
         
-    # work out common extent
-    workingPixGrid = pixelgrid.findCommonRegion(gridList, referenceGrid, 
-                            controls.footprint)
+        # work out the reference pixgrid. This is used when the footprint
+        # is BOUNDS_FROM_REFERENCE            
+        referenceGrid = controls.referencePixgrid
+        if referenceGrid is None and controls.referenceImage is not None:
+            referenceGrid = pixelgrid.pixelGridFromFile(controls.referenceImage)
+        if referenceGrid is None:
+            # default to first
+            referenceGrid = gridList[0]
+
+        # for now, check they all align. We may support reprojection in the future
+        for pixGrid in gridList:
+            if not referenceGrid.alignedWith(pixGrid):
+                msg = 'Un-aligned datasets not yet supported'
+                raise generic.LiDARFileException(msg)
+        
+        # work out common extent
+        workingPixGrid = pixelgrid.findCommonRegion(gridList, referenceGrid, 
+                                controls.footprint)
                             
-    # tell all drivers that are creating files what pixel grid is
-    for driver in driverList:
-        # TODO: is this only for create?
-        if driver.mode != READ:
-            driver.setPixelGrid(workingPixGrid)
+        # tell all drivers that are creating files what pixel grid is
+        for driver in driverList:
+            # TODO: is this only for create?
+            if driver.mode != READ:
+                driver.setPixelGrid(workingPixGrid)
             
-    # tell info class
-    userContainer.info.setPixGrid(workingPixGrid)
-                            
-    # work out where the first block is
-    # controls.windowSize is in bins. Convert to meters
-    windowSizeWorld = controls.windowSize * workingPixGrid.xRes
-    currentExtent = basedriver.Extent(workingPixGrid.xMin, 
+        # tell info class
+        userContainer.info.setPixGrid(workingPixGrid)
+            
+        # work out where the first block is
+        # controls.windowSize is in bins. Convert to meters
+        windowSizeWorld = controls.windowSize * workingPixGrid.xRes
+        currentExtent = basedriver.Extent(workingPixGrid.xMin, 
                         workingPixGrid.xMin + windowSizeWorld,
                         workingPixGrid.yMax - windowSizeWorld,
                         workingPixGrid.yMax, workingPixGrid.xRes)
                         
-    controls.progress.setProgress(0)
-    nTotalBlocks = int(numpy.ceil(
+        nTotalBlocks = int(numpy.ceil(
             (workingPixGrid.xMax - workingPixGrid.xMin) / workingPixGrid.xRes) +
             numpy.ceil(
             (workingPixGrid.yMax - workingPixGrid.yMin) / workingPixGrid.yRes))
+        bMoreToDo = currentExtent.yMax > workingPixGrid.yMin
+        
+    else:
+        # TODO: what if some or all of the drivers don't know how many pulses
+        # there are?
+        nTotalPulses = max([driver.getTotalNumberPulses() for 
+                        driver in driverList])
+        nTotalBlocks = int(numpy.ceil(nTotalPulses / controls.windowSize))
+        currentRange = generic.PulseRange(0, controls.windowSize)
+        bMoreToDo = currentRange.startPulse < nTotalPulses
+            
     nBlocksSoFar = 0
+    controls.progress.setProgress(0)
                         
     # loop while we haven't fallen off the bottom of the pixelgrid region
-    while currentExtent.yMax > workingPixGrid.yMin:
+    while bMoreToDo:
         # update the driver classes with the new extent
-        for driver in driverList:
-            driver.setExtent(currentExtent)
+        if controls.spatialProcessing:
+            for driver in driverList:
+                driver.setExtent(currentExtent)
+            # update info class
+            userContainer.info.setExtent(currentExtent)
             
-        # update info class
-        userContainer.info.setExtent(currentExtent)
+        else:
+            for driver in driverList:
+                driver.setPulseRange(currentRange)
+            # TODO: info class support for pulseRange?
             
         # build the function args which is one thing, unless
         # there is user data
@@ -386,25 +415,34 @@ To suppress this message call Controls.setSpatialProcessing(False)""")
         # call it
         userFunc(*functionArgs)
         
-        # update to read in next block
-        # try going accross first
-        currentExtent.xMin += windowSizeWorld
-        currentExtent.xMax += windowSizeWorld
+        if controls.spatialProcessing:
+            # update to read in next block
+            # try going accross first
+            currentExtent.xMin += windowSizeWorld
+            currentExtent.xMax += windowSizeWorld
         
-        # partial block
-        if currentExtent.xMax > workingPixGrid.xMax:
-            currentExtent.xMax = workingPixGrid.xMax
+            # partial block
+            if currentExtent.xMax > workingPixGrid.xMax:
+                currentExtent.xMax = workingPixGrid.xMax
         
-        if currentExtent.xMin > workingPixGrid.xMax:
-            # start next line down
-            currentExtent.xMin = workingPixGrid.xMin
-            currentExtent.xMax = workingPixGrid.xMin + windowSizeWorld
-            currentExtent.yMax -= windowSizeWorld
-            currentExtent.yMin -= windowSizeWorld
+            if currentExtent.xMin > workingPixGrid.xMax:
+                # start next line down
+                currentExtent.xMin = workingPixGrid.xMin
+                currentExtent.xMax = workingPixGrid.xMin + windowSizeWorld
+                currentExtent.yMax -= windowSizeWorld
+                currentExtent.yMin -= windowSizeWorld
             
-        # partial block
-        if currentExtent.yMin < workingPixGrid.yMin:
-            currentExtent.yMin = workingPixGrid.yMin
+            # partial block
+            if currentExtent.yMin < workingPixGrid.yMin:
+                currentExtent.yMin = workingPixGrid.yMin
+            
+            # done?
+            bMoreToDo = currentExtent.yMax > workingPixGrid.yMin
+        else:
+            currentRange.startPulse += controls.windowSize
+            currentRange.endPulse += controls.windowSize
+            # done?
+            bMoreToDo = currentRange.startPulse < nTotalPulses
 
         # progress
         nBlocksSoFar += 1

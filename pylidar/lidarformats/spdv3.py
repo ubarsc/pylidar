@@ -147,18 +147,27 @@ class SPDV3File(generic.LiDARFile):
         # read in the bits I need            
         if mode == generic.READ:
             # TODO: handle when the spatial index does not exist
-            self.si_cnt = self.fileHandle['INDEX']['PLS_PER_BIN'][...]
-            self.si_idx = self.fileHandle['INDEX']['BIN_OFFSETS'][...]
-            self.si_binSize = self.fileHandle['HEADER']['BIN_SIZE'][0]
-            self.si_xMin = self.fileHandle['HEADER']['X_MIN'][0]
-            self.si_yMax = self.fileHandle['HEADER']['Y_MAX'][0]
-            # bottom right coords don't seem right (of data rather than si)
-            self.si_xMax = self.si_xMin + (self.si_idx.shape[1] * self.si_binSize)
-            self.si_yMin = self.si_yMax - (self.si_idx.shape[0] * self.si_binSize)
+            indexKeys = self.fileHandle['INDEX'].keys()
+            if 'PLS_PER_BIN' in indexKeys and 'BIN_OFFSETS' in indexKeys:
+                self.si_cnt = self.fileHandle['INDEX']['PLS_PER_BIN'][...]
+                self.si_idx = self.fileHandle['INDEX']['BIN_OFFSETS'][...]
+                self.si_binSize = self.fileHandle['HEADER']['BIN_SIZE'][0]
+                self.si_xMin = self.fileHandle['HEADER']['X_MIN'][0]
+                self.si_yMax = self.fileHandle['HEADER']['Y_MAX'][0]
+                # bottom right coords don't seem right (of data rather than si)
+                self.si_xMax = self.si_xMin + (self.si_idx.shape[1] * self.si_binSize)
+                self.si_yMin = self.si_yMax - (self.si_idx.shape[0] * self.si_binSize)
             
-            #self.si_xMax = self.fileHandle['HEADER']['X_MAX'][0]
-            #self.si_yMin = self.fileHandle['HEADER']['Y_MIN'][0]
-            self.wkt = self.fileHandle['HEADER']['SPATIAL_REFERENCE'][0].decode()
+                self.wkt = self.fileHandle['HEADER']['SPATIAL_REFERENCE'][0].decode()
+            else:
+                self.si_cnt = None
+                self.si_idx = None
+                self.si_binSize = None
+                self.si_xMin = None
+                self.si_yMax = None
+                self.si_xMax = None
+                self.si_yMin = None
+                self.wkt = None
         else:
             # set on setPixelGrid
             self.si_cnt = None
@@ -175,6 +184,11 @@ class SPDV3File(generic.LiDARFile):
         self.lastPoints = None
         self.lastPulses = None
         self.extent = None
+        self.pulseRange = None
+        self.lastPulseRange = None
+
+    def getDriverName(self):
+        return "SPDV3"
 
     def getPixelGrid(self):
         pixGrid = pixelgrid.PixelGridDefn(projection=self.wkt,
@@ -184,7 +198,9 @@ class SPDV3File(generic.LiDARFile):
         return pixGrid
     
     def setPixelGrid(self, pixGrid):
-        assert self.mode != generic.READ
+        if self.mode == generic.READ:
+            msg = 'Can only set new pixel grid when updating or creating'
+            raise generic.LiDARInvalidData(msg)
         self.si_binSize = pixGrid.xRes
         self.si_xMin = pixGrid.xMin
         self.si_yMax = pixGrid.yMax
@@ -198,6 +214,9 @@ class SPDV3File(generic.LiDARFile):
         self.si_idx = numpy.zeros((ncols, nrows), dtype=numpy.int)
     
     def setExtent(self, extent):
+        if not self.hasSpatialIndex():
+            msg = 'Format has no spatial Index. Processing must be done non-spatially'
+            raise generic.LiDARInvalidSetting(msg)
         self.extent = extent    
     
     def readPointsForExtent(self):
@@ -221,7 +240,7 @@ class SPDV3File(generic.LiDARFile):
         
         points = self.fileHandle['DATA']['POINTS'][point_bool]
         
-        self.lastExtent = copy.copy(self.extent)
+        # self.lastExtent updated in readPulsesForExtent()
         self.lastPoints = points
         # TODO: set to None in constructor
         self.lastPoints_Idx = points_idx
@@ -294,7 +313,7 @@ class SPDV3File(generic.LiDARFile):
         # TODO: a method to create 2-d ragged array of points by pixel
         # TODO: a method to create 2-d ragged array of pulses by pixel
     
-    def readTransmitted(self, pulse):
+    def readTransmitted(self, pulses):
         # TODO: update so an array of pulses is taken
         # and a masked array is returned
         idx = pulse['TRANSMITTED_START_IDX']
@@ -302,7 +321,7 @@ class SPDV3File(generic.LiDARFile):
         transmitted = self.fileHandle['DATA']['TRANSMITTED'][idx:idx+cnt+1]
         return transmitted
         
-    def readReceived(self, pulse):
+    def readReceived(self, pulses):
         # TODO: update so an array of pulses is taken
         # and a masked array is returned
         idx = pulse['RECEIVED_START_IDX']
@@ -376,15 +395,58 @@ class SPDV3File(generic.LiDARFile):
         raise NotImplementedError()
 
     def hasSpatialIndex(self):
-        # assume this format always does
-        # TODO: is this correct?
-        return True
+        return self.si_cnt is not None
         
     # see below for no spatial index
-    def readPoints(self, n):
-        raise NotImplementedError()
-    def readPulses(self, n):
-        raise NotImplementedError()
+    def setPulseRange(self, pulseRange):
+        # copy it so we can change the values if beyond the 
+        # range of data
+        self.pulseRange = copy.copy(pulseRange)
+        nTotalPulses = self.getTotalNumberPulses()
+        if self.pulseRange.startPulse > nTotalPulses:
+            # no data to read
+            self.pulseRange.startPulse = 0
+            self.pulseRange.endPulse = 0
+            
+        elif self.pulseRange.endPulse > nTotalPulses:
+            self.pulseRange.endPulse = nTotalPulses + 1
+        
+    def readPointsForRange(self):
+        if (self.lastPulseRange is not None and
+                self.lastPulseRange == self.pulseRange and
+                self.lastPoints is not None):
+            return self.lastPoints
+            
+        # this should return anything cached
+        pulses = self.readPulses()
+        
+        nReturns = pulses['NUMBER_OF_RETURNS']
+        startIdxs = pulses['PTS_START_IDX']
+        
+        # TODO: what now?
+        points = None
+        
+        self.lastPoints = points
+        # self.lastPulseRange copied in readPulses()
+        return points        
+    
+    def readPulsesForRange(self):
+        if (self.lastPulseRange is not None and
+                self.lastPulseRange == self.pulseRange and 
+                self.lastPulses is not None):
+            return self.lastPulses
+    
+        pulses = self.fileHandle['DATA']['PULSES'][
+            self.pulseRange.startPulse:self.pulseRange.endPulse]
+            
+        self.lastPulses = pulses
+        self.lastPulseRange = copy.copy(self.pulseRange)
+        self.lastPoints = None # now invalid
+        return pulses
+    
+    def getTotalNumberPulses(self):
+        return self.fileHandle['DATA']['PULSES'].shape[0]
+        
     def writePoints(self, points):
         raise NotImplementedError()
     def writePulses(self, pulses):
