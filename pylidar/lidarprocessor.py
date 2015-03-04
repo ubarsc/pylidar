@@ -375,9 +375,9 @@ To suppress this message call Controls.setSpatialProcessing(False)""")
                         workingPixGrid.yMax, workingPixGrid.xRes)
                         
         nTotalBlocks = int(numpy.ceil(
-            (workingPixGrid.xMax - workingPixGrid.xMin) / workingPixGrid.xRes) +
+            (workingPixGrid.xMax - workingPixGrid.xMin) / windowSizeWorld) *
             numpy.ceil(
-            (workingPixGrid.yMax - workingPixGrid.yMin) / workingPixGrid.yRes))
+            (workingPixGrid.yMax - workingPixGrid.yMin) / windowSizeWorld))
         bMoreToDo = currentExtent.yMax > workingPixGrid.yMin
         
     else:
@@ -391,7 +391,7 @@ To suppress this message call Controls.setSpatialProcessing(False)""")
             
     nBlocksSoFar = 0
     controls.progress.setProgress(0)
-                        
+
     # loop while we haven't fallen off the bottom of the pixelgrid region
     while bMoreToDo:
         # update the driver classes with the new extent
@@ -405,7 +405,7 @@ To suppress this message call Controls.setSpatialProcessing(False)""")
             for driver in driverList:
                 driver.setPulseRange(currentRange)
             # TODO: info class support for pulseRange?
-            
+
         # build the function args which is one thing, unless
         # there is user data
         functionArgs = (userContainer,)

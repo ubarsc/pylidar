@@ -12,6 +12,8 @@ def readFunc(data):
     #print(trans)
     #recv = data.input1.getReceived(pulses)
     #print(recv)
+    pointsByPulse = data.input1.getPointsByPulse()
+    print(pointsByPulse)
     
 def testRead(infile):
     dataFiles = lidarprocessor.DataFiles()

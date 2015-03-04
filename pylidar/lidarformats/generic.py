@@ -84,16 +84,16 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
-    def readTransmitted(self, pulses):
+    def readTransmitted(self):
         """
-        Read the transmitted waveform for the given (1d) array of pulses
+        Read the transmitted waveform for all pulses
         returns a 2d masked array
         """
         raise NotImplementedError()
         
-    def readReceived(self, pulses):
+    def readReceived(self):
         """
-        Read the received waveform for the given (1d) array of pulses
+        Read the received waveform for all pulses
         returns a 2d masked array
         """
         raise NotImplementedError()

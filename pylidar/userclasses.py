@@ -67,7 +67,7 @@ class LidarData(object):
             pulses = self.driver.readPulsesForRange()
         return pulses
         
-    def getPulsesByBins(self):
+    def getPulsesByBins(self, extent=None):
         # TODO: move into driver
         # maybe driver should return object 
         # with other info from getPulses()
@@ -78,7 +78,7 @@ class LidarData(object):
         pulsesByBins = pulses[idx]
         return numpy.ma.array(pulsesByBins, mask=idxMask)
         
-    def getPointsByBins(self):
+    def getPointsByBins(self, extent=None):
         # have to spatially index the points
         import numpy
         points = self.getPoints()
@@ -98,30 +98,31 @@ class LidarData(object):
         
         pointsByBins = sortedPoints[pts_idx]
         return numpy.ma.array(pointsByBins, mask=pts_idx_mask)
+
+    def getPointsByPulse(self):
+        import numpy
+        points = self.getPoints()
+        idx = self.driver.lastPoints_Idx
+        idxMask = self.driver.lastPoints_IdxMask
         
-    def convertPointsTo2D(self, points):
-        pass
+        pointsByPulse = points[idx]
+        return numpy.ma.array(pointsByPulse, mask=idxMask)
         
-    # For a particular pulse
-    # TODO: should support a pulsearray with masking
-    def getTransmitted(self, pulses):
+    def getTransmitted(self):
         "as a masked 2d integer array"
-        return self.driver.readTransmitted(pulses)
+        return self.driver.readTransmitted()
         
-    def setTransmitted(self, pulse, transmitted):
+    def setTransmitted(self, transmitted):
         "as a masked 2d integer array"
         
-    def getReceived(self, pulses):
+    def getReceived(self):
         "as an integer array"
-        return self.driver.readReceived(pulses)
+        return self.driver.readReceived()
         
-    def setReceived(self, pulse, received):
+    def setReceived(self, received):
         "as an integer array"
         
-    def regridData(self, data):
-        "tdb"
-        
-    def setPoints(self, pts):
+    def setPoints(self, points):
         "as a structured array"
         self.driver.writePointsForExtent(points)
         

@@ -83,7 +83,7 @@ def convertIdxBool2D(start_idx_array, count_array, outBool, outRow, outCol,
     # outBool 1d - same shape as the dataset size, but bool inited to False
     #   for passing to h5py for reading data
     # outIdx 3d - (max(count_array), nRows, nCols) int32 inited to 0
-    #   for constructing a masked array
+    #   for constructing a masked array - relative to subset size
     # outMask 3d - bool same shape as outIdx inited to True
     #   for constructing a masked array
     # outRow same shape as outBool but uint32 created with numpy.empty()
@@ -369,8 +369,6 @@ class SPDV3File(generic.LiDARFile):
             outMask = numpy.ones((maxCount, nRows, nCols), numpy.bool)
             outRow = numpy.empty((outSize,), dtype=numpy.uint32)
             outCol = numpy.empty((outSize,), dtype=numpy.uint32)
-            #outRow = numpy.zeros((outSize,), dtype=numpy.uint32)
-            #outCol = numpy.zeros((outSize,), dtype=numpy.uint32)
             counts = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
         
             convertIdxBool2D(start_idx_array, count_array, outBool, outRow, 
@@ -396,14 +394,13 @@ class SPDV3File(generic.LiDARFile):
         # TODO: a method to create 2-d ragged array of points by pixel
         # TODO: a method to create 2-d ragged array of pulses by pixel
     
-    def readTransmitted(self, pulses):
-        # TODO: this takes a parameter of pulses
-        # which is the subset you are interested in
-        # is this ok, or should it always do all pulses?
+    def readTransmitted(self):
         if pulses.ndim != 1:
             msg = 'function only works on 1d pulses array'
             raise ValueError(msg)
         
+        # TODO: read all pulses
+        pulses = 1
         idx = pulses['TRANSMITTED_START_IDX']
         cnt = pulses['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
         
@@ -418,10 +415,13 @@ class SPDV3File(generic.LiDARFile):
         
         return trans_masked
         
-    def readReceived(self, pulses):
+    def readReceived(self):
         if pulses.ndim != 1:
             msg = 'function only works on 1d pulses array'
             raise ValueError(msg)
+
+        # TODO: read all pulses
+        pulses = 1
             
         idx = pulses['RECEIVED_START_IDX']
         cnt = pulses['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
