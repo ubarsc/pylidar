@@ -88,14 +88,15 @@ class LidarData(object):
         sortedbins, idx, cnt = self.driver.CreateSpatialIndex(
                 points['Y'], points['X'], extent.binSize, extent.yMax,
                 extent.xMin, nrows, ncols)
-        
         # TODO: don't really want the bool array returned - need
         # to make it optional
-        nOut = (idx + cnt).max() + 1
+        nOut = len(points)
         pts_bool, pts_idx, pts_idx_mask = self.driver.convertIdxToUsefulStuff(
                                 idx, cnt, nOut)
+                                
+        sortedPoints = points[sortedbins]
         
-        pointsByBins = points[pts_idx]
+        pointsByBins = sortedPoints[pts_idx]
         return numpy.ma.array(pointsByBins, mask=pts_idx_mask)
         
     def convertPointsTo2D(self, points):

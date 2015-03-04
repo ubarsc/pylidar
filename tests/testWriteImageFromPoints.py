@@ -4,14 +4,25 @@ import sys
 import numpy
 from pylidar import lidarprocessor
 from rios import cuiprogress
+from rios import pixelgrid
 
 def writeImageFunc(data):
 
     pointsByBins = data.input1.getPointsByBins()
     zValues = pointsByBins['Z']
-    avgZ = zValues.mean(axis=0)
-    avgZ = numpy.expand_dims(avgZ, axis=0)
-    data.imageOut1.setData(avgZ)
+    #yValues = pointsByBins['Y']
+    (maxPts, nRows, nCols) = zValues.shape
+    nullval = 0
+    if maxPts > 0:
+        minZ = zValues.min(axis=0)
+        #minY = yValues.min(axis=0)
+        minZ[minZ.mask] = nullval
+        #minY[minY.mask] = nullval
+        #stack = numpy.array([minZ, minY])
+        stack = numpy.expand_dims(minZ, axis=0)
+    else:
+        stack = numpy.full((1, nRows, nCols), nullval, dtype=zValues.dtype)
+    data.imageOut1.setData(stack)
     
     
 def testWrite(infile, imageFile):
@@ -23,6 +34,10 @@ def testWrite(infile, imageFile):
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
+    
+    pixGrid = pixelgrid.PixelGridDefn(xMin=706445.0, xMax=706545.0, yMin=6153381.0, yMax=6153481.0,
+                        xRes=0.5, yRes=0.5, projection='')
+#    controls.setReferencePixgrid(pixGrid)
     
     lidarprocessor.doProcessing(writeImageFunc, dataFiles, controls=controls)
     

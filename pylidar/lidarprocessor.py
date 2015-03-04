@@ -425,7 +425,7 @@ To suppress this message call Controls.setSpatialProcessing(False)""")
             if currentExtent.xMax > workingPixGrid.xMax:
                 currentExtent.xMax = workingPixGrid.xMax
         
-            if currentExtent.xMin > workingPixGrid.xMax:
+            if currentExtent.xMin >= workingPixGrid.xMax:
                 # start next line down
                 currentExtent.xMin = workingPixGrid.xMin
                 currentExtent.xMax = workingPixGrid.xMin + windowSizeWorld

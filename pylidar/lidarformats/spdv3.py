@@ -51,7 +51,7 @@ POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'),
 @jit
 def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
     """
-    binNum is col * nCols + row
+    binNum is row * nCols + col
     sortedBinNumNdx is argsorted binNum    
     si_start and si_count are output spatial indices
     """
@@ -293,8 +293,9 @@ class SPDV3File(generic.LiDARFile):
         # of the same shape as the dataset
         # so we do this. If you give it the indices themselves
         # this must be done as a list which is slow
+        nOut = self.fileHandle['DATA']['POINTS'].shape[0]
         point_bool, point_idx, point_idx_mask = self.convertIdxToUsefulStuff(
-            startIdxs, nReturns, self.fileHandle['DATA']['POINTS'].shape[0])
+                        startIdxs, nReturns, nOut)
         
         points = self.fileHandle['DATA']['POINTS'][point_bool]
         
@@ -341,9 +342,9 @@ class SPDV3File(generic.LiDARFile):
         # of the same shape as the dataset
         # so we do this. If you give it the indices themselves
         # this must be done as a list which is slow
+        nOut = self.fileHandle['DATA']['PULSES'].shape[0]
         pulse_bool, pulse_idx, pulse_idx_mask = self.convertIdxToUsefulStuff(
-                idx_subset, cnt_subset, 
-                self.fileHandle['DATA']['PULSES'].shape[0])
+                idx_subset, cnt_subset, nOut)
         pulses = self.fileHandle['DATA']['PULSES'][pulse_bool]
         
         self.lastExtent = copy.copy(self.extent)
@@ -357,7 +358,7 @@ class SPDV3File(generic.LiDARFile):
     @staticmethod
     def convertIdxToUsefulStuff(start_idx_array, count_array, outSize):
         outBool = numpy.zeros((outSize,), dtype=numpy.bool)
-        if len(count_array) > 0:
+        if count_array.size > 0:
             maxCount = count_array.max()
         else:
             maxCount = 0
@@ -368,6 +369,8 @@ class SPDV3File(generic.LiDARFile):
             outMask = numpy.ones((maxCount, nRows, nCols), numpy.bool)
             outRow = numpy.empty((outSize,), dtype=numpy.uint32)
             outCol = numpy.empty((outSize,), dtype=numpy.uint32)
+            #outRow = numpy.zeros((outSize,), dtype=numpy.uint32)
+            #outCol = numpy.zeros((outSize,), dtype=numpy.uint32)
             counts = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
         
             convertIdxBool2D(start_idx_array, count_array, outBool, outRow, 
@@ -487,10 +490,9 @@ class SPDV3File(generic.LiDARFile):
         # coordOneMax and coordTwoMin define the top left of the 
         #   spatial index to be built
         # nRows, nCols - size of the spatial index
-        sortedIdx = numpy.empty_like(coordOne, dtype=numpy.int64)
         row = numpy.floor((coordOneMax - coordOne) / binSize).astype(numpy.uint32)
         col = numpy.floor((coordTwo - coordTwoMin) / binSize).astype(numpy.uint32)
-        binNum = col * nCols + row
+        binNum = row * nCols + col
         sortedBinNumNdx = numpy.argsort(binNum)
     
         si_start = numpy.zeros((nRows, nCols), dtype=numpy.uint64)
@@ -564,7 +566,7 @@ class SPDV3File(generic.LiDARFile):
         raise NotImplementedError()
 
     def close(self):
-        if self.mode != generic.READ:
+        if self.mode != generic.READ and self.si_cnt is not None:
             # write out to file
             self.fileHandle['INDEX']['PLS_PER_BIN'] = self.si_cnt
             self.fileHandle['INDEX']['BIN_OFFSETS'] = self.si_idx
