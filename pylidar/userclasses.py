@@ -91,7 +91,7 @@ class LidarData(object):
         # TODO: don't really want the bool array returned - need
         # to make it optional
         nOut = len(points)
-        pts_bool, pts_idx, pts_idx_mask = self.driver.convertIdxToUsefulStuff(
+        pts_bool, pts_idx, pts_idx_mask = self.driver.convertSPDIdxToReadIdxAndMaskInfo(
                                 idx, cnt, nOut)
                                 
         sortedPoints = points[sortedbins]

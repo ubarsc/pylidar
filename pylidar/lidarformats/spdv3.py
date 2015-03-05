@@ -51,7 +51,12 @@ POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'),
 @jit
 def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
     """
-    binNum is row * nCols + col
+    Internal function used by SPDV3File.CreateSpatialIndex.
+    
+    Fills in the spatial index from the sorted bins created by CreateSpatialIndex.
+    
+    binNum is row * nCols + col where row and col are arrays of the row and col 
+        of each element being spatially indexed.
     sortedBinNumNdx is argsorted binNum    
     si_start and si_count are output spatial indices
     """
@@ -59,116 +64,159 @@ def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
     nRows = si_start.shape[0]
     nThings = binNum.shape[0]
     for i in range(nThings):
+        # get the bin of the sorted location of this element
         bn = binNum[sortedBinNumNdx[i]]
+        # extract the row and column
         row = bn // nCols
         col = bn % nCols
+        # range check in case outside of the bouds of index 
+        # being created
         if row >= 0 and col >= 0 and row < nRows and col < nCols:    
             if si_count[row, col] == 0:
+                # first element of a new bin - save the start 
+                # rest of elements in this bin should be next
+                # since it is sorted
                 si_start[row, col] = i
+            # update count of elements
             si_count[row, col] += 1
     
 @jit
 def convertIdxBool2D(start_idx_array, count_array, outBool, outRow, outCol, 
                         outIdx, counts, outMask):
     """
-    Convert SPD's default regular spatial index of pulse offsets and pulse counts
-    per bin into a single boolean array. It is assumed that out is already
-    set to all False
+    Internal function called by convertSPDIdxToReadIdxAndMaskInfo
+    
+    Convert SPD's default regular spatial index of pulse offsets and pulse 
+    counts per bin into a boolean array (for passing to h5py for reading data), 
+    an array of indexes and a mask for creating a 3d masked array of the data 
+    extracted.
+    
+    Note: indexes returned are relative to the subset, not the file.
 
+    start_idx_array 2d - array of start indexes
+       input - from the SPD spatial index
+    count_array 2d - array of counts
+       input - from the SPD spatial index
+    outBool 1d - same shape as the dataset size, but bool inited to False
+       for passing to h5py for reading data
+    outIdx 3d - (max(count_array), nRows, nCols) int32 inited to 0
+       for constructing a masked array - relative to subset size
+    outMask 3d - bool same shape as outIdx inited to True
+       for constructing a masked array. Result will be False were valid data
+    outRow same shape as outBool but uint32 created with numpy.empty()
+       used internally only
+    outCol same shape as outBool but uint32 empty()
+       used internally only
+    counts (nRows, nCols) int32 inited to 0
+       used internally only
     """
-    # start_idx_array 2d - array of start indexes
-    #   input
-    # count_array 2d - array of counts
-    #   input
-    # outBool 1d - same shape as the dataset size, but bool inited to False
-    #   for passing to h5py for reading data
-    # outIdx 3d - (max(count_array), nRows, nCols) int32 inited to 0
-    #   for constructing a masked array - relative to subset size
-    # outMask 3d - bool same shape as outIdx inited to True
-    #   for constructing a masked array
-    # outRow same shape as outBool but uint32 created with numpy.empty()
-    #   used internally only
-    # outCol same shape as outBool but uint32 empty()
-    #   used internally only
-    # counts (nRows, nCols) int32 inited to 0
-    #   used internally only
     
     nRows = start_idx_array.shape[0]
     nCols = start_idx_array.shape[1]
     
     for col in range(nCols):
         for row in range(nRows):
+            # go through each bin in the spatial index
         
             cnt = count_array[row, col]
             startidx = start_idx_array[row, col]
             for i in range(cnt):
+                # work out the location in the file we need
+                # to read this element from
                 # seems a strange bug in numba/llvm where the
                 # result of this add gets promoted to a double
                 # so cast it back
                 idx = int(startidx + i)
-                outBool[idx] = True
-                outRow[idx] = row
-                outCol[idx] = col
+                outBool[idx] = True # tell h5py we want this one
+                outRow[idx] = row   # store the row/col for this element
+                outCol[idx] = col   # relative to this subset
                 
+    # go through again setting up the indexes and mask
     n = outBool.shape[0]
     counter = 0
     for i in range(n):
         if outBool[i]:
+            # ok will be data extracted here
+            # get the row and col of where it came from
             row = outRow[i]
             col = outCol[i]
+            # get the current number of elements from this bin
             c = counts[row, col]
+            # save the current element number at the right level
+            # in the outIdx (using the current number of elements in this bin)
             outIdx[c, row, col] = counter
+            # tell the masked array there is valid data here
             outMask[c, row, col] = False
+            # update the current number of elements in this bin
             counts[row, col] += 1
+            # update the current element number
             counter += 1
 
 @jit
 def convertIdxBool1D(start_idx_array, count_array, outBool, outRow, outIdx, 
                         counts, outMask):
     """
+    Internal function called by convertSPDIdxToReadIdxAndMaskInfo
+    
     Convert SPD's indexing of points from pulses, or waveforms from pulses
-    into a single boolean array. It is assumed that out is already
-    set to all False
+    into a single boolean array (for passing to h5py for reading data), 
+    an array of indexes and a mask for creating a 3d masked array of the data 
+    extracted.
+                
+    Note: indexes returned are relative to the subset, not the file.
+                    
+    start_idx_array 1d - array of start indexes
+       input - from the SPD index
+    count_array 1d - array of counts
+       input - from the SPD index
+    outBool 1d - same shape as the dataset size, but bool inited to False
+       for passing to h5py for reading data
+    outIdx 2d - (max(count_array), nRows) int32 inited to 0
+       for constructing a masked array - relative to subset size
+    outMask 2d - bool same shape as outIdx inited to True
+       for constructing a masked array. Result will be False were valid data
+    outRow same shape as outBool but uint32 created with numpy.empty()
+       used internally only
+    counts (nRows, nCols) int32 inited to 0
+       used internally only
 
     """
-    # start_idx_array 1d - array of start indexes
-    #   input
-    # count_array 1d - array of counts
-    #   input
-    # outBool 1d - same shape as the dataset size, but bool inited to False
-    #   for passing to h5py for reading data
-    # outIdx 2d - (max(count_array), nRows) int32 inited to 0
-    #   for constructing a masked array
-    # outMask 2d - bool same shape as outIdx inited to True
-    #   for constructing a masked array
-    # outRow same shape as outBool but uint32 created with numpy.empty()
-    #   used internally only
-    # counts (nRows,) int32 inited to 0
-    #   used internally only
     
     nRows = start_idx_array.shape[0]
     
     for row in range(nRows):
+        # go through each bin in the index
         
         cnt = count_array[row]
         startidx = start_idx_array[row]
         for i in range(cnt):
+            # work out the location in the file we need
+            # to read this element from
             # seems a strange bug in numba/llvm where the
             # result of this add gets promoted to a double
             # so cast it back
             idx = int(startidx + i)
-            outBool[idx] = True
-            outRow[idx] = row
+            outBool[idx] = True # tell h5py we want this one
+            outRow[idx] = row # store the row for this element
                 
+    # go through again setting up the indexes and mask
     n = outBool.shape[0]
     counter = 0
     for i in range(n):
         if outBool[i]:
+            # ok will be data extracted here
+            # get the row of where it came from
             row = outRow[i]
+            # get the current number of elements from this bin
             c = counts[row]
+            # save the current element number at the right level
+            # in the outIdx (using the current number of elements in this bin)
             outIdx[c, row] = counter
+            # tell the masked array there is valid data here
             outMask[c, row] = False
+            # update the current number of elements in this bin
             counts[row] += 1
+            # update the current element number
             counter += 1
                 
 class SPDV3File(generic.LiDARFile):
@@ -294,7 +342,7 @@ class SPDV3File(generic.LiDARFile):
         # so we do this. If you give it the indices themselves
         # this must be done as a list which is slow
         nOut = self.fileHandle['DATA']['POINTS'].shape[0]
-        point_bool, point_idx, point_idx_mask = self.convertIdxToUsefulStuff(
+        point_bool, point_idx, point_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
         
         points = self.fileHandle['DATA']['POINTS'][point_bool]
@@ -343,7 +391,7 @@ class SPDV3File(generic.LiDARFile):
         # so we do this. If you give it the indices themselves
         # this must be done as a list which is slow
         nOut = self.fileHandle['DATA']['PULSES'].shape[0]
-        pulse_bool, pulse_idx, pulse_idx_mask = self.convertIdxToUsefulStuff(
+        pulse_bool, pulse_idx, pulse_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                 idx_subset, cnt_subset, nOut)
         pulses = self.fileHandle['DATA']['PULSES'][pulse_bool]
         
@@ -356,17 +404,45 @@ class SPDV3File(generic.LiDARFile):
         return pulses
 
     @staticmethod
-    def convertIdxToUsefulStuff(start_idx_array, count_array, outSize):
+    def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize):
+        """
+        Convert either a 2d SPD spatial index or 1d index (pulse to points, 
+        pulse to waveform etc) information for reading with h5py and creating
+        a masked array with the indices into the read subset.
+        
+        Parameters:
+        start_idx_array is the 2 or 1d input array of file start indices from SPD
+        count_array is the 2 or 1d input array of element counts from SPD
+        outSize is the size of the h5py dataset to be read. 
+        
+        Returns:
+        A 1d bool array to pass to h5py for reading the info out of the dataset.
+            This will be outSize elements long
+        A 3 or 2d (depending on if a 2 or 1 array was input) array containing
+            indices into the new subset of the data. This array is arranged so
+            that the first axis contains the indices for each bin (or pulse)
+            and the other axis is the row (and col axis for 3d output)
+            This array can be used to rearrange the data ready from h5py into
+            a ragged array of the correct shape constaining the data from 
+            each bin.
+        A 3 or 2d (depending on if a 2 or 1 array was input) bool array that
+            can be used as a mask in a masked array of the ragged array (above)
+            of the actual data.
+        """
+        # create the bool array for h5py
         outBool = numpy.zeros((outSize,), dtype=numpy.bool)
+        # work out the size of the first dimension of the index
         if count_array.size > 0:
             maxCount = count_array.max()
         else:
             maxCount = 0
         
         if count_array.ndim == 2:
+            # 2d input - 3d output index and mask
             nRows, nCols = count_array.shape
             outIdx = numpy.zeros((maxCount, nRows, nCols), dtype=numpy.uint32)
             outMask = numpy.ones((maxCount, nRows, nCols), numpy.bool)
+            # for internal use by convertIdxBool2D
             outRow = numpy.empty((outSize,), dtype=numpy.uint32)
             outCol = numpy.empty((outSize,), dtype=numpy.uint32)
             counts = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
@@ -375,9 +451,11 @@ class SPDV3File(generic.LiDARFile):
                             outCol, outIdx, counts, outMask)
                             
         elif count_array.ndim == 1:
+            # 1d input - 2d output index and mask
             nRows = count_array.shape[0]
             outIdx = numpy.zeros((maxCount, nRows), dtype=numpy.uint32)
             outMask = numpy.ones((maxCount, nRows), numpy.bool)
+            # for internal use by convertIdxBool1D
             outRow = numpy.empty((outSize,), dtype=numpy.uint32)
             counts = numpy.zeros((nRows,), dtype=numpy.uint32)
             
@@ -387,6 +465,7 @@ class SPDV3File(generic.LiDARFile):
             msg = 'only 1 or 2d indexing supported'
             raise ValueError(msg)
         
+        # return the arrays
         return outBool, outIdx, outMask
 
         # TODO: a method to create a ragged array of points-by-pulses using PTS_START_IDX 
@@ -405,7 +484,7 @@ class SPDV3File(generic.LiDARFile):
         cnt = pulses['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
         
         nOut = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
-        trans_bool, trans_idx, trans_idx_mask = self.convertIdxToUsefulStuff(
+        trans_bool, trans_idx, trans_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                     idx, cnt, nOut)
         
         transmitted = self.fileHandle['DATA']['TRANSMITTED'][trans_bool]
@@ -427,7 +506,7 @@ class SPDV3File(generic.LiDARFile):
         cnt = pulses['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
         
         nOut = self.fileHandle['DATA']['RECEIVED'].shape[0]
-        recv_bool, recv_idx, recv_idx_mask = self.convertIdxToUsefulStuff(
+        recv_bool, recv_idx, recv_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                     idx, cnt, nOut)
         
         received = self.fileHandle['DATA']['RECEIVED'][recv_bool]
@@ -483,22 +562,51 @@ class SPDV3File(generic.LiDARFile):
     @staticmethod
     def CreateSpatialIndex(coordOne, coordTwo, binSize, coordOneMax, 
                     coordTwoMin, nRows, nCols):
-        # coordOne is the coordinate corresponding to bin row. 
-        # coordTwo corresponds to bin col.
-        # Note that coordOne will always be reversed??????
-        # binSize is the size (in world coords) of each bin
-        # coordOneMax and coordTwoMin define the top left of the 
-        #   spatial index to be built
-        # nRows, nCols - size of the spatial index
+        """
+        Create a SPD V3 spatial index given arrays of the coordinates of 
+        the elements.
+        
+        This can then be used for writing a SPD V3 spatial index to file,
+        or to re-bin data to a new grid.
+
+        Parameters:
+            coordOne is the coordinate corresponding to bin row. 
+            coordTwo corresponds to bin col.
+                Note that coordOne will always be reversed??????
+            binSize is the size (in world coords) of each bin
+            coordOneMax and coordTwoMin define the top left of the 
+                spatial index to be built
+            nRows, nCols - size of the spatial index
+            
+        Returns:
+            sortedBins - a 1d array of indices that is used to 
+                re-sort the data into the correct order for using 
+                the created spatial index. Since the spatial index puts
+                all elements in the same bin together this is a very important
+                step!
+            si_start - a 2d array of start indexes into the sorted data (see
+                above)
+            si_count - the count of elements in each bin.
+        """
+        # work out the row and column of each element to be put into the
+        # spatial index
         row = numpy.floor((coordOneMax - coordOne) / binSize).astype(numpy.uint32)
         col = numpy.floor((coordTwo - coordTwoMin) / binSize).astype(numpy.uint32)
+        # convert this to a 'binNum' which is a combination of row and col
+        # and can be sorted
         binNum = row * nCols + col
+        # get an array of indices of the sorted version of the bins
         sortedBinNumNdx = numpy.argsort(binNum)
     
+        # output spatial index arrays
         si_start = numpy.zeros((nRows, nCols), dtype=numpy.uint64)
         si_count = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
         
+        # call our helper function to put the elements into the spatial index
         BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count)
+        
+        # return array to get back to sorted version of the elements
+        # and the new spatial index
         return sortedBinNumNdx, si_start, si_count
         
     def writeTransmitted(self, pulse, transmitted):
