@@ -19,6 +19,8 @@ And the doProcessing function itself
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function, division
+
 import os
 import numpy
 from rios import imageio

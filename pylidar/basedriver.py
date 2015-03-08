@@ -22,6 +22,8 @@ to use for reading or writing the current block.
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function, division
+
 class Extent(object):
     """
     Class that defines the extent in world coords

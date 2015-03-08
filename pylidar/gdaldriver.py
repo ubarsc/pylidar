@@ -18,6 +18,8 @@ Driver for GDAL supported files
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function, division
+
 import numpy
 from osgeo import gdal
 from rios import pixelgrid

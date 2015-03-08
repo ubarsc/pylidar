@@ -18,6 +18,8 @@ Classes that are passed to the user's function
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function, division
+
 import copy
 
 class UserInfo(object):
@@ -142,5 +144,3 @@ class ImageData(object):
     def setData(self, data):
         "as 3d array"    
         self.driver.setData(data)
-            
-            
