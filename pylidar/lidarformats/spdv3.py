@@ -572,10 +572,15 @@ class SPDV3File(generic.LiDARFile):
         Parameters:
             coordOne is the coordinate corresponding to bin row. 
             coordTwo corresponds to bin col.
-                Note that coordOne will always be reversed??????
-            binSize is the size (in world coords) of each bin
+                Note that coordOne will always be reversed, in keeping with widespread
+                conventions that a Y coordinate increases going north, but a grid row number
+                increases going south. This same assumption will be applied even when
+                the coordinates are not cartesian (e.g. angles). 
+            binSize is the size (in world coords) of each bin. The V3 index definition
+                requires that bins are square. 
             coordOneMax and coordTwoMin define the top left of the 
-                spatial index to be built
+                spatial index to be built. This is the world coordinate of the
+                top-left corner of the top-left bin
             nRows, nCols - size of the spatial index
             
         Returns:
@@ -593,7 +598,7 @@ class SPDV3File(generic.LiDARFile):
         row = numpy.floor((coordOneMax - coordOne) / binSize).astype(numpy.uint32)
         col = numpy.floor((coordTwo - coordTwoMin) / binSize).astype(numpy.uint32)
         # convert this to a 'binNum' which is a combination of row and col
-        # and can be sorted
+        # and can be sorted to make a complete ordering of the 2-d grid of bins
         binNum = row * nCols + col
         # get an array of indices of the sorted version of the bins
         sortedBinNumNdx = numpy.argsort(binNum)
