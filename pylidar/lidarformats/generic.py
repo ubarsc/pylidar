@@ -39,6 +39,12 @@ class LiDARInvalidData(LiDARFileException):
 class LiDARInvalidSetting(LiDARFileException):
     "Setting does not make sense"
     
+class LiDARNonSpatialProcessing(LiDARFileException):
+    "Functionality not available when not processing spatially"
+    
+class LiDARFunctionUnsupported(LiDARFileException):
+    "Function unsupported by LiDAR driver"
+    
 class PulseRange(object):
     """
     Class for setting the range of pulses to read/write
@@ -59,35 +65,78 @@ class PulseRange(object):
 
 class LiDARFile(basedriver.Driver):
     """
-    Base class for all LiDAR Format reader/writers
+    Base class for all LiDAR Format reader/writers.
+    
+    It is intended that very little work happens until the user actually
+    asks for the data - then read it in. Subsequent calls for the same
+    extent should return cached data.
     """
     def __init__(self, fname, mode, controls, userClass):
+        """
+        Constructor. Derived drivers should open the file and read any
+        spatial index data out. 
+        
+        Raise generic.LiDARFormatNotUnderstood if file not supported
+        by driver - all drivers may be asked to open a file to determine
+        which one supports the format of the file. So a good idea to be 
+        sure that this file correct for your driver before returning 
+        successfully.
+        """
         basedriver.Driver.__init__(self, fname, mode, controls, userClass)
         
     def getDriverName(self):
         """
-        Return name of driver
+        Return name of driver - just a short unique name is fine.
         """
         raise NotImplementedError()
         
     def readPointsForExtent(self):
         """
         Read all the points within the given extent
-        as 1d strcutured array
+        as 1d structured array. The names of the fields in this array
+        will be defined by the driver.
         """
         raise NotImplementedError()
         
     def readPulsesForExtent(self):
         """
         Read all the pulses within the given extent
-        as 1d strcutured array
+        as 1d structured array. The names of the fields in this array
+        will be defined by the driver.
+        """
+        raise NotImplementedError()
+        
+    def readPulsesForExtentByBins(extent=None):
+        """
+        Read all the pulses within the given extent as a 3d structured 
+        masked array to match the block/bins being used.
+        
+        The extent/binning for the read data can be overriden by passing in a
+        Extent instance.
+        """
+        raise NotImplementedError()
+        
+    def readPointsForExtentByBins(extent=None):
+        """
+        Read all the points within the given extent as a 3d structured 
+        masked array to match the block/bins being used.
+        
+        The extent/binning for the read data can be overriden by passing in a
+        Extent instance.
+        """
+        raise NotImplementedError()
+        
+    def readPointsByPulse(self):     
+        """
+        Read a 2d structured masked array containing the points
+        for each pulse.
         """
         raise NotImplementedError()
         
     def readTransmitted(self):
         """
         Read the transmitted waveform for all pulses
-        returns a 2d masked array
+        returns a 2d masked array. 
         """
         raise NotImplementedError()
         
@@ -97,17 +146,35 @@ class LiDARFile(basedriver.Driver):
         returns a 2d masked array
         """
         raise NotImplementedError()
+
+    def writeTransmitted(self, transmitted):
+        """
+        Write the transmitted waveform for all pulses
+        as a 2d masked array
+        """
+        raise NotImplementedError()
+        
+    def writeReceived(self, received):
+        """
+        Write the received waveform for all pulses
+        as a 2d masked array
+        """
+        raise NotImplementedError()
         
     def writePointsForExtent(self, points):
+        """
+        Write the points for the current extent. Can either be
+        1d structured array (like that returned by readPointsForExtent())
+        or a 3d masked array (like that returned by readPointsByBins())
+        """
         raise NotImplementedError()
         
     def writePulsesForExtent(self, pulses):
-        raise NotImplementedError()
-        
-    def writeTransmitted(self, pulses, transmitted):
-        raise NotImplementedError()
-        
-    def writeReceived(self, pulses, received):
+        """
+        Write the pulses for the current extent. Can either be
+        1d structured array (like that returned by readPulsesForExtent())
+        or a 3d masked array (like that returned by readPulsessByBins())
+        """
         raise NotImplementedError()
         
     def hasSpatialIndex(self):
@@ -125,18 +192,42 @@ class LiDARFile(basedriver.Driver):
         raise NotImplementedError()
     
     def readPointsForRange(self):
+        """
+        Reads the points for the current range. Returns a 1d array.
+        
+        Returns an empty array if range is outside of the current file.
+        """
         raise NotImplementedError()
         
     def readPulsesForRange(self):
+        """
+        Reads the pulses for the current range. Returns a 1d array.
+
+        Returns an empty array if range is outside of the current file.
+        """
         raise NotImplementedError()
         
     def getTotalNumberPulses(self):
+        """
+        Returns the total number of pulses in this file. Used for progress.
+        
+        Raise a LiDARFunctionUnsupported error if driver does not support
+        easily finding the total number of pulses.
+        """
         raise NotImplementedError()
         
-    def writePoints(self, points):
+    def writePointsForRange(self, points):
+        """
+        Write the points for the current extent. Must be
+        1d structured array like that returned by readPointsForRange().
+        """
         raise NotImplementedError()
         
-    def writePulses(self, pulses):
+    def writePulsesForRange(self, pulses):
+        """
+        Write the pulses for the current extent. Must be
+        1d structured array like that returned by readPulsesForRange().
+        """
         raise NotImplementedError()
         
     def close(self):

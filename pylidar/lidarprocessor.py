@@ -101,7 +101,7 @@ setDefaultDrivers()
 class DataFiles(object):
     """
     Container class that has all instances of LidarFile and ImageFile
-    insterted into it as the names they are to be used inside the users
+    inserted into it as the names they are to be used inside the users
     function.
     """
     pass
@@ -350,6 +350,9 @@ To suppress this message call Controls.setSpatialProcessing(False)""")
             referenceGrid = gridList[0]
 
         # for now, check they all align. We may support reprojection in the future
+        # TODO: I think all we want to do is check they all have the same projection
+        # the LiDAR files don't need to align since we can recompute the spatial 
+        # index on the fly.
         for pixGrid in gridList:
             if not referenceGrid.alignedWith(pixGrid):
                 msg = 'Un-aligned datasets not yet supported'
@@ -383,16 +386,25 @@ To suppress this message call Controls.setSpatialProcessing(False)""")
         bMoreToDo = currentExtent.yMax > workingPixGrid.yMin
         
     else:
-        # TODO: what if some or all of the drivers don't know how many pulses
-        # there are?
-        nTotalPulses = max([driver.getTotalNumberPulses() for 
+        try:
+            nTotalPulses = max([driver.getTotalNumberPulses() for 
                         driver in driverList])
-        nTotalBlocks = int(numpy.ceil(nTotalPulses / controls.windowSize))
+        except generic.LiDARFunctionUnsupported:
+            # handle the fact that some drivers might not know
+            # how many pulses they have in total
+            nTotalBlocks = -1
+        else:
+            nTotalBlocks = int(numpy.ceil(nTotalPulses / controls.windowSize))
+            
         currentRange = generic.PulseRange(0, controls.windowSize)
-        bMoreToDo = currentRange.startPulse < nTotalPulses
+        if nTotalBlocks != -1:
+            bMoreToDo = currentRange.startPulse < nTotalPulses
+        else:
+            bMoreToDo = True
             
     nBlocksSoFar = 0
-    controls.progress.setProgress(0)
+    if nTotalBlocks != -1:
+        controls.progress.setProgress(0)
 
     # loop while we haven't fallen off the bottom of the pixelgrid region
     while bMoreToDo:
@@ -444,12 +456,18 @@ To suppress this message call Controls.setSpatialProcessing(False)""")
             currentRange.startPulse += controls.windowSize
             currentRange.endPulse += controls.windowSize
             # done?
-            bMoreToDo = currentRange.startPulse < nTotalPulses
+            if nTotalBlocks != -1:
+                bMoreToDo = currentRange.startPulse < nTotalPulses
+            else:
+                # this is a bit tricky - we need to see if all the arrays
+                # are empty. TODO:
+                bMoreToDo = True
 
         # progress
         nBlocksSoFar += 1
-        percentProgress = int((nBlocksSoFar / nTotalBlocks) * 100)
-        controls.progress.setProgress(percentProgress)
+        if nTotalBlocks != -1:
+            percentProgress = int((nBlocksSoFar / nTotalBlocks) * 100)
+            controls.progress.setProgress(percentProgress)
 
     controls.progress.reset()
     

@@ -220,6 +220,11 @@ def convertIdxBool1D(start_idx_array, count_array, outBool, outRow, outIdx,
             counter += 1
                 
 class SPDV3File(generic.LiDARFile):
+    """
+    Class to support reading and writing of SPD Version 3.x files.
+    
+    Uses h5py to handle access to the underlying HDF5 file.
+    """
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
     
@@ -252,7 +257,6 @@ class SPDV3File(generic.LiDARFile):
 
         # read in the bits I need            
         if mode == generic.READ:
-            # TODO: handle when the spatial index does not exist
             indexKeys = self.fileHandle['INDEX'].keys()
             if 'PLS_PER_BIN' in indexKeys and 'BIN_OFFSETS' in indexKeys:
                 self.si_cnt = self.fileHandle['INDEX']['PLS_PER_BIN'][...]
@@ -292,18 +296,34 @@ class SPDV3File(generic.LiDARFile):
         self.extent = None
         self.pulseRange = None
         self.lastPulseRange = None
+        self.lastPoints_Idx = None
+        self.lastPoints_IdxMask = None
+        self.lastPulses_Idx = None
+        self.lastPulses_IdxMask = None
 
     def getDriverName(self):
+        """
+        Name of this driver
+        """
         return "SPDV3"
 
     def getPixelGrid(self):
-        pixGrid = pixelgrid.PixelGridDefn(projection=self.wkt,
+        """
+        Return the pixel grid of this spatial index. 
+        """
+        if self.si_idx is not None:
+            pixGrid = pixelgrid.PixelGridDefn(projection=self.wkt,
                     xMin=self.si_xMin, xMax=self.si_xMax,
                     yMin=self.si_yMin, yMax=self.si_yMax,
                     xRes=self.si_binSize, yRes=self.si_binSize)
+        else:
+            pixGrid = None
         return pixGrid
     
     def setPixelGrid(self, pixGrid):
+        """
+        Set the pixel grid on creation or update
+        """
         if self.mode == generic.READ:
             msg = 'Can only set new pixel grid when updating or creating'
             raise generic.LiDARInvalidData(msg)
@@ -314,18 +334,25 @@ class SPDV3File(generic.LiDARFile):
         self.si_yMin = pixGrid.yMin
         self.wkt = pixGrid.projection
         
-        # create spatial index
+        # create spatial index - assume existing one (if it exists)
+        # is invalid
         (nrows, ncols) = pixGrid.getDimensions()
         self.si_cnt = numpy.zeros((ncols, nrows), dtype=numpy.uint32)
         self.si_idx = numpy.zeros((ncols, nrows), dtype=numpy.uint64)
     
     def setExtent(self, extent):
+        """
+        Set the extent to use for the *ForExtent() functions.
+        """
         if not self.hasSpatialIndex():
             msg = 'Format has no spatial Index. Processing must be done non-spatially'
             raise generic.LiDARInvalidSetting(msg)
         self.extent = extent    
     
     def readPointsForExtent(self):
+        """
+        Read out the points for the given extent as a 1d structured array.
+        """
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
                         not self.lastPoints is None):
@@ -348,15 +375,16 @@ class SPDV3File(generic.LiDARFile):
         points = self.fileHandle['DATA']['POINTS'][point_bool]
         
         # self.lastExtent updated in readPulsesForExtent()
+        # keep these indices from pulses to points - handy for the indexing 
+        # functions.
         self.lastPoints = points
-        # TODO: set to None in constructor
         self.lastPoints_Idx = point_idx
         self.lastPoints_IdxMask = point_idx_mask
-        # TODO: should return idx info in object along with points?
         return points
             
     def readPulsesForExtent(self):
         """
+        Return the pulses for the given extent as a 1d strcutured array
         """
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
@@ -397,11 +425,66 @@ class SPDV3File(generic.LiDARFile):
         
         self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
+        # keep these indices from spatial index to pulses as they are
+        # handy for the ByBins functions
         self.lastPulses_Idx = pulse_idx
         self.lastPulses_IdxMask = pulse_idx_mask
         self.lastPoints = None # are now invalid
-        # TODO: should return idx info in object along with pulses?
         return pulses
+
+    def readPulsesForExtentByBins(self, extent=None):
+        """
+        Return the pulses as a 3d structured masked array.
+        """
+        # TODO: support new extent
+        # go and get the pulses - should returned cached if 
+        # already got.
+        pulses = self.readPulsesForExtent()
+        # get these 'last' indices which map spatial index to pulses
+        idx = self.lastPulses_Idx
+        idxMask = self.lastPulses_IdxMask 
+        # re-map into 3d
+        pulsesByBins = pulses[idx]
+        # make masked array
+        return numpy.ma.array(pulsesByBins, mask=idxMask)
+        
+    def readPointsForExtentByBins(self, extent=None):
+        """
+        Return the points as a 3d structured masked array.
+        
+        Note that because the spatial index on a SPDV3 file is on pulses
+        this may miss points that are outside the pulse extent.
+        """
+        # have to spatially index the points 
+        points = self.readPointsForExtent()
+        extent = self.lastExtent
+        nrows = int((extent.yMax - extent.yMin) / extent.binSize)
+        ncols = int((extent.xMax - extent.xMin) / extent.binSize)
+        sortedbins, idx, cnt = self.CreateSpatialIndex(
+                points['Y'], points['X'], extent.binSize, extent.yMax,
+                extent.xMin, nrows, ncols)
+        # TODO: don't really want the bool array returned - need
+        # to make it optional
+        nOut = len(points)
+        pts_bool, pts_idx, pts_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
+                                idx, cnt, nOut)
+                                
+        sortedPoints = points[sortedbins]
+        
+        pointsByBins = sortedPoints[pts_idx]
+        return numpy.ma.array(pointsByBins, mask=pts_idx_mask)
+
+    def readPointsByPulse(self):
+        if self.controls.spatialProcessing:
+            points = self.readPointsForExtent()
+        else:
+            points = self.readPointsForRange()
+        idx = self.lastPoints_Idx
+        idxMask = self.lastPoints_IdxMask
+        
+        pointsByPulse = points[idx]
+        return numpy.ma.array(pointsByPulse, mask=idxMask)
+
 
     @staticmethod
     def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize):
@@ -673,11 +756,6 @@ class SPDV3File(generic.LiDARFile):
     def getTotalNumberPulses(self):
         return self.fileHandle['DATA']['PULSES'].shape[0]
         
-    def writePoints(self, points):
-        raise NotImplementedError()
-    def writePulses(self, pulses):
-        raise NotImplementedError()
-
     def close(self):
         if self.mode != generic.READ and self.si_cnt is not None:
             # write out to file
