@@ -186,6 +186,12 @@ class GDALDriver(basedriver.Driver):
                 bh = self.ds.GetRasterBand(band+1)
                 bh.SetNoDataValue(ignore)
                 self.nullValList.append(ignore)
+                
+        else:
+            # check they are consistent about the data type
+            if self.gdalType != imageio.NumpyTypeToGDALType(data.dtype):
+                msg = 'Output data type must stay the same for each block'
+                raise GDALException(msg)
         
         # ok now we can write the data
         for band in range(self.ds.RasterCount):
