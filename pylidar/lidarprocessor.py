@@ -192,6 +192,7 @@ class LidarFile(object):
         self.mode = mode
         self.lidarDriver = DEFAULT_LIDARDRIVERNAME
         self.lidarDriverOptions = DEFAULT_LIDARCREATIONOPTIONS
+        self.writeSpatialIndex = True
         
     def setLiDARDriver(self, driverName):
         """
@@ -210,6 +211,13 @@ class LidarFile(object):
             msg = 'Only valid for creation'
             raise generic.LiDARInvalidSetting(msg)
         self.lidarDriverOptions = options
+        
+    def setWriteSpatialIndex(self, writeSpatialIndex):
+        """
+        Set whether to write spatial index or not on creation or update.
+        Ignored for reading.
+        """
+        self.writeSpatialIndex = writeSpatialIndex
     
 class ImageFile(object):
     def __init__(self, fname, mode):

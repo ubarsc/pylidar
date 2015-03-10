@@ -336,9 +336,10 @@ class SPDV3File(generic.LiDARFile):
         
         # create spatial index - assume existing one (if it exists)
         # is invalid
-        (nrows, ncols) = pixGrid.getDimensions()
-        self.si_cnt = numpy.zeros((ncols, nrows), dtype=numpy.uint32)
-        self.si_idx = numpy.zeros((ncols, nrows), dtype=numpy.uint64)
+        if self.userClass.writeSpatialIndex:
+            (nrows, ncols) = pixGrid.getDimensions()
+            self.si_cnt = numpy.zeros((ncols, nrows), dtype=numpy.uint32)
+            self.si_idx = numpy.zeros((ncols, nrows), dtype=numpy.uint64)
     
     def setExtent(self, extent):
         """
@@ -793,7 +794,8 @@ class SPDV3File(generic.LiDARFile):
         """
         Write out the spatial index and close file handle.
         """
-        if self.mode != generic.READ and self.si_cnt is not None:
+        if (self.mode != generic.READ and self.userClass.writeSpatialIndex and 
+                    self.si_cnt is not None):
             # write out to file
             self.fileHandle['INDEX']['PLS_PER_BIN'] = self.si_cnt
             self.fileHandle['INDEX']['BIN_OFFSETS'] = self.si_idx
