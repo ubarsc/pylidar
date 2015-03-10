@@ -453,9 +453,12 @@ class SPDV3File(generic.LiDARFile):
         Return the points as a 3d structured masked array.
         
         Note that because the spatial index on a SPDV3 file is on pulses
-        this may miss points that are outside the pulse extent.
+        this may miss points that are attached to pulses outside the current
+        extent. If this is a problem then select an overlap large enough.
         """
+        # TODO: support new extent
         # have to spatially index the points 
+        # since SPDV3 files have only a spatial index on pulses.
         points = self.readPointsForExtent()
         extent = self.lastExtent
         nrows = int((extent.yMax - extent.yMin) / extent.binSize)
@@ -475,6 +478,10 @@ class SPDV3File(generic.LiDARFile):
         return numpy.ma.array(pointsByBins, mask=pts_idx_mask)
 
     def readPointsByPulse(self):
+        """
+        Return a 2d masked structured array of point that matches
+        the pulses.
+        """
         if self.controls.spatialProcessing:
             points = self.readPointsForExtent()
         else:
@@ -551,18 +558,17 @@ class SPDV3File(generic.LiDARFile):
         # return the arrays
         return outBool, outIdx, outMask
 
-        # TODO: a method to create a ragged array of points-by-pulses using PTS_START_IDX 
-        
-        # TODO: a method to create 2-d ragged array of points by pixel
-        # TODO: a method to create 2-d ragged array of pulses by pixel
-    
     def readTransmitted(self):
-        if pulses.ndim != 1:
-            msg = 'function only works on 1d pulses array'
-            raise ValueError(msg)
+        """
+        Return the 2d masked integer array of transmitted for each of the
+        current pulses. 
+        """
+        # TODO: cache read. Tricky with extent/range.
+        if self.controls.spatialProcessing:
+            pulses = self.readPulsesForExtent()
+        else:
+            pulses = self.readPulsesForRange()
         
-        # TODO: read all pulses
-        pulses = 1
         idx = pulses['TRANSMITTED_START_IDX']
         cnt = pulses['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
         
@@ -578,12 +584,15 @@ class SPDV3File(generic.LiDARFile):
         return trans_masked
         
     def readReceived(self):
-        if pulses.ndim != 1:
-            msg = 'function only works on 1d pulses array'
-            raise ValueError(msg)
-
-        # TODO: read all pulses
-        pulses = 1
+        """
+        Return the 2d masked integer array of received for each of the
+        current pulses. 
+        """
+        # TODO: cache read. Tricky with extent/range.
+        if self.controls.spatialProcessing:
+            pulses = self.readPulsesForExtent()
+        else:
+            pulses = self.readPulsesForRange()
             
         idx = pulses['RECEIVED_START_IDX']
         cnt = pulses['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
@@ -697,30 +706,37 @@ class SPDV3File(generic.LiDARFile):
         # and the new spatial index
         return sortedBinNumNdx, si_start, si_count
         
-    def writeTransmitted(self, pulse, transmitted):
-        raise NotImplementedError()
-        
-    def writeReceived(self, pulse, received):
-        raise NotImplementedError()
-
     def hasSpatialIndex(self):
+        """
+        Return True if we have a spatial index.
+        """
         return self.si_cnt is not None
         
-    # see below for no spatial index
+    # The functions below are for when there is no spatial index.
     def setPulseRange(self, pulseRange):
+        """
+        Set the range of pulses to read
+        """
         # copy it so we can change the values if beyond the 
         # range of data
         self.pulseRange = copy.copy(pulseRange)
         nTotalPulses = self.getTotalNumberPulses()
+        bMore = True
         if self.pulseRange.startPulse > nTotalPulses:
             # no data to read
             self.pulseRange.startPulse = 0
             self.pulseRange.endPulse = 0
+            bMore = False
             
         elif self.pulseRange.endPulse > nTotalPulses:
             self.pulseRange.endPulse = nTotalPulses + 1
+            
+        return bMore
         
     def readPointsForRange(self):
+        """
+        Read all the points for the specified range of pulses
+        """
         if (self.lastPulseRange is not None and
                 self.lastPulseRange == self.pulseRange and
                 self.lastPoints is not None):
@@ -732,14 +748,28 @@ class SPDV3File(generic.LiDARFile):
         nReturns = pulses['NUMBER_OF_RETURNS']
         startIdxs = pulses['PTS_START_IDX']
         
-        # TODO: what now?
-        points = None
+        # h5py prefers to take it's index by numpy bool array
+        # of the same shape as the dataset
+        # so we do this. If you give it the indices themselves
+        # this must be done as a list which is slow
+        nOut = self.fileHandle['DATA']['POINTS'].shape[0]
+        point_bool, point_idx, point_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
+                        startIdxs, nReturns, nOut)
         
+        points = self.fileHandle['DATA']['POINTS'][point_bool]
+        
+        # keep these indices from pulses to points - handy for the indexing 
+        # functions.
         self.lastPoints = points
+        self.lastPoints_Idx = point_idx
+        self.lastPoints_IdxMask = point_idx_mask
         # self.lastPulseRange copied in readPulses()
         return points        
     
     def readPulsesForRange(self):
+        """
+        Read the specified range of pulses
+        """
         if (self.lastPulseRange is not None and
                 self.lastPulseRange == self.pulseRange and 
                 self.lastPulses is not None):
@@ -754,9 +784,15 @@ class SPDV3File(generic.LiDARFile):
         return pulses
     
     def getTotalNumberPulses(self):
+        """
+        Return the total number of pulses
+        """
         return self.fileHandle['DATA']['PULSES'].shape[0]
         
     def close(self):
+        """
+        Write out the spatial index and close file handle.
+        """
         if self.mode != generic.READ and self.si_cnt is not None:
             # write out to file
             self.fileHandle['INDEX']['PLS_PER_BIN'] = self.si_cnt

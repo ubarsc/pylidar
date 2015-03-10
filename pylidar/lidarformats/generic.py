@@ -188,6 +188,8 @@ class LiDARFile(basedriver.Driver):
         """
         Sets the PulseRange object to use for non spatial
         reads/writes.
+        
+        Return False if outside the range of data.
         """
         raise NotImplementedError()
     
@@ -231,6 +233,9 @@ class LiDARFile(basedriver.Driver):
         raise NotImplementedError()
         
     def close(self):
+        """
+        Write any updated spatial index and close any file handles.
+        """
         raise NotImplementedError()
 
 
