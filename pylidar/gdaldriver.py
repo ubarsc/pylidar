@@ -203,6 +203,11 @@ class GDALDriver(basedriver.Driver):
             slice_rightMost = data.shape[-1] - overlap
                                                         
             outblock = data[band, overlap:slice_bottomMost, overlap:slice_rightMost]
+            
+            # if a masked array full in the masked out areas with 
+            # the bands null value
+            if isinstance(outblock, numpy.ma.masked_array):
+                outblock = outblock.filled(self.nullValList[band])
                                                                                                 
             bh.WriteArray(outblock, self.blockxcoord, self.blockycoord)
             
