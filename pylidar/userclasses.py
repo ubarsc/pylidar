@@ -271,7 +271,7 @@ class ImageData(object):
         Returns the data for the current extent as a 3d numpy array in the 
         same data type as the image file.
         """
-        self.driver.getData()
+        return self.driver.getData()
         
     def setData(self, data):
         """

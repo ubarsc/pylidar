@@ -60,6 +60,7 @@ class GDALDriver(basedriver.Driver):
             
             # get this other information while we are here
             self.geoTrans = self.ds.GetGeoTransform()
+            success, self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
             self.gdalType = self.ds.GetRasterBand(1).DataType
             
             self.pixGrid = None # unused in read case
@@ -71,6 +72,7 @@ class GDALDriver(basedriver.Driver):
             
             self.pixGrid = None # set by setPixelGrid
             self.geoTrans = None # set by setPixelGrid
+            self.invGeoTrans = None # set by setPixelGrid
             self.nullValList = None # not used in write case
             
         # to read/write at. Set by setExtent()
