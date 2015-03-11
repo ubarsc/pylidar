@@ -32,13 +32,21 @@ from .lidarformats import generic
 from .lidarformats import spdv3
 from . import userclasses
 
+# to be passed to ImageData and LidarData class constructors
 READ = generic.READ
 UPDATE = generic.UPDATE
 CREATE = generic.CREATE
 
+# to be passed to Controls.setFootprint()
 INTERSECTION = imageio.INTERSECTION
 UNION = imageio.UNION
 BOUNDS_FROM_REFERENCE = imageio.BOUNDS_FROM_REFERENCE
+
+# to be passed to message handler function set with
+# Controls.setMessageHandler
+MESSAGE_WARNING = generic.MESSAGE_WARNING
+MESSAGE_INFORMATION = generic.MESSAGE_INFORMATION
+MESSAGE_DEBUG = generic.MESSAGE_DEBUG
 
 DEFAULT_WINDOW_SIZE = 200 # bins
 
@@ -114,6 +122,20 @@ class OtherArgs(object):
     """
     pass
     
+def defaultMessageFn(message, level):
+    """
+    Default message printer. Prints all messages regardless of level.
+    
+    Change with Controls.setMessageHandler
+    """
+    print(message)
+    
+def silentMessageFn(message, level):
+    """
+    Alternate message printer - does nothing.
+    """
+    pass
+    
 class Controls(object):
     """
     The controls object. This is passed to the doProcessing function 
@@ -127,6 +149,7 @@ class Controls(object):
         self.referenceImage = None
         self.referencePixgrid = None
         self.progress = cuiprogress.SilentProgress()
+        self.messageHandler = defaultMessageFn
         
     def setFootprint(self, footprint):
         """
@@ -180,6 +203,18 @@ class Controls(object):
         Default is silent progress
         """
         self.progress = progress
+
+    def setMessageHandler(self, messageHandler):
+        """
+        Set the message handler function to use for printing messages regarding
+        things discovered during the processing. The default behaviour is to 
+        print all messages. 
+        
+        Can pass in silentMessageFn which will print nothing, or your own
+        function that takes a message string and a level (one of the
+        MESSAGE_* constants).
+        """
+        self.messageHandler = messageHandler        
     
 class LidarFile(object):
     """
@@ -218,6 +253,7 @@ class LidarFile(object):
         Ignored for reading.
         """
         self.writeSpatialIndex = writeSpatialIndex
+        
     
 class ImageFile(object):
     def __init__(self, fname, mode):
@@ -270,11 +306,6 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
     If controls (an instance of Controls) is not None then these controls
         are used for changing the behaviour of reading and writing.
     """
-    # TODO: update so we can handle no spatial index
-    # -requested via the controls
-    # - or file doesn't have one
-    # when no spatial index - read 1000 PULSES per time
-
     if controls is None:
         # default values
         controls = Controls()
@@ -329,9 +360,10 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         for driver in driverList:
             if isinstance(driver, generic.LiDARFile):
                 if not driver.hasSpatialIndex():
-                    print("""Warning: Not all LiDAR files have a spatial index. 
+                    msg = """Warning: Not all LiDAR files have a spatial index. 
 Non-spatial processing will now occur. 
-To suppress this message call Controls.setSpatialProcessing(False)""")
+To suppress this message call Controls.setSpatialProcessing(False)"""
+                    controls.messageHandler(msg, MESSAGE_WARNING)
                     controls.spatialProcessing = False
                     break
                     

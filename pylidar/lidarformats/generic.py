@@ -20,9 +20,16 @@ Base class for LiDAR format reader/writers
 
 from .. import basedriver
 
+# access modes passed to driver constructor
 READ = 0
 UPDATE = 1
 CREATE = 2
+
+# to be passed to message handler function 
+# controls.messageHandler
+MESSAGE_WARNING = 0
+MESSAGE_INFORMATION = 1
+MESSAGE_DEBUG = 2
 
 class LiDARFileException(Exception):
     "Base class for LiDAR format reader/writers"
