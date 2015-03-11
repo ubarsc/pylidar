@@ -12,15 +12,11 @@ def writeImageFunc(data):
 
     pointsByBins = data.input1.getPointsByBins()
     zValues = pointsByBins['Z']
-    #yValues = pointsByBins['Y']
     (maxPts, nRows, nCols) = zValues.shape
     nullval = 0
     if maxPts > 0:
         minZ = zValues.min(axis=0)
-        #minY = yValues.min(axis=0)
         minZ[minZ.mask] = nullval
-        #minY[minY.mask] = nullval
-        #stack = numpy.array([minZ, minY])
         stack = numpy.expand_dims(minZ, axis=0)
     else:
         stack = numpy.full((1, nRows, nCols), nullval, dtype=zValues.dtype)

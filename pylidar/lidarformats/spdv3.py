@@ -47,6 +47,9 @@ POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'),
 ('USER_FIELD', '<u4'), ('IGNORE', 'u1'), ('WAVE_PACKET_DESC_IDX', '<i2'), 
 ('WAVEFORM_OFFSET', '<u4')])
 
+# types for the spatial index
+SPDV3_SI_COUNT_DTYPE = numpy.uint32
+SPDV3_SI_INDEX_DTYPE = numpy.uint64
     
 @jit
 def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
@@ -340,8 +343,8 @@ class SPDV3File(generic.LiDARFile):
         # is invalid
         if self.userClass.writeSpatialIndex:
             (nrows, ncols) = pixGrid.getDimensions()
-            self.si_cnt = numpy.zeros((ncols, nrows), dtype=numpy.uint32)
-            self.si_idx = numpy.zeros((ncols, nrows), dtype=numpy.uint64)
+            self.si_cnt = numpy.zeros((ncols, nrows), dtype=SPDV3_SI_COUNT_DTYPE)
+            self.si_idx = numpy.zeros((ncols, nrows), dtype=SPDV3_SI_INDEX_DTYPE)
     
     def setExtent(self, extent):
         """
@@ -359,10 +362,14 @@ class SPDV3File(generic.LiDARFile):
         extentPixGrid = pixelgrid.PixelGridDefn(xMin=extent.xMin, 
                 xMax=extent.xMax, yMin=extent.yMin, yMax=extent.yMax,
                 xRes=extent.binSize, yRes=extent.binSize)
-        self.extentAlignedWithSpatialIndex = extentPixGrid.alignedWith(totalPixGrid)
+                
+        self.extentAlignedWithSpatialIndex = (
+                extentPixGrid.alignedWith(totalPixGrid) and 
+                extent.binSize == totalPixGrid.xRes)
+        
         if (not self.extentAlignedWithSpatialIndex and 
                     not self.unalignedWarningGiven):
-            msg = """Extent not on same grid as file.
+            msg = """Extent not on same grid or resolution as file.
 spatial index will be recomputed on the fly"""
             self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
             self.unalignedWarningGiven = True
@@ -410,28 +417,82 @@ spatial index will be recomputed on the fly"""
                         not self.lastPulses is None):
             return self.lastPulses
 
-        tlxbin = int((self.extent.xMin - self.si_xMin) / self.si_binSize)
-        tlybin = int((self.si_yMax - self.extent.yMax) / self.si_binSize)
-        brxbin = int(numpy.ceil((self.extent.xMax - self.si_xMin) / self.si_binSize))
-        brybin = int(numpy.ceil((self.si_yMax - self.extent.yMin) / self.si_binSize))
+        # size of spatial index we need to read
+        nrows = int((self.extent.yMax - self.extent.yMin) / 
+                        self.extent.binSize)
+        ncols = int((self.extent.xMax - self.extent.xMin) / 
+                        self.extent.binSize)
+        # add overlap 
+        nrows += (self.controls.overlap * 2)
+        ncols += (self.controls.overlap * 2)
+
+        # create subset of spatial index to read data into
+        cnt_subset = numpy.zeros((nrows, ncols), dtype=SPDV3_SI_COUNT_DTYPE)
+        idx_subset = numpy.zeros((nrows, ncols), dtype=SPDV3_SI_INDEX_DTYPE)
+        
+        # work out where on the whole of file spatial index to read from
+        xoff = int((self.extent.xMin - self.si_xMin) / self.si_binSize)
+        yoff = int((self.si_yMax - self.extent.yMax) / self.si_binSize)
+        xright = int(numpy.ceil((self.extent.xMax - self.si_xMin) / self.si_binSize))
+        xbottom = int(numpy.ceil((self.si_yMax - self.extent.yMin) / self.si_binSize))
+        xsize = xright - xoff
+        ysize = xbottom - yoff
         
         # adjust for overlap
-        tlxbin -= self.controls.overlap
-        tlybin += self.controls.overlap
-        brxbin += self.controls.overlap
-        brybin -= self.controls.overlap
+        xoff_margin = xoff - self.controls.overlap
+        yoff_margin = yoff - self.controls.overlap
+        xSize_margin = xsize + self.controls.overlap * 2
+        ySize_margin = ysize + self.controls.overlap * 2
         
-        if tlxbin < 0:
-            tlxbin = 0
-        if tlybin < 0:
-            tlybin = 0
-        if brxbin > self.si_cnt.shape[1]:
-            brxbin = self.si_cnt.shape[1]
-        if brybin > self.si_cnt.shape[0]:
-            brybin = self.si_cnt.shape[0]
+        # Code below adapted from rios.imagereader.readBlockWithMargin
+        # Not sure if it can be streamlined for this case
+
+        # The bounds of the whole image in the file        
+        imgLeftBound = 0
+        imgTopBound = 0
+        imgRightBound = self.si_cnt.shape[1]
+        imgBottomBound = self.si_cnt.shape[0]
         
-        cnt_subset = self.si_cnt[tlybin:brybin, tlxbin:brxbin]
-        idx_subset = self.si_idx[tlybin:brybin, tlxbin:brxbin]
+        # The region we will, in principle, read from the file. Note that xSize_margin 
+        # and ySize_margin are already calculated above
+        
+        # Restrict this to what is available in the file
+        xoff_margin_file = max(xoff_margin, imgLeftBound)
+        xoff_margin_file = min(xoff_margin_file, imgRightBound)
+        xright_margin_file = xoff_margin + xSize_margin
+        xright_margin_file = min(xright_margin_file, imgRightBound)
+        xSize_margin_file = xright_margin_file - xoff_margin_file
+
+        yoff_margin_file = max(yoff_margin, imgTopBound)
+        yoff_margin_file = min(yoff_margin_file, imgBottomBound)
+        ySize_margin_file = min(ySize_margin, imgBottomBound - yoff_margin_file)
+        ybottom_margin_file = yoff_margin + ySize_margin
+        ybottom_margin_file = min(ybottom_margin_file, imgBottomBound)
+        ySize_margin_file = ybottom_margin_file - yoff_margin_file
+        
+        # How many pixels on each edge of the block we end up NOT reading from 
+        # the file, and thus have to leave as null in the array
+        notRead_left = xoff_margin_file - xoff_margin
+        notRead_right = xSize_margin - (notRead_left + xSize_margin_file)
+        notRead_top = yoff_margin_file - yoff_margin
+        notRead_bottom = ySize_margin - (notRead_top + ySize_margin_file)
+        
+        # The upper bounds on the slices specified to receive the data
+        slice_right = xSize_margin - notRead_right
+        slice_bottom = ySize_margin - notRead_bottom
+        
+        if xSize_margin_file > 0 and ySize_margin_file > 0:
+            # Now read in the part of the array which we can actually read from the file.
+            # Read each layer separately, to honour the layerselection
+            
+            # The part of the final array we are filling
+            imageSlice = (slice(notRead_top, slice_bottom), slice(notRead_left, slice_right))
+            # the input from the spatial index
+            siSlice = (slice(yoff_margin_file, yoff_margin_file+ySize_margin_file), 
+                        slice(xoff_margin_file, xoff_margin_file+xSize_margin_file))
+        
+            cnt_subset[imageSlice] = self.si_cnt[siSlice]
+            idx_subset[imageSlice] = self.si_idx[siSlice]
         
         # h5py prefers to take it's index by numpy bool array
         # of the same shape as the dataset
@@ -755,8 +816,8 @@ spatial index will be recomputed on the fly"""
         sortedBinNumNdx = numpy.argsort(binNum)
     
         # output spatial index arrays
-        si_start = numpy.zeros((nRows, nCols), dtype=numpy.uint64)
-        si_count = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
+        si_start = numpy.zeros((nRows, nCols), dtype=SPDV3_SI_INDEX_DTYPE)
+        si_count = numpy.zeros((nRows, nCols), dtype=SPDV3_SI_COUNT_DTYPE)
         
         # call our helper function to put the elements into the spatial index
         BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count)
