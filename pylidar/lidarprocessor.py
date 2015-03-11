@@ -386,21 +386,40 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
         if referenceGrid is None and controls.referenceImage is not None:
             referenceGrid = pixelgrid.pixelGridFromFile(controls.referenceImage)
         if referenceGrid is None:
-            # default to first
+            # default to first image
             referenceGrid = gridList[0]
 
-        # for now, check they all align. We may support reprojection in the future
-        # TODO: I think all we want to do is check they all have the same projection
+        # Check they all have the same projection
         # the LiDAR files don't need to align since we can recompute the spatial 
         # index on the fly.
         for pixGrid in gridList:
-            if not referenceGrid.alignedWith(pixGrid):
-                msg = 'Un-aligned datasets not yet supported'
-                raise generic.LiDARFileException(msg)
+            # TODO: not keen on this obession of not setting the field
+            # properly in SPD files.
+            if pixGrid.projection != '' and referenceGrid.projection != '':
+                if not referenceGrid.equalProjection(pixGrid):
+                    msg = 'Un-aligned datasets not yet supported'
+                    raise generic.LiDARFileException(msg)
         
         # work out common extent
         workingPixGrid = pixelgrid.findCommonRegion(gridList, referenceGrid, 
                                 controls.footprint)
+                                
+        # we don't support reprojection of raster datasets yet.
+        # use RIOS for that. Need to ensure that any input raster datasets
+        # are on the workingPixGrid.
+        # we can deal with reprojection of LiDAR datasets so don't worry
+        # about them.
+        for driver in driverList:
+            if (isinstance(driver, gdaldriver.GDALDriver) and 
+                                driver.mode != CREATE):
+                # TODO: we have already asked for this - should cache
+                # the pixGrid with the driver
+                pixGrid = driver.getPixelGrid()
+                if not pixGrid.alignedWith(workingPixGrid):
+                    msg = """Input image file(s) not aligned with calculated 
+grid. Resample input images to match, or set grid explicitly with 
+controls.setReferenceImage()"""
+                    raise generic.LiDARFileException(msg)
                             
         # tell all drivers that are creating files what pixel grid is
         for driver in driverList:

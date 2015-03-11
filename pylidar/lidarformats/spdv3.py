@@ -300,6 +300,8 @@ class SPDV3File(generic.LiDARFile):
         self.lastPoints_IdxMask = None
         self.lastPulses_Idx = None
         self.lastPulses_IdxMask = None
+        self.extentAlignedWithSpatialIndex = True
+        self.unalignedWarningGiven = False
 
     def getDriverName(self):
         """
@@ -348,7 +350,23 @@ class SPDV3File(generic.LiDARFile):
         if not self.hasSpatialIndex():
             msg = 'Format has no spatial Index. Processing must be done non-spatially'
             raise generic.LiDARInvalidSetting(msg)
-        self.extent = extent    
+        self.extent = extent
+        
+        # need to check that the given extent is on the same grid as the 
+        # spatial index. If not a new spatial index will have to be calculated
+        # for each block before we can access the data.
+        totalPixGrid = self.getPixelGrid()
+        extentPixGrid = pixelgrid.PixelGridDefn(xMin=extent.xMin, 
+                xMax=extent.xMax, yMin=extent.yMin, yMax=extent.yMax,
+                xRes=extent.binSize, yRes=extent.binSize)
+        self.extentAlignedWithSpatialIndex = extentPixGrid.alignedWith(totalPixGrid)
+        if (not self.extentAlignedWithSpatialIndex and 
+                    not self.unalignedWarningGiven):
+            msg = """Extent not on same grid as file.
+spatial index will be recomputed on the fly"""
+            self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+            self.unalignedWarningGiven = True
+        
     
     def readPointsForExtent(self):
         """
@@ -423,6 +441,26 @@ class SPDV3File(generic.LiDARFile):
         pulse_bool, pulse_idx, pulse_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                 idx_subset, cnt_subset, nOut)
         pulses = self.fileHandle['DATA']['PULSES'][pulse_bool]
+
+        if not self.extentAlignedWithSpatialIndex:
+            # need to recompute subset of spatial index to bins
+            # are aligned with current extent
+            nrows = int(numpy.ceil((self.extent.yMax - self.extent.yMin) / 
+                        self.extent.binSize))
+            ncols = int(numpy.ceil((self.extent.xMax - self.extent.xMin) / 
+                        self.extent.binSize))
+            sortedbins, new_idx, new_cnt = self.CreateSpatialIndex(
+                    pulses['Y_IDX'], pulses['X_IDX'], self.extent.binSize, 
+                    self.extent.yMax, self.extent.xMin, nrows, ncols)
+            # ok calculate indices on new spatial indexes
+            pulse_bool, pulse_idx, pulse_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
+                            new_idx, new_cnt, nOut)
+            # re-sort the pulses to match the new spatial index
+            # TODO: deletion of pulses that were in the original spatial index
+            # but aren't in the current one??
+            pulses = pulses[sortedbins]
+            # TODO: I think this is ok....
+
         
         self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
@@ -437,7 +475,10 @@ class SPDV3File(generic.LiDARFile):
         """
         Return the pulses as a 3d structured masked array.
         """
-        # TODO: support new extent
+        # if they have given us a new extent then use that
+        if extent is not None:
+            oldExtent = self.lastExtent
+            self.setExtent(extent)
         # go and get the pulses - should returned cached if 
         # already got.
         pulses = self.readPulsesForExtent()
@@ -446,6 +487,12 @@ class SPDV3File(generic.LiDARFile):
         idxMask = self.lastPulses_IdxMask 
         # re-map into 3d
         pulsesByBins = pulses[idx]
+        
+        # set extent back to the 'normal' one for this block
+        # in case they call this again without the extent param
+        if extent is not None:
+            self.setExtent(oldExtent)
+            
         # make masked array
         return numpy.ma.array(pulsesByBins, mask=idxMask)
         
@@ -457,16 +504,21 @@ class SPDV3File(generic.LiDARFile):
         this may miss points that are attached to pulses outside the current
         extent. If this is a problem then select an overlap large enough.
         """
-        # TODO: support new extent
+        # if they have given us a new extent then use that
+        if extent is not None:
+            oldExtent = self.lastExtent
+            self.setExtent(extent)
         # have to spatially index the points 
         # since SPDV3 files have only a spatial index on pulses.
         points = self.readPointsForExtent()
-        extent = self.lastExtent
-        nrows = int((extent.yMax - extent.yMin) / extent.binSize)
-        ncols = int((extent.xMax - extent.xMin) / extent.binSize)
+        
+        nrows = int((self.lastExtent.yMax - self.lastExtent.yMin) / 
+                        self.lastExtent.binSize)
+        ncols = int((self.lastExtent.xMax - self.lastExtent.xMin) / 
+                        self.lastExtent.binSize)
         sortedbins, idx, cnt = self.CreateSpatialIndex(
-                points['Y'], points['X'], extent.binSize, extent.yMax,
-                extent.xMin, nrows, ncols)
+                points['Y'], points['X'], self.lastExtent.binSize, 
+                self.lastExtent.yMax, self.lastExtent.xMin, nrows, ncols)
         # TODO: don't really want the bool array returned - need
         # to make it optional
         nOut = len(points)
@@ -476,6 +528,12 @@ class SPDV3File(generic.LiDARFile):
         sortedPoints = points[sortedbins]
         
         pointsByBins = sortedPoints[pts_idx]
+
+        # set extent back to the 'normal' one for this block
+        # in case they call this again without the extent param
+        if extent is not None:
+            self.setExtent(oldExtent)
+
         return numpy.ma.array(pointsByBins, mask=pts_idx_mask)
 
     def readPointsByPulse(self):
