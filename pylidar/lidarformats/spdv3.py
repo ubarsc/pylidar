@@ -417,11 +417,17 @@ spatial index will be recomputed on the fly"""
                         not self.lastPulses is None):
             return self.lastPulses
 
+        # snap the extent to the grid of the spatial index
+        # TODO: cache pixel grid
+        pixGrid = self.getPixelGrid()
+        xMin = pixGrid.snapToGrid(self.extent.xMin, pixGrid.xMin, pixGrid.xRes)
+        xMax = pixGrid.snapToGrid(self.extent.xMax, pixGrid.xMax, pixGrid.xRes)
+        yMin = pixGrid.snapToGrid(self.extent.yMin, pixGrid.yMin, pixGrid.yRes)
+        yMax = pixGrid.snapToGrid(self.extent.yMax, pixGrid.yMax, pixGrid.yRes)
+
         # size of spatial index we need to read
-        nrows = int((self.extent.yMax - self.extent.yMin) / 
-                        self.extent.binSize)
-        ncols = int((self.extent.xMax - self.extent.xMin) / 
-                        self.extent.binSize)
+        nrows = int(numpy.ceil((yMax - yMin) / self.si_binSize))
+        ncols = int(numpy.ceil((xMax - xMin) / self.si_binSize))
         # add overlap 
         nrows += (self.controls.overlap * 2)
         ncols += (self.controls.overlap * 2)
@@ -431,10 +437,10 @@ spatial index will be recomputed on the fly"""
         idx_subset = numpy.zeros((nrows, ncols), dtype=SPDV3_SI_INDEX_DTYPE)
         
         # work out where on the whole of file spatial index to read from
-        xoff = int((self.extent.xMin - self.si_xMin) / self.si_binSize)
-        yoff = int((self.si_yMax - self.extent.yMax) / self.si_binSize)
-        xright = int(numpy.ceil((self.extent.xMax - self.si_xMin) / self.si_binSize))
-        xbottom = int(numpy.ceil((self.si_yMax - self.extent.yMin) / self.si_binSize))
+        xoff = int((xMin - self.si_xMin) / self.si_binSize)
+        yoff = int((self.si_yMax - yMax) / self.si_binSize)
+        xright = int(numpy.ceil((xMax - self.si_xMin) / self.si_binSize))
+        xbottom = int(numpy.ceil((self.si_yMax - yMin) / self.si_binSize))
         xsize = xright - xoff
         ysize = xbottom - yoff
         
@@ -490,7 +496,7 @@ spatial index will be recomputed on the fly"""
             # the input from the spatial index
             siSlice = (slice(yoff_margin_file, yoff_margin_file+ySize_margin_file), 
                         slice(xoff_margin_file, xoff_margin_file+xSize_margin_file))
-        
+
             cnt_subset[imageSlice] = self.si_cnt[siSlice]
             idx_subset[imageSlice] = self.si_idx[siSlice]
         

@@ -401,7 +401,7 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
                     raise generic.LiDARFileException(msg)
         
         # work out common extent
-        workingPixGrid = pixelgrid.findCommonRegion(gridList, referenceGrid, 
+        workingPixGrid = findCommonPixelGridRegion(gridList, referenceGrid, 
                                 controls.footprint)
                                 
         # we don't support reprojection of raster datasets yet.
@@ -534,3 +534,37 @@ controls.setReferenceImage()"""
     for driver in driverList:
         driver.close()
 
+
+def findCommonPixelGridRegion(gridList, refGrid, combine=INTERSECTION):
+    """
+    Returns a PixelGridDefn for the combination of all the grids 
+    in the given gridList. The output grid is in the same coordinate 
+    system as the reference grid. 
+    
+    This is adapted from the original in RIOS. This version does not
+    attempt to reproject between coordinate systems. Firstly, because
+    many LiDAR files do not seem to have the projection set. Secondly,
+    we don't support reprojection anyway - unlike RIOS.
+    
+    The combine parameter controls whether UNION, INTERSECTION 
+    or BOUNDS_FROM_REFERENCE is performed. 
+    
+    """
+    newGrid = refGrid
+    if combine != imageio.BOUNDS_FROM_REFERENCE:
+        for grid in gridList:
+            if not newGrid.alignedWith(grid):
+                xMin = grid.snapToGrid(grid.xMin, refGrid.xMin, refGrid.xRes)
+                xMax = grid.snapToGrid(grid.xMax, refGrid.xMax, refGrid.xRes)
+                yMin = grid.snapToGrid(grid.yMin, refGrid.yMin, refGrid.yRes)
+                yMax = grid.snapToGrid(grid.yMax, refGrid.yMax, refGrid.yRes)
+                grid = pixelgrid.PixelGridDefn(xMin=xMin, xMax=xMax, yMin=yMin, 
+                        yMax=yMax, xRes=refGrid.xRes, yRes=refGrid.yRes, 
+                        projection=refGrid.projection)
+
+            if combine == imageio.INTERSECTION:
+                newGrid = newGrid.intersection(grid)
+            elif combine == imageio.UNION:
+                newGrid = newGrid.union(grid)
+        
+    return newGrid
