@@ -50,6 +50,11 @@ POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'),
 # types for the spatial index
 SPDV3_SI_COUNT_DTYPE = numpy.uint32
 SPDV3_SI_INDEX_DTYPE = numpy.uint64
+
+# types of indexing in the file
+SPDV3_INDEX_CARTESIAN = 1
+SPDV3_INDEX_SPHERICAL = 2
+SPDV3_INDEX_SCAN = 5
     
 @jit
 def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
@@ -249,33 +254,52 @@ class SPDV3File(generic.LiDARFile):
             raise generic.LiDARFormatNotUnderstood(str(err))
             
         # check that it is indeed the right version
-        headerKeys = self.fileHandle['HEADER'].keys()
-        if (not 'VERSION_MAJOR_SPD' in headerKeys or 
-                    not 'VERSION_MINOR_SPD' in headerKeys):
-            msg = "File appears not to be SPD"
-            raise generic.LiDARFormatNotUnderstood(msg)
-        elif self.fileHandle['HEADER']['VERSION_MAJOR_SPD'][0] != 2:
-            msg = "File seems to be wrong version for this driver"
-            raise generic.LiDARFormatNotUnderstood(msg)
-
-        # read in the bits I need            
+        if mode == generic.READ or mode == generic.UPDATE:
+            header = self.fileHandle['HEADER']
+            headerKeys = header.keys()
+            if (not 'VERSION_MAJOR_SPD' in headerKeys or 
+                        not 'VERSION_MINOR_SPD' in headerKeys):
+                msg = "File appears not to be SPD"
+                raise generic.LiDARFormatNotUnderstood(msg)
+            elif header['VERSION_MAJOR_SPD'][0] != 2:
+                msg = "File seems to be wrong version for this driver"
+                raise generic.LiDARFormatNotUnderstood(msg)
+                
+        # read in the bits I need for the spatial index
         if mode == generic.READ:
             indexKeys = self.fileHandle['INDEX'].keys()
             if 'PLS_PER_BIN' in indexKeys and 'BIN_OFFSETS' in indexKeys:
+                header = self.fileHandle['HEADER']
                 self.si_cnt = self.fileHandle['INDEX']['PLS_PER_BIN'][...]
                 self.si_idx = self.fileHandle['INDEX']['BIN_OFFSETS'][...]
-                self.si_binSize = self.fileHandle['HEADER']['BIN_SIZE'][0]
-                self.si_xMin = self.fileHandle['HEADER']['X_MIN'][0]
-                self.si_yMax = self.fileHandle['HEADER']['Y_MAX'][0]
+                self.si_binSize = header['BIN_SIZE'][0]
+
+                # also check the type of indexing used on this file
+                self.indexType = header['INDEX_TYPE'][0]
+                if self.indexType == SPDV3_INDEX_CARTESIAN:
+                    self.si_xMin = header['X_MIN'][0]
+                    self.si_yMax = header['Y_MAX'][0]
+                elif self.indexType == SPDV3_INDEX_SPHERICAL:
+                    self.si_xMin = header['AZIMUTH_MIN'][0]
+                    self.si_yMax = header['ZENITH_MIN'][0]
+                elif self.indexType == SPDV3_INDEX_SCAN:
+                    self.si_xMin = header['SCANLINE_IDX_MIN'][0]
+                    self.si_yMax = header['SCANLINE_MIN'][0]
+                else:
+                    msg = 'Unsupported index type %d' % self.indexType
+                    raise generic.LiDARInvalidSetting(msg)                    
+                    
                 # bottom right coords don't seem right (of data rather than si)
                 self.si_xMax = self.si_xMin + (self.si_idx.shape[1] * self.si_binSize)
                 self.si_yMin = self.si_yMax - (self.si_idx.shape[0] * self.si_binSize)
             
                 self.wkt = self.fileHandle['HEADER']['SPATIAL_REFERENCE'][0].decode()
+
             else:
                 self.si_cnt = None
                 self.si_idx = None
                 self.si_binSize = None
+                self.indexType = SPDV3_INDEX_CARTESIAN
                 self.si_xMin = None
                 self.si_yMax = None
                 self.si_xMax = None
