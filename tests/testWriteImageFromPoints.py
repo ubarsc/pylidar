@@ -16,8 +16,7 @@ def writeImageFunc(data):
     nullval = 0
     if maxPts > 0:
         minZ = zValues.min(axis=0)
-        minZ[minZ.mask] = nullval
-        stack = numpy.expand_dims(minZ, axis=0)
+        stack = numpy.ma.expand_dims(minZ, axis=0)
     else:
         stack = numpy.full((1, nRows, nCols), nullval, dtype=zValues.dtype)
     data.imageOut1.setData(stack)
@@ -32,10 +31,6 @@ def testWrite(infile, imageFile):
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
-    
-    pixGrid = pixelgrid.PixelGridDefn(xMin=706445.0, xMax=706545.0, yMin=6153381.0, yMax=6153481.0,
-                        xRes=0.5, yRes=0.5, projection='')
-#    controls.setReferencePixgrid(pixGrid)
     
     lidarprocessor.doProcessing(writeImageFunc, dataFiles, controls=controls)
     

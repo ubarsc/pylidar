@@ -18,13 +18,13 @@ def writeImageFunc(data):
     stacked = numpy.ma.vstack((zValues1, zValues2))
     
     (maxPts, nRows, nCols) = stacked.shape
-    
+
     if maxPts > 0:
         minZ = stacked.min(axis=0)
-        minZ[minZ.mask] = 0
-        minZ = numpy.expand_dims(minZ, axis=0)
+        minZ = numpy.ma.expand_dims(minZ, axis=0)
     else:
         minZ = numpy.zeros((1, nRows, nCols), dtype=zValues1.dtype)
+    
     data.imageOut1.setData(minZ)
     
     

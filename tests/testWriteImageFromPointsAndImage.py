@@ -16,10 +16,9 @@ def writeImageFunc(data):
     nullval = 0
     if maxPts > 0:
         minZ = zValues.min(axis=0)
-        minZ[minZ.mask] = nullval
         rasterData = data.imageIn1.getData()
         minZ += rasterData[0]
-        stack = numpy.expand_dims(minZ, axis=0)
+        stack = numpy.ma.expand_dims(minZ, axis=0)
     else:
         stack = numpy.full((1, nRows, nCols), nullval, dtype=zValues.dtype)
     data.imageOut1.setData(stack)
