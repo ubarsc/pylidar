@@ -150,14 +150,17 @@ class GDALDriver(basedriver.Driver):
             msg = 'Only 3d arrays can be written'
             raise GDALException(msg)
 
-        if (data.shape[-1] != self.blockxsize or 
-                data.shape[-2] != self.blockysize):
+        nbands, nrows, ncols = data.shape
+        nrows -= (self.controls.overlap * 2)
+        ncols -= (self.controls.overlap * 2)
+
+        if (ncols != self.blockxsize or 
+                nrows != self.blockysize):
             msg = 'data is incorrect size for writing current block'
             raise GDALException(msg)
             
         if self.ds is None:
             # need to create output file first size know we know datatype etc
-            nbands = data.shape[0]
             self.gdalType = imageio.NumpyTypeToGDALType(data.dtype)
     
             # get info for whole file needed.
@@ -193,6 +196,11 @@ class GDALDriver(basedriver.Driver):
             # check they are consistent about the data type
             if self.gdalType != imageio.NumpyTypeToGDALType(data.dtype):
                 msg = 'Output data type must stay the same for each block'
+                raise GDALException(msg)
+                
+            # and bands
+            if self.ds.RasterCount != nbands:
+                msg = 'Output number of bands must stay the same for each block'
                 raise GDALException(msg)
         
         # ok now we can write the data

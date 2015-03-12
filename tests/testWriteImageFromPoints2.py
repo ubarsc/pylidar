@@ -39,6 +39,7 @@ def testWrite(infile1, infile2, imageFile):
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     controls.setFootprint(lidarprocessor.UNION)
+    controls.setOverlap(10)
     
     lidarprocessor.doProcessing(writeImageFunc, dataFiles, controls=controls)
     

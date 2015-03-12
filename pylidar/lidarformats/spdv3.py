@@ -73,15 +73,15 @@ def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
         row = bn // nCols
         col = bn % nCols
         # range check in case outside of the bouds of index 
-        # being created
-        if row >= 0 and col >= 0 and row < nRows and col < nCols:    
-            if si_count[row, col] == 0:
-                # first element of a new bin - save the start 
-                # rest of elements in this bin should be next
-                # since it is sorted
-                si_start[row, col] = i
-            # update count of elements
-            si_count[row, col] += 1
+        # being created - not needed anymore as caller does this
+        #if row >= 0 and col >= 0 and row < nRows and col < nCols:    
+        if si_count[row, col] == 0:
+            # first element of a new bin - save the start 
+            # rest of elements in this bin should be next
+            # since it is sorted
+            si_start[row, col] = i
+        # update count of elements
+        si_count[row, col] += 1
     
 @jit
 def convertIdxBool2D(start_idx_array, count_array, outBool, outRow, outCol, 
@@ -510,15 +510,16 @@ spatial index will be recomputed on the fly"""
                         self.extent.binSize))
             ncols = int(numpy.ceil((self.extent.xMax - self.extent.xMin) / 
                         self.extent.binSize))
-            sortedbins, new_idx, new_cnt = self.CreateSpatialIndex(
+            nrows += (self.controls.overlap * 2)
+            ncols += (self.controls.overlap * 2)
+            mask, sortedbins, new_idx, new_cnt = self.CreateSpatialIndex(
                     pulses['Y_IDX'], pulses['X_IDX'], self.extent.binSize, 
                     self.extent.yMax, self.extent.xMin, nrows, ncols)
             # ok calculate indices on new spatial indexes
             pulse_bool, pulse_idx, pulse_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                             new_idx, new_cnt, nOut)
             # re-sort the pulses to match the new spatial index
-            # TODO: deletion of pulses that were in the original spatial index
-            # but aren't in the current one??
+            pulses = pulses[mask]
             pulses = pulses[sortedbins]
             # TODO: I think this is ok....
 
@@ -577,7 +578,12 @@ spatial index will be recomputed on the fly"""
                         self.lastExtent.binSize)
         ncols = int((self.lastExtent.xMax - self.lastExtent.xMin) / 
                         self.lastExtent.binSize)
-        sortedbins, idx, cnt = self.CreateSpatialIndex(
+                        
+        # add overlap
+        nrows += (self.controls.overlap * 2)
+        ncols += (self.controls.overlap * 2)
+                        
+        mask, sortedbins, idx, cnt = self.CreateSpatialIndex(
                 points['Y'], points['X'], self.lastExtent.binSize, 
                 self.lastExtent.yMax, self.lastExtent.xMin, nrows, ncols)
         # TODO: don't really want the bool array returned - need
@@ -585,7 +591,8 @@ spatial index will be recomputed on the fly"""
         nOut = len(points)
         pts_bool, pts_idx, pts_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                                 idx, cnt, nOut)
-                                
+              
+        points = points[mask]                  
         sortedPoints = points[sortedbins]
         
         pointsByBins = sortedPoints[pts_idx]
@@ -780,6 +787,9 @@ spatial index will be recomputed on the fly"""
         
         This can then be used for writing a SPD V3 spatial index to file,
         or to re-bin data to a new grid.
+        
+        Any elements outside of the new spatial index are ignored and the
+        arrays returned will not refer to them.
 
         Parameters:
             coordOne is the coordinate corresponding to bin row. 
@@ -796,6 +806,8 @@ spatial index will be recomputed on the fly"""
             nRows, nCols - size of the spatial index
             
         Returns:
+            mask - a 1d array of bools of the valid elements. This must be applied
+                before sortedBins.
             sortedBins - a 1d array of indices that is used to 
                 re-sort the data into the correct order for using 
                 the created spatial index. Since the spatial index puts
@@ -807,8 +819,18 @@ spatial index will be recomputed on the fly"""
         """
         # work out the row and column of each element to be put into the
         # spatial index
-        row = numpy.floor((coordOneMax - coordOne) / binSize).astype(numpy.uint32)
-        col = numpy.floor((coordTwo - coordTwoMin) / binSize).astype(numpy.uint32)
+        row = numpy.floor((coordOneMax - coordOne) / binSize)
+        col = numpy.floor((coordTwo - coordTwoMin) / binSize)
+        
+        # work out the elements that aren't within the new spatial 
+        # index and remove them
+        # TODO: can we do this so this is all one operation for the caller?
+        validMask = (row >= 0) & (col >= 0) & (row < nRows) & (col < nCols)
+        row = row[validMask].astype(numpy.uint32)
+        col = col[validMask].astype(numpy.uint32)
+        coordOne = coordOne[validMask]
+        coordTwo = coordTwo[validMask]
+        
         # convert this to a 'binNum' which is a combination of row and col
         # and can be sorted to make a complete ordering of the 2-d grid of bins
         binNum = row * nCols + col
@@ -824,7 +846,7 @@ spatial index will be recomputed on the fly"""
         
         # return array to get back to sorted version of the elements
         # and the new spatial index
-        return sortedBinNumNdx, si_start, si_count
+        return validMask, sortedBinNumNdx, si_start, si_count
         
     def hasSpatialIndex(self):
         """
