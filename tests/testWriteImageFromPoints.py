@@ -18,7 +18,8 @@ def writeImageFunc(data):
         minZ = zValues.min(axis=0)
         stack = numpy.ma.expand_dims(minZ, axis=0)
     else:
-        stack = numpy.full((1, nRows, nCols), nullval, dtype=zValues.dtype)
+        stack = numpy.empty((1, nRows, nCols), dtype=zValues.dtype)
+        stack.fill(nullval)
     data.imageOut1.setData(stack)
     
     
