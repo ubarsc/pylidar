@@ -184,7 +184,7 @@ class GDALDriver(basedriver.Driver):
                 
             # set info on new dataset
             self.ds.SetGeoTransform(self.geoTrans)
-            self.ds.SetProjection(projection)
+            self.ds.SetProjection(str(projection))
             self.nullValList = []
             ignore = self.userClass.rasterIgnore
             for band in range(self.ds.RasterCount):
