@@ -983,3 +983,10 @@ spatial index will be recomputed on the fly"""
         self.lastExtent = None
         self.lastPoints = None
         self.lastPulses = None
+
+class SPDV3FileInfo(generic.LiDARFileInfo):
+    """
+    """
+    def __init__(self, fname):
+        generic.LiDARFileInfo.__init__(fname)
+    

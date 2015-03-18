@@ -94,4 +94,9 @@ class Driver(object):
         """
         raise NotImplementedError()
         
-        
+class FileInfo(object):
+    """
+    Class that contains information about a file
+    """        
+    def __init__(self, fname):
+        self.fname = fname

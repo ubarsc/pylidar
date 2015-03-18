@@ -245,6 +245,12 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
 
+class LiDARFileInfo(basedriver.FileInfo):
+    """
+    Info for a Lidar file
+    """
+    def __init__(self, fname):
+        basedriver.FileInfo.__init__(self, fname)
 
 def getReaderForLiDARFile(fname, mode, controls, userClass):
     """
@@ -266,4 +272,17 @@ def getReaderForLiDARFile(fname, mode, controls, userClass):
     # none worked
     msg = 'Cannot open LiDAR file %s' % fname
     raise LiDARFormatDriverNotFound(msg)
+
+def getLidarFileInfo(fname):
+    for cls in LidarFileInfo.__subclasses__():
+        try:
+            inst = cls(fname)
+            return inst
+        except LiDARFileException:
+            # failed - onto the next one
+            pass
+        # none worked
+        msg = 'Cannot open LiDAR file %s' % fname
+        raise LiDARFormatDriverNotFound(msg)
+                                            
 
