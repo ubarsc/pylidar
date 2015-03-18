@@ -316,7 +316,8 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
     # First Open all the files
     gridList = []
     driverList = []
-    for name in dataFiles.__dict__.keys():
+    nameList = dataFiles.__dict__.keys()
+    for name in nameList:
         # TODO: lists, dictionaries etc
         inputFile = getattr(dataFiles, name)
         if isinstance(inputFile, LidarFile):
@@ -487,6 +488,11 @@ controls.setReferenceImage()"""
             
         # call it
         userFunc(*functionArgs)
+        
+        # write anything out that has been queued for output
+        for name in nameList:
+            userClass = getattr(userContainer, name)
+            userClass.flush()
         
         if controls.spatialProcessing:
             # update to read in next block

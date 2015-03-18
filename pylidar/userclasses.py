@@ -21,7 +21,46 @@ Classes that are passed to the user's function
 from __future__ import print_function, division
 
 import copy
+import numpy
+from numba import jit
 from .lidarformats import generic
+
+@jit
+def stratify3DArrayByValue(inValues, inValuesMask, outIdxs_row, outIdxs_col, outIdxs_p, outIdxsMask, outIdxsCount, 
+        bins, counting):
+    """
+    inValues     3d (ragged) array of values to stratify on (e.g. height)  (nrows, ncols, npts)
+    outIndxs_row     4d array of row coord of stratified values (nPtsPerHgtBin, nBins, nrows, ncols)
+    outIdxs_col      4d array of col coord of stratified values (nPtsPerHgtBin, nBins, nrows, ncols)
+    outIdxs_p        4d array of p coord (nPtsPerHgtBin, nBins, nrows, ncols)
+    outIdxsMask      4d bool array - True for unused elements (nPtsPerHgtBin, nBins, nrows, ncols)
+    outIdxsCount     3d int array of counts per bin (nBins, rows, ncols) (initialized to zero, always)
+    bins             1d array of height bins. Includes end points, i.e. the number of height bins is
+                     (len(bins) - 1). A point is in i-th bin when bin[i] <= z < bins[i+1]. Assumes
+                     no points are outside the range of bin values given. 
+    counting         bool flag. If True, then we are just counting, and filling in outIdxsCount,
+                         otherwise we are filling in outIdxs_* arrays, too. 
+    
+    Usage: Call first with counting=True, then find outIdxsCount.max(), use this as nPtsPerHgtBin
+        to create other out arrays. Then zero outIdxsCount again, and call again with counting=False. 
+    
+    """
+    (nPts, nRows, nCols) = inValues.shape
+    nBins = bins.shape[0] - 1
+    for r in range(nRows):
+        for c in range(nCols):
+            for p in range(nPts):
+                if not inValuesMask[p, r, c]:
+                    v = inValues[p, r, c]
+                    for b in range(nBins):
+                        if v >= bins[b] and v < bins[b+1]:
+                            if not counting:
+                                j = outIdxsCount[b, r, c]
+                                outIdxs_row[j, b, r, c] = r
+                                outIdxs_col[j, b, r, c] = c
+                                outIdxs_p[j, b, r, c] = p
+                                outIdxsMask[j, b, r, c] = False
+                            outIdxsCount[b, r, c] += 1
 
 class UserInfo(object):
     """
@@ -110,8 +149,13 @@ class LidarData(object):
         self.driver = driver
         self.extent = None
         self.spatialProcessing = driver.controls.spatialProcessing
+        # for writing
+        self.pointsToWrite = None
+        self.pulsesToWrite = None
+        self.receivedToWrite = None
+        self.transmittedToWrite = None
         
-    def getPoints(self):
+    def getPoints(self, colNames=None):
         """
         Returns the points for the extent/range of the current
         block as a structured array. The fields on this array
@@ -123,7 +167,7 @@ class LidarData(object):
             points = self.driver.readPointsForRange()
         return points
         
-    def getPulses(self):
+    def getPulses(self, colNames=None):
         """
         Returns the pulses for the extent/range of the current
         block as a structured array. The fields on this array
@@ -135,7 +179,7 @@ class LidarData(object):
             pulses = self.driver.readPulsesForRange()
         return pulses
         
-    def getPulsesByBins(self, extent=None):
+    def getPulsesByBins(self, extent=None, colNames=None):
         """
         Returns the pulses for the extent of the current block
         as a 3 dimensional structured masked array. Only valid for spatial 
@@ -159,7 +203,7 @@ class LidarData(object):
             
         return pulses
         
-    def getPointsByBins(self, extent=None):
+    def getPointsByBins(self, extent=None, colNames=None):
         """
         Returns the points for the extent of the current block
         as a 3 dimensional structured masked array. Only valid for spatial 
@@ -181,9 +225,48 @@ class LidarData(object):
             msg = 'Call only valid when doing spatial processing'
             raise generic.LiDARNonSpatialProcessing(msg)
 
-        return points        
+        return points
+    
+    def rebinPtsByHeight(self, pointsByBin, bins, heightField='Z'):
+        """
+        pointsByBin       3d ragged (masked) structured array of points. (nrows, ncols, npts)
+        bins              Hieght bins into which to stratify points
+        
+        Return:
+            4d re-binned copy of pointsByBin
+            
+        """
+        (maxpts, nrows, ncols) = pointsByBin.shape
+        nbins = len(bins) - 1
+        # Set up for first pass
+        idxCount = numpy.zeros((nbins, nrows, ncols), dtype=numpy.uint16)
+        heightArray = pointsByBin[heightField]
+        
+        # numba doesn't support None so create some empty arrays
+        idx_row = numpy.zeros((1, 1, 1, 1), dtype=numpy.uint16)
+        idx_col = numpy.zeros((1, 1, 1, 1), dtype=numpy.uint16)
+        idx_p = numpy.zeros((1, 1, 1, 1), dtype=numpy.uint16)
+        idxMask = numpy.ones((1, 1, 1, 1), dtype=numpy.bool)
+        
+        stratify3DArrayByValue(heightArray.data, heightArray.mask, idx_row, idx_col, idx_p, idxMask, idxCount, 
+            bins, True)
+        ptsPerHgtBin = idxCount.max()
+        
+        idx_row = numpy.zeros((ptsPerHgtBin, nbins, nrows, ncols), dtype=numpy.uint16)
+        idx_col = numpy.zeros((ptsPerHgtBin, nbins, nrows, ncols), dtype=numpy.uint16)
+        idx_p = numpy.zeros((ptsPerHgtBin, nbins, nrows, ncols), dtype=numpy.uint16)
+        idxMask = numpy.ones((ptsPerHgtBin, nbins, nrows, ncols), dtype=numpy.bool)
+        idxCount.fill(0)
+        
+        stratify3DArrayByValue(heightArray.data, heightArray.mask, idx_row, idx_col, idx_p, idxMask, idxCount, 
+            bins, False)
+        
+        rebinnedPts = pointsByBin[(idx_p, idx_row, idx_col)].data
+        rebinnedPtsMasked = numpy.ma.array(rebinnedPts, mask=idxMask)
+        return rebinnedPtsMasked
+        
 
-    def getPointsByPulse(self):
+    def getPointsByPulse(self, colNames=None):
         """
         Returns the points as a 2d structured masked array. The first axis
         is the same length as the pulse array but the second axis contains the 
@@ -219,14 +302,14 @@ class LidarData(object):
         Set the transmitted waveform for each pulse as 
         a masked 2d integer array.
         """
-        return self.driver.writeTransmitted(transmitted)
+        self.transmittedToWrite = transmitted
         
     def setReceived(self, received):
         """
         Set the received waveform for each pulse as 
         a masked 2d integer array.
         """
-        return self.driver.writeReceived(received)
+        self.receivedToWrite = received
         
     def setPoints(self, points):
         """
@@ -236,10 +319,7 @@ class LidarData(object):
         Pass either a 1d array (like that read from getPoints()) or a
         3d masked array (like that read from getPointsByBins()).
         """
-        if self.spatialProcessing:
-            self.driver.writePointsForExtent(points)
-        else:
-            self.driver.writePointsForRange(points)
+        self.pointsToWrite = points
             
     def setPulses(self, pulses):
         """
@@ -249,10 +329,20 @@ class LidarData(object):
         Pass either a 1d array (like that read from getPulses()) or a
         3d masked array (like that read from getPulsesByBins()).
         """
-        if self.spatialProcessing:
-            self.driver.writePulsesForExtent(pulses)
-        else:
-            self.driver.writePulsesForRange(pulses)
+        self.pulsesToWrite = pulses
+        
+    def flush(self):
+        """
+        writes data to file set via the set*() functions
+        """
+        # TODO:
+        #self.driver.writeData(self.pulsesToWrite, self.pointsToWrite, 
+        #    self.transmittedToWrite, self.receivedToWrite)
+        # reset for next time
+        self.pointsToWrite = None
+        self.pulsesToWrite = None
+        self.receivedToWrite = None
+        self.transmittedToWrite = None
         
 class ImageData(object):
     """
@@ -265,6 +355,7 @@ class ImageData(object):
     def __init__(self, mode, driver):
         self.mode = mode
         self.driver = driver
+        self.data = None
         
     def getData(self):
         """
@@ -278,4 +369,9 @@ class ImageData(object):
         Sets the image data for the current extent. The data type of the passed 
         in numpy array will be the data type for the newly created file.
         """
-        self.driver.setData(data)
+        self.data = data
+        
+    def flush(self):
+        self.driver.setData(self.data)
+        self.data = None
+        
