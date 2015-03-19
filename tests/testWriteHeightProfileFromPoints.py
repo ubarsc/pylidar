@@ -17,6 +17,13 @@ def writeImageFunc(data):
     if maxPts > 0:
         
         ptsByBinsByHeights = data.input1.rebinPtsByHeight(pointsByBins, bins)
+        # OK 2 issues here. 
+        # 1. Masked arrays use False where valid data so we have to invert the mask
+        # 2. Masked strcutured arrays seem to have a weird thing where they
+        #    get a mask for each element also. So we have to extract just one
+        #    field. 
+        # If this is a common operation we might have to create a function
+        # to make this easier for the user.
         cntByBinsByHeights = (~ptsByBinsByHeights['Z'].mask).sum(axis=0).astype(numpy.int32)
     else:
         cntByBinsByHeights = numpy.empty((len(bins)-1, nRows, nCols), dtype=numpy.int32)
