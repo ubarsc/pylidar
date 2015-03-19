@@ -274,7 +274,12 @@ def getReaderForLiDARFile(fname, mode, controls, userClass):
     raise LiDARFormatDriverNotFound(msg)
 
 def getLidarFileInfo(fname):
-    for cls in LidarFileInfo.__subclasses__():
+    """
+    Returns an instance of a LiDAR format info class.
+    Or raises an exception if none found for the file.
+    """
+    for cls in LiDARFileInfo.__subclasses__():
+        #print('trying', cls)
         try:
             inst = cls(fname)
             return inst

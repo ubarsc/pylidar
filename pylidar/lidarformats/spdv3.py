@@ -293,7 +293,7 @@ class SPDV3File(generic.LiDARFile):
                 self.si_xMax = self.si_xMin + (self.si_idx.shape[1] * self.si_binSize)
                 self.si_yMin = self.si_yMax - (self.si_idx.shape[0] * self.si_binSize)
             
-                self.wkt = self.fileHandle['HEADER']['SPATIAL_REFERENCE'][0].decode()
+                self.wkt = header['SPATIAL_REFERENCE'][0].decode()
 
             else:
                 self.si_cnt = None
@@ -986,7 +986,38 @@ spatial index will be recomputed on the fly"""
 
 class SPDV3FileInfo(generic.LiDARFileInfo):
     """
+    Class that gets information about a SPDV3 file
+    and makes it available as fields.
     """
     def __init__(self, fname):
-        generic.LiDARFileInfo.__init__(fname)
+        generic.LiDARFileInfo.__init__(self, fname)
     
+        # attempt to open the file
+        try:
+            fileHandle = h5py.File(fname, 'r')
+        except OSError as err:
+            # always seems to through an OSError
+            raise generic.LiDARFormatNotUnderstood(str(err))
+            
+        # check that it is indeed the right version
+        header = fileHandle['HEADER']
+        headerKeys = header.keys()
+        if (not 'VERSION_MAJOR_SPD' in headerKeys or 
+                    not 'VERSION_MINOR_SPD' in headerKeys):
+            msg = "File appears not to be SPD"
+            raise generic.LiDARFormatNotUnderstood(msg)
+        elif header['VERSION_MAJOR_SPD'][0] != 2:
+            msg = "File seems to be wrong version for this driver"
+            raise generic.LiDARFormatNotUnderstood(msg)
+
+        self.wkt = header['SPATIAL_REFERENCE'][0].decode()
+
+        self.zMax = header['Z_MAX'][0]
+        self.zMin = header['Z_MIN'][0]
+        self.wavelengths = header['WAVELENGTHS'][...]
+        self.bandwidths = header['BANDWIDTHS'][...]
+        # probably other things too
+        
+        
+        
+        

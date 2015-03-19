@@ -29,6 +29,8 @@ from rios import cuiprogress
 from . import basedriver
 from . import gdaldriver
 from .lidarformats import generic
+# import modules implementing subclasses here so 
+# we can use the __subclasses__() python feature
 from .lidarformats import spdv3
 from . import userclasses
 

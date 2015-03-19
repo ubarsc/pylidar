@@ -97,6 +97,7 @@ class Driver(object):
 class FileInfo(object):
     """
     Class that contains information about a file
+    At this stage only subclassed by the lidar drivers
     """        
     def __init__(self, fname):
         self.fname = fname
