@@ -398,15 +398,31 @@ spatial index will be recomputed on the fly"""
             self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
             self.unalignedWarningGiven = True
         
+    @staticmethod
+    def subsetColumns(array, colNames):
+        """
+        Internal method. Subsets the given column names from the array and
+        returns it. colNames can be either a string or a sequence of column
+        names. If None the input array is returned.
+        """
+        if colNames is not None:
+            if isinstance(colNames, str):
+                array = array[colNames]
+            else:
+                # assume a sequence. For some reason numpy
+                # doesn't like a tuple here
+                array = array[list(colNames)]
+            
+        return array
     
-    def readPointsForExtent(self):
+    def readPointsForExtent(self, colNames=None):
         """
         Read out the points for the given extent as a 1d structured array.
         """
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
                         not self.lastPoints is None):
-            return self.lastPoints
+            return self.subsetColumns(self.lastPoints, colNames)
             
         # this should also return anything cached
         pulses = self.readPulsesForExtent()
@@ -430,16 +446,16 @@ spatial index will be recomputed on the fly"""
         self.lastPoints = points
         self.lastPoints_Idx = point_idx
         self.lastPoints_IdxMask = point_idx_mask
-        return points
+        return self.subsetColumns(points, colNames)
             
-    def readPulsesForExtent(self):
+    def readPulsesForExtent(self, colNames=None):
         """
         Return the pulses for the given extent as a 1d strcutured array
         """
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
                         not self.lastPulses is None):
-            return self.lastPulses
+            return self.subsetColumns(self.lastPulses, colNames)
 
         # snap the extent to the grid of the spatial index
         # TODO: cache pixel grid
@@ -561,9 +577,9 @@ spatial index will be recomputed on the fly"""
         self.lastPulses_Idx = pulse_idx
         self.lastPulses_IdxMask = pulse_idx_mask
         self.lastPoints = None # are now invalid
-        return pulses
+        return self.subsetColumns(pulses, colNames)
 
-    def readPulsesForExtentByBins(self, extent=None):
+    def readPulsesForExtentByBins(self, extent=None, colNames=None):
         """
         Return the pulses as a 3d structured masked array.
         """
@@ -586,9 +602,10 @@ spatial index will be recomputed on the fly"""
             self.setExtent(oldExtent)
             
         # make masked array
-        return numpy.ma.array(pulsesByBins, mask=idxMask)
+        pulses = numpy.ma.array(pulsesByBins, mask=idxMask)
+        return self.subsetColumns(pulses, colNames)
         
-    def readPointsForExtentByBins(self, extent=None):
+    def readPointsForExtentByBins(self, extent=None, colNames=None):
         """
         Return the points as a 3d structured masked array.
         
@@ -632,9 +649,10 @@ spatial index will be recomputed on the fly"""
         if extent is not None:
             self.setExtent(oldExtent)
 
-        return numpy.ma.array(pointsByBins, mask=pts_idx_mask)
+        points = numpy.ma.array(pointsByBins, mask=pts_idx_mask)
+        return self.subsetColumns(points, colNames)
 
-    def readPointsByPulse(self):
+    def readPointsByPulse(self, colNames=None):
         """
         Return a 2d masked structured array of point that matches
         the pulses.
@@ -647,8 +665,8 @@ spatial index will be recomputed on the fly"""
         idxMask = self.lastPoints_IdxMask
         
         pointsByPulse = points[idx]
-        return numpy.ma.array(pointsByPulse, mask=idxMask)
-
+        points = numpy.ma.array(pointsByPulse, mask=idxMask)
+        return self.subsetColumns(points, colNames)
 
     @staticmethod
     def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize):
@@ -765,22 +783,8 @@ spatial index will be recomputed on the fly"""
         
         return recv_masked
     
-    def writePointsForExtent(self, points):
-        # TODO: must remove points in overlap area
-        # somehow? Via Pulses?
-        assert self.mode != generic.READ
-        raise NotImplementedError()
         
-    # TODO: write both at once 
-    def writePulsesForExtent(self, pulses):
-        assert self.mode != generic.READ
-        # we are fussy here about the dtype - the format
-        # written must match the spec. Not such an issue for SPD v4?
-        if pulses.dtype != PULSE_DTYPE:
-            msg = ("Invalid pulse array. " +
-                "Fields and types must be the same as that read")
-            raise LiDARInvalidData(msg)
-        
+    def writeData(self, pulses, points, transmitted, received):
         # self.extent is the size of the block without the overlap
         # so just strip out everything outside of it
         mask = ( (pulses['X_IDX'] >= self.extent.xMin) & 
@@ -905,14 +909,14 @@ spatial index will be recomputed on the fly"""
             
         return bMore
         
-    def readPointsForRange(self):
+    def readPointsForRange(self, colNames=None):
         """
         Read all the points for the specified range of pulses
         """
         if (self.lastPulseRange is not None and
                 self.lastPulseRange == self.pulseRange and
                 self.lastPoints is not None):
-            return self.lastPoints
+            return self.subsetColumns(self.lastPoints, colNames)
             
         # this should return anything cached
         pulses = self.readPulses()
@@ -936,16 +940,16 @@ spatial index will be recomputed on the fly"""
         self.lastPoints_Idx = point_idx
         self.lastPoints_IdxMask = point_idx_mask
         # self.lastPulseRange copied in readPulses()
-        return points        
+        return self.subsetColumns(points, colNames)
     
-    def readPulsesForRange(self):
+    def readPulsesForRange(self, colNames=None):
         """
         Read the specified range of pulses
         """
         if (self.lastPulseRange is not None and
                 self.lastPulseRange == self.pulseRange and 
                 self.lastPulses is not None):
-            return self.lastPulses
+            return self.subsetColumns(self.lastPulses, colNames)
     
         pulses = self.fileHandle['DATA']['PULSES'][
             self.pulseRange.startPulse:self.pulseRange.endPulse]
@@ -953,7 +957,7 @@ spatial index will be recomputed on the fly"""
         self.lastPulses = pulses
         self.lastPulseRange = copy.copy(self.pulseRange)
         self.lastPoints = None # now invalid
-        return pulses
+        return self.subsetColumns(pulses, colNames)
     
     def getTotalNumberPulses(self):
         """

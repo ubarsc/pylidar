@@ -10,8 +10,7 @@ from rios import pixelgrid
 
 def writeImageFunc(data):
 
-    pointsByBins = data.input1.getPointsByBins()
-    zValues = pointsByBins['Z']
+    zValues = data.input1.getPointsByBins(colNames='Z')
     (maxPts, nRows, nCols) = zValues.shape
     nullval = 0
     if maxPts > 0:

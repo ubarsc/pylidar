@@ -97,39 +97,51 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
-    def readPointsForExtent(self):
+    def readPointsForExtent(self, colNames=None):
         """
         Read all the points within the given extent
         as 1d structured array. The names of the fields in this array
         will be defined by the driver.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         raise NotImplementedError()
         
-    def readPulsesForExtent(self):
+    def readPulsesForExtent(self, colNames=None):
         """
         Read all the pulses within the given extent
         as 1d structured array. The names of the fields in this array
         will be defined by the driver.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         raise NotImplementedError()
         
-    def readPulsesForExtentByBins(extent=None):
+    def readPulsesForExtentByBins(extent=None, colNames=None):
         """
         Read all the pulses within the given extent as a 3d structured 
         masked array to match the block/bins being used.
         
         The extent/binning for the read data can be overriden by passing in a
         Extent instance.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         raise NotImplementedError()
         
-    def readPointsForExtentByBins(extent=None):
+    def readPointsForExtentByBins(extent=None, colNames=None):
         """
         Read all the points within the given extent as a 3d structured 
         masked array to match the block/bins being used.
         
         The extent/binning for the read data can be overriden by passing in a
         Extent instance.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         raise NotImplementedError()
         
@@ -154,36 +166,6 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
 
-    def writeTransmitted(self, transmitted):
-        """
-        Write the transmitted waveform for all pulses
-        as a 2d masked array
-        """
-        raise NotImplementedError()
-        
-    def writeReceived(self, received):
-        """
-        Write the received waveform for all pulses
-        as a 2d masked array
-        """
-        raise NotImplementedError()
-        
-    def writePointsForExtent(self, points):
-        """
-        Write the points for the current extent. Can either be
-        1d structured array (like that returned by readPointsForExtent())
-        or a 3d masked array (like that returned by readPointsByBins())
-        """
-        raise NotImplementedError()
-        
-    def writePulsesForExtent(self, pulses):
-        """
-        Write the pulses for the current extent. Can either be
-        1d structured array (like that returned by readPulsesForExtent())
-        or a 3d masked array (like that returned by readPulsessByBins())
-        """
-        raise NotImplementedError()
-        
     def hasSpatialIndex(self):
         """
         Returns True if file has a spatial index defined
@@ -200,19 +182,25 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
     
-    def readPointsForRange(self):
+    def readPointsForRange(self, colNames=None):
         """
         Reads the points for the current range. Returns a 1d array.
         
         Returns an empty array if range is outside of the current file.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         raise NotImplementedError()
         
-    def readPulsesForRange(self):
+    def readPulsesForRange(self, colNames=None):
         """
         Reads the pulses for the current range. Returns a 1d array.
 
         Returns an empty array if range is outside of the current file.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         raise NotImplementedError()
         
@@ -224,18 +212,14 @@ class LiDARFile(basedriver.Driver):
         easily finding the total number of pulses.
         """
         raise NotImplementedError()
+
+    def writeData(self, pulses, points, transmitted, received):
+        """
+        Write data to file. pulses to be 1d structured array. points to be
+        2d points-by-pulses format. transmitted and received to be 2d
+        by-pulses format.
         
-    def writePointsForRange(self, points):
-        """
-        Write the points for the current extent. Must be
-        1d structured array like that returned by readPointsForRange().
-        """
-        raise NotImplementedError()
-        
-    def writePulsesForRange(self, pulses):
-        """
-        Write the pulses for the current extent. Must be
-        1d structured array like that returned by readPulsesForRange().
+        Pass None if no data to be written or data unchanged (for update).
         """
         raise NotImplementedError()
         

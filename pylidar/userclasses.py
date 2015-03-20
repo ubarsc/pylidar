@@ -172,11 +172,14 @@ class LidarData(object):
         Returns the points for the extent/range of the current
         block as a structured array. The fields on this array
         are defined by the driver being used.
+        
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         if self.spatialProcessing:
-            points = self.driver.readPointsForExtent()
+            points = self.driver.readPointsForExtent(colNames)
         else:
-            points = self.driver.readPointsForRange()
+            points = self.driver.readPointsForRange(colNames)
         return points
         
     def getPulses(self, colNames=None):
@@ -184,11 +187,14 @@ class LidarData(object):
         Returns the pulses for the extent/range of the current
         block as a structured array. The fields on this array
         are defined by the driver being used.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         if self.spatialProcessing:
-            pulses = self.driver.readPulsesForExtent()
+            pulses = self.driver.readPulsesForExtent(colNames)
         else:
-            pulses = self.driver.readPulsesForRange()
+            pulses = self.driver.readPulsesForRange(colNames)
         return pulses
         
     def getPulsesByBins(self, extent=None, colNames=None):
@@ -206,9 +212,12 @@ class LidarData(object):
         
         The extent/binning for the read data can be overriden by passing in a
         basedriver.Extent instance.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         if self.spatialProcessing:
-            pulses = self.driver.readPulsesForExtentByBins(extent)
+            pulses = self.driver.readPulsesForExtentByBins(extent, colNames)
         else:
             msg = 'Call only valid when doing spatial processing'
             raise generic.LiDARNonSpatialProcessing(msg)
@@ -230,9 +239,12 @@ class LidarData(object):
         
         The extent/binning for the read data can be overriden by passing in a
         basedriver.Extent instance.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
         if self.spatialProcessing:
-            points = self.driver.readPointsForExtentByBins(extent)
+            points = self.driver.readPointsForExtentByBins(extent, colNames)
         else:
             msg = 'Call only valid when doing spatial processing'
             raise generic.LiDARNonSpatialProcessing(msg)
@@ -293,8 +305,11 @@ class LidarData(object):
         is the same length as the pulse array but the second axis contains the 
         points for each pulse. The mask will be set to True where no valid data
         since some pulses will have more points than others. 
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
         """
-        return self.driver.readPointsByPulse()
+        return self.driver.readPointsByPulse(colNames)
         
     def getTransmitted(self):
         """
