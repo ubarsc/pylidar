@@ -173,7 +173,7 @@ class LidarData(object):
         block as a structured array. The fields on this array
         are defined by the driver being used.
         
-        colNames can be a list of column names to return. By default
+        colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
         if self.spatialProcessing:
@@ -188,7 +188,7 @@ class LidarData(object):
         block as a structured array. The fields on this array
         are defined by the driver being used.
 
-        colNames can be a list of column names to return. By default
+        colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
         if self.spatialProcessing:
@@ -213,7 +213,7 @@ class LidarData(object):
         The extent/binning for the read data can be overriden by passing in a
         basedriver.Extent instance.
 
-        colNames can be a list of column names to return. By default
+        colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
         if self.spatialProcessing:
@@ -240,7 +240,7 @@ class LidarData(object):
         The extent/binning for the read data can be overriden by passing in a
         basedriver.Extent instance.
 
-        colNames can be a list of column names to return. By default
+        colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
         if self.spatialProcessing:
@@ -306,7 +306,7 @@ class LidarData(object):
         points for each pulse. The mask will be set to True where no valid data
         since some pulses will have more points than others. 
 
-        colNames can be a list of column names to return. By default
+        colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
         return self.driver.readPointsByPulse(colNames)
@@ -408,6 +408,9 @@ class ImageData(object):
         self.data = data
         
     def flush(self):
+        """
+        Now actually do the write
+        """
         self.driver.setData(self.data)
         self.data = None
         

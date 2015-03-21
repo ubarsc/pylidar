@@ -103,7 +103,7 @@ class LiDARFile(basedriver.Driver):
         as 1d structured array. The names of the fields in this array
         will be defined by the driver.
 
-        colNames can be a list of column names to return. By default
+        colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
         raise NotImplementedError()
@@ -114,7 +114,7 @@ class LiDARFile(basedriver.Driver):
         as 1d structured array. The names of the fields in this array
         will be defined by the driver.
 
-        colNames can be a list of column names to return. By default
+        colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
         raise NotImplementedError()
@@ -127,7 +127,7 @@ class LiDARFile(basedriver.Driver):
         The extent/binning for the read data can be overriden by passing in a
         Extent instance.
 
-        colNames can be a list of column names to return. By default
+        colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
         raise NotImplementedError()
@@ -140,7 +140,7 @@ class LiDARFile(basedriver.Driver):
         The extent/binning for the read data can be overriden by passing in a
         Extent instance.
 
-        colNames can be a list of column names to return. By default
+        colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
         raise NotImplementedError()

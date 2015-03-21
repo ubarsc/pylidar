@@ -142,9 +142,10 @@ class GDALDriver(basedriver.Driver):
         """
         Write a 3d numpy array to the image
         """
-        if self.mode == generic.READ:
-            msg = 'can only set raster data in UPDATE or CREATE modes'
-            raise GDALException(msg)
+        if self.mode == generic.READ or data is None:
+            # the user class always call this as the processor makes no
+            # distinction with read/write when calling flush()
+            return
         
         if data.ndim != 3:
             msg = 'Only 3d arrays can be written'

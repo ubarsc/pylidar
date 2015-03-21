@@ -783,34 +783,130 @@ spatial index will be recomputed on the fly"""
         
         return recv_masked
     
-        
     def writeData(self, pulses, points, transmitted, received):
-        # self.extent is the size of the block without the overlap
-        # so just strip out everything outside of it
-        mask = ( (pulses['X_IDX'] >= self.extent.xMin) & 
-                    (pulses['X_IDX'] <= self.extent.xMax) & 
-                    (pulses['Y_IDX'] >= self.extent.yMin) &
-                    (pulses['Y_IDX'] <= self.extent.yMax))
-        pulses = pulses[mask]
+        """
+        """
+        if self.mode == generic.READ:
+            # the processor always calls this so if a reading driver just ignore
+            return
+    
+        # ok this not really written yet
+        raise NotImplementedError()
         
-        # TOOD: Points must be written at the same time so 
-        # we can set PTS_START_IDX
+        if pulses is not None and pulses.ndim == 3:
+            # TODO: must flatten back to be 1d using the indexes
+            # used to create the 3d version (pulsesbybin)
+            # not sure how to do this
+            raise NotImplementedError()
+            
+        if pulses is not None and pulses.ndim != 1:
+            msg = 'Pulse array must be either 1d or 3d'
+            raise generic.LiDARInvalidSetting(msg)
+            
+        if points is not None and points.ndim == 3:
+            # TODO: must flatten back to be 1d using the indexes
+            # used to create the 3d version (pointsbybin)
+            raise NotImplementedError()
+            
+        if points is not None and points.ndim == 2:
+            # TODO: must flatten back to be 1d using the indexes
+            # used to create the 2d version (pointsbypulses)
+            raise NotImplementedError()
+            
+        if points is not None and points.ndim != 1:
+            msg = 'Point array must be either 1d or 3d'
+            raise generic.LiDARInvalidData(msg)
+        
+        if pulses is not None:
+            if self.mode == generic.CREATE:
+                # need to check that passed in data has all the required fields
+                if pulses.dtype != PULSE_DTYPE:
+                    msg = 'Pulse array does not have all the required fields'
+                    raise generic.LiDARInvalidData(msg)
+        
+            else:
+                if pulses.dtype != PULSE_DTYPE:
+                    # passed in array does not have all the fields we need to write
+                    # so get the original data read 
+                    if self.controls.spatialProcessing:
+                        origPulses = self.readPulsesForExtent()
+                    else:
+                        origPulses = self.readPulsesForRange()
+                    # TODO: copy fields from pulses into origPulses
+                    # here...
+                    pulses = origPulses
+                    
+        if points is not None:
+            if self.mode == generic.CREATE:
+                # need to check that passed in data has all the required fields
+                if points.dtype != POINT_DTYPE:
+                    msg = 'Point array does not have all the required fields'
+                    raise generic.LiDARInvalidData(msg)
+        
+            else:
+                if point.dtype != POINT_DTYPE:
+                    # passed in array does not have all the fields we need to write
+                    # so get the original data read 
+                    if self.controls.spatialProcessing:
+                        origPoints = self.readPointsForExtent()
+                    else:
+                        origPoints = self.readPointsForRange()
+                    # TODO: copy fields from points into origPoints
+                    # here...
+                    points = origPoints
+        
+        if pulses is not None and self.extent is not None:
+            # if we doing spatial index we need to strip out areas in the overlap
+            # self.extent is the size of the block without the overlap
+            # so just strip out everything outside of it
+            mask = ( (pulses['X_IDX'] >= self.extent.xMin) & 
+                        (pulses['X_IDX'] <= self.extent.xMax) & 
+                        (pulses['Y_IDX'] >= self.extent.yMin) &
+                        (pulses['Y_IDX'] <= self.extent.yMax))
+            pulses = pulses[mask]
+        
+        if points is not None and self.extent is not None:
+            # TODO: is this ok?
+            mask = ( (points['X'] >= self.extent.xMin) & 
+                        (points['X'] <= self.extent.xMax) &
+                        (points['Y'] >= self.extent.yMin) &
+                        (points['Y'] <= self.extent.yMax))
+            points = points[mask]
         
         if self.mode == generic.CREATE:
             # need to extend the hdf5 dataset before writing
-            oldSize = self.fileHandle['DATA']['PULSES'].shape[0]
-            nPulses = len(pulses)
-            newSize = oldSize + nPulses
-            self.fileHandle['DATA']['PULSES'].resize((newSize,))
-            
+            # TODO: do pulses always need to be provided?
+            if pulses is not None:
+                oldSize = self.fileHandle['DATA']['PULSES'].shape[0]
+                nPulses = len(pulses)
+                newSize = oldSize + nPulses
+                self.fileHandle['DATA']['PULSES'].resize((newSize,))
+                
+            if points is not None:
+                oldSize = self.fileHandle['DATA']['POINTS'].shape[0]
+                nPoints = len(points)
+                newSize = oldSize + nPoints
+                self.fileHandle['DATA']['POINTS'].resize((newSize,))
+                
+            if transmitted is not None:
+                oldSize = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
+                nTrans = len(transmitted)
+                newSize = oldSize + nTrans
+                self.fileHandle['DATA']['TRANSMITTED'].resize((newSize,))
+                
+            if received is not None:
+                oldSize = self.fileHandle['DATA']['RECEIVED'].shape[0]
+                nRecv = len(received)
+                newSize = oldSize + nRecv
+                self.fileHandle['DATA']['RECEIVED'].resize((newSize,))
+                
+            # TODO: update indices and write
             
         else:
-            # mode == WRITE
-            # TODO: not totally sure what this means at the moment
+            # TODO: update indices and write
             pass
-        
-        # now update the spatial index
-        raise NotImplementedError()
+        # TODO: now update the spatial index
+        pass
 
     @staticmethod
     def CreateSpatialIndex(coordOne, coordTwo, binSize, coordOneMax, 
