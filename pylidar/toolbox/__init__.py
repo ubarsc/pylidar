@@ -1,7 +1,6 @@
-#!/usr/bin/env python
 
 """
-Install script for PyLidar
+toolbox module. A bunch of useful tools for LiDAR Processing using pylidar.
 """
 # This file is part of PyLidar
 # Copyright (C) 2015 John Armston, Neil Flood, Sam Gillingham and Pete Bunting
@@ -18,15 +17,3 @@ Install script for PyLidar
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-from distutils.core import setup
-
-import pylidar
-
-setup(name='pylidar',
-      version=pylidar.PYLIDAR_VERSION,
-      description='Tools for simplifying LiDAR data I/O and tools for processing.',
-      packages=['pylidar', 'pylidar/lidarformats', 'pylidar/toolbox'],
-      license='LICENSE.txt', 
-      url='https://bitbucket.org/chchrsc/pylidar/overview')
-      
