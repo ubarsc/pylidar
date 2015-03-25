@@ -313,7 +313,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         controls = Controls()
 
     # object to be passed to the user function
-    userContainer = userclasses.DataContainer()
+    userContainer = userclasses.DataContainer(controls)
 
     # First Open all the files
     gridList = []

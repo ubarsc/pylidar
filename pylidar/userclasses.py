@@ -83,10 +83,12 @@ class UserInfo(object):
     Equivalent to the RIOS 'info' object.
     
     """
-    def __init__(self):
+    def __init__(self, controls):
         self.pixGrid = None
         self.extent = None # either extent is not None, or range. Not both.
         self.range = None
+        # take a copy so the user can't change it
+        self.controls = copy.copy(controls)
         
     def setPixGrid(self, pixGrid):
         """
@@ -134,6 +136,40 @@ class UserInfo(object):
         getExtent().
         """
         return self.range
+        
+    def getControls(self):
+        """
+        Return the instance of the controls object used for processing
+        
+        """
+        return self.controls
+        
+    def getBlockCoordArrays(self):
+        """
+        Return a tuple of the world coordinates for every pixel
+        in the current block. Each array has the same shape as the 
+        current block. Return value is a tuple
+            (xBlock, yBlock)
+        where the values in xBlock are the X coordinates of the centre
+        of each pixel, and similarly for yBlock. 
+                                                    
+        The coordinates returned are for the pixel centres. This is 
+        slightly inconsistent with usual GDAL usage, but more likely to
+        be what one wants.         
+        
+        """
+        nRows = int(numpy.ceil((self.extent.yMax - self.extent.yMin) / self.extent.binSize))
+        nCols = int(numpy.ceil((self.extent.xMax - self.extent.xMin) / self.extent.binSize))
+        # add overlap 
+        nRows += (self.controls.overlap * 2)
+        nCols += (self.controls.overlap * 2)
+        # create the indices
+        (rowNdx, colNdx) = numpy.mgrid[0:nRows, 0:nCols]
+        xBlock = (self.extent.xMin - self.controls.overlap*self.extent.binSize + 
+                    self.extent.binSize/2.0 + colNdx * self.extent.binSize)
+        yBlock = (self.extent.yMax + self.controls.overlap*self.extent.binSize - 
+                    self.extent.binSize/2.0 - rowNdx * self.extent.binSize)
+        return (xBlock, yBlock)        
 
 class DataContainer(object):
     """
@@ -144,8 +180,8 @@ class DataContainer(object):
     that was passed to doProcessing().
     
     """
-    def __init__(self):
-        self.info = UserInfo()
+    def __init__(self, controls):
+        self.info = UserInfo(controls)
 
 class LidarData(object):
     """
