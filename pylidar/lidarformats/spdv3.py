@@ -57,6 +57,27 @@ SPDV3_INDEX_SPHERICAL = 2
 SPDV3_INDEX_SCAN = 5
     
 @jit
+def updateBoolArray(boolArray, mask):
+    nBool = boolArray.shape[0]
+    maskIdx = 0
+    for n in range(nBool):
+        if boolArray[n]:
+            boolArray[n] = mask[maskIdx]
+            maskIdx += 1
+
+@jit
+def flatten3dMaskedArray(flatArray, in3d, mask3d, idx3d):
+    (maxPts, nRows, nCols) = in3d.shape
+    for n in range(maxPts):
+        for row in range(nRows):
+            for col in range(nCols):
+                if not mask3d[n, row, col]:
+                    idx = idx3d[n, row, col]
+                    val = in3d[n, row, col]
+                    flatArray[idx] = val
+
+    
+@jit
 def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
     """
     Internal function used by SPDV3File.CreateSpatialIndex.
@@ -329,6 +350,8 @@ class SPDV3File(generic.LiDARFile):
         self.lastPulsesBool = None
         self.lastPulses_Idx = None
         self.lastPulses_IdxMask = None
+        self.lastPoints3d_Idx = None
+        self.lastPoints3d_IdxMask = None
         self.extentAlignedWithSpatialIndex = True
         self.unalignedWarningGiven = False
 
@@ -637,12 +660,16 @@ spatial index will be recomputed on the fly"""
         mask, sortedbins, idx, cnt = self.CreateSpatialIndex(
                 points['Y'], points['X'], self.lastExtent.binSize, 
                 self.lastExtent.yMax, self.lastExtent.xMin, nrows, ncols)
+                
+        # for writing
+        updateBoolArray(self.lastPointsBool, mask)
+                
         # TODO: don't really want the bool array returned - need
         # to make it optional
         nOut = len(points)
         pts_bool, pts_idx, pts_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                                 idx, cnt, nOut)
-              
+
         points = points[mask]                  
         sortedPoints = points[sortedbins]
         
@@ -653,6 +680,10 @@ spatial index will be recomputed on the fly"""
         if extent is not None:
             self.setExtent(oldExtent)
 
+        # TODO: make usage of this vs self.lastPoints etc clearer
+        self.lastPoints3d_Idx = pts_idx
+        self.lastPoints3d_IdxMask = pts_idx_mask
+        
         points = numpy.ma.array(pointsByBins, mask=pts_idx_mask)
         return self.subsetColumns(points, colNames)
 
@@ -793,6 +824,15 @@ spatial index will be recomputed on the fly"""
         if self.mode == generic.READ:
             # the processor always calls this so if a reading driver just ignore
             return
+            
+        if pulses is not None and pulses.size == 0:
+            pulses = None
+        if points is not None and points.size == 0:
+            points = None
+        if transmitted is not None and transmitted.size == 0:
+            transmitted = None
+        if received is not None and received.size == 0:
+            received = None
     
         if pulses is not None and pulses.ndim == 3:
             # TODO: must flatten back to be 1d using the indexes
@@ -808,15 +848,10 @@ spatial index will be recomputed on the fly"""
             # must flatten back to be 1d using the indexes
             # used to create the 3d version (pointsbybin)
             if self.mode == generic.UPDATE:
-                flatSize = self.lastPoints_Idx.max()
+                flatSize = self.lastPoints3d_Idx.max() + 1
                 flatPoints = numpy.empty((flatSize,), dtype=points.data.dtype)
-                (maxPts, nRows, nCols) = points.shape
-                for n in range(maxPts):
-                    for row in range(nRows):
-                        for col in range(nCols):
-                            if not self.lastPoints_IdxMask[n, row, col]:
-                                idx = self.lastPoints_Idx[n, row, col]
-                                flatPoints[idx] = points[n, row, col]
+                flatten3dMaskedArray(flatPoints, points, 
+                            self.lastPoints3d_IdxMask, self.lastPoints3d_Idx)
                 points = flatPoints
             else:
                 # TODO: flatten somehow                
@@ -943,10 +978,12 @@ spatial index will be recomputed on the fly"""
                 
         else:
             if points is not None:
-                print(self.lastPointsBool.shape, self.lastPointsBool.sum())
-                print(points.shape)
                 self.fileHandle['DATA']['POINTS'][self.lastPointsBool] = points
-            else:
+            if pulses is not None:
+                raise NotImplementedError()
+            if transmitted is not None:
+                raise NotImplementedError()
+            if received is not None:
                 raise NotImplementedError()
         # TODO: now update the spatial index
         pass
