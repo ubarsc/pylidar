@@ -25,8 +25,12 @@ def interpGrdReturnsFunc(data):
         yVals = yVals[classVals == 3]
         zVals = zVals[classVals == 3]
         
-        out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, 'cubic')
-        out = numpy.expand_dims(out, axis=0)
+        if xVals.shape[0] >= 4:
+            out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, 'cubic')
+            out = numpy.expand_dims(out, axis=0)
+        else:
+            out = numpy.empty((1, pxlCoords[0].shape[0], pxlCoords[0].shape[1]), dtype=numpy.float64)
+            out.fill(0)
     else:
         out = numpy.empty((1, pxlCoords[0].shape[0], pxlCoords[0].shape[1]), dtype=numpy.float64)
         out.fill(0)
@@ -41,6 +45,8 @@ def testInterp(infile, imageFile):
     dataFiles.imageOut1 = lidarprocessor.ImageFile(imageFile, lidarprocessor.CREATE)
     
     controls = lidarprocessor.Controls()
+    controls.setReferenceResolution(1.0)
+    controls.setOverlap(25)
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     

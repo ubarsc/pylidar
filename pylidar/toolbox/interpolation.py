@@ -37,12 +37,23 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method):
     returns grid of float64 values with the same dimensions are the gridCoords with interpolated Z values.
     """
     
+    if (xVals.shape != yVals.shape) & (yVals.shape != zVals.shape):
+        raise Exception("X, Y and Z inputs did not have the same shapes.")
+    
+    if xVals.shape[0] < 4:
+        raise Exception("Must have at least 4 input points to create interpolator")
+    
+    if (numpy.var(xVals) < 4.0) & (numpy.var(yVals) < 4.0):
+        raise Exception("Both the X and Y input coordinates must have a variance > 4.")
+    
+    
+    
     if method == 'nearest' or method == 'linear' or method == 'cubic':
         interpZ = scipy.interpolate.griddata((xVals, yVals), zVals, (gridCoords[0].flatten(), gridCoords[1].flatten()), method=method)
         interpZ = interpZ.astype(numpy.float64)
         out = numpy.reshape(interpZ, gridCoords[0].shape)
     elif method == 'nn':
-        raise NotImplementedError("Natural Neighbour interpolation is not ready yet...")
+        raise Exception("Natural Neighbour interpolation is not ready yet...")
     else:
-        raise generic.LiDARInvalidSetting("Interpolaton method was not recognised")
+        raise Exception("Interpolaton method was not recognised")
     return out
