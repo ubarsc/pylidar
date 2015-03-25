@@ -385,8 +385,8 @@ class SPDV3File(generic.LiDARFile):
         totalPixGrid = self.getPixelGrid()
         extentPixGrid = pixelgrid.PixelGridDefn(xMin=extent.xMin, 
                 xMax=extent.xMax, yMin=extent.yMin, yMax=extent.yMax,
-                xRes=extent.binSize, yRes=extent.binSize)
-                
+                xRes=extent.binSize, yRes=extent.binSize, projection=totalPixGrid.projection)
+        
         self.extentAlignedWithSpatialIndex = (
                 extentPixGrid.alignedWith(totalPixGrid) and 
                 extent.binSize == totalPixGrid.xRes)
