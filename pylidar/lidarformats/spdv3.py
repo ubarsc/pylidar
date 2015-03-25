@@ -266,7 +266,7 @@ class SPDV3File(generic.LiDARFile):
                 raise generic.LiDARFormatNotUnderstood(msg)
                 
         # read in the bits I need for the spatial index
-        if mode == generic.READ:
+        if mode == generic.READ or mode == generic.UPDATE:
             indexKeys = self.fileHandle['INDEX'].keys()
             if 'PLS_PER_BIN' in indexKeys and 'BIN_OFFSETS' in indexKeys:
                 header = self.fileHandle['HEADER']
@@ -323,8 +323,10 @@ class SPDV3File(generic.LiDARFile):
         self.extent = None
         self.pulseRange = None
         self.lastPulseRange = None
+        self.lastPointsBool = None
         self.lastPoints_Idx = None
         self.lastPoints_IdxMask = None
+        self.lastPulsesBool = None
         self.lastPulses_Idx = None
         self.lastPulses_IdxMask = None
         self.extentAlignedWithSpatialIndex = True
@@ -443,6 +445,7 @@ spatial index will be recomputed on the fly"""
         # self.lastExtent updated in readPulsesForExtent()
         # keep these indices from pulses to points - handy for the indexing 
         # functions.
+        self.lastPointsBool = point_bool
         self.lastPoints = points
         self.lastPoints_Idx = point_idx
         self.lastPoints_IdxMask = point_idx_mask
@@ -574,6 +577,7 @@ spatial index will be recomputed on the fly"""
         self.lastPulses = pulses
         # keep these indices from spatial index to pulses as they are
         # handy for the ByBins functions
+        self.lastPulsesBool = pulse_bool
         self.lastPulses_Idx = pulse_idx
         self.lastPulses_IdxMask = pulse_idx_mask
         self.lastPoints = None # are now invalid
@@ -790,9 +794,6 @@ spatial index will be recomputed on the fly"""
             # the processor always calls this so if a reading driver just ignore
             return
     
-        # ok this not really written yet
-        raise NotImplementedError()
-        
         if pulses is not None and pulses.ndim == 3:
             # TODO: must flatten back to be 1d using the indexes
             # used to create the 3d version (pulsesbybin)
@@ -804,56 +805,92 @@ spatial index will be recomputed on the fly"""
             raise generic.LiDARInvalidSetting(msg)
             
         if points is not None and points.ndim == 3:
-            # TODO: must flatten back to be 1d using the indexes
+            # must flatten back to be 1d using the indexes
             # used to create the 3d version (pointsbybin)
-            raise NotImplementedError()
-            
+            if self.mode == generic.UPDATE:
+                flatSize = self.lastPoints_Idx.max()
+                flatPoints = numpy.empty((flatSize,), dtype=points.data.dtype)
+                (maxPts, nRows, nCols) = points.shape
+                for n in range(maxPts):
+                    for row in range(nRows):
+                        for col in range(nCols):
+                            if not self.lastPoints_IdxMask[n, row, col]:
+                                idx = self.lastPoints_Idx[n, row, col]
+                                flatPoints[idx] = points[n, row, col]
+                points = flatPoints
+            else:
+                # TODO: flatten somehow                
+                raise NotImplementedError()
+                            
         if points is not None and points.ndim == 2:
             # TODO: must flatten back to be 1d using the indexes
             # used to create the 2d version (pointsbypulses)
             raise NotImplementedError()
             
         if points is not None and points.ndim != 1:
-            msg = 'Point array must be either 1d or 3d'
+            msg = 'Point array must be either 1d, 2 or 3d'
             raise generic.LiDARInvalidData(msg)
         
         if pulses is not None:
-            if self.mode == generic.CREATE:
+
+            if self.mode == generic.UPDATE:
+                # we need these for 
+                # 1) inserting missing fields when they have read a subset of them
+                # 2) ensuring that they x and y fields haven't been changed
+                if self.controls.spatialProcessing:
+                    origPulses = self.readPulsesForExtent()
+                else:
+                    origPulses = self.readPulsesForRange()
+                
+                for locField in ('X_IDX', 'Y_IDX'):
+                    if locField in pulses.dtype.fields:
+                        if pulses[locField] != origPulses[locField]:
+                            msg = 'Coordinate changed on update'
+                            raise generic.LiDARInvalidData(msg)
+
+                if pulses.dtype != PULSE_DTYPE:
+                    # passed in array does not have all the fields we need to write
+                    # so get the original data read 
+                    # copy fields from pulses into origPulses
+                    for fieldName in pulses.dtype.fields.keys():
+                        origPulses[fieldName] = pulses[fieldName]
+                    
+                    # change them over so we have the full data
+                    pulses = origPulses
+
+            else:
                 # need to check that passed in data has all the required fields
                 if pulses.dtype != PULSE_DTYPE:
                     msg = 'Pulse array does not have all the required fields'
                     raise generic.LiDARInvalidData(msg)
-        
-            else:
-                if pulses.dtype != PULSE_DTYPE:
-                    # passed in array does not have all the fields we need to write
-                    # so get the original data read 
-                    if self.controls.spatialProcessing:
-                        origPulses = self.readPulsesForExtent()
-                    else:
-                        origPulses = self.readPulsesForRange()
-                    # TODO: copy fields from pulses into origPulses
-                    # here...
-                    pulses = origPulses
                     
         if points is not None:
-            if self.mode == generic.CREATE:
+
+            if self.mode == generic.UPDATE:
+                # we need these for 
+                # 1) inserting missing fields when they have read a subset of them
+                if self.controls.spatialProcessing:
+                    origPoints = self.readPointsForExtent()
+                else:
+                    origPoints = self.readPointsForRange()
+
+                # TODO: don't think we need to check for changed coords since
+                # the points 
+
+                if points.dtype != POINT_DTYPE:
+                    # passed in array does not have all the fields we need to write
+                    # so get the original data read 
+                    for fieldName in points.dtype.fields.keys():
+                        origPoints[fieldName] = points[fieldName]
+
+                    # change them over so we have the full data
+                    points = origPoints
+
+            else:
                 # need to check that passed in data has all the required fields
                 if points.dtype != POINT_DTYPE:
                     msg = 'Point array does not have all the required fields'
                     raise generic.LiDARInvalidData(msg)
-        
-            else:
-                if point.dtype != POINT_DTYPE:
-                    # passed in array does not have all the fields we need to write
-                    # so get the original data read 
-                    if self.controls.spatialProcessing:
-                        origPoints = self.readPointsForExtent()
-                    else:
-                        origPoints = self.readPointsForRange()
-                    # TODO: copy fields from points into origPoints
-                    # here...
-                    points = origPoints
         
         if pulses is not None and self.extent is not None:
             # if we doing spatial index we need to strip out areas in the overlap
@@ -867,11 +904,13 @@ spatial index will be recomputed on the fly"""
         
         if points is not None and self.extent is not None:
             # TODO: is this ok?
-            mask = ( (points['X'] >= self.extent.xMin) & 
-                        (points['X'] <= self.extent.xMax) &
-                        (points['Y'] >= self.extent.yMin) &
-                        (points['Y'] <= self.extent.yMax))
-            points = points[mask]
+            #mask = ( (points['X'] >= self.extent.xMin) & 
+            #            (points['X'] <= self.extent.xMax) &
+            #            (points['Y'] >= self.extent.yMin) &
+            #            (points['Y'] <= self.extent.yMax))
+            #print('mask', mask.sum(), points.shape)
+            #points = points[mask]
+            pass
         
         if self.mode == generic.CREATE:
             # need to extend the hdf5 dataset before writing
@@ -899,12 +938,16 @@ spatial index will be recomputed on the fly"""
                 nRecv = len(received)
                 newSize = oldSize + nRecv
                 self.fileHandle['DATA']['RECEIVED'].resize((newSize,))
+
+            raise NotImplementedError()
                 
-            # TODO: update indices and write
-            
         else:
-            # TODO: update indices and write
-            pass
+            if points is not None:
+                print(self.lastPointsBool.shape, self.lastPointsBool.sum())
+                print(points.shape)
+                self.fileHandle['DATA']['POINTS'][self.lastPointsBool] = points
+            else:
+                raise NotImplementedError()
         # TODO: now update the spatial index
         pass
 
@@ -1065,7 +1108,7 @@ spatial index will be recomputed on the fly"""
         """
         Write out the spatial index and close file handle.
         """
-        if (self.mode != generic.READ and self.userClass.writeSpatialIndex and 
+        if (self.mode == generic.CREATE and self.userClass.writeSpatialIndex and 
                     self.si_cnt is not None):
             # write out to file
             self.fileHandle['INDEX']['PLS_PER_BIN'] = self.si_cnt

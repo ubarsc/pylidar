@@ -407,9 +407,8 @@ class LidarData(object):
         """
         writes data to file set via the set*() functions
         """
-        # TODO:
-        #self.driver.writeData(self.pulsesToWrite, self.pointsToWrite, 
-        #    self.transmittedToWrite, self.receivedToWrite)
+        self.driver.writeData(self.pulsesToWrite, self.pointsToWrite, 
+            self.transmittedToWrite, self.receivedToWrite)
         # reset for next time
         self.pointsToWrite = None
         self.pulsesToWrite = None

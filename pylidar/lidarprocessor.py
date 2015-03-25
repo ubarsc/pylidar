@@ -150,6 +150,7 @@ class Controls(object):
         self.spatialProcessing = True 
         self.referenceImage = None
         self.referencePixgrid = None
+        self.referenceResolution = None
         self.progress = cuiprogress.SilentProgress()
         self.messageHandler = defaultMessageFn
         
@@ -198,6 +199,14 @@ class Controls(object):
         or referenceImage, not both.
         """
         self.referencePixgrid = referencePixgrid
+        
+    def setReferenceResolution(self, resolution):
+        """
+        Overrides the resolution that the processing happens with. Overrides
+        either of the setReferenceImage or setReferencePixgrid calls or the
+        default reference.
+        """
+        self.referenceResolution = resolution
         
     def setProgress(self, progress):
         """
@@ -391,6 +400,19 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
         if referenceGrid is None:
             # default to first image
             referenceGrid = gridList[0]
+        
+        # override the resolution and snap the coords    
+        if controls.referenceResolution is not None:
+            referenceGrid.xMin = referenceGrid.snapToGrid(referenceGrid.xMin, 
+                    referenceGrid.xMin, controls.referenceResolution)
+            referenceGrid.xMax = referenceGrid.snapToGrid(referenceGrid.xMax, 
+                    referenceGrid.xMax, controls.referenceResolution)
+            referenceGrid.yMin = referenceGrid.snapToGrid(referenceGrid.yMin, 
+                    referenceGrid.yMin, controls.referenceResolution)
+            referenceGrid.yMax = referenceGrid.snapToGrid(referenceGrid.yMax, 
+                    referenceGrid.yMax, controls.referenceResolution)
+            referenceGrid.xRes = controls.referenceResolution
+            referenceGrid.yRes = controls.referenceResolution
 
         # Check they all have the same projection
         # the LiDAR files don't need to align since we can recompute the spatial 
@@ -426,8 +448,7 @@ controls.setReferenceImage()"""
                             
         # tell all drivers that are creating files what pixel grid is
         for driver in driverList:
-            # TODO: is this only for create?
-            if driver.mode != READ:
+            if driver.mode == CREATE:
                 driver.setPixelGrid(workingPixGrid)
             
         # tell info class
