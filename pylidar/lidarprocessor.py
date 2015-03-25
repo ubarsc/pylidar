@@ -4,7 +4,7 @@ Classes that are passed to the doProcessing function.
 And the doProcessing function itself
 """
 # This file is part of PyLidar
-# Copyright (C) 2015 John Armston, Neil Flood and Sam Gillingham
+# Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
