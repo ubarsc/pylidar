@@ -21,9 +21,9 @@ from __future__ import print_function, division
 
 import os
 import numpy
-import scipy
+import scipy.interpolate
 
-def interpGrid(xVals, yVals, zVals, gridCoords, method):
+def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
     """
     A function to interpolate values to a regular gridCoords given 
     an irregular set of input data points
@@ -43,13 +43,18 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method):
     if xVals.shape[0] < 4:
         raise Exception("Must have at least 4 input points to create interpolator")
     
-    if (numpy.var(xVals) < 4.0) & (numpy.var(yVals) < 4.0):
-        raise Exception("Both the X and Y input coordinates must have a variance > 4.")
-    
-    
-    
+    if checkPtDist:
+        if (xVals.shape[0] < 100) & (numpy.var(xVals) < 4.0) & (numpy.var(yVals) < 4.0):
+            raise Exception("Both the X and Y input coordinates must have a variance > 4 when the number of points is < 100.")
+        
     if method == 'nearest' or method == 'linear' or method == 'cubic':
-        interpZ = scipy.interpolate.griddata((xVals, yVals), zVals, (gridCoords[0].flatten(), gridCoords[1].flatten()), method=method)
+        interpZ = scipy.interpolate.griddata((xVals, yVals), zVals, (gridCoords[0].flatten(), gridCoords[1].flatten()), method=method, rescale=True)
+        interpZ = interpZ.astype(numpy.float64)
+        out = numpy.reshape(interpZ, gridCoords[0].shape)
+    elif method == 'rbf':
+        raise Exception("RBF has not been tested and may well have issues and further options need to be explored...")
+        rbfInterp = scipy.interpolate.Rbf(xVals, yVals, zVals)
+        interpZ = rbfInterp(gridCoords[0].flatten(), gridCoords[1].flatten())
         interpZ = interpZ.astype(numpy.float64)
         out = numpy.reshape(interpZ, gridCoords[0].shape)
     elif method == 'nn':
