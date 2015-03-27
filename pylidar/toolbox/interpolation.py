@@ -2,7 +2,7 @@
 Functions which can be used to perform interpolation of point data
 """
 # This file is part of PyLidar
-# Copyright (C) 2015 John Armston, Neil Flood, Sam Gillingham and Pete Bunting
+# Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
