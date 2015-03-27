@@ -1,7 +1,5 @@
-#!/usr/bin/env python
-
 """
-Install script for PyLidar
+Functions to classify the ground returns within the point cloud.
 """
 # This file is part of PyLidar
 # Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
@@ -19,14 +17,19 @@ Install script for PyLidar
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from distutils.core import setup
+from __future__ import print_function, division
 
-import pylidar
+import os
+import numpy
 
-setup(name='pylidar',
-      version=pylidar.PYLIDAR_VERSION,
-      description='Tools for simplifying LiDAR data I/O and tools for processing.',
-      packages=['pylidar', 'pylidar/lidarformats', 'pylidar/toolbox', 'pylidar/toolbox/grdfilters'],
-      license='LICENSE.txt', 
-      url='https://bitbucket.org/chchrsc/pylidar/overview')
-      
+
+def classifyGroundReturns(ptBinVals, grdSurf, thres):
+    """
+    A function to classify the ground return points within a distance from a
+    ground surface. 
+    * ptBinVals is a binned list of points
+    * grdSurf ground surface with the same dimensions as the binned points
+    * thres is the threshold for defining whether a point is ground or not.
+    """
+    ptBinVals['CLASSIFICATION'] = numpy.where( ptBinVals['CLASSIFICATION'] == 3, 0, ptBinVals['CLASSIFICATION'])
+    ptBinVals['CLASSIFICATION'] = numpy.where( numpy.absolute(ptBinVals['Z'] - grdSurf) < thres, 3, ptBinVals['CLASSIFICATION'])
