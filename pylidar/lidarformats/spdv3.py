@@ -436,7 +436,10 @@ spatial index will be recomputed on the fly"""
             else:
                 # assume a sequence. For some reason numpy
                 # doesn't like a tuple here
-                array = array[list(colNames)]
+                # have to do a copy to avoid numpy warning
+                # that updating returned array will break in future
+                # numpy release.
+                array = array[list(colNames)].copy()
             
         return array
     
