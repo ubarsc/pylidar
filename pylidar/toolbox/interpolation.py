@@ -23,6 +23,12 @@ import os
 import numpy
 import scipy.interpolate
 
+haveCGALInterpPy = True
+try:
+    import cgalinterp
+except ImportError as cgalInterpErr:
+    haveCGALInterpPy = False
+
 def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
     """
     A function to interpolate values to a regular gridCoords given 
@@ -44,21 +50,23 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
         raise Exception("Must have at least 4 input points to create interpolator")
     
     if checkPtDist:
-        if (xVals.shape[0] < 100) & (numpy.var(xVals) < 4.0) & (numpy.var(yVals) < 4.0):
-            raise Exception("Both the X and Y input coordinates must have a variance > 4 when the number of points is < 100.")
-        
+        if xVals.shape[0] < 100:
+            if (numpy.var(xVals) < 4.0) | (numpy.var(yVals) < 4.0):
+                print("X Var: ", numpy.var(xVals))
+                print("Y Var: ", numpy.var(yVals))
+                raise Exception("Both the X and Y input coordinates must have a variance > 4 when the number of points is < 100.")
+          
     if method == 'nearest' or method == 'linear' or method == 'cubic':
         interpZ = scipy.interpolate.griddata((xVals, yVals), zVals, (gridCoords[0].flatten(), gridCoords[1].flatten()), method=method, rescale=True)
         interpZ = interpZ.astype(numpy.float64)
         out = numpy.reshape(interpZ, gridCoords[0].shape)
-    elif method == 'rbf':
-        raise Exception("RBF has not been tested and may well have issues and further options need to be explored...")
-        rbfInterp = scipy.interpolate.Rbf(xVals, yVals, zVals)
-        interpZ = rbfInterp(gridCoords[0].flatten(), gridCoords[1].flatten())
-        interpZ = interpZ.astype(numpy.float64)
-        out = numpy.reshape(interpZ, gridCoords[0].shape)
     elif method == 'nn':
-        raise Exception("Natural Neighbour interpolation is not ready yet...")
+        if not haveCGALInterpPy:
+            raise Exception("The cgalinterp python bindings required for natural neighbour interpolation and could not be imported\n\t" + cgalInterpErr)        
+        xVals = xVals.astype(numpy.float64)
+        yVals = yVals.astype(numpy.float64)
+        zVals = zVals.astype(numpy.float64)
+        out = cgalinterp.NaturalNeighbour(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
     else:
         raise Exception("Interpolaton method was not recognised")
     return out
