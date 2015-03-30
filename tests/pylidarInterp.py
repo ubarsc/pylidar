@@ -11,7 +11,7 @@ from pylidar.toolbox import interpolation
 from rios import cuiprogress
 from rios import pixelgrid
 
-def interpGrdReturnsFunc(data):
+def interpGrdReturnsFunc(data, argsDict):
     ptVals = data.input1.getPoints(colNames=['X','Y','Z','CLASSIFICATION'])
     pxlCoords = data.info.getBlockCoordArrays()
     
@@ -35,7 +35,7 @@ def interpGrdReturnsFunc(data):
                 out = numpy.empty((1, pxlCoords[0].shape[0], pxlCoords[0].shape[1]), dtype=numpy.float64)
                 out.fill(0)
         else:
-            out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, 'nn')
+            out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, argsDict['interp'])
             out = numpy.expand_dims(out, axis=0)
     else:
         out = numpy.empty((1, pxlCoords[0].shape[0], pxlCoords[0].shape[1]), dtype=numpy.float64)
@@ -45,7 +45,7 @@ def interpGrdReturnsFunc(data):
     data.imageOut1.setData(out)
     
     
-def testInterp(infile, imageFile, overlap):
+def testInterp(infile, imageFile, overlap, interpolator):
     dataFiles = lidarprocessor.DataFiles()
     
     dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
@@ -57,10 +57,13 @@ def testInterp(infile, imageFile, overlap):
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     
-    lidarprocessor.doProcessing(interpGrdReturnsFunc, dataFiles, controls=controls)
+    otherArgs = dict()
+    otherArgs['interp'] = interpolator
+    
+    lidarprocessor.doProcessing(interpGrdReturnsFunc, dataFiles, otherArgs=otherArgs, controls=controls)
     
 if __name__ == '__main__':
-    testInterp(sys.argv[1], sys.argv[2], float(sys.argv[3]))
+    testInterp(sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4])
         
 
 
