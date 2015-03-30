@@ -352,6 +352,7 @@ class SPDV3File(generic.LiDARFile):
         self.lastPulses_IdxMask = None
         self.lastPoints3d_Idx = None
         self.lastPoints3d_IdxMask = None
+        self.lastPoints3d_InRegionMask = None
         self.extentAlignedWithSpatialIndex = True
         self.unalignedWarningGiven = False
 
@@ -436,7 +437,10 @@ spatial index will be recomputed on the fly"""
             else:
                 # assume a sequence. For some reason numpy
                 # doesn't like a tuple here
-                array = array[list(colNames)]
+                # have to do a copy to avoid numpy warning
+                # that updating returned array will break in future
+                # numpy release.
+                array = array[list(colNames)].copy()
             
         return array
     
@@ -683,6 +687,7 @@ spatial index will be recomputed on the fly"""
         # TODO: make usage of this vs self.lastPoints etc clearer
         self.lastPoints3d_Idx = pts_idx
         self.lastPoints3d_IdxMask = pts_idx_mask
+        self.lastPoints3d_InRegionMask = mask
         
         points = numpy.ma.array(pointsByBins, mask=pts_idx_mask)
         return self.subsetColumns(points, colNames)
@@ -902,17 +907,22 @@ spatial index will be recomputed on the fly"""
         if points is not None:
 
             if self.mode == generic.UPDATE:
-                # we need these for 
-                # 1) inserting missing fields when they have read a subset of them
-                if self.controls.spatialProcessing:
-                    origPoints = self.readPointsForExtent()
-                else:
-                    origPoints = self.readPointsForRange()
-
                 # TODO: don't think we need to check for changed coords since
                 # the points 
 
                 if points.dtype != POINT_DTYPE:
+                    # we need these for 
+                    # 1) inserting missing fields when they have read a subset of them
+                    if self.controls.spatialProcessing:
+                        origPoints = self.readPointsForExtent()
+                    else:
+                        origPoints = self.readPointsForRange()
+
+                    # just the ones that are within the region
+                    # this makes the length of origPoints the same as 
+                    # that returned by pointsbybins flattened
+                    origPoints = origPoints[self.lastPoints3d_InRegionMask]
+                
                     # passed in array does not have all the fields we need to write
                     # so get the original data read 
                     for fieldName in points.dtype.fields.keys():

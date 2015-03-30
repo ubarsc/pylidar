@@ -10,9 +10,9 @@ from rios import pixelgrid
 
 def updatePointFunc(data):
 
-    pts = data.input1.getPoints(colNames=['Z', 'CLASSIFICATION'])
+    pts = data.input1.getPointsByBins(colNames=['CLASSIFICATION', 'Z'])
     pts['CLASSIFICATION'] = 79
-    
+
     data.input1.setPoints(pts)
     
 def testUpdate(infile):
