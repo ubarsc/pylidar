@@ -28,6 +28,12 @@ try:
     import cgalinterp
 except ImportError as cgalInterpErr:
     haveCGALInterpPy = False
+    
+havePyNNInterp = True
+try:
+    import pynninterp
+except ImportError as pyNNInterpErr:
+    havePyNNInterp = False
 
 def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
     """
@@ -38,7 +44,7 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
     * yVals is an array of Y coordinates for known points
     * zVals is an array of values associated with the X,Y points to be interpolated
     * gridCoords is a 2D array with the X,Y values for each 'pixel' in the grid; use data.info.getBlockCoordArrays()
-    * method is a string specifying the method of interpolation to use, 'nearest', 'linear', 'cubic', 'nn'
+    * method is a string specifying the method of interpolation to use, 'nearest', 'linear', 'cubic', 'cgalnn', 'pynn', 'pylinear'
     
     returns grid of float64 values with the same dimensions are the gridCoords with interpolated Z values.
     """
@@ -60,13 +66,27 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
         interpZ = scipy.interpolate.griddata((xVals, yVals), zVals, (gridCoords[0].flatten(), gridCoords[1].flatten()), method=method, rescale=True)
         interpZ = interpZ.astype(numpy.float64)
         out = numpy.reshape(interpZ, gridCoords[0].shape)
-    elif method == 'nn':
+    elif method == 'cgalnn':
         if not haveCGALInterpPy:
             raise Exception("The cgalinterp python bindings required for natural neighbour interpolation and could not be imported\n\t" + cgalInterpErr)        
         xVals = xVals.astype(numpy.float64)
         yVals = yVals.astype(numpy.float64)
         zVals = zVals.astype(numpy.float64)
         out = cgalinterp.NaturalNeighbour(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+    elif method == 'pynn':
+        if not havePyNNInterp:
+            raise Exception("The PyNNInterp python bindings required for natural neighbour interpolation and could not be imported\n\t" + pyNNInterpErr)        
+        xVals = xVals.astype(numpy.float64)
+        yVals = yVals.astype(numpy.float64)
+        zVals = zVals.astype(numpy.float64)
+        out = pynninterp.NaturalNeighbour(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+    elif method == 'pylinear':
+        if not havePyNNInterp:
+            raise Exception("The PyNNInterp python bindings required for linear (TIN?) interpolation and could not be imported\n\t" + pyNNInterpErr)        
+        xVals = xVals.astype(numpy.float64)
+        yVals = yVals.astype(numpy.float64)
+        zVals = zVals.astype(numpy.float64)
+        out = pynninterp.Linear(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
     else:
         raise Exception("Interpolaton method was not recognised")
     return out
