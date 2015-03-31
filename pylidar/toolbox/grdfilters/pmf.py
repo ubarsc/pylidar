@@ -6,7 +6,7 @@ classify the ground returns.
 Zhang, K., Chen, S., Whitman, D., Shyu, M., Yan, J., & Zhang, C. (2003). 
 A progressive morphological filter for removing nonground measurements 
 from airborne LIDAR data. IEEE Transactions on Geoscience and Remote Sensing, 
-41(4), 872–882. 
+41(4), 872-882. 
 """
 # This file is part of PyLidar
 # Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
