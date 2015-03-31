@@ -113,7 +113,7 @@ def doOpening(iarray, maxWindowSize, winSize1, c, s, dh0, dhmax):
             structureElement = disk(wk)#(int(wk), int(wk))
             #Zf = ndimage.grey_erosion(Z, size = structureElement)
             #Zf = ndimage.grey_dilation(Zf, size = structureElement)
-            Zf = ndimage.morphology.grey_opening(Z, structure=structureElement)
+            Zf = ndimage.morphology.grey_opening(Z, structure=structureElement, size=structureElement.shape)
             
             #Trying new method - only replace the value if it's less than the specified height
             #threshold or the zalue is less than the input
