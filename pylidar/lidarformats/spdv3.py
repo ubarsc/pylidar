@@ -191,9 +191,9 @@ def convertIdxBool1D(start_idx_array, count_array, outBool, outRow, outIdx,
     into a single boolean array (for passing to h5py for reading data), 
     an array of indexes and a mask for creating a 3d masked array of the data 
     extracted.
-                
+    
     Note: indexes returned are relative to the subset, not the file.
-                    
+    
     start_idx_array 1d - array of start indexes
        input - from the SPD index
     count_array 1d - array of counts
@@ -247,7 +247,7 @@ def convertIdxBool1D(start_idx_array, count_array, outBool, outRow, outIdx,
             counts[row] += 1
             # update the current element number
             counter += 1
-                
+            
 class SPDV3File(generic.LiDARFile):
     """
     Class to support reading and writing of SPD Version 3.x files.
@@ -480,7 +480,7 @@ spatial index will be recomputed on the fly"""
             
     def readPulsesForExtent(self, colNames=None):
         """
-        Return the pulses for the given extent as a 1d strcutured array
+        Return the pulses for the given extent as a 1d structured array
         """
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
@@ -636,7 +636,7 @@ spatial index will be recomputed on the fly"""
         pulses = numpy.ma.array(pulsesByBins, mask=idxMask)
         return self.subsetColumns(pulses, colNames)
         
-    def readPointsForExtentByBins(self, extent=None, colNames=None):
+    def readPointsForExtentByBins(self, extent=None, colNames=None, indexByPulse=False):
         """
         Return the points as a 3d structured masked array.
         
@@ -660,9 +660,18 @@ spatial index will be recomputed on the fly"""
         # add overlap
         nrows += (self.controls.overlap * 2)
         ncols += (self.controls.overlap * 2)
-                        
+        
+        # create point spatial index
+        if indexByPulse:
+            # TODO: check if is there is a better way of going about this
+            idx_x = numpy.repeat(self.lastPulses['X_IDX'],self.lastPulses['NUMBER_OF_RETURNS'])
+            idx_y = numpy.repeat(self.lastPulses['Y_IDX'],self.lastPulses['NUMBER_OF_RETURNS'])
+        else:
+            idx_x = points['X'] 
+            idx_y = points['Y']            
+        
         mask, sortedbins, idx, cnt = self.CreateSpatialIndex(
-                points['Y'], points['X'], self.lastExtent.binSize, 
+                idx_y, idx_x, self.lastExtent.binSize, 
                 self.lastExtent.yMax, self.lastExtent.xMin, nrows, ncols)
                 
         # for writing
@@ -671,6 +680,10 @@ spatial index will be recomputed on the fly"""
         # TODO: don't really want the bool array returned - need
         # to make it optional
         nOut = len(points)
+        #idx = self.lastPulses['PTS_START_IDX']
+        #cnt = self.lastPulses['NUMBER_OF_RETURNS']
+        #pts_bool, pts_idx, pts_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
+        #                        idx, cnt, nOut)
         pts_bool, pts_idx, pts_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                                 idx, cnt, nOut)
 
