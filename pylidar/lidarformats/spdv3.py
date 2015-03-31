@@ -680,10 +680,6 @@ spatial index will be recomputed on the fly"""
         # TODO: don't really want the bool array returned - need
         # to make it optional
         nOut = len(points)
-        #idx = self.lastPulses['PTS_START_IDX']
-        #cnt = self.lastPulses['NUMBER_OF_RETURNS']
-        #pts_bool, pts_idx, pts_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
-        #                        idx, cnt, nOut)
         pts_bool, pts_idx, pts_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                                 idx, cnt, nOut)
 
