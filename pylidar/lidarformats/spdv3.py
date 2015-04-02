@@ -660,19 +660,21 @@ spatial index will be recomputed on the fly"""
         # add overlap
         nrows += (self.controls.overlap * 2)
         ncols += (self.controls.overlap * 2)
+        xMin = self.lastExtent.xMin - (self.controls.overlap * self.lastExtent.binSize)
+        yMax = self.lastExtent.yMax + (self.controls.overlap * self.lastExtent.binSize)
         
         # create point spatial index
         if indexByPulse:
             # TODO: check if is there is a better way of going about this
-            idx_x = numpy.repeat(self.lastPulses['X_IDX'],self.lastPulses['NUMBER_OF_RETURNS'])
-            idx_y = numpy.repeat(self.lastPulses['Y_IDX'],self.lastPulses['NUMBER_OF_RETURNS'])
+            x_idx = numpy.repeat(self.lastPulses['X_IDX'],self.lastPulses['NUMBER_OF_RETURNS'])
+            y_idx = numpy.repeat(self.lastPulses['Y_IDX'],self.lastPulses['NUMBER_OF_RETURNS'])
         else:
-            idx_x = points['X'] 
-            idx_y = points['Y']            
+            x_idx = points['X'] 
+            y_idx = points['Y']            
         
         mask, sortedbins, idx, cnt = self.CreateSpatialIndex(
-                idx_y, idx_x, self.lastExtent.binSize, 
-                self.lastExtent.yMax, self.lastExtent.xMin, nrows, ncols)
+                y_idx, x_idx, self.lastExtent.binSize, 
+                yMax, xMin, nrows, ncols)
                 
         # for writing
         updateBoolArray(self.lastPointsBool, mask)
