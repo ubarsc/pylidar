@@ -886,6 +886,11 @@ spatial index will be recomputed on the fly"""
             transmitted = None
         if received is not None and received.size == 0:
             received = None
+            
+        if pulses is not None:
+            orgPulseDims = pulses.ndim
+        if points is not None:
+            origPointsDims = points.ndim
     
         if pulses is not None and pulses.ndim == 3:
             # TODO: must flatten back to be 1d using the indexes
@@ -911,9 +916,17 @@ spatial index will be recomputed on the fly"""
                 raise NotImplementedError()
                             
         if points is not None and points.ndim == 2:
-            # TODO: must flatten back to be 1d using the indexes
+            # must flatten back to be 1d using the indexes
             # used to create the 2d version (pointsbypulses)
-            raise NotImplementedError()
+            if self.mode == generic.UPDATE:
+                flatSize = self.lastPoints_Idx.max() + 1
+                flatPoints = numpy.empty((flatSize,), dtype=points.data.dtype)
+                flatten2dMaskedArray(flatPoints, points, 
+                            self.lastPoints_IdxMask, self.lastPoints_Idx)
+                points = flatPoints
+            else:
+                # TODO: flatten somehow
+                raise NotImplementedError()
             
         if points is not None and points.ndim != 1:
             msg = 'Point array must be either 1d, 2 or 3d'
@@ -956,7 +969,7 @@ spatial index will be recomputed on the fly"""
 
             if self.mode == generic.UPDATE:
                 # TODO: don't think we need to check for changed coords since
-                # the points 
+                # the points aren't indexed
 
                 if points.dtype != POINT_DTYPE:
                     # we need these for 
@@ -969,7 +982,8 @@ spatial index will be recomputed on the fly"""
                     # just the ones that are within the region
                     # this makes the length of origPoints the same as 
                     # that returned by pointsbybins flattened
-                    origPoints = origPoints[self.lastPoints3d_InRegionMask]
+                    if origPointsDims == 3:
+                        origPoints = origPoints[self.lastPoints3d_InRegionMask]
                 
                     # passed in array does not have all the fields we need to write
                     # so get the original data read 
@@ -994,16 +1008,16 @@ spatial index will be recomputed on the fly"""
                         (pulses['Y_IDX'] >= self.extent.yMin) &
                         (pulses['Y_IDX'] <= self.extent.yMax))
             pulses = pulses[mask]
+            updateBoolArray(self.lastPulsesBool, mask)
         
         if points is not None and self.extent is not None:
-            # TODO: is this ok?
-            #mask = ( (points['X'] >= self.extent.xMin) & 
-            #            (points['X'] <= self.extent.xMax) &
-            #            (points['Y'] >= self.extent.yMin) &
-            #            (points['Y'] <= self.extent.yMax))
-            #print('mask', mask.sum(), points.shape)
-            #points = points[mask]
-            pass
+            # TODO: is this ok for points read in by indexByPulse=True?
+            mask = ( (points['X'] >= self.extent.xMin) & 
+                        (points['X'] <= self.extent.xMax) &
+                        (points['Y'] >= self.extent.yMin) &
+                        (points['Y'] <= self.extent.yMax))
+            points = points[mask]
+            updateBoolArray(self.lastPointsBool, mask)
         
         if self.mode == generic.CREATE:
             # need to extend the hdf5 dataset before writing
