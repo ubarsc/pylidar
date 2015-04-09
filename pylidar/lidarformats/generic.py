@@ -52,6 +52,9 @@ class LiDARNonSpatialProcessing(LiDARFileException):
 class LiDARFunctionUnsupported(LiDARFileException):
     "Function unsupported by LiDAR driver"
     
+class LiDARArrayColumnError(LiDARFileException):
+    "Unsupported operation on a structured array"
+    
 class PulseRange(object):
     """
     Class for setting the range of pulses to read/write

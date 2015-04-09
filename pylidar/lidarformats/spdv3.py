@@ -459,10 +459,22 @@ spatial index will be recomputed on the fly"""
             else:
                 # assume a sequence. For some reason numpy
                 # doesn't like a tuple here
+                colNames = list(colNames)
+                
+                # need to check that all the named columns
+                # actually exist in the structured array.
+                # Numpy gives no error/warning if they do not
+                # just simply ignores ones that don't exist.
+                existingNames = array.dtype.fields.keys()
+                for col in colNames:
+                    if col not in existingNames:
+                        msg = 'column %s does not exist for this format' % col
+                        raise generic.LiDARArrayColumnError(msg)
+                
                 # have to do a copy to avoid numpy warning
                 # that updating returned array will break in future
                 # numpy release.
-                array = array[list(colNames)].copy()
+                array = array[colNames].copy()
             
         return array
     
