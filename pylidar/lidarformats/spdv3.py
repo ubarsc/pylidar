@@ -58,6 +58,10 @@ SPDV3_INDEX_SCAN = 5
     
 @jit
 def updateBoolArray(boolArray, mask):
+    """
+    Used by readPointsForExtentByBins to update the mask of makmelements
+    that 
+    """
     nBool = boolArray.shape[0]
     maskIdx = 0
     for n in range(nBool):
@@ -67,6 +71,10 @@ def updateBoolArray(boolArray, mask):
 
 @jit
 def flatten3dMaskedArray(flatArray, in3d, mask3d, idx3d):
+    """
+    Used by writeData to flatten out masked 3d data into a 1d
+    using the indexes and masked saved from when the array was created.
+    """
     (maxPts, nRows, nCols) = in3d.shape
     for n in range(maxPts):
         for row in range(nRows):
@@ -75,6 +83,20 @@ def flatten3dMaskedArray(flatArray, in3d, mask3d, idx3d):
                     idx = idx3d[n, row, col]
                     val = in3d[n, row, col]
                     flatArray[idx] = val
+
+@jit
+def flatten2dMaskedArray(flatArray, in2d, mask2d, idx2d):
+    """
+    Used by writeData to flatten out masked 2d data into a 1d
+    using the indexes and masked saved from when the array was created.
+    """
+    (maxPts, nRows) = in2d.shape
+    for n in range(maxPts):
+        for row in range(nRows):
+            if not mask2d[n, row]:
+                idx = idx2d[n, row]
+                val = in2d[n, row]
+                flatArray[idx] = val
 
     
 @jit
@@ -633,8 +655,9 @@ spatial index will be recomputed on the fly"""
             self.setExtent(oldExtent)
             
         # make masked array
+        pulsesByBins = self.subsetColumns(pulsesByBins, colNames)
         pulses = numpy.ma.array(pulsesByBins, mask=idxMask)
-        return self.subsetColumns(pulses, colNames)
+        return pulses
         
     def readPointsForExtentByBins(self, extent=None, colNames=None, indexByPulse=False):
         """
@@ -700,8 +723,9 @@ spatial index will be recomputed on the fly"""
         self.lastPoints3d_IdxMask = pts_idx_mask
         self.lastPoints3d_InRegionMask = mask
         
+        pointsByBins = self.subsetColumns(pointsByBins, colNames)
         points = numpy.ma.array(pointsByBins, mask=pts_idx_mask)
-        return self.subsetColumns(points, colNames)
+        return points
 
     def readPointsByPulse(self, colNames=None):
         """
@@ -716,8 +740,9 @@ spatial index will be recomputed on the fly"""
         idxMask = self.lastPoints_IdxMask
         
         pointsByPulse = points[idx]
+        pointsByPulse = self.subsetColumns(pointsByPulse, colNames)
         points = numpy.ma.array(pointsByPulse, mask=idxMask)
-        return self.subsetColumns(points, colNames)
+        return points
 
     @staticmethod
     def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize):
