@@ -10,10 +10,10 @@ from rios import pixelgrid
 
 def updatePointFunc(data):
 
-    pts = data.input1.getPointsByBins(colNames=['CLASSIFICATION', 'Z'])
-    pts['CLASSIFICATION'] = 79
-
-    data.input1.setPoints(pts)
+    pts = data.input1.getPulses(colNames=['X_IDX', 'USER_FIELD'])
+    pts['USER_FIELD'] = 81
+    
+    data.input1.setPulses(pts)
     
 def testUpdate(infile):
     dataFiles = lidarprocessor.DataFiles()
@@ -23,7 +23,6 @@ def testUpdate(infile):
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
-    controls.setOverlap(10)
     
     lidarprocessor.doProcessing(updatePointFunc, dataFiles, controls=controls)
     

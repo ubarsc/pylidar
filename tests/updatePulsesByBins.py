@@ -10,10 +10,10 @@ from rios import pixelgrid
 
 def updatePointFunc(data):
 
-    pts = data.input1.getPointsByBins(colNames=['CLASSIFICATION', 'Z'])
-    pts['CLASSIFICATION'] = 79
+    pls = data.input1.getPulsesByBins(colNames=['X_IDX', 'USER_FIELD'])
+    pls['USER_FIELD'] = 82
 
-    data.input1.setPoints(pts)
+    data.input1.setPulses(pls)
     
 def testUpdate(infile):
     dataFiles = lidarprocessor.DataFiles()

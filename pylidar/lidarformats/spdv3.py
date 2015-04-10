@@ -59,8 +59,9 @@ SPDV3_INDEX_SCAN = 5
 @jit
 def updateBoolArray(boolArray, mask):
     """
-    Used by readPointsForExtentByBins to update the mask of makmelements
-    that 
+    Used by readPointsForExtentByBins and writeData to update the mask of 
+    elements that are to be written. Often elements need to be dropped
+    since they are outside the window etc.
     """
     nBool = boolArray.shape[0]
     maskIdx = 0
@@ -893,10 +894,17 @@ spatial index will be recomputed on the fly"""
             origPointsDims = points.ndim
     
         if pulses is not None and pulses.ndim == 3:
-            # TODO: must flatten back to be 1d using the indexes
+            # must flatten back to be 1d using the indexes
             # used to create the 3d version (pulsesbybin)
-            # not sure how to do this
-            raise NotImplementedError()
+            if self.mode == generic.UPDATE:
+                flatSize = self.lastPulses_Idx.max() + 1
+                flatPulses = numpy.empty((flatSize,), dtype=pulses.data.dtype)
+                flatten3dMaskedArray(flatPulses, pulses,
+                            self.lastPulses_IdxMask, self.lastPulses_Idx)
+                pulses = flatPulses
+            else:
+                # TODO: flatten somehow
+                raise NotImplementedError()
             
         if pulses is not None and pulses.ndim != 1:
             msg = 'Pulse array must be either 1d or 3d'
@@ -945,7 +953,7 @@ spatial index will be recomputed on the fly"""
                 
                 for locField in ('X_IDX', 'Y_IDX'):
                     if locField in pulses.dtype.fields:
-                        if pulses[locField] != origPulses[locField]:
+                        if (pulses[locField] != origPulses[locField]).any():
                             msg = 'Coordinate changed on update'
                             raise generic.LiDARInvalidData(msg)
 
@@ -983,8 +991,20 @@ spatial index will be recomputed on the fly"""
                     # this makes the length of origPoints the same as 
                     # that returned by pointsbybins flattened
                     if origPointsDims == 3:
+                        # first update the inregion stuff with the not overlap mask
                         origPoints = origPoints[self.lastPoints3d_InRegionMask]
-                
+                        
+                    # strip out the points that were originally outside
+                    # the window and within the overlap.
+                    # TODO: is this ok for points read in by indexByPulse=True?
+                    mask = ( (origPoints['X'] >= self.extent.xMin) & 
+                        (origPoints['X'] <= self.extent.xMax) &
+                        (origPoints['Y'] >= self.extent.yMin) &
+                        (origPoints['Y'] <= self.extent.yMax))
+                    points = points[mask]
+                    origPoints = origPoints[mask]
+                    updateBoolArray(self.lastPointsBool, mask)
+
                     # passed in array does not have all the fields we need to write
                     # so get the original data read 
                     for fieldName in points.dtype.fields.keys():
@@ -1009,15 +1029,8 @@ spatial index will be recomputed on the fly"""
                         (pulses['Y_IDX'] <= self.extent.yMax))
             pulses = pulses[mask]
             updateBoolArray(self.lastPulsesBool, mask)
-        
-        if points is not None and self.extent is not None:
-            # TODO: is this ok for points read in by indexByPulse=True?
-            mask = ( (points['X'] >= self.extent.xMin) & 
-                        (points['X'] <= self.extent.xMax) &
-                        (points['Y'] >= self.extent.yMin) &
-                        (points['Y'] <= self.extent.yMax))
-            points = points[mask]
-            updateBoolArray(self.lastPointsBool, mask)
+
+        # stripping out of points outside are handled above        
         
         if self.mode == generic.CREATE:
             # need to extend the hdf5 dataset before writing
@@ -1052,7 +1065,7 @@ spatial index will be recomputed on the fly"""
             if points is not None:
                 self.fileHandle['DATA']['POINTS'][self.lastPointsBool] = points
             if pulses is not None:
-                raise NotImplementedError()
+                self.fileHandle['DATA']['PULSES'][self.lastPulsesBool] = pulses
             if transmitted is not None:
                 raise NotImplementedError()
             if received is not None:
