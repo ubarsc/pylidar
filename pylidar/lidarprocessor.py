@@ -475,6 +475,12 @@ controls.setReferenceImage()"""
                         workingPixGrid.yMax - windowSizeWorld,
                         workingPixGrid.yMax, workingPixGrid.xRes)
                         
+        # handle the file being smaller than the block size
+        if currentExtent.xMax > workingPixGrid.xMax:
+            currentExtent.xMax = workingPixGrid.xMax
+        if currentExtent.yMin < workingPixGrid.yMin:
+            currentExtent.yMin = workingPixGrid.yMin
+                        
         nTotalBlocks = int(numpy.ceil(
             (workingPixGrid.xMax - workingPixGrid.xMin) / windowSizeWorld) *
             numpy.ceil(
