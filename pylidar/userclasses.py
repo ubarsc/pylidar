@@ -260,7 +260,8 @@ class LidarData(object):
             
         return pulses
         
-    def getPointsByBins(self, extent=None, colNames=None, indexByPulse=False):
+    def getPointsByBins(self, extent=None, colNames=None, indexByPulse=False,
+                returnPulseIndex=False):
         """
         Returns the points for the extent of the current block
         as a 3 dimensional structured masked array. Only valid for spatial 
@@ -281,9 +282,13 @@ class LidarData(object):
         
         Set indexByPulse to True to bin points by the pulse index location rather
         than point location.
+        
+        Set returnPulseIndex to True to also return a 3 dimensional masked array
+        containing the indexes into the 1d array returned by getPulses().
         """
         if self.spatialProcessing:
-            points = self.driver.readPointsForExtentByBins(extent, colNames, indexByPulse)
+            points = self.driver.readPointsForExtentByBins(extent, colNames, 
+                        indexByPulse, returnPulseIndex)
         else:
             msg = 'Call only valid when doing spatial processing'
             raise generic.LiDARNonSpatialProcessing(msg)

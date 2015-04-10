@@ -135,7 +135,8 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
-    def readPointsForExtentByBins(extent=None, colNames=None):
+    def readPointsForExtentByBins(extent=None, colNames=None, indexByPulse=False, 
+                returnPulseIndex=False):
         """
         Read all the points within the given extent as a 3d structured 
         masked array to match the block/bins being used.
@@ -145,6 +146,14 @@ class LiDARFile(basedriver.Driver):
 
         colNames can be a name or list of column names to return. By default
         all columns are returned.
+        
+        Pass indexByPulse=True to bin the points by the locations of the pulses
+            instead of the points.
+        
+        Pass returnPulseIndex=True to also return a masked 3d array of 
+            the indices into the 1d pulse array (as returned by 
+            readPulsesForExtent())
+        
         """
         raise NotImplementedError()
         

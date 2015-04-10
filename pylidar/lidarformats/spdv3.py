@@ -672,13 +672,21 @@ spatial index will be recomputed on the fly"""
         pulses = numpy.ma.array(pulsesByBins, mask=idxMask)
         return pulses
         
-    def readPointsForExtentByBins(self, extent=None, colNames=None, indexByPulse=False):
+    def readPointsForExtentByBins(self, extent=None, colNames=None, 
+                    indexByPulse=False, returnPulseIndex=False):
         """
         Return the points as a 3d structured masked array.
         
         Note that because the spatial index on a SPDV3 file is on pulses
         this may miss points that are attached to pulses outside the current
         extent. If this is a problem then select an overlap large enough.
+        
+        Pass indexByPulse=True to bin the points by the locations of the pulses
+            (using X_IDX and Y_IDX rather than the locations of the points)
+        Pass returnPulseIndex=True to also return a masked 3d array of 
+            the indices into the 1d pulse array (as returned by 
+            readPulsesForExtent())
+            
         """
         # if they have given us a new extent then use that
         if extent is not None:
@@ -702,8 +710,10 @@ spatial index will be recomputed on the fly"""
         # create point spatial index
         if indexByPulse:
             # TODO: check if is there is a better way of going about this
-            x_idx = numpy.repeat(self.lastPulses['X_IDX'],self.lastPulses['NUMBER_OF_RETURNS'])
-            y_idx = numpy.repeat(self.lastPulses['Y_IDX'],self.lastPulses['NUMBER_OF_RETURNS'])
+            x_idx = numpy.repeat(self.lastPulses['X_IDX'],
+                        self.lastPulses['NUMBER_OF_RETURNS'])
+            y_idx = numpy.repeat(self.lastPulses['Y_IDX'],
+                        self.lastPulses['NUMBER_OF_RETURNS'])
         else:
             x_idx = points['X'] 
             y_idx = points['Y']            
@@ -738,7 +748,29 @@ spatial index will be recomputed on the fly"""
         
         pointsByBins = self.subsetColumns(pointsByBins, colNames)
         points = numpy.ma.array(pointsByBins, mask=pts_idx_mask)
-        return points
+        
+        if returnPulseIndex:
+            # have to generate array the same lengths as the 1d points
+            # but containing the indexes of the pulses
+            pulse_count = numpy.arange(0, self.lastPulses.size)
+            # convert this into an array with an element for each point
+            pulse_idx_1d = numpy.repeat(pulse_count, 
+                            self.lastPulses['NUMBER_OF_RETURNS'])
+            # mask the ones that are within the spatial index
+            pulse_idx_1d = pulse_idx_1d[mask]
+            # sort the right way
+            sortedpulse_idx_1d = pulse_idx_1d[sortedbins]
+            # turn into a 3d in the same way as the points themselves
+            pulse_idx_3d = sortedpulse_idx_1d[pts_idx]
+            
+            # create a masked array 
+            pulse_idx_3dmask = numpy.ma.array(pulse_idx_3d, mask=pts_idx_mask)
+            
+            # return 2 things
+            return points, pulse_idx_3dmask
+        else:
+            # just return the points
+            return points
 
     def readPointsByPulse(self, colNames=None):
         """
