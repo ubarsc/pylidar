@@ -151,6 +151,7 @@ class Controls(object):
         self.referenceImage = None
         self.referencePixgrid = None
         self.referenceResolution = None
+        self.snapGrid = False
         self.progress = cuiprogress.SilentProgress()
         self.messageHandler = defaultMessageFn
         
@@ -207,6 +208,13 @@ class Controls(object):
         default reference.
         """
         self.referenceResolution = resolution
+        
+    def setSnapGrid(self, snap):
+        """
+        Snap the output grid to be multiples of the resoltution. This is only
+        needed when ReferenceResolution is not set.
+        """
+        self.snapGrid = snap
         
     def setProgress(self, progress):
         """
@@ -402,17 +410,22 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
             referenceGrid = gridList[0]
         
         # override the resolution and snap the coords    
-        if controls.referenceResolution is not None:
+        if controls.referenceResolution is not None or controls.snapGrid:
+            res = controls.referenceResolution
+            if controls.snapGrid:
+                # just use the already calculated res
+                res = referenceGrid.xRes
+        
             referenceGrid.xMin = referenceGrid.snapToGrid(referenceGrid.xMin, 
-                    referenceGrid.xMin, controls.referenceResolution)
+                    referenceGrid.xMin, res)
             referenceGrid.xMax = referenceGrid.snapToGrid(referenceGrid.xMax, 
-                    referenceGrid.xMax, controls.referenceResolution)
+                    referenceGrid.xMax, res)
             referenceGrid.yMin = referenceGrid.snapToGrid(referenceGrid.yMin, 
-                    referenceGrid.yMin, controls.referenceResolution)
+                    referenceGrid.yMin, res)
             referenceGrid.yMax = referenceGrid.snapToGrid(referenceGrid.yMax, 
-                    referenceGrid.yMax, controls.referenceResolution)
-            referenceGrid.xRes = controls.referenceResolution
-            referenceGrid.yRes = controls.referenceResolution
+                    referenceGrid.yMax, res)
+            referenceGrid.xRes = res
+            referenceGrid.yRes = res
 
         # Check they all have the same projection
         # the LiDAR files don't need to align since we can recompute the spatial 
