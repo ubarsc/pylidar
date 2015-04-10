@@ -872,8 +872,10 @@ spatial index will be recomputed on the fly"""
         
         return recv_masked
     
-    def writeData(self, pulses, points, transmitted, received):
+    def writeData(self, pulses=None, points=None, transmitted=None, received=None):
         """
+        Write all the updated data. Pass None for data that do not need to be updated.
+        It is assumed that each parameter has been read by the reading functions
         """
         if self.mode == generic.READ:
             # the processor always calls this so if a reading driver just ignore
@@ -1031,6 +1033,12 @@ spatial index will be recomputed on the fly"""
             updateBoolArray(self.lastPulsesBool, mask)
 
         # stripping out of points outside are handled above        
+        
+        if transmitted is not None or received is not None:
+            if self.mode == generic.UPDATE:
+                # TODO: need to add guard for overlap etc
+                msg = 'updating of transmitted and received not supported'
+                raise NotImplementedError(msg)
         
         if self.mode == generic.CREATE:
             # need to extend the hdf5 dataset before writing
