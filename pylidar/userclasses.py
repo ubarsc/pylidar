@@ -218,7 +218,7 @@ class LidarData(object):
             points = self.driver.readPointsForRange(colNames)
         return points
         
-    def getPulses(self, colNames=None):
+    def getPulses(self, colNames=None, pulseIndex=None):
         """
         Returns the pulses for the extent/range of the current
         block as a structured array. The fields on this array
@@ -226,11 +226,18 @@ class LidarData(object):
 
         colNames can be a name or list of column names to return. By default
         all columns are returned.
+        
+        pulseIndex is an optional masked 3d array of indices to remap the
+        1d pulse array
         """
         if self.spatialProcessing:
             pulses = self.driver.readPulsesForExtent(colNames)
         else:
             pulses = self.driver.readPulsesForRange(colNames)
+        
+        if pulseIndex is not None:
+            pulses = numpy.ma.array(pulses[pulseIndex], mask=pulseIndex.mask)                
+        
         return pulses
         
     def getPulsesByBins(self, extent=None, colNames=None):
