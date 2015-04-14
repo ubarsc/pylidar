@@ -228,15 +228,15 @@ class LidarData(object):
         all columns are returned.
         
         pulseIndex is an optional masked 3d array of indices to remap the
-        1d pulse array
+        1d pulse array to a 3D point by bin array. pulseIndex is returned from
+        getPoints with returnPulseIndex=True.
         """
         if self.spatialProcessing:
             pulses = self.driver.readPulsesForExtent(colNames)
+            if pulseIndex is not None:
+                pulses = numpy.ma.array(pulses[pulseIndex], mask=pulseIndex.mask)
         else:
-            pulses = self.driver.readPulsesForRange(colNames)
-        
-        if pulseIndex is not None:
-            pulses = numpy.ma.array(pulses[pulseIndex], mask=pulseIndex.mask)                
+            pulses = self.driver.readPulsesForRange(colNames)              
         
         return pulses
         
