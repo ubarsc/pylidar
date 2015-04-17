@@ -26,16 +26,21 @@ from numba import jit
 from .lidarformats import generic
 
 @jit
-def stratify3DArrayByValue(inValues, inValuesMask, outIdxs_row, outIdxs_col, outIdxs_p, 
+def stratify3DArrayByValueIdx(inValues, inValuesMask, outIdxs_row, outIdxs_col, outIdxs_p, 
         outIdxsMask, outIdxsCount, 
         bins, counting):
     """
+    Note: This function is no longer called, but kept in case it is needed for building 
+    a spatial index in future. The stratify3DArrayByValue call below is currently used by
+    rebinPtsByHeight(). 
+    
     Creates indexes for building a 4d (points, height bin, row, col) point array from the 3d
     (point, row, col) array returned by getPointsByBins() function.
     
     Parameters:
     
-    inValues     3d (ragged) array of values to stratify on (e.g. height)  (nPts, nrows, ncols)
+    inValues         3d (ragged) array of values to stratify on (e.g. height)  (nPts, nrows, ncols)
+    inValuesMask     Mask for inValues.
     outIndxs_row     4d array of row coord of stratified values (nPtsPerHgtBin, nBins, nrows, ncols)
     outIdxs_col      4d array of col coord of stratified values (nPtsPerHgtBin, nBins, nrows, ncols)
     outIdxs_p        4d array of p coord (nPtsPerHgtBin, nBins, nrows, ncols)
@@ -54,7 +59,6 @@ def stratify3DArrayByValue(inValues, inValuesMask, outIdxs_row, outIdxs_col, out
         to create other out arrays. Then zero outIdxsCount again, and call again with counting=False. 
     
     """
-    # TODO: change to return new array rather than indices
     (nPts, nRows, nCols) = inValues.shape
     nBins = bins.shape[0] - 1 # because they are bounds
     for r in range(nRows):
@@ -71,6 +75,56 @@ def stratify3DArrayByValue(inValues, inValuesMask, outIdxs_row, outIdxs_col, out
                                 outIdxs_col[j, b, r, c] = c
                                 outIdxs_p[j, b, r, c] = p
                                 outIdxsMask[j, b, r, c] = False
+                            # always update the counts
+                            outIdxsCount[b, r, c] += 1
+
+@jit
+def stratify3DArrayByValue(inValues, inValuesMask, rebinnedByHeight, 
+        rebinnedByHeight_mask, outIdxsCount, 
+        bins, counting, heightValues):
+    """
+    Called by rebinPtsByHeight().
+    
+    Creates a new 4d (points, height bin, row, col) array if the 3d 
+    (points, row, col) data in inValues.
+    
+    Parameters:
+    
+    inValues         3d (ragged) structured array of values to stratify  (nPts, nrows, ncols)
+    inValuesMask     Mask for inValues - note this must be a plain bool array not just inValues.mask
+                        since inValues.mask will have a bool per record. Best to pass mask for a single
+                        record - ie heightValues.mask.
+    rebinnedByHeight 4d Output array (nPtsPerHgtBin, nBins, nrows, ncols)
+    rebinnedByHeight_mask 4d output mask for creating ragged array (should be inited to True).
+    outIdxsCount     3d int array of counts per bin (nBins, rows, ncols) (initialized to zero, always)
+    bins             1d array of height bins. Includes end points, i.e. the number of height bins is
+                     (len(bins) - 1). A point is in i-th bin when bin[i] <= z < bins[i+1]. Assumes
+                     no points are outside the range of bin values given. 
+    counting         bool flag. If True, then we are just counting, and filling in outIdxsCount,
+                         otherwise we are filling in inValues* arrays, too. 
+    heightValues    3d (ragged) array of a single value from inValues to stratify on ie inValues['Z'].
+                         
+    Returns:
+        Nothing
+    
+    Usage: Call first with counting=True, then find outIdxsCount.max(), use this as nPtsPerHgtBin
+        to create other out arrays. Then zero outIdxsCount again, and call again with counting=False. 
+    
+    """
+    (nPts, nRows, nCols) = inValues.shape
+    nBins = bins.shape[0] - 1 # because they are bounds
+    for r in range(nRows):
+        for c in range(nCols):
+            for p in range(nPts):
+                if not inValuesMask[p, r, c]: # because masked arrays are False where not masked
+                    v = heightValues[p, r, c]
+                    for b in range(nBins):
+                        if v >= bins[b] and v < bins[b+1]: # in this bin?
+                            if not counting:
+                                # only do these steps when running for real
+                                j = outIdxsCount[b, r, c]
+                                rebinnedByHeight[j, b, r, c] = inValues[p, r, c]
+                                rebinnedByHeight_mask[j, b, r, c] = False
                             # always update the counts
                             outIdxsCount[b, r, c] += 1
 
@@ -319,32 +373,25 @@ class LidarData(object):
         
         # numba doesn't support None so create some empty arrays
         # for the outputs we don't need
-        idx_row = numpy.zeros((1, 1, 1, 1), dtype=numpy.uint16)
-        idx_col = numpy.zeros((1, 1, 1, 1), dtype=numpy.uint16)
-        idx_p = numpy.zeros((1, 1, 1, 1), dtype=numpy.uint16)
         idxMask = numpy.ones((1, 1, 1, 1), dtype=numpy.bool)
+        rebinnedPts = numpy.empty((1, 1, 1, 1), dtype=pointsByBin.data.dtype)
         
         # this first call we are just working out the sizes by letting
         # it populate idxCount and nothing else
-        stratify3DArrayByValue(heightArray.data, heightArray.mask, idx_row, 
-            idx_col, idx_p, idxMask, idxCount, bins, True)
+        stratify3DArrayByValue(pointsByBin.data, heightArray.mask, rebinnedPts,
+            idxMask, idxCount, bins, True, heightArray.data)
         ptsPerHgtBin = idxCount.max()
         
         # ok now we know the sizes we can create the arrays
-        idx_row = numpy.zeros((ptsPerHgtBin, nbins, nrows, ncols), dtype=numpy.uint16)
-        idx_col = numpy.zeros((ptsPerHgtBin, nbins, nrows, ncols), dtype=numpy.uint16)
-        idx_p = numpy.zeros((ptsPerHgtBin, nbins, nrows, ncols), dtype=numpy.uint16)
         idxMask = numpy.ones((ptsPerHgtBin, nbins, nrows, ncols), dtype=numpy.bool)
+        rebinnedPts = numpy.empty((ptsPerHgtBin, nbins, nrows, ncols), dtype=pointsByBin.data.dtype)
         # rezero the counts
         idxCount.fill(0)
-        
+
         # now we can call the thing for real
-        stratify3DArrayByValue(heightArray.data, heightArray.mask, idx_row, 
-            idx_col, idx_p, idxMask, idxCount, bins, False)
+        stratify3DArrayByValue(pointsByBin.data, heightArray.mask, rebinnedPts, 
+            idxMask, idxCount, bins, False, heightArray.data)
             
-        # do the indexing to get the new array
-        # TODO: change stratify3DArrayByValue to just return the new array
-        rebinnedPts = pointsByBin[(idx_p, idx_row, idx_col)].data
         # create a masked array
         rebinnedPtsMasked = numpy.ma.array(rebinnedPts, mask=idxMask)
         return rebinnedPtsMasked
