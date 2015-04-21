@@ -376,6 +376,13 @@ class SPDV3File(generic.LiDARFile):
         self.lastPoints3d_Idx = None
         self.lastPoints3d_IdxMask = None
         self.lastPoints3d_InRegionMask = None
+        self.lastTransBool = None
+        self.lastTrans_Idx = None
+        self.lastTrans_IdxMask = None
+        self.lastRecvBool = None
+        self.lastRecv_Idx = None
+        self.lastRecv_IdxMask = None
+        
         self.extentAlignedWithSpatialIndex = True
         self.unalignedWarningGiven = False
 
@@ -877,6 +884,10 @@ spatial index will be recomputed on the fly"""
         transByPulse = transmitted[trans_idx]
         trans_masked = numpy.ma.array(transByPulse, mask=trans_idx_mask)
         
+        self.lastTransBool = trans_bool
+        self.lastTrans_Idx = trans_idx
+        self.lastTrans_IdxMask = trans_idx_mask
+        
         return trans_masked
         
     def readReceived(self):
@@ -901,6 +912,10 @@ spatial index will be recomputed on the fly"""
         
         recvByPulse = received[recv_idx]
         recv_masked = numpy.ma.array(recvByPulse, mask=recv_idx_mask)
+        
+        self.lastRecvBool = recv_bool
+        self.lastRecv_Idx = recv_idx
+        self.lastRecv_IdxMask = recv_idx_mask
         
         return recv_masked
     
@@ -1031,13 +1046,14 @@ spatial index will be recomputed on the fly"""
                     # strip out the points that were originally outside
                     # the window and within the overlap.
                     # TODO: is this ok for points read in by indexByPulse=True?
-                    mask = ( (origPoints['X'] >= self.extent.xMin) & 
-                        (origPoints['X'] <= self.extent.xMax) &
-                        (origPoints['Y'] >= self.extent.yMin) &
-                        (origPoints['Y'] <= self.extent.yMax))
-                    points = points[mask]
-                    origPoints = origPoints[mask]
-                    updateBoolArray(self.lastPointsBool, mask)
+                    if self.controls.spatialProcessing:
+                        mask = ( (origPoints['X'] >= self.extent.xMin) & 
+                            (origPoints['X'] <= self.extent.xMax) &
+                            (origPoints['Y'] >= self.extent.yMin) &
+                            (origPoints['Y'] <= self.extent.yMax))
+                        points = points[mask]
+                        origPoints = origPoints[mask]
+                        updateBoolArray(self.lastPointsBool, mask)
 
                     # passed in array does not have all the fields we need to write
                     # so get the original data read 
@@ -1053,7 +1069,7 @@ spatial index will be recomputed on the fly"""
                     msg = 'Point array does not have all the required fields'
                     raise generic.LiDARInvalidData(msg)
         
-        if pulses is not None and self.extent is not None:
+        if pulses is not None and self.extent is not None and self.controls.spatialProcessing:
             # if we doing spatial index we need to strip out areas in the overlap
             # self.extent is the size of the block without the overlap
             # so just strip out everything outside of it
@@ -1066,11 +1082,83 @@ spatial index will be recomputed on the fly"""
 
         # stripping out of points outside are handled above        
         
-        if transmitted is not None or received is not None:
+        if transmitted is not None:
+            if transmitted.ndim != 2:
+                msg = 'transmitted data must be 2d'
+                raise generic.LiDARInvalidData(msg)
+
             if self.mode == generic.UPDATE:
-                # TODO: need to add guard for overlap etc
-                msg = 'updating of transmitted and received not supported'
-                raise NotImplementedError(msg)
+
+                origShape = transmitted.shape
+
+                # flatten it back to 1d so it can be written
+                flatSize = self.lastTrans_Idx.max() + 1
+                flatTrans = numpy.empty((flatSize,), dtype=transmitted.data.dtype)
+                flatten2dMaskedArray(flatTrans, transmitted,
+                    self.lastTrans_IdxMask, self.lastTrans_Idx)
+                transmitted = flatTrans
+                
+                # mask out those in the overlap using the pulses
+                if self.controls.spatialProcessing:
+
+                    origPulses = self.readPulsesForExtent()
+                    mask = ( (origPulses['X_IDX'] >= self.extent.xMin) & 
+                            (origPulses['X_IDX'] <= self.extent.xMax) & 
+                            (origPulses['Y_IDX'] >= self.extent.yMin) &
+                            (origPulses['Y_IDX'] <= self.extent.yMax))
+
+                    # Repeat the mask so that it is the same shape as the 
+                    # original transmitted and then flatten in the same way
+                    # we can then remove the transmitted outside the extent.         
+                    # We can't do this earlier since removing from transmitted
+                    # would mean the above flattening trick won't work.
+                    mask = numpy.expand_dims(mask, axis=0)
+                    mask = numpy.repeat(mask, origShape[1], axis=1)
+                    flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
+                    flatten2dMaskedArray(flatMask, mask, 
+                        self.lastTrans_IdxMask, self.lastTrans_Idx)
+            
+                    transmitted = transmitted[flatMask]
+                    updateBoolArray(self.lastTransBool, flatMask)
+
+        if received is not None:
+            if received.ndim != 2:
+                msg = 'received data must be 2d'
+                raise generic.LiDARInvalidData(msg)
+
+            if self.mode == generic.UPDATE:
+
+                origShape = received.shape
+
+                # flatten it back to 1d so it can be written
+                flatSize = self.lastRecv_Idx.max() + 1
+                flatRecv = numpy.empty((flatSize,), dtype=received.data.dtype)
+                flatten2dMaskedArray(flatRecv, received,
+                    self.lastRecv_IdxMask, self.lastRecv_Idx)
+                received = flatRecv
+                
+                # mask out those in the overlap using the pulses
+                if self.controls.spatialProcessing:
+
+                    origPulses = self.readPulsesForExtent()
+                    mask = ( (origPulses['X_IDX'] >= self.extent.xMin) & 
+                            (origPulses['X_IDX'] <= self.extent.xMax) & 
+                            (origPulses['Y_IDX'] >= self.extent.yMin) &
+                            (origPulses['Y_IDX'] <= self.extent.yMax))
+
+                    # Repeat the mask so that it is the same shape as the 
+                    # original received and then flatten in the same way
+                    # we can then remove the received outside the extent.         
+                    # We can't do this earlier since removing from received
+                    # would mean the above flattening trick won't work.
+                    mask = numpy.expand_dims(mask, axis=0)
+                    mask = numpy.repeat(mask, origShape[0], axis=1)
+                    flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
+                    flatten2dMaskedArray(flatMask, mask, 
+                        self.lastRecv_IdxMask, self.lastRecv_Idx)
+            
+                    received = received[flatMask]
+                    updateBoolArray(self.lastRecvBool, flatMask)
         
         if self.mode == generic.CREATE:
             # need to extend the hdf5 dataset before writing
@@ -1107,9 +1195,9 @@ spatial index will be recomputed on the fly"""
             if pulses is not None:
                 self.fileHandle['DATA']['PULSES'][self.lastPulsesBool] = pulses
             if transmitted is not None:
-                raise NotImplementedError()
+                self.fileHandle['DATA']['TRANSMITTED'][self.lastTransBool] = transmitted
             if received is not None:
-                raise NotImplementedError()
+                self.fileHandle['DATA']['RECEIVED'][self.lastRecvBool] = received
         # TODO: now update the spatial index
         pass
 
