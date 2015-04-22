@@ -305,8 +305,6 @@ class ImageFile(object):
         """
         Set the ignore value for calculating statistics
         """
-        # TODO: maybe should be valid for read for area outside
-        # footprint?
         if self.mode == READ:
             msg = 'Only valid for creation or update'
             raise generic.LiDARInvalidSetting(msg)
@@ -431,8 +429,6 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
         # the LiDAR files don't need to align since we can recompute the spatial 
         # index on the fly.
         for pixGrid in gridList:
-            # TODO: not keen on this obession of not setting the field
-            # properly in SPD files.
             if pixGrid.projection != '' and referenceGrid.projection != '':
                 if not referenceGrid.equalProjection(pixGrid):
                     msg = 'Un-aligned datasets not yet supported'
@@ -450,8 +446,6 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
         for driver in driverList:
             if (isinstance(driver, gdaldriver.GDALDriver) and 
                                 driver.mode != CREATE):
-                # TODO: we have already asked for this - should cache
-                # the pixGrid with the driver
                 pixGrid = driver.getPixelGrid()
                 if not pixGrid.alignedWith(workingPixGrid):
                     msg = """Input image file(s) not aligned with calculated 
@@ -518,9 +512,13 @@ controls.setReferenceImage()"""
             userContainer.info.setExtent(currentExtent)
             
         else:
+            bMoreToDo = False # assume we have finished
             for driver in driverList:
-                driver.setPulseRange(currentRange)
-            # TODO: info class support for pulseRange?
+                if driver.setPulseRange(currentRange):
+                    # unless there is actually still more data
+                    bMoreToDo = True
+            # update info class
+            userContainer.info.setRange(currentRange)
 
         # build the function args which is one thing, unless
         # there is user data
@@ -563,12 +561,7 @@ controls.setReferenceImage()"""
             currentRange.startPulse += controls.windowSize
             currentRange.endPulse += controls.windowSize
             # done?
-            if nTotalBlocks != -1:
-                bMoreToDo = currentRange.startPulse < nTotalPulses
-            else:
-                # this is a bit tricky - we need to see if all the arrays
-                # are empty. TODO:
-                bMoreToDo = True
+            # bMoreToDo is updated when the pulse range is set (above)
 
         # progress
         nBlocksSoFar += 1

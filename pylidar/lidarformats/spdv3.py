@@ -361,27 +361,52 @@ class SPDV3File(generic.LiDARFile):
             self.wkt = None
             
         # so we can be clever about when to read from disk
+        
+        # the following is for caching reads so we don't need to 
+        # keep re-reading each time the user asks. Also handy since
+        # reading points requires pulses etc
         self.lastExtent = None
+        self.lastPulseRange = None
         self.lastPoints = None
         self.lastPulses = None
+        
+        # the current extent or range for data being read
         self.extent = None
         self.pulseRange = None
-        self.lastPulseRange = None
+        
+        # bool array to pass to h5py to read/write current pts
         self.lastPointsBool = None
+        # index to turn into 2d pointsbypulse
         self.lastPoints_Idx = None
+        # mask for 2d pointsbypulse
         self.lastPoints_IdxMask = None
+         # bool array to pass to h5py to read/write current pls
         self.lastPulsesBool = None
+        # index to turn into 3d pulsebybins
         self.lastPulses_Idx = None
+        # mask for 3d pulsebybins
         self.lastPulses_IdxMask = None
+        # index to turn into 3d pointsbybins
         self.lastPoints3d_Idx = None
+        # mask for 3d pointsbybins
         self.lastPoints3d_IdxMask = None
+        # mask of the points within the current extent
+        # since the spatial index is on the pulses, points can be outside
         self.lastPoints3d_InRegionMask = None
+        # bool array to pass to h5py to read/write current transmitted
         self.lastTransBool = None
+        # index to turn into 2d transbypulses
         self.lastTrans_Idx = None
+        # mask for 2d transbypulses
         self.lastTrans_IdxMask = None
+         # bool array to pass to h5py to read/write current received
         self.lastRecvBool = None
+        # index to turn into 2d recvbypulses
         self.lastRecv_Idx = None
+        # mask for 2d recvbypulses
         self.lastRecv_IdxMask = None
+        
+        self.pixGrid = None
         
         self.extentAlignedWithSpatialIndex = True
         self.unalignedWarningGiven = False
@@ -397,11 +422,18 @@ class SPDV3File(generic.LiDARFile):
         Return the pixel grid of this spatial index. 
         """
         if self.si_idx is not None:
-            pixGrid = pixelgrid.PixelGridDefn(projection=self.wkt,
+            if self.pixGrid is None:
+                pixGrid = pixelgrid.PixelGridDefn(projection=self.wkt,
                     xMin=self.si_xMin, xMax=self.si_xMax,
                     yMin=self.si_yMin, yMax=self.si_yMax,
                     xRes=self.si_binSize, yRes=self.si_binSize)
+                # cache it
+                self.pixGrid = pixGrid
+            else:
+                # return cache
+                pixGrid = self.pixGrid
         else:
+            # no spatial index - no pixgrid
             pixGrid = None
         return pixGrid
     
@@ -425,6 +457,9 @@ class SPDV3File(generic.LiDARFile):
             (nrows, ncols) = pixGrid.getDimensions()
             self.si_cnt = numpy.zeros((ncols, nrows), dtype=SPDV3_SI_COUNT_DTYPE)
             self.si_idx = numpy.zeros((ncols, nrows), dtype=SPDV3_SI_INDEX_DTYPE)
+            
+        # cache it
+        self.pixGrid = pixGrid
     
     def setExtent(self, extent):
         """
@@ -530,7 +565,6 @@ spatial index will be recomputed on the fly"""
             return self.subsetColumns(self.lastPulses, colNames)
 
         # snap the extent to the grid of the spatial index
-        # TODO: cache pixel grid
         pixGrid = self.getPixelGrid()
         xMin = pixGrid.snapToGrid(self.extent.xMin, pixGrid.xMin, pixGrid.xRes)
         xMax = pixGrid.snapToGrid(self.extent.xMax, pixGrid.xMax, pixGrid.xRes)
@@ -639,7 +673,6 @@ spatial index will be recomputed on the fly"""
             # re-sort the pulses to match the new spatial index
             pulses = pulses[mask]
             pulses = pulses[sortedbins]
-            # TODO: I think this is ok....
 
         
         self.lastExtent = copy.copy(self.extent)
@@ -717,6 +750,8 @@ spatial index will be recomputed on the fly"""
         # create point spatial index
         if indexByPulse:
             # TODO: check if is there is a better way of going about this
+            # in theory spatial index already exists but may be more work 
+            # it is worth to use
             x_idx = numpy.repeat(self.lastPulses['X_IDX'],
                         self.lastPulses['NUMBER_OF_RETURNS'])
             y_idx = numpy.repeat(self.lastPulses['Y_IDX'],
@@ -748,7 +783,6 @@ spatial index will be recomputed on the fly"""
         if extent is not None:
             self.setExtent(oldExtent)
 
-        # TODO: make usage of this vs self.lastPoints etc clearer
         self.lastPoints3d_Idx = pts_idx
         self.lastPoints3d_IdxMask = pts_idx_mask
         self.lastPoints3d_InRegionMask = mask
@@ -866,7 +900,6 @@ spatial index will be recomputed on the fly"""
         Return the 2d masked integer array of transmitted for each of the
         current pulses. 
         """
-        # TODO: cache read. Tricky with extent/range.
         if self.controls.spatialProcessing:
             pulses = self.readPulsesForExtent()
         else:
@@ -895,7 +928,6 @@ spatial index will be recomputed on the fly"""
         Return the 2d masked integer array of received for each of the
         current pulses. 
         """
-        # TODO: cache read. Tricky with extent/range.
         if self.controls.spatialProcessing:
             pulses = self.readPulsesForExtent()
         else:
@@ -1025,8 +1057,6 @@ spatial index will be recomputed on the fly"""
         if points is not None:
 
             if self.mode == generic.UPDATE:
-                # TODO: don't think we need to check for changed coords since
-                # the points aren't indexed
 
                 if points.dtype != POINT_DTYPE:
                     # we need these for 
@@ -1247,7 +1277,6 @@ spatial index will be recomputed on the fly"""
         
         # work out the elements that aren't within the new spatial 
         # index and remove them
-        # TODO: can we do this so this is all one operation for the caller?
         validMask = (row >= 0) & (col >= 0) & (row < nRows) & (col < nCols)
         row = row[validMask].astype(numpy.uint32)
         col = col[validMask].astype(numpy.uint32)
