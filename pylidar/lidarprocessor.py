@@ -336,38 +336,51 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
     nameList = dataFiles.__dict__.keys()
     for name in nameList:
         # TODO: lists, dictionaries etc
-        inputFile = getattr(dataFiles, name)
-        if isinstance(inputFile, LidarFile):
-            driver = generic.getReaderForLiDARFile(inputFile.fname,
-                                inputFile.mode, controls, inputFile)
-            driverList.append(driver)
-                                
-            # create a class to wrap this for the users function
-            userClass = userclasses.LidarData(inputFile.mode, driver)
-            setattr(userContainer, name, userClass)
-            
-            # grab the pixel grid while we are at it - if reading
-            if inputFile.mode != CREATE:
-                pixGrid = driver.getPixelGrid()
-                gridList.append(pixGrid)
-                
-        elif isinstance(inputFile, ImageFile):
-            driver = gdaldriver.GDALDriver(inputFile.fname,
-                                inputFile.mode, controls, inputFile)
-            driverList.append(driver)
-
-            # create a class to wrap this for the users function
-            userClass = userclasses.ImageData(inputFile.mode, driver)
-            setattr(userContainer, name, userClass)
-                        
-            # grab the pixel grid while we are at it - if reading
-            if inputFile.mode != CREATE:
-                pixGrid = driver.getPixelGrid()
-                gridList.append(pixGrid)
-                                                                                
+        
+        inputFiles = getattr(dataFiles, name)
+        if isinstance(inputFiles, list):
+            setattr(userContainer, name, list())
         else:
-            msg = "File type not understood"
-            raise generic.LiDARFileException(msg)
+            inputFiles = [inputFiles]
+        
+        for inputFile in inputFiles:
+            if isinstance(inputFile, LidarFile):
+                driver = generic.getReaderForLiDARFile(inputFile.fname,
+                                    inputFile.mode, controls, inputFile)
+                driverList.append(driver)
+
+                # create a class to wrap this for the users function
+                userClass = userclasses.LidarData(inputFile.mode, driver)
+                if hasattr(userContainer, name):
+                    getattr(userContainer, name).append(userClass)
+                else:
+                    setattr(userContainer, name, userClass)
+
+                # grab the pixel grid while we are at it - if reading
+                if inputFile.mode != CREATE:
+                    pixGrid = driver.getPixelGrid()
+                    gridList.append(pixGrid)
+
+            elif isinstance(inputFile, ImageFile):
+                driver = gdaldriver.GDALDriver(inputFile.fname,
+                                    inputFile.mode, controls, inputFile)
+                driverList.append(driver)
+
+                # create a class to wrap this for the users function
+                userClass = userclasses.ImageData(inputFile.mode, driver)
+                if hasattr(userContainer, name):
+                    getattr(userContainer, name).append(userClass)
+                else:
+                    setattr(userContainer, name, userClass)
+
+                # grab the pixel grid while we are at it - if reading
+                if inputFile.mode != CREATE:
+                    pixGrid = driver.getPixelGrid()
+                    gridList.append(pixGrid)
+
+            else:
+                msg = "File type not understood"
+                raise generic.LiDARFileException(msg)
             
     if len(gridList) == 0:
         msg = 'No input files selected'
@@ -532,7 +545,11 @@ controls.setReferenceImage()"""
         # write anything out that has been queued for output
         for name in nameList:
             userClass = getattr(userContainer, name)
-            userClass.flush()
+            if isinstance(userClass, list):
+                for userClassItem in userClass:
+                    userClassItem.flush()
+            else:
+                userClass.flush()
         
         if controls.spatialProcessing:
             # update to read in next block

@@ -283,7 +283,7 @@ class LidarData(object):
         
         pulseIndex is an optional masked 3d array of indices to remap the
         1d pulse array to a 3D point by bin array. pulseIndex is returned from
-        getPoints with returnPulseIndex=True.
+        getPointsByBins with returnPulseIndex=True.
         """
         if self.spatialProcessing:
             pulses = self.driver.readPulsesForExtent(colNames)
@@ -359,7 +359,7 @@ class LidarData(object):
     def rebinPtsByHeight(self, pointsByBin, bins, heightField='Z'):
         """
         pointsByBin       3d ragged (masked) structured array of points. (nrows, ncols, npts)
-        bins              Hieght bins into which to stratify points
+        bins              Height bins into which to stratify points
         
         Return:
             4d re-binned copy of pointsByBin
