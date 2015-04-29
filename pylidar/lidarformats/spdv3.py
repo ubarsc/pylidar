@@ -950,31 +950,16 @@ spatial index will be recomputed on the fly"""
         self.lastRecv_IdxMask = recv_idx_mask
         
         return recv_masked
-    
-    def writeData(self, pulses=None, points=None, transmitted=None, received=None):
+        
+    def preparePulsesForWriting(self, pulses):
         """
-        Write all the updated data. Pass None for data that do not need to be updated.
-        It is assumed that each parameter has been read by the reading functions
+        Called from writeData(). Massages what the user has passed into something
+        we can write back to the file.
         """
-        if self.mode == generic.READ:
-            # the processor always calls this so if a reading driver just ignore
-            return
+        if pulses.size == 0:
+            return None
             
-        if pulses is not None and pulses.size == 0:
-            pulses = None
-        if points is not None and points.size == 0:
-            points = None
-        if transmitted is not None and transmitted.size == 0:
-            transmitted = None
-        if received is not None and received.size == 0:
-            received = None
-            
-        if pulses is not None:
-            orgPulseDims = pulses.ndim
-        if points is not None:
-            origPointsDims = points.ndim
-    
-        if pulses is not None and pulses.ndim == 3:
+        if pulses.ndim == 3:
             # must flatten back to be 1d using the indexes
             # used to create the 3d version (pulsesbybin)
             if self.mode == generic.UPDATE:
@@ -986,12 +971,67 @@ spatial index will be recomputed on the fly"""
             else:
                 # TODO: flatten somehow
                 raise NotImplementedError()
-            
-        if pulses is not None and pulses.ndim != 1:
+                
+        if pulses.ndim != 1:
             msg = 'Pulse array must be either 1d or 3d'
             raise generic.LiDARInvalidSetting(msg)
+                        
+
+        if self.mode == generic.UPDATE:
+            # we need these for 
+            # 1) inserting missing fields when they have read a subset of them
+            # 2) ensuring that they x and y fields haven't been changed
+            if self.controls.spatialProcessing:
+                origPulses = self.readPulsesForExtent()
+            else:
+                origPulses = self.readPulsesForRange()
+                
+            for locField in ('X_IDX', 'Y_IDX'):
+                if locField in pulses.dtype.fields:
+                    if (pulses[locField] != origPulses[locField]).any():
+                        msg = 'Coordinate changed on update'
+                        raise generic.LiDARInvalidData(msg)
+
+            if pulses.dtype != PULSE_DTYPE:
+                # passed in array does not have all the fields we need to write
+                # so get the original data read 
+                # copy fields from pulses into origPulses
+                for fieldName in pulses.dtype.fields.keys():
+                    origPulses[fieldName] = pulses[fieldName]
+                    
+                # change them over so we have the full data
+                pulses = origPulses
+
+        else:
+            # need to check that passed in data has all the required fields
+            if pulses.dtype != PULSE_DTYPE:
+                msg = 'Pulse array does not have all the required fields'
+                raise generic.LiDARInvalidData(msg)
+                
+        if self.extent is not None and self.controls.spatialProcessing:
+            # if we doing spatial index we need to strip out areas in the overlap
+            # self.extent is the size of the block without the overlap
+            # so just strip out everything outside of it
+            mask = ( (pulses['X_IDX'] >= self.extent.xMin) & 
+                        (pulses['X_IDX'] <= self.extent.xMax) & 
+                        (pulses['Y_IDX'] >= self.extent.yMin) &
+                        (pulses['Y_IDX'] <= self.extent.yMax))
+            pulses = pulses[mask]
+            updateBoolArray(self.lastPulsesBool, mask)
             
-        if points is not None and points.ndim == 3:
+        return pulses
+
+    def preparePointsForWriting(self, points):
+        """
+        Called from writeData(). Massages what the user has passed into something
+        we can write back to the file.
+        """
+        if points.size == 0:
+            return None
+            
+        origPointsDims = points.ndim
+
+        if points.ndim == 3:
             # must flatten back to be 1d using the indexes
             # used to create the 3d version (pointsbybin)
             if self.mode == generic.UPDATE:
@@ -1004,7 +1044,7 @@ spatial index will be recomputed on the fly"""
                 # TODO: flatten somehow                
                 raise NotImplementedError()
                             
-        if points is not None and points.ndim == 2:
+        if points.ndim == 2:
             # must flatten back to be 1d using the indexes
             # used to create the 2d version (pointsbypulses)
             if self.mode == generic.UPDATE:
@@ -1017,179 +1057,178 @@ spatial index will be recomputed on the fly"""
                 # TODO: flatten somehow
                 raise NotImplementedError()
             
-        if points is not None and points.ndim != 1:
+        if points.ndim != 1:
             msg = 'Point array must be either 1d, 2 or 3d'
             raise generic.LiDARInvalidData(msg)
-        
-        if pulses is not None:
 
-            if self.mode == generic.UPDATE:
+        if self.mode == generic.UPDATE:
+
+            if points.dtype != POINT_DTYPE:
                 # we need these for 
                 # 1) inserting missing fields when they have read a subset of them
-                # 2) ensuring that they x and y fields haven't been changed
                 if self.controls.spatialProcessing:
-                    origPulses = self.readPulsesForExtent()
+                    origPoints = self.readPointsForExtent()
                 else:
-                    origPulses = self.readPulsesForRange()
-                
-                for locField in ('X_IDX', 'Y_IDX'):
-                    if locField in pulses.dtype.fields:
-                        if (pulses[locField] != origPulses[locField]).any():
-                            msg = 'Coordinate changed on update'
-                            raise generic.LiDARInvalidData(msg)
+                    origPoints = self.readPointsForRange()
 
-                if pulses.dtype != PULSE_DTYPE:
-                    # passed in array does not have all the fields we need to write
-                    # so get the original data read 
-                    # copy fields from pulses into origPulses
-                    for fieldName in pulses.dtype.fields.keys():
-                        origPulses[fieldName] = pulses[fieldName]
-                    
-                    # change them over so we have the full data
-                    pulses = origPulses
-
-            else:
-                # need to check that passed in data has all the required fields
-                if pulses.dtype != PULSE_DTYPE:
-                    msg = 'Pulse array does not have all the required fields'
-                    raise generic.LiDARInvalidData(msg)
-                    
-        if points is not None:
-
-            if self.mode == generic.UPDATE:
-
-                if points.dtype != POINT_DTYPE:
-                    # we need these for 
-                    # 1) inserting missing fields when they have read a subset of them
-                    if self.controls.spatialProcessing:
-                        origPoints = self.readPointsForExtent()
-                    else:
-                        origPoints = self.readPointsForRange()
-
-                    # just the ones that are within the region
-                    # this makes the length of origPoints the same as 
-                    # that returned by pointsbybins flattened
-                    if origPointsDims == 3:
-                        # first update the inregion stuff with the not overlap mask
-                        origPoints = origPoints[self.lastPoints3d_InRegionMask]
+                # just the ones that are within the region
+                # this makes the length of origPoints the same as 
+                # that returned by pointsbybins flattened
+                if origPointsDims == 3:
+                    # first update the inregion stuff with the not overlap mask
+                    origPoints = origPoints[self.lastPoints3d_InRegionMask]
                         
-                    # strip out the points that were originally outside
-                    # the window and within the overlap.
-                    # TODO: is this ok for points read in by indexByPulse=True?
-                    if self.controls.spatialProcessing:
-                        mask = ( (origPoints['X'] >= self.extent.xMin) & 
-                            (origPoints['X'] <= self.extent.xMax) &
-                            (origPoints['Y'] >= self.extent.yMin) &
-                            (origPoints['Y'] <= self.extent.yMax))
-                        points = points[mask]
-                        origPoints = origPoints[mask]
-                        updateBoolArray(self.lastPointsBool, mask)
+                # strip out the points that were originally outside
+                # the window and within the overlap.
+                # TODO: is this ok for points read in by indexByPulse=True?
+                if self.controls.spatialProcessing:
+                    mask = ( (origPoints['X'] >= self.extent.xMin) & 
+                        (origPoints['X'] <= self.extent.xMax) &
+                        (origPoints['Y'] >= self.extent.yMin) &
+                        (origPoints['Y'] <= self.extent.yMax))
+                    points = points[mask]
+                    origPoints = origPoints[mask]
+                    updateBoolArray(self.lastPointsBool, mask)
 
-                    # passed in array does not have all the fields we need to write
-                    # so get the original data read 
-                    for fieldName in points.dtype.fields.keys():
-                        origPoints[fieldName] = points[fieldName]
+                # passed in array does not have all the fields we need to write
+                # so get the original data read 
+                for fieldName in points.dtype.fields.keys():
+                    origPoints[fieldName] = points[fieldName]
 
-                    # change them over so we have the full data
-                    points = origPoints
+                # change them over so we have the full data
+                points = origPoints
 
-            else:
-                # need to check that passed in data has all the required fields
-                if points.dtype != POINT_DTYPE:
-                    msg = 'Point array does not have all the required fields'
-                    raise generic.LiDARInvalidData(msg)
-        
-        if pulses is not None and self.extent is not None and self.controls.spatialProcessing:
-            # if we doing spatial index we need to strip out areas in the overlap
-            # self.extent is the size of the block without the overlap
-            # so just strip out everything outside of it
-            mask = ( (pulses['X_IDX'] >= self.extent.xMin) & 
-                        (pulses['X_IDX'] <= self.extent.xMax) & 
-                        (pulses['Y_IDX'] >= self.extent.yMin) &
-                        (pulses['Y_IDX'] <= self.extent.yMax))
-            pulses = pulses[mask]
-            updateBoolArray(self.lastPulsesBool, mask)
-
-        # stripping out of points outside are handled above        
-        
-        if transmitted is not None:
-            if transmitted.ndim != 2:
-                msg = 'transmitted data must be 2d'
+        else:
+            # need to check that passed in data has all the required fields
+            if points.dtype != POINT_DTYPE:
+                msg = 'Point array does not have all the required fields'
                 raise generic.LiDARInvalidData(msg)
+        
+        return points
 
-            if self.mode == generic.UPDATE:
+    def prepareTransmittedForWriting(self, transmitted):
+        """
+        Called from writeData(). Massages what the user has passed into something
+        we can write back to the file.
+        """
+        if transmitted.size == 0:
+            return None
 
-                origShape = transmitted.shape
+        if transmitted.ndim != 2:
+            msg = 'transmitted data must be 2d'
+            raise generic.LiDARInvalidData(msg)
 
-                # flatten it back to 1d so it can be written
-                flatSize = self.lastTrans_Idx.max() + 1
-                flatTrans = numpy.empty((flatSize,), dtype=transmitted.data.dtype)
-                flatten2dMaskedArray(flatTrans, transmitted,
+        if self.mode == generic.UPDATE:
+
+            origShape = transmitted.shape
+
+            # flatten it back to 1d so it can be written
+            flatSize = self.lastTrans_Idx.max() + 1
+            flatTrans = numpy.empty((flatSize,), dtype=transmitted.data.dtype)
+            flatten2dMaskedArray(flatTrans, transmitted,
+                self.lastTrans_IdxMask, self.lastTrans_Idx)
+            transmitted = flatTrans
+                
+            # mask out those in the overlap using the pulses
+            if self.controls.spatialProcessing:
+
+                origPulses = self.readPulsesForExtent()
+                mask = ( (origPulses['X_IDX'] >= self.extent.xMin) & 
+                        (origPulses['X_IDX'] <= self.extent.xMax) & 
+                        (origPulses['Y_IDX'] >= self.extent.yMin) &
+                        (origPulses['Y_IDX'] <= self.extent.yMax))
+
+                # Repeat the mask so that it is the same shape as the 
+                # original transmitted and then flatten in the same way
+                # we can then remove the transmitted outside the extent.         
+                # We can't do this earlier since removing from transmitted
+                # would mean the above flattening trick won't work.
+                mask = numpy.expand_dims(mask, axis=0)
+                mask = numpy.repeat(mask, origShape[1], axis=1)
+                flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
+                flatten2dMaskedArray(flatMask, mask, 
                     self.lastTrans_IdxMask, self.lastTrans_Idx)
-                transmitted = flatTrans
-                
-                # mask out those in the overlap using the pulses
-                if self.controls.spatialProcessing:
-
-                    origPulses = self.readPulsesForExtent()
-                    mask = ( (origPulses['X_IDX'] >= self.extent.xMin) & 
-                            (origPulses['X_IDX'] <= self.extent.xMax) & 
-                            (origPulses['Y_IDX'] >= self.extent.yMin) &
-                            (origPulses['Y_IDX'] <= self.extent.yMax))
-
-                    # Repeat the mask so that it is the same shape as the 
-                    # original transmitted and then flatten in the same way
-                    # we can then remove the transmitted outside the extent.         
-                    # We can't do this earlier since removing from transmitted
-                    # would mean the above flattening trick won't work.
-                    mask = numpy.expand_dims(mask, axis=0)
-                    mask = numpy.repeat(mask, origShape[1], axis=1)
-                    flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
-                    flatten2dMaskedArray(flatMask, mask, 
-                        self.lastTrans_IdxMask, self.lastTrans_Idx)
             
-                    transmitted = transmitted[flatMask]
-                    updateBoolArray(self.lastTransBool, flatMask)
+                transmitted = transmitted[flatMask]
+                updateBoolArray(self.lastTransBool, flatMask)
+                
+        else:
+            raise NotImplementedError()
+                
+        return transmitted
 
-        if received is not None:
-            if received.ndim != 2:
-                msg = 'received data must be 2d'
-                raise generic.LiDARInvalidData(msg)
+    def prepareReceivedForWriting(self, received):
+        """
+        Called from writeData(). Massages what the user has passed into something
+        we can write back to the file.
+        """
+        if received.size == 0:
+            return None
 
-            if self.mode == generic.UPDATE:
+        if received.ndim != 2:
+            msg = 'received data must be 2d'
+            raise generic.LiDARInvalidData(msg)
 
-                origShape = received.shape
+        if self.mode == generic.UPDATE:
 
-                # flatten it back to 1d so it can be written
-                flatSize = self.lastRecv_Idx.max() + 1
-                flatRecv = numpy.empty((flatSize,), dtype=received.data.dtype)
-                flatten2dMaskedArray(flatRecv, received,
+            origShape = received.shape
+
+            # flatten it back to 1d so it can be written
+            flatSize = self.lastRecv_Idx.max() + 1
+            flatRecv = numpy.empty((flatSize,), dtype=received.data.dtype)
+            flatten2dMaskedArray(flatRecv, received,
+                self.lastRecv_IdxMask, self.lastRecv_Idx)
+            received = flatRecv
+                
+            # mask out those in the overlap using the pulses
+            if self.controls.spatialProcessing:
+
+                origPulses = self.readPulsesForExtent()
+                mask = ( (origPulses['X_IDX'] >= self.extent.xMin) & 
+                        (origPulses['X_IDX'] <= self.extent.xMax) & 
+                        (origPulses['Y_IDX'] >= self.extent.yMin) &
+                        (origPulses['Y_IDX'] <= self.extent.yMax))
+
+                # Repeat the mask so that it is the same shape as the 
+                # original received and then flatten in the same way
+                # we can then remove the received outside the extent.         
+                # We can't do this earlier since removing from received
+                # would mean the above flattening trick won't work.
+                mask = numpy.expand_dims(mask, axis=0)
+                mask = numpy.repeat(mask, origShape[0], axis=1)
+                flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
+                flatten2dMaskedArray(flatMask, mask, 
                     self.lastRecv_IdxMask, self.lastRecv_Idx)
-                received = flatRecv
-                
-                # mask out those in the overlap using the pulses
-                if self.controls.spatialProcessing:
-
-                    origPulses = self.readPulsesForExtent()
-                    mask = ( (origPulses['X_IDX'] >= self.extent.xMin) & 
-                            (origPulses['X_IDX'] <= self.extent.xMax) & 
-                            (origPulses['Y_IDX'] >= self.extent.yMin) &
-                            (origPulses['Y_IDX'] <= self.extent.yMax))
-
-                    # Repeat the mask so that it is the same shape as the 
-                    # original received and then flatten in the same way
-                    # we can then remove the received outside the extent.         
-                    # We can't do this earlier since removing from received
-                    # would mean the above flattening trick won't work.
-                    mask = numpy.expand_dims(mask, axis=0)
-                    mask = numpy.repeat(mask, origShape[0], axis=1)
-                    flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
-                    flatten2dMaskedArray(flatMask, mask, 
-                        self.lastRecv_IdxMask, self.lastRecv_Idx)
             
-                    received = received[flatMask]
-                    updateBoolArray(self.lastRecvBool, flatMask)
-        
+                received = received[flatMask]
+                updateBoolArray(self.lastRecvBool, flatMask)
+
+        else:
+            raise NotImplementedError()
+
+        return received
+    
+    def writeData(self, pulses=None, points=None, transmitted=None, received=None):
+        """
+        Write all the updated data. Pass None for data that do not need to be updated.
+        It is assumed that each parameter has been read by the reading functions
+        """
+        if self.mode == generic.READ:
+            # the processor always calls this so if a reading driver just ignore
+            return
+            
+        if pulses is not None:
+            pulses = self.preparePulsesForWriting(pulses)
+            
+        if points is not None:
+            points = self.preparePointsForWriting(points)
+            
+        if transmitted is not None:
+            transmitted = self.prepareTransmittedForWriting(transmitted)
+            
+        if received is not None:
+            received = self.prepareReceivedForWriting(received)
+            
         if self.mode == generic.CREATE:
             # need to extend the hdf5 dataset before writing
             # TODO: do pulses always need to be provided?

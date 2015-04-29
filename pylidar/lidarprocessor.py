@@ -335,9 +335,9 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
     driverList = []
     nameList = dataFiles.__dict__.keys()
     for name in nameList:
-        # TODO: lists, dictionaries etc
         
         inputFiles = getattr(dataFiles, name)
+        # check if we are dealing with a list of inputs
         if isinstance(inputFiles, list):
             setattr(userContainer, name, list())
         else:
