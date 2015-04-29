@@ -323,12 +323,18 @@ class SPDV3File(generic.LiDARFile):
                 if self.indexType == SPDV3_INDEX_CARTESIAN:
                     self.si_xMin = header['X_MIN'][0]
                     self.si_yMax = header['Y_MAX'][0]
+                    self.si_xPulseColName = 'X_IDX'
+                    self.si_yPulseColName = 'Y_IDX'
                 elif self.indexType == SPDV3_INDEX_SPHERICAL:
                     self.si_xMin = header['AZIMUTH_MIN'][0]
                     self.si_yMax = header['ZENITH_MIN'][0]
+                    self.si_xPulseColName = 'AZIMUTH'
+                    self.si_yPulseColName = 'ZENITH'
                 elif self.indexType == SPDV3_INDEX_SCAN:
                     self.si_xMin = header['SCANLINE_IDX_MIN'][0]
                     self.si_yMax = header['SCANLINE_MIN'][0]
+                    self.si_xPulseColName = 'SCANLINE_IDX'
+                    self.si_yPulseColName = 'SCANLINE'
                 else:
                     msg = 'Unsupported index type %d' % self.indexType
                     raise generic.LiDARInvalidSetting(msg)                    
@@ -348,6 +354,8 @@ class SPDV3File(generic.LiDARFile):
                 self.si_yMax = None
                 self.si_xMax = None
                 self.si_yMin = None
+                self.si_xPulseColName = None
+                self.si_yPulseColName = None
                 self.wkt = None
         else:
             # set on setPixelGrid
@@ -665,7 +673,8 @@ spatial index will be recomputed on the fly"""
             nrows += (self.controls.overlap * 2)
             ncols += (self.controls.overlap * 2)
             mask, sortedbins, new_idx, new_cnt = self.CreateSpatialIndex(
-                    pulses['Y_IDX'], pulses['X_IDX'], self.extent.binSize, 
+                    pulses[self.si_xPulseColName], pulses[self.si_yPulseColName], 
+                    self.extent.binSize, 
                     self.extent.yMax, self.extent.xMin, nrows, ncols)
             # ok calculate indices on new spatial indexes
             pulse_bool, pulse_idx, pulse_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
@@ -752,9 +761,9 @@ spatial index will be recomputed on the fly"""
             # TODO: check if is there is a better way of going about this
             # in theory spatial index already exists but may be more work 
             # it is worth to use
-            x_idx = numpy.repeat(self.lastPulses['X_IDX'],
+            x_idx = numpy.repeat(self.lastPulses[self.si_xPulseColName],
                         self.lastPulses['NUMBER_OF_RETURNS'])
-            y_idx = numpy.repeat(self.lastPulses['Y_IDX'],
+            y_idx = numpy.repeat(self.lastPulses[self.si_yPulseColName],
                         self.lastPulses['NUMBER_OF_RETURNS'])
         else:
             x_idx = points['X'] 
@@ -986,7 +995,7 @@ spatial index will be recomputed on the fly"""
             else:
                 origPulses = self.readPulsesForRange()
                 
-            for locField in ('X_IDX', 'Y_IDX'):
+            for locField in (self.si_xPulseColName, self.si_yPulseColName):
                 if locField in pulses.dtype.fields:
                     if (pulses[locField] != origPulses[locField]).any():
                         msg = 'Coordinate changed on update'
@@ -1012,10 +1021,10 @@ spatial index will be recomputed on the fly"""
             # if we doing spatial index we need to strip out areas in the overlap
             # self.extent is the size of the block without the overlap
             # so just strip out everything outside of it
-            mask = ( (pulses['X_IDX'] >= self.extent.xMin) & 
-                        (pulses['X_IDX'] <= self.extent.xMax) & 
-                        (pulses['Y_IDX'] >= self.extent.yMin) &
-                        (pulses['Y_IDX'] <= self.extent.yMax))
+            mask = ( (pulses[self.si_xPulseColName] >= self.extent.xMin) & 
+                        (pulses[self.si_xPulseColName] <= self.extent.xMax) & 
+                        (pulses[self.si_yPulseColName] >= self.extent.yMin) &
+                        (pulses[self.si_yPulseColName] <= self.extent.yMax))
             pulses = pulses[mask]
             updateBoolArray(self.lastPulsesBool, mask)
             
@@ -1133,10 +1142,10 @@ spatial index will be recomputed on the fly"""
             if self.controls.spatialProcessing:
 
                 origPulses = self.readPulsesForExtent()
-                mask = ( (origPulses['X_IDX'] >= self.extent.xMin) & 
-                        (origPulses['X_IDX'] <= self.extent.xMax) & 
-                        (origPulses['Y_IDX'] >= self.extent.yMin) &
-                        (origPulses['Y_IDX'] <= self.extent.yMax))
+                mask = ( (origPulses[self.si_xPulseColName] >= self.extent.xMin) & 
+                        (origPulses[self.si_xPulseColName] <= self.extent.xMax) & 
+                        (origPulses[self.si_yPulseColName] >= self.extent.yMin) &
+                        (origPulses[self.si_yPulseColName] <= self.extent.yMax))
 
                 # Repeat the mask so that it is the same shape as the 
                 # original transmitted and then flatten in the same way
@@ -1184,10 +1193,10 @@ spatial index will be recomputed on the fly"""
             if self.controls.spatialProcessing:
 
                 origPulses = self.readPulsesForExtent()
-                mask = ( (origPulses['X_IDX'] >= self.extent.xMin) & 
-                        (origPulses['X_IDX'] <= self.extent.xMax) & 
-                        (origPulses['Y_IDX'] >= self.extent.yMin) &
-                        (origPulses['Y_IDX'] <= self.extent.yMax))
+                mask = ( (origPulses[self.si_xPulseColName] >= self.extent.xMin) & 
+                        (origPulses[self.si_xPulseColName] <= self.extent.xMax) & 
+                        (origPulses[self.si_yPulseColName] >= self.extent.yMin) &
+                        (origPulses[self.si_yPulseColName] <= self.extent.yMax))
 
                 # Repeat the mask so that it is the same shape as the 
                 # original received and then flatten in the same way
