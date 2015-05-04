@@ -18,6 +18,7 @@ SPD V3 format driver and support functions
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
 import copy
 import numpy
 import h5py
@@ -46,6 +47,49 @@ POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'),
 ('GREEN', '<u2'), ('BLUE', '<u2'), ('CLASSIFICATION', 'u1'), 
 ('USER_FIELD', '<u4'), ('IGNORE', 'u1'), ('WAVE_PACKET_DESC_IDX', '<i2'), 
 ('WAVEFORM_OFFSET', '<u4')])
+
+HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
+'BANDWIDTHS' : numpy.float32, 'BIN_SIZE' : numpy.float32,
+'BLOCK_SIZE_POINT' : numpy.uint16, 'BLOCK_SIZE_PULSE' : numpy.uint16,
+'BLOCK_SIZE_RECEIVED' : numpy.uint16, 'BLOCK_SIZE_TRANSMITTED' : numpy.uint16,
+'CAPTURE_DAY_OF' : numpy.uint16, 'CAPTURE_HOUR_OF' : numpy.uint16,
+'CAPTURE_MINUTE_OF' : numpy.uint16, 'CAPTURE_MONTH_OF' : numpy.uint16,
+'CAPTURE_SECOND_OF' : numpy.uint16, 'CAPTURE_YEAR_OF' : numpy.uint16,
+'CREATION_DAY_OF' : numpy.uint16, 'CREATION_HOUR_OF' : numpy.uint16,
+'CREATION_MINUTE_OF' : numpy.uint16, 'CREATION_MONTH_OF' : numpy.uint16,
+'CREATION_SECOND_OF' : numpy.uint16, 'CREATION_YEAR_OF' : numpy.uint16,
+'DEFINED_DECOMPOSED_PT' : numpy.int16, 'DEFINED_DISCRETE_PT' : numpy.int16,
+'DEFINED_HEIGHT' : numpy.int16, 'DEFINED_ORIGIN' : numpy.int16,
+'DEFINED_RECEIVE_WAVEFORM' : numpy.int16, 'DEFINED_RGB' : numpy.int16,
+'DEFINED_TRANS_WAVEFORM' : numpy.int16, 'FIELD_OF_VIEW' : numpy.float32,
+'FILE_SIGNATURE' : bytes, 'FILE_TYPE' : numpy.uint16,
+'GENERATING_SOFTWARE' : bytes, 'INDEX_TYPE' : numpy.uint16,
+'NUMBER_BINS_X' : numpy.uint32, 'NUMBER_BINS_Y' : numpy.uint32,
+'NUMBER_OF_POINTS' : numpy.uint64, 'NUMBER_OF_PULSES' : numpy.uint64,
+'NUM_OF_WAVELENGTHS' : numpy.uint16, 'POINT_DENSITY' : numpy.float32,
+'PULSE_ALONG_TRACK_SPACING' : numpy.float32, 
+'PULSE_ANGULAR_SPACING_AZIMUTH' : numpy.float32,
+'PULSE_ANGULAR_SPACING_ZENITH' : numpy.float32,
+'PULSE_CROSS_TRACK_SPACING' : numpy.float32, 'PULSE_DENSITY' : numpy.float32,
+'PULSE_ENERGY' : numpy.float32, 'PULSE_FOOTPRINT' : numpy.float32,
+'PULSE_INDEX_METHOD' : numpy.uint16, 'RANGE_MAX' : numpy.float64,
+'RANGE_MIN' : numpy.float64, 'RETURN_NUMBERS_SYN_GEN' : numpy.int16,
+'SCANLINE_IDX_MAX' : numpy.float64, 'SCANLINE_IDX_MIN' : numpy.float64,
+'SCANLINE_MAX' : numpy.float64, 'SCANLINE_MIN' : numpy.float64,
+'SENSOR_APERTURE_SIZE' : numpy.float32, 'SENSOR_BEAM_DIVERGENCE' : numpy.float32,
+'SENSOR_HEIGHT' : numpy.float64, 'SENSOR_MAX_SCAN_ANGLE' : numpy.float32,
+'SENSOR_PULSE_REPETITION_FREQ' : numpy.float32,
+'SENSOR_SCAN_RATE' : numpy.float32, 'SENSOR_SPEED' : numpy.float32,
+'SENSOR_TEMPORAL_BIN_SPACING' : numpy.float64, 'SPATIAL_REFERENCE' : bytes,
+'SYSTEM_IDENTIFIER' : bytes, 'USER_META_DATA' : bytes,
+'VERSION_MAJOR_SPD' : numpy.uint16, 'VERSION_MINOR_SPD' : numpy.uint16,
+'VERSION_POINT' : numpy.uint16, 'VERSION_PULSE' : numpy.uint16,
+'WAVEFORM_BIT_RES' : numpy.uint16, 'WAVELENGTHS' : numpy.float32,
+'X_MAX' : numpy.float64, 'X_MIN' : numpy.float64, 'Y_MAX' : numpy.float64,
+'Y_MIN' : numpy.float64, 'ZENITH_MAX' : numpy.float64, 
+'ZENITH_MIN' : numpy.float64, 'Z_MAX' : numpy.float64, 'Z_MIN' : numpy.float64}
+
+HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS')
 
 # types for the spatial index
 SPDV3_SI_COUNT_DTYPE = numpy.uint32
@@ -298,6 +342,7 @@ class SPDV3File(generic.LiDARFile):
             raise generic.LiDARFormatNotUnderstood(str(err))
             
         # check that it is indeed the right version
+        # and get header
         if mode == generic.READ or mode == generic.UPDATE:
             header = self.fileHandle['HEADER']
             headerKeys = header.keys()
@@ -309,11 +354,24 @@ class SPDV3File(generic.LiDARFile):
                 msg = "File seems to be wrong version for this driver"
                 raise generic.LiDARFormatNotUnderstood(msg)
                 
+            self.headerDict = self.convertHeaderToDictionary(header)
+            self.headerUpdated = False
+        else:
+            # just create a blank dictionary with the right names
+            self.headerDict = {}
+            for key in HEADER_FIELDS:
+                cls = HEADER_FIELDS[key]
+                # blank value - 0 for numbers, '' for strings
+                if key in HEADER_ARRAY_FIELDS:
+                    self.headerDict[key] = numpy.array([cls()])
+                else:
+                    self.headerDict[key] = cls() 
+            self.headerUpdated = False
+                
         # read in the bits I need for the spatial index
         if mode == generic.READ or mode == generic.UPDATE:
             indexKeys = self.fileHandle['INDEX'].keys()
             if 'PLS_PER_BIN' in indexKeys and 'BIN_OFFSETS' in indexKeys:
-                header = self.fileHandle['HEADER']
                 self.si_cnt = self.fileHandle['INDEX']['PLS_PER_BIN'][...]
                 self.si_idx = self.fileHandle['INDEX']['BIN_OFFSETS'][...]
                 self.si_binSize = header['BIN_SIZE'][0]
@@ -343,7 +401,9 @@ class SPDV3File(generic.LiDARFile):
                 self.si_xMax = self.si_xMin + (self.si_idx.shape[1] * self.si_binSize)
                 self.si_yMin = self.si_yMax - (self.si_idx.shape[0] * self.si_binSize)
             
-                self.wkt = header['SPATIAL_REFERENCE'][0].decode()
+                self.wkt = header['SPATIAL_REFERENCE'][0]
+                if sys.version_info[0] == 3:
+                    self.wkt = self.wkt.decode()
 
             else:
                 self.si_cnt = None
@@ -418,6 +478,23 @@ class SPDV3File(generic.LiDARFile):
         
         self.extentAlignedWithSpatialIndex = True
         self.unalignedWarningGiven = False
+        
+    @staticmethod
+    def convertHeaderToDictionary(header):
+        """
+        Static method to convert the header returned by h5py
+        into a normal dictionary
+        """
+        dict = {}
+        headerKeys = header.keys()
+        for key in headerKeys:
+            value = header[key][...]
+            if len(value) == 1 and key not in HEADER_ARRAY_FIELDS:
+                value = value[0]
+            if sys.version_info[0] == 3 and isinstance(value, bytes):
+                value = value.decode()
+            dict[key] = value
+        return dict
 
     def getDriverName(self):
         """
@@ -1431,21 +1508,79 @@ spatial index will be recomputed on the fly"""
         """
         return self.fileHandle['DATA']['PULSES'].shape[0]
         
+    def getHeader(self):
+        """
+        Return our cached dictionary
+        """
+        return self.headerDict
+        
+    def setHeader(self, newHeaderDict):
+        """
+        Update our cached dictionary
+        """
+        for key in newHeaderDict.keys():
+            if key not in self.headerDict:
+                msg = 'Header field %s not supported in SPDV3 files' % key
+                raise ValueError(msg)
+            self.headerDict[key] = newHeaderDict[key]
+        self.headerUpdated = True
+            
+    def getHeaderValue(self, name):
+        """
+        Just extract the one value and return it
+        """
+        return self.headerDict[name]
+        
+    def setHeaderValue(self, name, value):
+        """
+        Just update one value in the header
+        """
+        if name not in self.headerDict:
+            msg = 'Header field %s not supported in SPDV3 files' % name
+            raise ValueError(msg)
+        self.headerDict[name] =  value
+        self.headerUpdated = True 
+        
     def close(self):
         """
-        Write out the spatial index and close file handle.
+        Write out the spatial index, header and close file handle.
         """
+        # header - note values reladed to spatial index may be overwritten
+        # with the correct values below
+        if self.mode == generic.CREATE or (self.headerUpdated and 
+                    self.mode == generic.UPDATE):
+            # loop through the dictionary we have cached and 
+            # ensure correct type and write out
+            for key in self.headerDict:
+                value = self.headerDict[key]
+                # convert to correct type
+                cls = HEADER_FIELDS[key]
+                try:
+                    if sys.version_info[0] == 3 and cls == bytes:
+                        value = value.encode()
+                    value = cls(value)
+                except ValueError:
+                    msg = "Unable to convert field %s to the expected type"
+                    msg = msg % key
+                    raise generic.LiDARInvalidData(msg)
+                if key in HEADER_ARRAY_FIELDS and numpy.isscalar(value):
+                    value = numpy.array([value])
+                    
+                self.fileHandle['HEADER'][key][...] = value
+                    
+
         if (self.mode == generic.CREATE and self.userClass.writeSpatialIndex and 
                     self.si_cnt is not None):
             # write out to file
-            self.fileHandle['INDEX']['PLS_PER_BIN'] = self.si_cnt
-            self.fileHandle['INDEX']['BIN_OFFSETS'] = self.si_idx
-            self.fileHandle['HEADER']['BIN_SIZE'] = self.si_binSize
-            self.fileHandle['HEADER']['X_MIN'] = self.si_xmin
-            self.fileHandle['HEADER']['Y_MAX'] = self.si_ymax
-            self.fileHandle['HEADER']['X_MAX'] = self.si_xmax
-            self.fileHandle['HEADER']['Y_MIN'] = self.si_ymin
-            self.fileHandle['HEADER']['SPATIAL_REFERENCE'] = self.wkt
+            self.fileHandle['INDEX']['PLS_PER_BIN'][...] = self.si_cnt
+            self.fileHandle['INDEX']['BIN_OFFSETS'][...] = self.si_idx
+            self.fileHandle['HEADER']['BIN_SIZE'][...] = self.si_binSize
+            self.fileHandle['HEADER']['X_MIN'][...] = self.si_xmin
+            self.fileHandle['HEADER']['Y_MAX'][...] = self.si_ymax
+            self.fileHandle['HEADER']['X_MAX'][...] = self.si_xmax
+            self.fileHandle['HEADER']['Y_MIN'][...] = self.si_ymin
+            self.fileHandle['HEADER']['SPATIAL_REFERENCE'][...] = self.wkt.encode()
+           
             
         # close
         self.fileHandle.close()
@@ -1479,13 +1614,17 @@ class SPDV3FileInfo(generic.LiDARFileInfo):
         elif header['VERSION_MAJOR_SPD'][0] != 2:
             msg = "File seems to be wrong version for this driver"
             raise generic.LiDARFormatNotUnderstood(msg)
+            
+        # save the header as a dictionary
+        self.header = SPDV3File.convertHeaderToDictionary(header)
 
-        self.wkt = header['SPATIAL_REFERENCE'][0].decode()
+        # pull a few things out to the top level
+        self.wkt = self.header['SPATIAL_REFERENCE']
 
-        self.zMax = header['Z_MAX'][0]
-        self.zMin = header['Z_MIN'][0]
-        self.wavelengths = header['WAVELENGTHS'][...]
-        self.bandwidths = header['BANDWIDTHS'][...]
+        self.zMax = self.header['Z_MAX']
+        self.zMin = self.header['Z_MIN']
+        self.wavelengths = self.header['WAVELENGTHS']
+        self.bandwidths = self.header['BANDWIDTHS']
         # probably other things too
         
         

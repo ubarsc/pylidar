@@ -429,6 +429,37 @@ class LidarData(object):
         array is returned.
         """
         return self.driver.readReceived()
+        
+    def getHeader(self):
+        """
+        Returns the header as a dictionary of header key/value pairs.
+        """
+        return self.driver.getHeader()
+        
+    def setHeader(self, headerDict):
+        """
+        Sets header values as a dictionary of header key/value pairs.
+        """
+        self.driver.setHeader(headerDict)
+        
+    def getHeaderValue(self, name):
+        """
+        Gets a particular header value with the given name
+        """
+        return self.driver.getHeaderValue(name)
+        
+    def setHeaderValue(self, name, value):
+        """
+        Sets a particular header value with the given name
+        """
+        self.driver.setHeaderValue(name, value)
+        
+    def setHeaderValue(self, **kwargs):
+        """
+        Overloaded version to support key word args instead
+        """
+        for name in kwargs:
+            self.driver.setHeaderValue(name, kwargs[name])
 
     def setTransmitted(self, transmitted):
         """
