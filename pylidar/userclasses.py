@@ -356,10 +356,16 @@ class LidarData(object):
 
         return points
     
-    def rebinPtsByHeight(self, pointsByBin, bins, heightField='Z'):
+    def rebinPtsByHeight(self, pointsByBin, bins, heightArray=None, heightField='Z'):
         """
         pointsByBin       3d ragged (masked) structured array of points. (nrows, ncols, npts)
         bins              Height bins into which to stratify points
+        
+        Set heightArray to a masked array of values used to vertically stratify the points. 
+        This allows columns not in pointsByBin to be used.
+        
+        Set heightField to specify which pointsByBin column name to use for height values. 
+        Only used if heightArray is None.
         
         Return:
             4d re-binned copy of pointsByBin
@@ -369,7 +375,8 @@ class LidarData(object):
         nbins = len(bins) - 1
         # Set up for first pass
         idxCount = numpy.zeros((nbins, nrows, ncols), dtype=numpy.uint16)
-        heightArray = pointsByBin[heightField]
+        if heightArray is None:
+            heightArray = pointsByBin[heightField]
         
         # numba doesn't support None so create some empty arrays
         # for the outputs we don't need
