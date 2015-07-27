@@ -55,6 +55,9 @@ class LiDARFunctionUnsupported(LiDARFileException):
 class LiDARArrayColumnError(LiDARFileException):
     "Unsupported operation on a structured array"
     
+class LiDARSpatialIndexNotAvailable(LiDARFileException):
+    "The specified spatial index not available for this file"
+    
 class PulseRange(object):
     """
     Class for setting the range of pulses to read/write
