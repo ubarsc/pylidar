@@ -313,6 +313,8 @@ class SPDV4File(generic.LiDARFile):
         self.fileHandle = None        
         self.lastExtent = None
         self.lastPoints = None
+        self.lastPoints_Idx = None
+        self.lastPoints_IdxMask = None
         self.lastPointsColumns = None
         self.lastPulses = None
         self.lastPulsesColumns = None
@@ -330,7 +332,8 @@ class SPDV4File(generic.LiDARFile):
             not self.lastPoints is None and self.lastPointsColumns == colNames):
             return self.lastPoints
         
-        point_bool = self.si_handler.getPointsBoolForExtent(self.extent)
+        point_bool, idx, mask_idx = (
+                            self.si_handler.getPointsBoolForExtent(self.extent))
         
         if colNames is None:
             # get all names
@@ -342,12 +345,15 @@ class SPDV4File(generic.LiDARFile):
             dtype = self.fileHandle['DATA']['POINTS'][name].dtype
             dtypeList.append(dtype)
             
-        points = None
+        points = numpy.empty(point_bool.sum(), dtypeList)
         
         for name in colNames:
             data = self.fileHandle['DATA']['POINTS'][name][point_bool]
-            dataList.append(data)
+            points[name] = data
             
-        points = numpy.array(dataList)
+        self.lastPoints = points
+        self.lastPoints_Idx = idx
+        self.lastPoints_IdxMask = mask_idx
+        self.lastPointsColumns = colNames
 
         
