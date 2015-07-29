@@ -19,4 +19,4 @@ doProcessing() function and other useful things.
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-PYLIDAR_VERSION = '0.01'
+PYLIDAR_VERSION = '0.02'
