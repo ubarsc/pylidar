@@ -77,6 +77,10 @@ HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS', 'VERSION_SPD',
 'PULSE_ATTRIBUTES', 'POINT_ATTRIBUTES', 'RGB_FIELD', 'WAVEFORM_GAIN',
 'WAVEFORM_OFFSET', 'XYZHR_OFFSET', 'XYZHR_SCALE')
 
+# Note: NUMBER_OF_RETURNS and PTS_START_IDX always creates by pylidar
+PULSES_ESSENTIAL_FIELDS = ('PULSE_ID', 'X_IDX', 'Y_IDX')
+POINTS_ESSENTIAL_FIELDS = ('RETURN_NUMBER', 'X', 'Y', 'Z', 'CLASSIFICATION')
+
 # types of indexing in the file
 SPDV4_INDEX_CARTESIAN = 1
 SPDV4_INDEX_SPHERICAL = 2
@@ -313,10 +317,14 @@ class SPDV4File(generic.LiDARFile):
         self.fileHandle = None        
         self.lastExtent = None
         self.lastPoints = None
+        self.lastPointsBool = None
         self.lastPoints_Idx = None
         self.lastPoints_IdxMask = None
         self.lastPointsColumns = None
         self.lastPulses = None
+        self.lastPulsesBool = None
+        self.lastPulses_Idx = None
+        self.lastPulses_IdxMask = None
         self.lastPulsesColumns = None
 
     def readPointsForExtent(self, colNames=None):
@@ -327,6 +335,11 @@ class SPDV4File(generic.LiDARFile):
         colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
+        pointsHandle = self.fileHandle['DATA']['POINTS']
+        if colNames is None:
+            # get all names
+            colNames = pointsHandle.keys()
+            
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
             not self.lastPoints is None and self.lastPointsColumns == colNames):
@@ -335,25 +348,297 @@ class SPDV4File(generic.LiDARFile):
         point_bool, idx, mask_idx = (
                             self.si_handler.getPointsBoolForExtent(self.extent))
         
-        if colNames is None:
-            # get all names
-            colNames = self.fileHandle['DATA']['POINTS'].keys()
-        
-        # create a blank structured array to read the data into
-        dtypeList = []
-        for name in colNames:
-            dtype = self.fileHandle['DATA']['POINTS'][name].dtype
-            dtypeList.append(dtype)
+        if isinstance(colNames, str):
+            points = pointsHandle[colNames][point_bool]
+
+        else:            
+            # create a blank structured array to read the data into
+            dtypeList = []
+            for name in colNames:
+                dtype = pointsHandle[name].dtype
+                dtypeList.append(dtype)
             
-        points = numpy.empty(point_bool.sum(), dtypeList)
+            points = numpy.empty(point_bool.sum(), dtypeList)
         
-        for name in colNames:
-            data = self.fileHandle['DATA']['POINTS'][name][point_bool]
-            points[name] = data
+            for name in colNames:
+                data = pointsHandle[name][point_bool]
+                points[name] = data
             
         self.lastPoints = points
+        self.lastPointsBool = point_bool
         self.lastPoints_Idx = idx
         self.lastPoints_IdxMask = mask_idx
         self.lastPointsColumns = colNames
 
+    def readPulsesForExtent(self, colNames=None):
+        """
+        Read all the pulses within the given extent
+        as 1d structured array. 
+
+        colNames can be a name or list of column names to return. By default
+        all columns are returned.
+        """
+        pulsesHandle = self.fileHandle['DATA']['PULSES']
+        if colNames is None:
+            # get all names
+            colNames = pulsesHandle.keys()
+            
+        # returned cached if possible
+        if (self.lastExtent is not None and self.lastExtent == self.extent and 
+            not self.lastPulses is None and self.lastPulsesColumns == colNames):
+            return self.lastPulses
         
+        pulse_bool, idx, mask_idx = (
+                            self.si_handler.getPulsesBoolForExtent(self.extent))
+        
+        if isinstance(colNames, str):
+            pulses = pulsesHandle[colNames][pulse_bool]
+
+        else:            
+            # create a blank structured array to read the data into
+            dtypeList = []
+            for name in colNames:
+                dtype = pulsesHandle[name].dtype
+                dtypeList.append(dtype)
+            
+            pulses = numpy.empty(pulse_bool.sum(), dtypeList)
+        
+            for name in colNames:
+                data = pulsesHandle[name][pulses_bool]
+                pulses[name] = data
+            
+        self.lastPulses = pulses
+        self.lastPulsesBool = pulse_bool
+        self.lastPulses_Idx = idx
+        self.lastPulses_IdxMask = mask_idx
+        self.lastPulsesColumns = colNames
+    
+    def readPulsesForExtentByBins(self, extent=None, colNames=None):
+        """
+        Return the pulses as a 3d structured masked array.
+        """
+        # if they have given us a new extent then use that
+        if extent is not None:
+            oldExtent = self.lastExtent
+            self.setExtent(extent)
+        # go and get the pulses - should returned cached if 
+        # already got.
+        pulses = self.readPulsesForExtent(colNames)
+        # get these 'last' indices which map spatial index to pulses
+        idx = self.lastPulses_Idx
+        idxMask = self.lastPulses_IdxMask 
+        # re-map into 3d
+        pulsesByBins = pulses[idx]
+        
+        # set extent back to the 'normal' one for this block
+        # in case they call this again without the extent param
+        if extent is not None:
+            self.setExtent(oldExtent)
+            
+        # make masked array
+        pulses = numpy.ma.array(pulsesByBins, mask=idxMask)
+        return pulses
+
+    def readPointsForExtentByBins(self, extent=None, colNames=None, 
+                    indexByPulse=False, returnPulseIndex=False):
+        # TODO:
+        pass   
+        
+    def readPointsByPulse(self, colNames=None):
+        """
+        Return a 2d masked structured array of point that matches
+        the pulses.
+        """
+        if self.controls.spatialProcessing:
+            points = self.readPointsForExtent(colNames)
+        else:
+            points = self.readPointsForRange(colNames)
+        idx = self.lastPoints_Idx
+        idxMask = self.lastPoints_IdxMask
+        
+        pointsByPulse = points[idx]
+        points = numpy.ma.array(pointsByPulse, mask=idxMask)
+        return points
+        
+    def readTransmitted(self):
+        """
+        Return the 2d masked integer array of transmitted for each of the
+        current pulses. 
+        """
+        # TODO:
+        pass
+
+    def readReceived(self):
+        """
+        Return the 2d masked integer array of received for each of the
+        current pulses. 
+        """
+        # TODO:
+        pass
+        
+    def writeData(self, pulses=None, points=None, transmitted=None, received=None):
+        """
+        Write all the updated data. Pass None for data that do not need to be updated.
+        It is assumed that each parameter has been read by the reading functions
+        """
+        if self.mode == generic.READ:
+            # the processor always calls this so if a reading driver just ignore
+            return
+            
+        elif self.mode == generic.CREATE:
+            # we only accept new data in a particular form so we can attach
+            # points to pulses
+            if pulses is None and points is None:
+                msg = 'Must provide points and pulses when writing new data'
+                raise generic.LiDARInvalidData(msg)
+                
+            if pulses.ndim != 1:
+                msg = 'pulses must be 1d as returned from getPulses'
+                raise generic.LiDARInvalidData(msg)
+            if points.ndim != 2:
+                msg = 'points must be 2d as returned from getPointsByPulse'
+                raise generic.LiDARInvalidData(msg)
+            
+        if pulses is not None:
+            pulses = self.preparePulsesForWriting(pulses)
+            
+        if points is not None:
+            points, pts_start, nreturns = self.preparePointsForWriting(points)
+            
+        if transmitted is not None:
+            transmitted = self.prepareTransmittedForWriting(transmitted)
+            
+        if received is not None:
+            received = self.prepareReceivedForWriting(received)
+            
+        if self.mode == generic.CREATE:
+            # need to extend the hdf5 dataset before writing
+            # TODO: do pulses always need to be provided?
+            if pulses is not None:
+                # essential fields exist?
+                for essential in PULSES_ESSENTIAL_FIELDS:
+                    if essential not in pulses.dtype.names:
+                        msg = ('Essential field %s must exist in pulse data ' +
+                                'when writing new file') % essential
+                        raise generic.LiDARInvalidData(msg)
+                        
+                pulsesHandle = self.fileHandle['DATA']['PULSES']
+                oldSize = pulsesHandle.shape[0]
+                nPulses = len(pulses)
+                newSize = oldSize + nPulses
+                pulsesHandle.resize((newSize,))
+                for name in pulses.dtype.names:
+                    pulsesHandle[name][oldSize:newSize+1] = pulses[name]
+                    
+                # index into points
+                pulsesHandle['PTS_START_IDX'][oldSize:newSize+1] = pts_start
+                pulsesHandle['NUMBER_OF_RETURNS'][oldSize:newSize+1] = nreturns
+                
+            if points is not None:
+                # essential fields exist?
+                for essential in POINTS_ESSENTIAL_FIELDS:
+                    if essential not in points.dtype.names:
+                        msg = ('Essential field %s must exist in point data ' +
+                                'when writing new file') % essential
+                        raise generic.LiDARInvalidData(msg)
+
+                pointsHandle = self.fileHandle['DATA']['PULSES']
+                oldSize = pointsHandle.shape[0]
+                nPoints = len(points)
+                newSize = oldSize + nPoints
+                pointsHandle.resize((newSize,))
+                for name in points.dtype.names:
+                    pointHandle[name][oldSize:newSize+1] = points[name]
+
+                # TODO: now update the spatial index
+                
+            # TODO:
+            if transmitted is not None:
+                oldSize = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
+                nTrans = len(transmitted)
+                newSize = oldSize + nTrans
+                self.fileHandle['DATA']['TRANSMITTED'].resize((newSize,))
+                
+            if received is not None:
+                oldSize = self.fileHandle['DATA']['RECEIVED'].shape[0]
+                nRecv = len(received)
+                newSize = oldSize + nRecv
+                self.fileHandle['DATA']['RECEIVED'].resize((newSize,))
+
+        else:
+            if points is not None:
+                self.fileHandle['DATA']['POINTS'][self.lastPointsBool] = points
+            if pulses is not None:
+                self.fileHandle['DATA']['PULSES'][self.lastPulsesBool] = pulses
+            if transmitted is not None:
+                self.fileHandle['DATA']['TRANSMITTED'][self.lastTransBool] = transmitted
+            if received is not None:
+                self.fileHandle['DATA']['RECEIVED'][self.lastRecvBool] = received
+        
+    # The functions below are for when there is no spatial index.
+    def setPulseRange(self, pulseRange):
+        """
+        Set the range of pulses to read
+        """
+        # copy it so we can change the values if beyond the 
+        # range of data
+        self.pulseRange = copy.copy(pulseRange)
+        nTotalPulses = self.getTotalNumberPulses()
+        bMore = True
+        if self.pulseRange.startPulse > nTotalPulses:
+            # no data to read
+            self.pulseRange.startPulse = 0
+            self.pulseRange.endPulse = 0
+            bMore = False
+            
+        elif self.pulseRange.endPulse > nTotalPulses:
+            self.pulseRange.endPulse = nTotalPulses + 1
+            
+        return bMore
+
+    def readPointsForRange(self, colNames=None):
+        """
+        Read all the points for the specified range of pulses
+        """
+        # TODO:
+        pass
+
+    def readPulsesForRange(self, colNames=None):
+        """
+        Read the specified range of pulses
+        """
+        # TODO:
+        pass
+
+    def getTotalNumberPulses(self):
+        """
+        Return the total number of pulses
+        """
+        return self.fileHandle['DATA']['PULSES'].shape[0]
+        
+    def getHeader(self):
+        """
+        Return our attributes on the file
+        """
+        return self.fileHandle.attrs
+        
+    def setHeader(self, newHeaderDict):
+        """
+        Update our cached dictionary
+        """
+        for key in newHeaderDict.keys():
+            self.fileHandle.attrs[key] = newHeaderDict[key]
+            
+    def getHeaderValue(self, name):
+        """
+        Just extract the one value and return it
+        """
+        return self.fileHandle.attrs[name]
+        
+    def setHeaderValue(self, name, value):
+        """
+        Just update one value in the header
+        """
+        self.fileHandle.attrs[name] = value
+    
+                                            

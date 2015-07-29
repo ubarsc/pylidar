@@ -228,6 +228,30 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
 
+    def getHeader(self):
+        """
+        Return a dictionary of key/value pairs containing header info
+        """
+        raise NotImplementedError()
+        
+    def setHeader(self, newHeaderDict):
+        """
+        Update all of the header values as a dictionary
+        """
+        raise NotImplementedError()
+            
+    def getHeaderValue(self, name):
+        """
+        Just extract the one value and return it
+        """
+        raise NotImplementedError()
+        
+    def setHeaderValue(self, name, value):
+        """
+        Just update one value in the header
+        """
+        raise NotImplementedError()
+
     def writeData(self, pulses=None, points=None, transmitted=None, received=None):
         """
         Write data to file. pulses to be 1d structured array. points to be
