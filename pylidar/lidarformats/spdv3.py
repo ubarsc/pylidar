@@ -217,14 +217,14 @@ def convertIdxBool2D(start_idx_array, count_array, outBool, outRow, outCol,
                 outCol[idx] = col   # relative to this subset
                 
     # go through again setting up the indexes and mask
-    n = outBool.shape[0]
     counter = 0
-    for i in range(n):
-        if outBool[i]:
+    n = outBool.shape[0]
+    for j in range(n):
+        if outBool[j]:
             # ok will be data extracted here
             # get the row and col of where it came from
-            row = outRow[i]
-            col = outCol[i]
+            row = outRow[j]
+            col = outCol[j]
             # get the current number of elements from this bin
             c = counts[row, col]
             # save the current element number at the right level
@@ -268,6 +268,8 @@ def convertIdxBool1D(start_idx_array, count_array, outBool, outRow, outIdx,
     """
     
     nRows = start_idx_array.shape[0]
+    if nRows == 0:
+        return
     
     for row in range(nRows):
         # go through each bin in the index
@@ -287,11 +289,11 @@ def convertIdxBool1D(start_idx_array, count_array, outBool, outRow, outIdx,
     # go through again setting up the indexes and mask
     n = outBool.shape[0]
     counter = 0
-    for i in range(n):
-        if outBool[i]:
+    for j in range(n):
+        if outBool[j]:
             # ok will be data extracted here
             # get the row of where it came from
-            row = outRow[i]
+            row = outRow[j]
             # get the current number of elements from this bin
             c = counts[row]
             # save the current element number at the right level
