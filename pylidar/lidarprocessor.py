@@ -53,6 +53,11 @@ MESSAGE_DEBUG = generic.MESSAGE_DEBUG
 
 DEFAULT_WINDOW_SIZE = 200 # bins
 
+# For use in userclass.LidarData.translateFieldNames() and LiDARFile.getTranslationDict()
+ARRAY_TYPE_POINTS = generic.ARRAY_TYPE_POINTS
+ARRAY_TYPE_PULSES = generic.ARRAY_TYPE_PULSES
+ARRAY_TYPE_WAVEFORMS = generic.ARRAY_TYPE_WAVEFORMS
+
 def setDefaultDrivers():
     """
     Adapted from RIOS

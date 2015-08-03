@@ -494,6 +494,18 @@ class SPDV3File(generic.LiDARFile):
         """
         return "SPDV3"
 
+    @staticmethod
+    def getTranslationDict(arrayType):
+        """
+        Translation dictionary between formats
+        """
+        dict = {}
+        if arrayType == generic.ARRAY_TYPE_POINTS:
+            dict[generic.FIELD_POINTS_RETURN_NUMBER] = 'RETURN_ID'
+        elif arrayType == generic.ARRAY_TYPE_PULSES:
+            dict[generic.FIELD_PULSES_TIMESTAMP] = 'GPS_TIME'
+        return dict
+
     def getPixelGrid(self):
         """
         Return the pixel grid of this spatial index. 

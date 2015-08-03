@@ -31,6 +31,15 @@ MESSAGE_WARNING = 0
 MESSAGE_INFORMATION = 1
 MESSAGE_DEBUG = 2
 
+# 'standard' fields that have different names for different formats
+FIELD_POINTS_RETURN_NUMBER = 1
+FIELD_PULSES_TIMESTAMP = 2
+
+# For use in userclass.LidarData.translateFieldNames() and LiDARFile.getTranslationDict()
+ARRAY_TYPE_POINTS = 0
+ARRAY_TYPE_PULSES = 1
+ARRAY_TYPE_WAVEFORMS = 3
+
 class LiDARFileException(Exception):
     "Base class for LiDAR format reader/writers"
     
@@ -96,10 +105,20 @@ class LiDARFile(basedriver.Driver):
         successfully.
         """
         basedriver.Driver.__init__(self, fname, mode, controls, userClass)
-        
-    def getDriverName(self):
+
+    @staticmethod        
+    def getDriverName():
         """
         Return name of driver - just a short unique name is fine.
+        """
+        raise NotImplementedError()
+        
+    @staticmethod
+    def getTranslationDict(arrayType):
+        """
+        Return a dictionary keyed on FIELD_* values (above)
+        that can be used to translate field names between the formats
+        arrayType is the type of array that is to be translates (ARRAY_TYPE_*)
         """
         raise NotImplementedError()
         

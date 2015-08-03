@@ -257,6 +257,33 @@ class LidarData(object):
         self.receivedToWrite = None
         self.transmittedToWrite = None
         
+    def translateFieldNames(self, otherLidarData, array, arrayType):
+        """
+        Translates the field names in an array from another format
+        (specified by passing the other data object) for use in writing
+        to the format for this driver. The array is passed in and updated
+        directly (no copy made). The array is returned.
+        
+        arrayType is one of the ARRAY_TYPE_* values defined in lidarprocessor.py.
+        """
+        thisDict = self.driver.getTranslationDict(arrayType)
+        otherDict = otherLidarData.driver.getTranslationDict(arrayType)
+        
+        newNames = []
+        for name in array.dtype.names:
+            for key in otherDict:
+                if otherDict[key] == name:
+                    name = thisDict[key]
+            newNames.append(name)
+            
+        # see http://stackoverflow.com/questions/14429992/can-i-rename-fields-in-a-numpy-record-array
+        array.dtype.names = newNames
+        if isinstance(array, numpy.ma.MaskedArray):
+            array.mask.dtype.names = newNames
+            
+        # just for consistancy
+        return array
+        
     def getPoints(self, colNames=None):
         """
         Returns the points for the extent/range of the current

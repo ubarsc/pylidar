@@ -8,9 +8,12 @@ from pylidar import lidarprocessor
 
 def transFunc(data):
     pulses = data.input1.getPulses()
-    print('pulses', len(pulses))
     points = data.input1.getPointsByPulse()
-    print('points', len(points))
+    
+    data.output1.translateFieldNames(data.input1, points, 
+            lidarprocessor.ARRAY_TYPE_POINTS)
+    data.output1.translateFieldNames(data.input1, pulses, 
+            lidarprocessor.ARRAY_TYPE_PULSES)
     
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)

@@ -96,6 +96,13 @@ SPDV4_INDEXTYPE_SIMPLEGRID = 0
 SPDV4_SIMPLEGRID_COUNT_DTYPE = numpy.uint32
 SPDV4_SIMPLEGRID_INDEX_DTYPE = numpy.uint64
 
+# flags for POINT_FLAGS
+SPDV4_POINT_FLAGS_IGNORE = 1
+SPDV4_POINT_FLAGS_OVERLAP = 2
+SPDV4_POINT_FLAGS_SYNTHETIC = 4
+SPDV4_POINT_FLAGS_KEY_POINT = 8
+SPDV4_POINT_FLAGS_WAVEFORM = 16
+
 class SPDV4SpatialIndex(object):
     """
     Class that hides the details of different Spatial Indices
@@ -328,6 +335,18 @@ class SPDV4File(generic.LiDARFile):
         Name of this driver
         """
         return "SPDV4"
+
+    @staticmethod
+    def getTranslationDict(arrayType):
+        """
+        Translation dictionary between formats
+        """
+        dict = {}
+        if arrayType == generic.ARRAY_TYPE_POINTS:
+            dict[generic.FIELD_POINTS_RETURN_NUMBER] = 'RETURN_NUMBER'
+        elif arrayType == generic.ARRAY_TYPE_PULSES:
+            dict[generic.FIELD_PULSES_TIMESTAMP] = 'TIMESTAMP'
+        return dict
 
     def setExtent(self, extent):
         """
