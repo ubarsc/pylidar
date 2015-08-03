@@ -25,6 +25,7 @@ import h5py
 from numba import jit
 from rios import pixelgrid
 from . import generic
+from . import gridindexutils
 
 HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float32, 'AZIMUTH_MIN' : numpy.float32,
 'BANDWIDTHS' : numpy.float32, 'BIN_SIZE' : numpy.float32,
@@ -107,13 +108,13 @@ class SPDV4SpatialIndex(object):
         # read the pixelgrid info out of the header
         # this is same for all spatial indices on SPD V4
         fileAttrs = fileHandle.attrs
-        binSize = fileAttrs['BIN_SIZE'][0]
-        shape = fileAttrs['NUMBER_BINS_Y'][0], fileAttrs['NUMBER_BINS_X'][0]
-        xMin = fileAttrs['INDEX_TLX'][0]
-        yMax = fileAttrs['INDEX_TLY'][0]
+        binSize = fileAttrs['BIN_SIZE']
+        shape = fileAttrs['NUMBER_BINS_Y'], fileAttrs['NUMBER_BINS_X']
+        xMin = fileAttrs['INDEX_TLX']
+        yMax = fileAttrs['INDEX_TLY']
         xMax = xMin + (shape[1] * binSize)
         yMin = yMax - (shape[0] * binSize)
-        wkt = fileAttrs['SPATIAL_REFERENCE'][0]
+        wkt = fileAttrs['SPATIAL_REFERENCE']
         if sys.version_info[0] == 3:
             wkt = wkt.decode()
             
@@ -125,7 +126,7 @@ class SPDV4SpatialIndex(object):
         Call to write data, close files etc
         """
         # update the header
-        if mode == generic.CREATE:
+        if self.mode == generic.CREATE:
             fileAttrs = self.fileHandle.attrs
             fileAttrs['BIN_SIZE'] = self.pixelGrid.xRes
             nrows, ncols = self.pixelGrid.getDimensions()
@@ -261,7 +262,7 @@ class SPDV4File(generic.LiDARFile):
         elif mode == generic.UPDATE:
             h5py_mode = 'r+'
         elif mode == generic.CREATE:
-            h5py_mode == 'w'
+            h5py_mode = 'w'
         else:
             raise ValueError('Unknown value for mode parameter')
     
@@ -308,7 +309,9 @@ class SPDV4File(generic.LiDARFile):
         self.lastExtent = None
         self.lastPulseRange = None
         self.lastPoints = None
+        self.lastPointsBool = None
         self.lastPulses = None
+        self.lastPulsesBool = None
         
         # the current extent or range for data being read
         self.extent = None
@@ -318,8 +321,9 @@ class SPDV4File(generic.LiDARFile):
         
         # for writing a new file, we generate PULSE_ID uniquely
         self.lastPulseID = numpy.uint64(0)
-         
-    def getDriverName(self):
+        
+    @staticmethod 
+    def getDriverName():
         """
         Name of this driver
         """
@@ -413,7 +417,8 @@ class SPDV4File(generic.LiDARFile):
             
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
-            not self.lastPoints is None and self.lastPointsColumns == colNames):
+            not self.lastPoints is None and self.lastPointsColumns is not None
+            and self.lastPointsColumns == colNames):
             return self.lastPoints
         
         point_bool, idx, mask_idx = (
@@ -456,7 +461,8 @@ class SPDV4File(generic.LiDARFile):
             
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
-            not self.lastPulses is None and self.lastPulsesColumns == colNames):
+            not self.lastPulses is None and self.lastPulsesColumns is not None
+            and self.lastPulsesColumns == colNames):
             return self.lastPulses
         
         pulse_bool, idx, mask_idx = (
@@ -608,7 +614,8 @@ class SPDV4File(generic.LiDARFile):
                         (y_idx >= self.extent.yMin) &
                         (y_idx <= self.extent.yMax))
             pulses = pulses[mask]
-            updateBoolArray(self.lastPulsesBool, mask)
+            if self.mode == generic.UPDATE:
+                gridindexutils.updateBoolArray(self.lastPulsesBool, mask)
             
         return pulses
 
@@ -651,40 +658,85 @@ class SPDV4File(generic.LiDARFile):
                 # flatten somehow
                 
                 # get the number of returns for each pulse
-                nreturns = points.count(axis=0)
-                pts_start = self.fileHandle['DATA']['POINTS'].shape[0] + nreturns
+                # this doesn't work with structured arrays so need
+                # to use one of the fields
+                firstField = points.dtype.names[0]
                 
-                # this does what we want - collapses the array
-                # doing a pulse at a time
-                points = points.compressed()
-            
+                nreturns = points[firstField].count(axis=0)
+                pointsHandle = self.fileHandle['DATA']['POINTS']
+                currPointsCount = 0
+                if firstField in pointsHandle:
+                    currPointsCount = pointsHandle[firstField].shape[0]
+                    
+                pts_start = nreturns + currPointsCount
+                # unfortunately points.compressed() doesn't work
+                # for structured arrays. Use our own version instead
+                outPoints = numpy.empty(points[firstField].count(), 
+                                    dtype=points.dtype)
+                                    
+                gridindexutils.flattenMaskedStructuredArray(points.data, 
+                            points[firstField].mask, outPoints)
+                
+                points = outPoints
+                
         if points.ndim != 1:
             msg = 'Point array must be either 1d, 2 or 3d'
             raise generic.LiDARInvalidData(msg)
 
-        if self.mode == generic.UPDATE:
+        if self.mode == generic.CREATE:
+            # need to check that passed in data has all the required fields
+            for essential in POINTS_ESSENTIAL_FIELDS:
+                if essential not in points.dtype.names:
+                    msg = ('Essential field %s must exist in point data ' +
+                             'when writing new file') % essential
+                    raise generic.LiDARInvalidData(msg)
 
-            # strip out the points that were originally outside
-            # the window and within the overlap.
-            # TODO: is this ok for points read in by indexByPulse=True?
-            if self.controls.spatialProcessing:
+        # strip out the points that were originally outside
+        # the window and within the overlap.
+        # TODO: is this ok for points read in by indexByPulse=True?
+        if self.controls.spatialProcessing:
+            if self.mode == generic.UPDATE:
+                # get data in case it is not passed in or changed
                 xloc = self.readPointsForExtent('X')
                 yloc = self.readPointsForExtent('Y')
+            else:
+                # on CREATE we can guarantee these exist (see above)
+                xloc = points['X']
+                yloc = points['Y']
                 
-                mask = ( (xloc >= self.extent.xMin) & 
-                    (xloc <= self.extent.xMax) &
-                    (yloc >= self.extent.yMin) &
-                    (yloc <= self.extent.yMax))
-                points = points[mask]
-                updateBoolArray(self.lastPointsBool, mask)
+            mask = ( (xloc >= self.extent.xMin) & 
+                (xloc <= self.extent.xMax) &
+                (yloc >= self.extent.yMin) &
+                (yloc <= self.extent.yMax))
+            points = points[mask]
+            if self.mode == generic.UPDATE:
+                gridindexutils.updateBoolArray(self.lastPointsBool, mask)
 
-        else:
-            # need to check that passed in data has all the required fields
-            if points.dtype != POINT_DTYPE:
-                msg = 'Point array does not have all the required fields'
-                raise generic.LiDARInvalidData(msg)
         
         return points, pts_start, nreturns
+        
+    def prepareTransmittedForWriting(self, transmitted):
+        # TODO:
+        return transmitted
+        
+    def prepareReceivedForWriting(self, received):
+        # TODO:
+        return received
+
+    @staticmethod
+    def createDataColumn(groupHandle, name, data):
+        """
+        Creates a new data column under groupHandle with the
+        given name with standard HDF5 params.
+        
+        The type is the same as the numpy array data and data
+        is written to the column
+        """
+        # From SPDLib
+        dset = groupHandle.create_dataset(name, data.shape, 
+                chunks=(250,), dtype=data.dtype, shuffle=True, 
+                compression="gzip", compression_opts=1)
+        dset[:] = data
         
     def writeData(self, pulses=None, points=None, transmitted=None, received=None):
         """
@@ -727,41 +779,56 @@ class SPDV4File(generic.LiDARFile):
             if pulses is not None:
                         
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
-                oldSize = pulsesHandle.shape[0]
+                firstField = pulses.dtype.names[0]
+                if firstField in pulsesHandle:
+                    oldSize = pulsesHandle[firstField].shape[0]
+                else:
+                    oldSize = 0
                 nPulses = len(pulses)
                 newSize = oldSize + nPulses
-                pulsesHandle.resize((newSize,))
-                for name in pulses.dtype.names:
-                    # don't bother writing out the ones we generate ourselves
-                    if (name != 'PTS_START_IDX' and name != 'NUMBER_OF_RETURNS'
-                            and name != 'PULSE_ID'):
-                        pulsesHandle[name][oldSize:newSize+1] = pulses[name]
-                    
-                # index into points
-                pulsesHandle['PTS_START_IDX'][oldSize:newSize+1] = pts_start
-                pulsesHandle['NUMBER_OF_RETURNS'][oldSize:newSize+1] = nreturns
                 
-                # pulseid
+                # index into points and pulseid generated fields
                 pulseid = numpy.arange(self.lastPulseID, 
                         self.lastPulseID + nPulses, dtype=numpy.uint64)
-                pulsesHandle['PULSE_ID'][oldSize:newSize+1] = pulseid
+                self.lastPulseID = self.lastPulseID + nPulses
+                generatedColumns = {'PTS_START_IDX' : pts_start,
+                        'NUMBER_OF_RETURNS' : nreturns, 'PULSE_ID' : pulseid}
+
+                for name in pulses.dtype.names:
+                    # don't bother writing out the ones we generate ourselves
+                    if name not in generatedColumns:
+                        if name in pulsesHandle:
+                            pulsesHandle[name].resize((newSize,))
+                            pulsesHandle[name][oldSize:newSize+1] = pulses[name]
+                        else:
+                            self.createDataColumn(pulsesHandle, name, 
+                                    pulses[name])
+                    
+                # now write the generated ones
+                for name in generatedColumns.keys():
+                    data = generatedColumns[name]
+                    if name in pulsesHandle:
+                        pulsesHandle[name].resize((newSize,))
+                        pulsesHandle[name][oldSize:newSize+1] = data
+                    else:
+                        self.createDataColumn(pulsesHandle, name, data)
                 
             if points is not None:
-                # essential fields exist?
-                for essential in POINTS_ESSENTIAL_FIELDS:
-                    if essential not in points.dtype.names:
-                        msg = ('Essential field %s must exist in point data ' +
-                                'when writing new file') % essential
-                        raise generic.LiDARInvalidData(msg)
 
                 pointsHandle = self.fileHandle['DATA']['POINTS']
-                oldSize = pointsHandle.shape[0]
+                firstField = points.dtype.names[0]
+                if firstField in pulsesHandle:
+                    oldSize = pointsHandle[firstField].shape[0]
+                else:
+                    oldSize = 0
                 nPoints = len(points)
                 newSize = oldSize + nPoints
-                pointsHandle.resize((newSize,))
                 for name in points.dtype.names:
-                    pointHandle[name][oldSize:newSize+1] = points[name]
-
+                    if name in pointsHandle:
+                        pointsHandle[name].resize((newSize,))
+                        pointsHandle[name][oldSize:newSize+1] = points[name]
+                    else:
+                        self.createDataColumn(pointsHandle, name, points[name])
 
                 if self.controls.spatialProcessing:
                     self.si_handler.setPointsAndPulsesForExtent(self.extent, 
@@ -815,15 +882,95 @@ class SPDV4File(generic.LiDARFile):
         """
         Read all the points for the specified range of pulses
         """
-        # TODO:
-        pass
+        pointsHandle = self.fileHandle['DATA']['POINTS']
+        if colNames is None:
+            # get all names
+            colNames = pointsHandle.keys()
+            
+        if (self.lastPulseRange is not None and
+                self.lastPulseRange == self.pulseRange and
+                self.lastPoints is not None and
+                colNames == self.lastPointsColumns):
+            return self.lastPoints
+            
+        pulses = self.readPulsesForRange()
+        
+        nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
+        startIdxs = self.readPulsesForRange('PTS_START_IDX')
+        
+        # h5py prefers to take it's index by numpy bool array
+        # of the same shape as the dataset
+        # so we do this. If you give it the indices themselves
+        # this must be done as a list which is slow
+        nOut = pointsHandle['RETURN_NUMBER'].shape[0]
+        point_bool, point_idx, point_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
+                        startIdxs, nReturns, nOut)
+        
+        if isinstance(colNames, str):
+            points = pointsHandle[colNames][point_bool]
 
+        else:            
+            # create a blank structured array to read the data into
+            dtypeList = []
+            for name in colNames:
+                dtype = pointsHandle[name].dtype
+                dtypeList.append(dtype)
+            
+            points = numpy.empty(point_bool.sum(), dtypeList)
+        
+            for name in colNames:
+                data = pointsHandle[name][point_bool]
+                points[name] = data
+        
+        # keep these indices from pulses to points - handy for the indexing 
+        # functions.
+        self.lastPoints = points
+        self.lastPoints_Idx = point_idx
+        self.lastPoints_IdxMask = point_idx_mask
+        self.lastPointsColumns = colNames
+        # self.lastPulseRange copied in readPulsesForRange()
+        return self.subsetColumns(points, colNames)
+    
     def readPulsesForRange(self, colNames=None):
         """
         Read the specified range of pulses
         """
-        # TODO:
-        pass
+        pulsesHandle = self.fileHandle['DATA']['PULSES']
+        if colNames is None:
+            # get all names
+            colNames = pulsesHandle.keys()
+            
+        if (self.lastPulseRange is not None and
+                self.lastPulseRange == self.pulseRange and 
+                self.lastPulses is not None and
+                self.lastPulsesColumns is not None and 
+                self.lastPulsesColumns != colNames):
+            return self.lastPulses
+
+        if isinstance(colNames, str):
+            pulses = pulsesHandle[colNames][
+                        self.pulseRange.startPulse:self.pulseRange.endPulse]
+
+        else:            
+            # create a blank structured array to read the data into
+            dtypeList = []
+            for name in colNames:
+                dtype = pulsesHandle[name].dtype
+                dtypeList.append(dtype)
+            
+            nPulses = self.pulseRange.endPulse - self.pulseRange.startPulse
+            pulses = numpy.empty(nPulses, dtypeList)
+        
+            for name in colNames:
+                data = pulsesHandle[name][
+                    self.pulseRange.startPulse:self.pulseRange.endPulse]
+                pulses[name] = data
+    
+        self.lastPulses = pulses
+        self.lastPulseRange = copy.copy(self.pulseRange)
+        self.lastPoints = None # now invalid
+        self.lastPointsColumns = colNames
+        return pulses
 
     def getTotalNumberPulses(self):
         """

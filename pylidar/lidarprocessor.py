@@ -32,6 +32,7 @@ from .lidarformats import generic
 # import modules implementing subclasses here so 
 # we can use the __subclasses__() python feature
 from .lidarformats import spdv3
+from .lidarformats import spdv4
 from . import userclasses
 
 # to be passed to ImageData and LidarData class constructors
@@ -345,7 +346,12 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
         
         for inputFile in inputFiles:
             if isinstance(inputFile, LidarFile):
-                driver = generic.getReaderForLiDARFile(inputFile.fname,
+                if inputFile.mode == generic.CREATE:
+                    # TODO: Creation options
+                    driver = generic.getWriterForLiDARFormat(inputFile.lidarDriver,
+                        inputFile.fname, inputFile.mode, controls, inputFile)
+                else:
+                    driver = generic.getReaderForLiDARFile(inputFile.fname,
                                     inputFile.mode, controls, inputFile)
                 driverList.append(driver)
 

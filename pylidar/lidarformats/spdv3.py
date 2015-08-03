@@ -25,6 +25,7 @@ import h5py
 from numba import jit
 from rios import pixelgrid
 from . import generic
+from . import gridindexutils
 
 # so we can check the user has passed in expected array type
 PULSE_DTYPE = numpy.dtype([('GPS_TIME', '<u8'), ('PULSE_ID', '<u8'), 
@@ -98,22 +99,10 @@ SPDV3_SI_INDEX_DTYPE = numpy.uint64
 # types of indexing in the file
 SPDV3_INDEX_CARTESIAN = 1
 SPDV3_INDEX_SPHERICAL = 2
+SPDV3_INDEX_CYLINDRICAL = 3
+SPDV3_INDEX_POLAR = 4
 SPDV3_INDEX_SCAN = 5
     
-@jit
-def updateBoolArray(boolArray, mask):
-    """
-    Used by readPointsForExtentByBins and writeData to update the mask of 
-    elements that are to be written. Often elements need to be dropped
-    since they are outside the window etc.
-    """
-    nBool = boolArray.shape[0]
-    maskIdx = 0
-    for n in range(nBool):
-        if boolArray[n]:
-            boolArray[n] = mask[maskIdx]
-            maskIdx += 1
-
 @jit
 def flatten3dMaskedArray(flatArray, in3d, mask3d, idx3d):
     """
@@ -330,7 +319,7 @@ class SPDV3File(generic.LiDARFile):
         elif mode == generic.UPDATE:
             h5py_mode = 'r+'
         elif mode == generic.CREATE:
-            h5py_mode == 'w'
+            h5py_mode = 'w'
         else:
             raise ValueError('Unknown value for mode parameter')
     
@@ -496,7 +485,8 @@ class SPDV3File(generic.LiDARFile):
             dict[key] = value
         return dict
 
-    def getDriverName(self):
+    @staticmethod
+    def getDriverName():
         """
         Name of this driver
         """
@@ -851,7 +841,7 @@ spatial index will be recomputed on the fly"""
                 yMax, xMin, nrows, ncols)
                 
         # for writing
-        updateBoolArray(self.lastPointsBool, mask)
+        gridindexutils.updateBoolArray(self.lastPointsBool, mask)
                 
         # TODO: don't really want the bool array returned - need
         # to make it optional
@@ -1103,7 +1093,7 @@ spatial index will be recomputed on the fly"""
                         (pulses[self.si_yPulseColName] >= self.extent.yMin) &
                         (pulses[self.si_yPulseColName] <= self.extent.yMax))
             pulses = pulses[mask]
-            updateBoolArray(self.lastPulsesBool, mask)
+            gridindexutils.updateBoolArray(self.lastPulsesBool, mask)
             
         return pulses
 
@@ -1174,7 +1164,7 @@ spatial index will be recomputed on the fly"""
                         (origPoints['Y'] <= self.extent.yMax))
                     points = points[mask]
                     origPoints = origPoints[mask]
-                    updateBoolArray(self.lastPointsBool, mask)
+                    gridindexutils.updateBoolArray(self.lastPointsBool, mask)
 
                 # passed in array does not have all the fields we need to write
                 # so get the original data read 
@@ -1236,7 +1226,7 @@ spatial index will be recomputed on the fly"""
                     self.lastTrans_IdxMask, self.lastTrans_Idx)
             
                 transmitted = transmitted[flatMask]
-                updateBoolArray(self.lastTransBool, flatMask)
+                gridindexutils.updateBoolArray(self.lastTransBool, flatMask)
                 
         else:
             raise NotImplementedError()
@@ -1287,7 +1277,7 @@ spatial index will be recomputed on the fly"""
                     self.lastRecv_IdxMask, self.lastRecv_Idx)
             
                 received = received[flatMask]
-                updateBoolArray(self.lastRecvBool, flatMask)
+                gridindexutils.updateBoolArray(self.lastRecvBool, flatMask)
 
         else:
             raise NotImplementedError()
@@ -1462,7 +1452,7 @@ spatial index will be recomputed on the fly"""
             return self.subsetColumns(self.lastPoints, colNames)
             
         # this should return anything cached
-        pulses = self.readPulses()
+        pulses = self.readPulsesForRange()
         
         nReturns = pulses['NUMBER_OF_RETURNS']
         startIdxs = pulses['PTS_START_IDX']
@@ -1482,7 +1472,7 @@ spatial index will be recomputed on the fly"""
         self.lastPoints = points
         self.lastPoints_Idx = point_idx
         self.lastPoints_IdxMask = point_idx_mask
-        # self.lastPulseRange copied in readPulses()
+        # self.lastPulseRange copied in readPulsesForRange()
         return self.subsetColumns(points, colNames)
     
     def readPulsesForRange(self, colNames=None):

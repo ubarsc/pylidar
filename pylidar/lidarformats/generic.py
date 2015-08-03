@@ -275,6 +275,21 @@ class LiDARFileInfo(basedriver.FileInfo):
     def __init__(self, fname):
         basedriver.FileInfo.__init__(self, fname)
 
+def getWriterForLiDARFormat(driverName, fname, mode, controls, userClass):
+    """
+    Given a driverName returns an instance of the given driver class
+    Raises LiDARFormatDriverNotFound if not found
+    """
+    for cls in LiDARFile.__subclasses__():
+        if cls.getDriverName() == driverName:
+            # create it
+            inst = cls(fname, mode, controls, userClass)
+            return inst
+    # none matched
+    msg = 'Cannot find LiDAR driver %s' % driverName
+    raise LiDARFormatDriverNotFound(msg)
+            
+
 def getReaderForLiDARFile(fname, mode, controls, userClass):
     """
     Returns an instance of a LiDAR format
