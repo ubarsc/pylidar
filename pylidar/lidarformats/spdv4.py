@@ -154,7 +154,7 @@ class SPDV4SpatialIndex(object):
     def createNewIndex(self, pixelGrid):
         raise NotImplementedError()
         
-    def setPointsAndPulsesForExtent(self, extent, points, pulses):
+    def setPointsAndPulsesForExtent(self, extent, points, pulses, lastPulseID):
         raise NotImplementedError()
         
     @staticmethod
@@ -207,26 +207,28 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
                 self.si_idx = group['BIN_OFFSETS'][...]
                 
     def close(self):
-        if mode == generic.WRITE:
+        if self.mode == generic.CREATE:
             # create it if it does not exist
-            group = fileHandle[SPATIALINDEX_GROUP]
-            if group is None:
-                group = fileHandle.create_group(SPATIALINDEX_GROUP)
+            if SPATIALINDEX_GROUP not in self.fileHandle:
+                group = self.fileHandle.create_group(SPATIALINDEX_GROUP)
+            else:
+                group = self.fileHandle[SPATIALINDEX_GROUP]
                 
-            group = group[SIMPLEPULSEGRID_GROUP]
-            if group is None:
+            if SIMPLEPULSEGRID_GROUP not in group:
                 group = group.create_group(SIMPLEPULSEGRID_GROUP)
+            else:
+                group = group[SIMPLEPULSEGRID_GROUP]
                 
             nrows, ncols = self.pixelGrid.getDimensions()
             # params adapted from SPDLib
-            countDataset = self.si_group.create_dataset('PLS_PER_BIN', 
+            countDataset = group.create_dataset('PLS_PER_BIN', 
                     (nrows, ncols), 
                     chunks=(1, ncols), dtype=SPDV4_SIMPLEGRID_COUNT_DTYPE,
                     shuffle=True, compression="gzip", compression_opts=1)
             if self.si_cnt is not None:
                 countDataset[...] = self.si_cnt
                     
-            offsetDataset = self.si_group.create_dataset('BIN_OFFSETS', 
+            offsetDataset = group.create_dataset('BIN_OFFSETS', 
                     (nrows, ncols), 
                     chunks=(1, ncols), dtype=SPDV4_SIMPLEGRID_INDEX_DTYPE,
                     shuffle=True, compression="gzip", compression_opts=1)
@@ -251,9 +253,42 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         # save the pixelGrid
         self.pixelGrid = pixelGrid
 
-    def setPointsAndPulsesForExtent(self, extent, points, pulses):
-        pass
+    def setPointsAndPulsesForExtent(self, extent, points, pulses, lastPulseID):
+        xMin = self.pixelGrid.snapToGrid(extent.xMin, self.pixelGrid.xMin, 
+                self.pixelGrid.xRes)
+        xMax = self.pixelGrid.snapToGrid(extent.xMax, self.pixelGrid.xMax, 
+                self.pixelGrid.xRes)
+        yMin = self.pixelGrid.snapToGrid(extent.yMin, self.pixelGrid.yMin, 
+                self.pixelGrid.yRes)
+        yMax = self.pixelGrid.snapToGrid(extent.yMax, self.pixelGrid.yMax, 
+                self.pixelGrid.yRes)
+                
+        # size of spatial index we need to write
+        nrows = int(numpy.ceil((yMax - yMin) / self.pixelGrid.xRes))
+        ncols = int(numpy.ceil((xMax - xMin) / self.pixelGrid.xRes))
+                
+        mask, sortedBins, idx_subset, cnt_subset = gridindexutils.CreateSpatialIndex(
+                pulses['Y_IDX'], pulses['X_IDX'], self.pixelGrid.xRes, yMax, xMin,
+                nrows, ncols, SPDV4_SIMPLEGRID_INDEX_DTYPE, 
+                SPDV4_SIMPLEGRID_COUNT_DTYPE)
+                   
+        # note overlap is zero as we have already removed them by not including 
+        # them in the spatial index
+        imageSlice, siSlice = gridindexutils.getSlicesForExtent(self.pixelGrid, 
+                     self.si_cnt.shape, 0, xMin, xMax, yMin, yMax)
 
+        if imageSlice is not None and siSlice is not None:
+
+            self.si_cnt[siSlice] = cnt_subset[imageSlice]
+            self.si_idx[siSlice] = idx_subset[imageSlice]
+
+        # re-sort the pulses to match the new spatial index
+        pulses = pulses[mask]
+        pulses = pulses[sortedBins]
+        
+        # return the new ones in the correct order to write
+        return points, pulses
+                                    
 class SPDV4File(generic.LiDARFile):
     """
     Class to support reading and writing of SPD Version 4.x files.
@@ -793,9 +828,14 @@ class SPDV4File(generic.LiDARFile):
             received = self.prepareReceivedForWriting(received)
             
         if self.mode == generic.CREATE:
-            # need to extend the hdf5 dataset before writing
-            # TODO: do pulses always need to be provided?
-            if pulses is not None:
+
+            if self.controls.spatialProcessing and pulses is not None:
+                # write spatial index. The pulses/points may need
+                # to be re-ordered before writing so we do this first
+                points, pulses = self.si_handler.setPointsAndPulsesForExtent(
+                        self.extent, points, pulses, self.lastPulseID)
+
+            if pulses is not None and len(pulses) > 0:
                         
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
                 firstField = pulses.dtype.names[0]
@@ -832,11 +872,11 @@ class SPDV4File(generic.LiDARFile):
                     else:
                         self.createDataColumn(pulsesHandle, name, data)
                 
-            if points is not None:
+            if points is not None and len(points) > 0:
 
                 pointsHandle = self.fileHandle['DATA']['POINTS']
                 firstField = points.dtype.names[0]
-                if firstField in pulsesHandle:
+                if firstField in pointsHandle:
                     oldSize = pointsHandle[firstField].shape[0]
                 else:
                     oldSize = 0
@@ -848,10 +888,6 @@ class SPDV4File(generic.LiDARFile):
                         pointsHandle[name][oldSize:newSize+1] = points[name]
                     else:
                         self.createDataColumn(pointsHandle, name, points[name])
-
-                if self.controls.spatialProcessing:
-                    self.si_handler.setPointsAndPulsesForExtent(self.extent, 
-                                            points, pulses)
                 
             # TODO:
             #if transmitted is not None:

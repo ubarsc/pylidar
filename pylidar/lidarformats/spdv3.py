@@ -468,66 +468,10 @@ spatial index will be recomputed on the fly"""
         cnt_subset = numpy.zeros((nrows, ncols), dtype=SPDV3_SI_COUNT_DTYPE)
         idx_subset = numpy.zeros((nrows, ncols), dtype=SPDV3_SI_INDEX_DTYPE)
         
-        # work out where on the whole of file spatial index to read from
-        xoff = int((xMin - self.si_xMin) / self.si_binSize)
-        yoff = int((self.si_yMax - yMax) / self.si_binSize)
-        xright = int(numpy.ceil((xMax - self.si_xMin) / self.si_binSize))
-        xbottom = int(numpy.ceil((self.si_yMax - yMin) / self.si_binSize))
-        xsize = xright - xoff
-        ysize = xbottom - yoff
-        
-        # adjust for overlap
-        xoff_margin = xoff - self.controls.overlap
-        yoff_margin = yoff - self.controls.overlap
-        xSize_margin = xsize + self.controls.overlap * 2
-        ySize_margin = ysize + self.controls.overlap * 2
-        
-        # Code below adapted from rios.imagereader.readBlockWithMargin
-        # Not sure if it can be streamlined for this case
-
-        # The bounds of the whole image in the file        
-        imgLeftBound = 0
-        imgTopBound = 0
-        imgRightBound = self.si_cnt.shape[1]
-        imgBottomBound = self.si_cnt.shape[0]
-        
-        # The region we will, in principle, read from the file. Note that xSize_margin 
-        # and ySize_margin are already calculated above
-        
-        # Restrict this to what is available in the file
-        xoff_margin_file = max(xoff_margin, imgLeftBound)
-        xoff_margin_file = min(xoff_margin_file, imgRightBound)
-        xright_margin_file = xoff_margin + xSize_margin
-        xright_margin_file = min(xright_margin_file, imgRightBound)
-        xSize_margin_file = xright_margin_file - xoff_margin_file
-
-        yoff_margin_file = max(yoff_margin, imgTopBound)
-        yoff_margin_file = min(yoff_margin_file, imgBottomBound)
-        ySize_margin_file = min(ySize_margin, imgBottomBound - yoff_margin_file)
-        ybottom_margin_file = yoff_margin + ySize_margin
-        ybottom_margin_file = min(ybottom_margin_file, imgBottomBound)
-        ySize_margin_file = ybottom_margin_file - yoff_margin_file
-        
-        # How many pixels on each edge of the block we end up NOT reading from 
-        # the file, and thus have to leave as null in the array
-        notRead_left = xoff_margin_file - xoff_margin
-        notRead_right = xSize_margin - (notRead_left + xSize_margin_file)
-        notRead_top = yoff_margin_file - yoff_margin
-        notRead_bottom = ySize_margin - (notRead_top + ySize_margin_file)
-        
-        # The upper bounds on the slices specified to receive the data
-        slice_right = xSize_margin - notRead_right
-        slice_bottom = ySize_margin - notRead_bottom
-        
-        if xSize_margin_file > 0 and ySize_margin_file > 0:
-            # Now read in the part of the array which we can actually read from the file.
-            # Read each layer separately, to honour the layerselection
-            
-            # The part of the final array we are filling
-            imageSlice = (slice(notRead_top, slice_bottom), slice(notRead_left, slice_right))
-            # the input from the spatial index
-            siSlice = (slice(yoff_margin_file, yoff_margin_file+ySize_margin_file), 
-                        slice(xoff_margin_file, xoff_margin_file+xSize_margin_file))
+        imageSlice, siSlice = gridindexutils.getSlicesForExtent(pixGrid, 
+             self.si_cnt.shape, self.controls.overlap, xMin, xMax, yMin, yMax)
+             
+        if imageSlice is not None and siSlice is not None:
 
             cnt_subset[imageSlice] = self.si_cnt[siSlice]
             idx_subset[imageSlice] = self.si_idx[siSlice]

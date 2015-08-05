@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import sys
 import numpy
 from pylidar import lidarprocessor
+from rios import cuiprogress
 
 def transFunc(data):
     pulses = data.input1.getPulses()
@@ -24,8 +25,12 @@ def testConvert(infile, outfile):
     dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
+
+    controls = lidarprocessor.Controls()
+    progress = cuiprogress.GDALProgressBar()
+    controls.setProgress(progress)
     
-    lidarprocessor.doProcessing(transFunc, dataFiles)
+    lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls)
     
 if __name__ == '__main__':
     testConvert(sys.argv[1], sys.argv[2])
