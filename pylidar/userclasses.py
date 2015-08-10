@@ -488,7 +488,7 @@ class LidarData(object):
         """
         self.driver.setHeaderValue(name, value)
         
-    def setHeaderValue(self, **kwargs):
+    def setHeaderValues(self, **kwargs):
         """
         Overloaded version to support key word args instead
         """
