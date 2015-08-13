@@ -83,6 +83,26 @@ PULSES_ESSENTIAL_FIELDS = ('X_IDX', 'Y_IDX')
 # RETURN_NUMBER always created by pylidar
 POINTS_ESSENTIAL_FIELDS = ('X', 'Y', 'Z', 'CLASSIFICATION')
 
+PULSE_FIELDS = {'PULSE_ID' : numpy.uint64, 'TIMESTAMP' : numpy.uint64,
+'NUMBER_OF_RETURNS' : numpy.uint8, 'AZIMUTH' : numpy.uint16, 
+'ZENITH' : numpy.uint16, 'SOURCE_ID' : numpy.uint16, 
+'PULSE_WAVELENGTH_IDX' : numpy.uint8, 'NUMBER_OF_WAVEFORM_SAMPLES' : numpy.uint8,
+'WFM_START_IDX' : numpy.uint64, 'PTS_START_IDX' : numpy.uint64, 
+'SCANLINE' : numpy.uint32, 'SCANLINE_IDX' : numpy.uint16, 'X_IDX' : numpy.uint16,
+'Y_IDX' : numpy.uint16, 'X_ORIGIN' : numpy.uint16, 'Y_ORIGIN' : numpy.uint16,
+'Z_ORIGIN' : numpy.uint16, 'H_ORIGIN' : numpy.uint16, 'PULSE_FLAGS' : numpy.uint8,
+'AMPLITUDE_PULSE' : numpy.float32, 'WIDTH_PULSE' : numpy.float32, 
+'SCAN_ANGLE_RANK' : numpy.int16, 'PRISM_FACET' : numpy.uint8}
+
+POINT_FIELDS = {'RANGE' : numpy.uint16, 'RETURN_NUMBER' : numpy.uint8,
+'X' : numpy.uint16, 'Y' : numpy.uint16, 'Z' : numpy.uint16, 
+'HEIGHT' : numpy.uint16, 'CLASSIFICATION' : numpy.uint8, 
+'POINT_FLAGS' : numpy.uint8, 'INTENSITY' : numpy.uint16, 
+'AMPLITUDE_RETURN' : numpy.float32, 'WIDTH_RETURN' : numpy.float32, 
+'RED' : numpy.uint16, 'GREEN' : numpy.uint16, 'BLUE' : numpy.uint16, 
+'NIR' : numpy.uint16, 'RHO_APP' : numpy.float32, 'DEVIATION' : numpy.float32,
+'ECHO_TYPE' : numpy.uint16, 'POINT_WAVELENGTH_IDX' : numpy.uint8}
+
 # types of indexing in the file
 SPDV4_INDEX_CARTESIAN = 1
 SPDV4_INDEX_SPHERICAL = 2
@@ -680,9 +700,10 @@ class SPDV4File(generic.LiDARFile):
         """
         pts_start = None
         nreturns = None
+        returnNumber = None
         
         if points.size == 0:
-            return None, pts_start, nreturns
+            return None, pts_start, nreturns, returnNumber
             
         origPointsDims = points.ndim
 
@@ -725,11 +746,13 @@ class SPDV4File(generic.LiDARFile):
                 pts_start = nreturns + currPointsCount
                 # unfortunately points.compressed() doesn't work
                 # for structured arrays. Use our own version instead
-                outPoints = numpy.empty(points[firstField].count(), 
-                                    dtype=points.dtype)
+                ptsCount = points[firstField].count()
+                outPoints = numpy.empty(ptsCount, dtype=points.dtype)
+                returnNumber = numpy.empty(ptsCount, 
+                                    dtype=POINT_FIELDS['RETURN_NUMBER'])
                                     
                 gridindexutils.flattenMaskedStructuredArray(points.data, 
-                            points[firstField].mask, outPoints)
+                            points[firstField].mask, outPoints, returnNumber)
                 
                 points = outPoints
                 
@@ -752,21 +775,28 @@ class SPDV4File(generic.LiDARFile):
                 # get data in case it is not passed in or changed
                 xloc = self.readPulsesForExtent('X_IDX')
                 yloc = self.readPulsesForExtent('Y_IDX')
+                numReturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
             else:
                 # on CREATE we can guarantee these exist (see above)
                 xloc = pulses['X_IDX']
                 yloc = pulses['Y_IDX']
+                numReturns = pulses['NUMBER_OF_RETURNS']
+
+            x_idx = numpy.repeat(xloc, numReturns)
+            y_idx = numpy.repeat(yloc, numReturns)
                 
-            mask = ( (xloc >= self.extent.xMin) & 
-                (xloc <= self.extent.xMax) &
-                (yloc >= self.extent.yMin) &
-                (yloc <= self.extent.yMax))
+            mask = ( (x_idx >= self.extent.xMin) & 
+                (x_idx <= self.extent.xMax) &
+                (y_idx >= self.extent.yMin) &
+                (y_idx <= self.extent.yMax))
             points = points[mask]
+            if returnNumber is not None:
+                returnNumber = returnNumber[mask]
             if self.mode == generic.UPDATE:
                 gridindexutils.updateBoolArray(self.lastPointsBool, mask)
 
         
-        return points, pts_start, nreturns
+        return points, pts_start, nreturns, returnNumber
         
     def prepareTransmittedForWriting(self, transmitted):
         # TODO:
@@ -818,7 +848,8 @@ class SPDV4File(generic.LiDARFile):
             pulses = self.preparePulsesForWriting(pulses)
             
         if points is not None:
-            points, pts_start, nreturns = self.preparePointsForWriting(points, pulses)
+            points, pts_start, nreturns, returnNumber = (
+                                self.preparePointsForWriting(points, pulses))
             
         if transmitted is not None:
             transmitted = self.prepareTransmittedForWriting(transmitted)
@@ -847,7 +878,7 @@ class SPDV4File(generic.LiDARFile):
                 
                 # index into points and pulseid generated fields
                 pulseid = numpy.arange(self.lastPulseID, 
-                        self.lastPulseID + nPulses, dtype=numpy.uint64)
+                        self.lastPulseID + nPulses, dtype=PULSE_FIELDS['PULSE_ID'])
                 self.lastPulseID = self.lastPulseID + nPulses
                 generatedColumns = {'PTS_START_IDX' : pts_start,
                         'NUMBER_OF_RETURNS' : nreturns, 'PULSE_ID' : pulseid}
@@ -855,16 +886,21 @@ class SPDV4File(generic.LiDARFile):
                 for name in pulses.dtype.names:
                     # don't bother writing out the ones we generate ourselves
                     if name not in generatedColumns:
+                        if name in PULSE_FIELDS:
+                            # take care to cast to right type
+                            data = pulses[name].astype(PULSE_FIELDS[name])
+                        else:
+                            # assume the right type as been passed in 
+                            data = pulses[name]
                         if name in pulsesHandle:
                             pulsesHandle[name].resize((newSize,))
-                            pulsesHandle[name][oldSize:newSize+1] = pulses[name]
+                            pulsesHandle[name][oldSize:newSize+1] = data
                         else:
-                            self.createDataColumn(pulsesHandle, name, 
-                                    pulses[name])
+                            self.createDataColumn(pulsesHandle, name, data)
                     
                 # now write the generated ones
                 for name in generatedColumns.keys():
-                    data = generatedColumns[name]
+                    data = generatedColumns[name].astype(PULSE_FIELDS[name])
                     if name in pulsesHandle:
                         pulsesHandle[name].resize((newSize,))
                         pulsesHandle[name][oldSize:newSize+1] = data
@@ -881,12 +917,31 @@ class SPDV4File(generic.LiDARFile):
                     oldSize = 0
                 nPoints = len(points)
                 newSize = oldSize + nPoints
+                generatedColumns = {'RETURN_NUMBER' : returnNumber}
+                
                 for name in points.dtype.names:
+                    if name not in generatedColumns:
+                        if name in POINT_FIELDS:
+                            # take care to cast to right type
+                            data = points[name].astype(POINT_FIELDS[name])
+                        else:
+                            # assume the right type as been passed in 
+                            data = points[name]
+                        if name in pointsHandle:
+                            pointsHandle[name].resize((newSize,))
+                            pointsHandle[name][oldSize:newSize+1] = data
+                        else:
+                            self.createDataColumn(pointsHandle, name, data)
+                            
+                # now write the generated ones
+                for name in generatedColumns.keys():
+                    data = generatedColumns[name].astype(POINT_FIELDS[name])
                     if name in pointsHandle:
                         pointsHandle[name].resize((newSize,))
-                        pointsHandle[name][oldSize:newSize+1] = points[name]
+                        pointsHandle[name][oldSize:newSize+1] = data
                     else:
-                        self.createDataColumn(pointsHandle, name, points[name])
+                        self.createDataColumn(pointsHandle, name, data)
+                
                 
             # TODO:
             #if transmitted is not None:
@@ -902,6 +957,7 @@ class SPDV4File(generic.LiDARFile):
             #    self.fileHandle['DATA']['RECEIVED'].resize((newSize,))
 
         else:
+            # TODO: ignore X_IDX, Y_IDX
             if points is not None:
                 self.fileHandle['DATA']['POINTS'][self.lastPointsBool] = points
             if pulses is not None:

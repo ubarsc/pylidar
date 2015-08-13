@@ -35,21 +35,26 @@ def updateBoolArray(boolArray, mask):
             maskIdx += 1
 
 @jit
-def flattenMaskedStructuredArray(inArray, inArrayMask, outArray):
+def flattenMaskedStructuredArray(inArray, inArrayMask, outArray, returnNumberArray):
     """
     using compressed() on a masked structured array does not
     work. Here is a workaround.
     
     inArray and inArrayMask should be 2d. outArray is 1d.
+    returnNumberArray should be the same shape as outArray
+    and receives the 'RETURN_NUMBER' field useful when writing points.
     """
     nX = inArray.shape[1]
     nY = inArray.shape[0]
     outIdx = 0
     for x in range(nX):
+        retN = 1
         for y in range(nY):
             if not inArrayMask[y, x]:
                 outArray[outIdx] = inArray[y, x]
                 outIdx += 1
+                returnNumberArray[outIdx] = retN
+                retN += 1
 
 @jit
 def flatten3dMaskedArray(flatArray, in3d, mask3d, idx3d):
