@@ -596,9 +596,6 @@ spatial index will be recomputed on the fly"""
                 y_idx, x_idx, self.lastExtent.binSize, 
                 yMax, xMin, nrows, ncols, SPDV3_SI_INDEX_DTYPE, SPDV3_SI_COUNT_DTYPE)
                 
-        # for writing
-        gridindexutils.updateBoolArray(self.lastPointsBool, mask)
-                
         # TODO: don't really want the bool array returned - need
         # to make it optional
         nOut = len(points)
@@ -845,14 +842,24 @@ spatial index will be recomputed on the fly"""
                     # first update the inregion stuff with the not overlap mask
                     origPoints = origPoints[self.lastPoints3d_InRegionMask]
                         
-                # strip out the points that were originally outside
+                # strip out the points connected with pulses that were 
+                # originally outside
                 # the window and within the overlap.
-                # TODO: is this ok for points read in by indexByPulse=True?
                 if self.controls.spatialProcessing:
-                    mask = ( (origPoints['X'] >= self.extent.xMin) & 
-                        (origPoints['X'] <= self.extent.xMax) &
-                        (origPoints['Y'] >= self.extent.yMin) &
-                        (origPoints['Y'] <= self.extent.yMax))
+                    x_idx = numpy.repeat(self.lastPulses[self.si_xPulseColName],
+                        self.lastPulses['NUMBER_OF_RETURNS'])
+                    y_idx = numpy.repeat(self.lastPulses[self.si_yPulseColName],
+                        self.lastPulses['NUMBER_OF_RETURNS'])
+
+                    mask = ( (x_idx >= self.extent.xMin) & 
+                        (x_idx <= self.extent.xMax) &
+                        (y_idx >= self.extent.yMin) &
+                        (y_idx <= self.extent.yMax))
+                    if origPointsDims == 3:
+                        mask = mask[self.lastPoints3d_InRegionMask]
+                        gridindexutils.updateBoolArray(self.lastPointsBool, 
+                                    self.lastPoints3d_InRegionMask)
+                        
                     points = points[mask]
                     origPoints = origPoints[mask]
                     gridindexutils.updateBoolArray(self.lastPointsBool, mask)
