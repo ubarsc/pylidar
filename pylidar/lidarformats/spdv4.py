@@ -673,7 +673,7 @@ class SPDV4File(generic.LiDARFile):
             
         return pulses
 
-    def preparePointsForWriting(self, points):
+    def preparePointsForWriting(self, points, pulses):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -747,16 +747,15 @@ class SPDV4File(generic.LiDARFile):
 
         # strip out the points that were originally outside
         # the window and within the overlap.
-        # TODO: is this ok for points read in by indexByPulse=True?
         if self.controls.spatialProcessing:
             if self.mode == generic.UPDATE:
                 # get data in case it is not passed in or changed
-                xloc = self.readPointsForExtent('X')
-                yloc = self.readPointsForExtent('Y')
+                xloc = self.readPulsesForExtent('X_IDX')
+                yloc = self.readPulsesForExtent('Y_IDX')
             else:
                 # on CREATE we can guarantee these exist (see above)
-                xloc = points['X']
-                yloc = points['Y']
+                xloc = pulses['X_IDX']
+                yloc = pulses['Y_IDX']
                 
             mask = ( (xloc >= self.extent.xMin) & 
                 (xloc <= self.extent.xMax) &
@@ -819,7 +818,7 @@ class SPDV4File(generic.LiDARFile):
             pulses = self.preparePulsesForWriting(pulses)
             
         if points is not None:
-            points, pts_start, nreturns = self.preparePointsForWriting(points)
+            points, pts_start, nreturns = self.preparePointsForWriting(points, pulses)
             
         if transmitted is not None:
             transmitted = self.prepareTransmittedForWriting(transmitted)

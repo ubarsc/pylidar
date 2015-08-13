@@ -785,7 +785,7 @@ spatial index will be recomputed on the fly"""
             
         return pulses
 
-    def preparePointsForWriting(self, points):
+    def preparePointsForWriting(self, points, pulses):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -877,6 +877,20 @@ spatial index will be recomputed on the fly"""
             if points.dtype != POINT_DTYPE:
                 msg = 'Point array does not have all the required fields'
                 raise generic.LiDARInvalidData(msg)
+                
+            # strip points outside extent in this case
+            if self.controls.spatialProcessing:
+                x_idx = numpy.repeat(pulses[self.si_xPulseColName],
+                        pulses['NUMBER_OF_RETURNS'])
+                y_idx = numpy.repeat(pulses[self.si_yPulseColName],
+                        pulses['NUMBER_OF_RETURNS'])
+                    
+                mask = ( (x_idx >= self.extent.xMin) & 
+                        (x_idx <= self.extent.xMax) &
+                        (y_idx >= self.extent.yMin) &
+                        (y_idx <= self.extent.yMax))
+                        
+                points = points[mask]
         
         return points
 
@@ -990,12 +1004,26 @@ spatial index will be recomputed on the fly"""
         if self.mode == generic.READ:
             # the processor always calls this so if a reading driver just ignore
             return
+
+        elif self.mode == generic.CREATE:
+            # we only accept new data in a particular form so we can attach
+            # points to pulses
+            if pulses is None and points is None:
+                msg = 'Must provide points and pulses when writing new data'
+                raise generic.LiDARInvalidData(msg)
+                
+            if pulses.ndim != 1:
+                msg = 'pulses must be 1d as returned from getPulses'
+                raise generic.LiDARInvalidData(msg)
+            if points.ndim != 2:
+                msg = 'points must be 2d as returned from getPointsByPulse'
+                raise generic.LiDARInvalidData(msg)
             
         if pulses is not None:
             pulses = self.preparePulsesForWriting(pulses)
             
         if points is not None:
-            points = self.preparePointsForWriting(points)
+            points = self.preparePointsForWriting(points, pulses)
             
         if transmitted is not None:
             transmitted = self.prepareTransmittedForWriting(transmitted)
