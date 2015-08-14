@@ -249,6 +249,8 @@ class SPDV3File(generic.LiDARFile):
         # mask of the points within the current extent
         # since the spatial index is on the pulses, points can be outside
         self.lastPoints3d_InRegionMask = None
+        # needs sorting also
+        self.lastPoints3d_InRegionSort = None
         # bool array to pass to h5py to read/write current transmitted
         self.lastTransBool = None
         # index to turn into 2d transbypulses
@@ -615,6 +617,7 @@ spatial index will be recomputed on the fly"""
         self.lastPoints3d_Idx = pts_idx
         self.lastPoints3d_IdxMask = pts_idx_mask
         self.lastPoints3d_InRegionMask = mask
+        self.lastPoints3d_InRegionSort = sortedbins
         
         pointsByBins = self.subsetColumns(pointsByBins, colNames)
         points = numpy.ma.array(pointsByBins, mask=pts_idx_mask)
@@ -835,13 +838,6 @@ spatial index will be recomputed on the fly"""
                 else:
                     origPoints = self.readPointsForRange()
 
-                # just the ones that are within the region
-                # this makes the length of origPoints the same as 
-                # that returned by pointsbybins flattened
-                if origPointsDims == 3:
-                    # first update the inregion stuff with the not overlap mask
-                    origPoints = origPoints[self.lastPoints3d_InRegionMask]
-                        
                 # strip out the points connected with pulses that were 
                 # originally outside
                 # the window and within the overlap.
@@ -856,6 +852,18 @@ spatial index will be recomputed on the fly"""
                         (y_idx >= self.extent.yMin) &
                         (y_idx <= self.extent.yMax))
                     if origPointsDims == 3:
+                        # just the ones that are within the region
+                        # this makes the length of origPoints the same as 
+                        # that returned by pointsbybins flattened
+                        origPoints = origPoints[self.lastPoints3d_InRegionMask]
+                        # ok as we sorted the points to fit into our binning
+                        # system we need to un-sort them so they can fit back into
+                        # the file
+                        sortedPointsundo = numpy.empty_like(points)
+                        gridindexutils.unsortArray(points, 
+                                self.lastPoints3d_InRegionSort, sortedPointsundo)
+                        points = sortedPointsundo
+                        
                         mask = mask[self.lastPoints3d_InRegionMask]
                         gridindexutils.updateBoolArray(self.lastPointsBool, 
                                     self.lastPoints3d_InRegionMask)

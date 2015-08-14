@@ -35,6 +35,18 @@ def updateBoolArray(boolArray, mask):
             maskIdx += 1
 
 @jit
+def unsortArray(inArray, sortIndices, outArray):
+    """
+    There might be a way of doing this in pure numpy but I couldn't work it out.
+    Takes an array and the indices used to sort it and 'unsorts'
+    it back to the original order.
+    """
+    nElements = inArray.shape[0]
+    for n in range(nElements):
+        idx = sortIndices[n]
+        outArray[idx] = inArray[n]
+        
+@jit
 def flattenMaskedStructuredArray(inArray, inArrayMask, outArray, returnNumberArray):
     """
     using compressed() on a masked structured array does not
