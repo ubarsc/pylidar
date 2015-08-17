@@ -494,6 +494,22 @@ class LidarData(object):
         """
         for name in kwargs:
             self.driver.setHeaderValue(name, kwargs[name])
+            
+    def setScaling(self, colName, arrayType, gain, offset):
+        """
+        Set the scaling for the given column name
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        """
+        self.driver.setScaling(colName, arrayType, gain, offset)
+        
+    def getScaling(self, colName, arrayType):
+        """
+        Returns the scaling (gain, offset) for the given column name
+
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        """
+        return self.driver.getScaling(colName, arrayType)
 
     def setTransmitted(self, transmitted):
         """

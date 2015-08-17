@@ -270,6 +270,22 @@ class LiDARFile(basedriver.Driver):
         Just update one value in the header
         """
         raise NotImplementedError()
+        
+    def setScaling(self, colName, arrayType, gain, offset):
+        """
+        Set the scaling for the given column name
+        
+        arrayType is one of the ARRAY_TYPE_* constants
+        """
+        raise NotImplementedError()
+        
+    def getScaling(self, colName, arrayType):
+        """
+        Returns the scaling (gain, offset) for the given column name
+
+        arrayType is one of the ARRAY_TYPE_* constants
+        """
+        raise NotImplementedError()
 
     def writeData(self, pulses=None, points=None, transmitted=None, received=None):
         """

@@ -66,17 +66,9 @@ HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float32, 'AZIMUTH_MIN' : numpy.float32,
 'Y_MIN' : numpy.float32, 'Z_MAX' : numpy.float64, 'Z_MIN' : numpy.float64,
 'HEIGHT_MIN' : numpy.float32, 'HEIGHT_MAX' : numpy.float32, 
 'ZENITH_MAX' : numpy.float32, 'ZENITH_MIN' : numpy.float64,
-'NUMBER_OF_PULSE_ATTRIBUTES' : numpy.uint16,
-'NUMBER_OF_POINT_ATTRIBUTES' : numpy.uint16,
-'PULSE_ATTRIBUTES' : bytes, 'POINT_ATTRIBUTES' : bytes,
-'RGB_FIELD' : bytes, 'WAVEFORM_GAIN' : numpy.float32, 
-'WAVEFORM_OFFSET' : numpy.float32, 'XYZHR_OFFSET' : numpy.float32,
-'XYZHR_SCALE' : numpy.float32, 'RAD_SCALE' : numpy.float32, 
-'RAD_OFFSET' : numpy.float32 }
+'RGB_FIELD' : bytes}
 
-HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS', 'VERSION_SPD', 
-'PULSE_ATTRIBUTES', 'POINT_ATTRIBUTES', 'RGB_FIELD', 'WAVEFORM_GAIN',
-'WAVEFORM_OFFSET', 'XYZHR_OFFSET', 'XYZHR_SCALE')
+HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS', 'VERSION_SPD', 'RGB_FIELD')
 
 # Note: PULSE_ID, NUMBER_OF_RETURNS and PTS_START_IDX always created by pylidar
 PULSES_ESSENTIAL_FIELDS = ('X_IDX', 'Y_IDX')
@@ -102,6 +94,15 @@ POINT_FIELDS = {'RANGE' : numpy.uint16, 'RETURN_NUMBER' : numpy.uint8,
 'RED' : numpy.uint16, 'GREEN' : numpy.uint16, 'BLUE' : numpy.uint16, 
 'NIR' : numpy.uint16, 'RHO_APP' : numpy.float32, 'DEVIATION' : numpy.float32,
 'ECHO_TYPE' : numpy.uint16, 'POINT_WAVELENGTH_IDX' : numpy.uint8}
+
+# need scaling applied 
+PULSE_SCALED_FIELDS = ('AZIMUTH', 'ZENITH', 'X_IDX', 'Y_IDX', 'Y_IDX', 
+'X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN')
+
+POINT_SCALED_FIELDS = ('X', 'Y', 'Z', 'HEIGHT')
+
+GAIN_NAME = 'GAIN'
+OFFSET_NAME = 'OFFSET'
 
 # types of indexing in the file
 SPDV4_INDEX_CARTESIAN = 1
@@ -476,6 +477,20 @@ class SPDV4File(generic.LiDARFile):
         self.lastPulses_IdxMask = None
         self.lastPulsesColumns = None
 
+    @staticmethod
+    def readFieldAndUnScale(handle, name, boolArray):
+        """
+        Given a h5py handle, field name and bool array does
+        any unscaling necessary. 
+        """
+        attrs = handle[name].attrs
+        data = handle[name][boolArray]
+        unScaled = name.endswith('_U')
+        
+        if not unScaled and GAIN_NAME in attrs and OFFSET_NAME in attrs:
+            data = (data / attrs[GAIN_NAME]) - attrs[OFFSET_NAME]
+        return data
+        
     def readPointsForExtent(self, colNames=None):
         """
         Read all the points within the given extent
@@ -511,7 +526,7 @@ class SPDV4File(generic.LiDARFile):
             points = numpy.empty(point_bool.sum(), dtypeList)
         
             for name in colNames:
-                data = pointsHandle[name][point_bool]
+                data = self.readFieldAndUnScale(pointsHandle, name, point_bool)
                 points[name] = data
             
         self.lastPoints = points
@@ -555,7 +570,7 @@ class SPDV4File(generic.LiDARFile):
             pulses = numpy.empty(pulse_bool.sum(), dtypeList)
         
             for name in colNames:
-                data = pulsesHandle[name][pulses_bool]
+                data = self.readFieldAndUnScale(pulsesHandle, name, pulses_bool)
                 pulses[name] = data
             
         self.lastPulses = pulses
@@ -797,6 +812,58 @@ class SPDV4File(generic.LiDARFile):
                 compression="gzip", compression_opts=1)
         dset[:] = data
         
+    @staticmethod
+    def prepareDataForWriting(handle, data, name, arrayType):
+        """
+        Prepares data for writing to a field. 
+        
+        arrayType is one of the ARRAY_TYPE_ values from .generic.
+        
+        Does unscaling if possible unless name ends with '_U'.
+        Raises exception if column needs to have scale and offset
+            defined, but aren't.
+        """
+        if name in handle:
+            attrs = handle[name].attrs
+            hasScaling = GAIN_NAME in attrs and OFFSET_NAME in attrs
+        else:
+            attrs = None
+            hasScaling = False
+        needsScaling = False
+        dataType = None
+        
+        if arrayType == generic.ARRAY_TYPE_POINTS:
+            if name in POINT_SCALED_FIELDS:
+                needsScaling = True
+            if name in POINT_FIELDS:
+                dataType = POINT_FIELDS[name]
+                
+        elif arrayType == generic.ARRAY_TYPE_PULSES:
+            if name in PULSE_SCALED_FIELDS:
+                needsScaling = True
+            if name in PULSE_FIELDS:
+                dataType = PULSE_FIELDS[name]
+
+        # other array types we don't worry for now
+        
+        # unless of course, they are passing the unscaled stuff in
+        if name.endswith('_U'):
+            needsScaling = False
+            hasScaling = False
+        
+        if needsScaling and not hasScaling:
+            msg = "field %s requires scaling to be set before writing" % name
+            raise generic.LiDARArrayColumnError(msg)
+            
+        if hasScaling:
+            data = (data - attrs[GAIN_NAME]) * attrs[OFFSET_NAME]
+            
+        # cast to datatype if it has one
+        if dataType is not None:
+            data = data.astype(dataType)
+            
+        return data
+        
     def writeData(self, pulses=None, points=None, transmitted=None, received=None):
         """
         Write all the updated data. Pass None for data that do not need to be updated.
@@ -862,12 +929,9 @@ class SPDV4File(generic.LiDARFile):
                 for name in pulses.dtype.names:
                     # don't bother writing out the ones we generate ourselves
                     if name not in generatedColumns:
-                        if name in PULSE_FIELDS:
-                            # take care to cast to right type
-                            data = pulses[name].astype(PULSE_FIELDS[name])
-                        else:
-                            # assume the right type as been passed in 
-                            data = pulses[name]
+                        data = self.prepareDataForWriting(pulsesHandle, 
+                                    pulses[name], name, generic.ARRAY_TYPE_PULSES)
+                    
                         if name in pulsesHandle:
                             pulsesHandle[name].resize((newSize,))
                             pulsesHandle[name][oldSize:newSize+1] = data
@@ -876,7 +940,9 @@ class SPDV4File(generic.LiDARFile):
                     
                 # now write the generated ones
                 for name in generatedColumns.keys():
-                    data = generatedColumns[name].astype(PULSE_FIELDS[name])
+                    data = self.prepareDataForWriting(pulsesHandle, 
+                        generatedColumns[name], name, generic.ARRAY_TYPE_PULSES)
+                        
                     if name in pulsesHandle:
                         pulsesHandle[name].resize((newSize,))
                         pulsesHandle[name][oldSize:newSize+1] = data
@@ -897,12 +963,9 @@ class SPDV4File(generic.LiDARFile):
                 
                 for name in points.dtype.names:
                     if name not in generatedColumns:
-                        if name in POINT_FIELDS:
-                            # take care to cast to right type
-                            data = points[name].astype(POINT_FIELDS[name])
-                        else:
-                            # assume the right type as been passed in 
-                            data = points[name]
+                        data = self.prepareDataForWriting(pointsHandle, 
+                                    points[name], name, generic.ARRAY_TYPE_POINTS)
+
                         if name in pointsHandle:
                             pointsHandle[name].resize((newSize,))
                             pointsHandle[name][oldSize:newSize+1] = data
@@ -911,7 +974,9 @@ class SPDV4File(generic.LiDARFile):
                             
                 # now write the generated ones
                 for name in generatedColumns.keys():
-                    data = generatedColumns[name].astype(POINT_FIELDS[name])
+                    data = self.prepareDataForWriting(pointsHandle, 
+                            generatedColumns[name], name, generic.ARRAY_TYPE_POINTS)
+
                     if name in pointsHandle:
                         pointsHandle[name].resize((newSize,))
                         pointsHandle[name][oldSize:newSize+1] = data
@@ -935,9 +1000,21 @@ class SPDV4File(generic.LiDARFile):
         else:
             # TODO: ignore X_IDX, Y_IDX
             if points is not None:
-                self.fileHandle['DATA']['POINTS'][self.lastPointsBool] = points
+                pointsHandle = self.fileHandle['DATA']['POINTS']
+                for name in points.dtype.names:
+                    data = self.prepareDataForWriting(pointsHandle, 
+                                    points[name], name, generic.ARRAY_TYPE_POINTS)
+
+                    pointsHandle[self.lastPointsBool] = data
             if pulses is not None:
-                self.fileHandle['DATA']['PULSES'][self.lastPulsesBool] = pulses
+                pulsesHandle = self.fileHandle['DATA']['PULSES']
+                for name in pulses.dtype.names:
+                    if name != 'X_IDX' and name != 'Y_IDX':
+                        data = self.prepareDataForWriting(pulsesHandle,
+                                    pulses[name], name, generic.ARRAY_TYPE_PULSES)
+                                    
+                        pulsesHandle[self.lastPulsesBool] = data
+                                    
             #if transmitted is not None:
             #    self.fileHandle['DATA']['TRANSMITTED'][self.lastTransBool] = transmitted
             #if received is not None:
@@ -1005,7 +1082,7 @@ class SPDV4File(generic.LiDARFile):
             points = numpy.empty(point_bool.sum(), dtypeList)
         
             for name in colNames:
-                data = pointsHandle[name][point_bool]
+                data = self.readFieldAndUnScale(pointsHandle, name, point_bool)
                 points[name] = data
         
         # keep these indices from pulses to points - handy for the indexing 
@@ -1048,8 +1125,8 @@ class SPDV4File(generic.LiDARFile):
             pulses = numpy.empty(nPulses, dtypeList)
         
             for name in colNames:
-                data = pulsesHandle[name][
-                    self.pulseRange.startPulse:self.pulseRange.endPulse]
+                data = self.readFieldAndUnScale(pulsesHandle, name,
+                    slice(self.pulseRange.startPulse,self.pulseRange.endPulse))
                 pulses[name] = data
     
         self.lastPulses = pulses
@@ -1074,6 +1151,9 @@ class SPDV4File(generic.LiDARFile):
         """
         Update our cached dictionary
         """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on read or create'
+            raise generic.LiDARInvalidSetting(msg)
         for key in newHeaderDict.keys():
             self.fileHandle.attrs[key] = newHeaderDict[key]
             
@@ -1087,6 +1167,49 @@ class SPDV4File(generic.LiDARFile):
         """
         Just update one value in the header
         """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on read or create'
+            raise generic.LiDARInvalidSetting(msg)
         self.fileHandle.attrs[name] = value
     
-                                            
+    def setScaling(self, colName, arrayType, gain, offset):
+        """
+        Set the scaling for the given column name
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set scaling values on read or create'
+            raise generic.LiDARInvalidSetting(msg)
+            
+        if arrayType == generic.ARRAY_TYPE_PULSE:
+            attrs = self.fileHandle['DATA']['PULSES'][colName]
+        elif arrayType == generic.ARRAY_TYPE_POINT:
+            attrs = self.fileHandle['DATA']['POINTS'][colName]
+        else:
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+            
+        attrs[GAIN_NAME] = gain
+        attrs[OFFSET_NAME] = offset
+            
+    def getScaling(self, colName, arrayType):
+        """
+        Returns the scaling (gain, offset) for the given column name
+        """
+        if arrayType == generic.ARRAY_TYPE_PULSE:
+            attrs = self.fileHandle['DATA']['PULSES'][colName]
+        elif arrayType == generic.ARRAY_TYPE_POINT:
+            attrs = self.fileHandle['DATA']['POINTS'][colName]
+        else:
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+        
+        if GAIN_NAME in attrs:
+            gain = attrs[GAIN_NAME]
+        else:
+            gain = 0.0
+            
+        if OFFSET_NAME in attrs:
+            offset = attrs[OFFSET_NAME]
+        else:
+            offset = 1.0        
+            
+        return gain, offset
+        

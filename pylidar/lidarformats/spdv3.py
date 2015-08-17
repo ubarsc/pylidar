@@ -1173,6 +1173,10 @@ spatial index will be recomputed on the fly"""
         """
         Update our cached dictionary
         """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on read or create'
+            raise generic.LiDARInvalidSetting(msg)
+            
         for key in newHeaderDict.keys():
             if key not in self.headerDict:
                 msg = 'Header field %s not supported in SPDV3 files' % key
@@ -1190,6 +1194,10 @@ spatial index will be recomputed on the fly"""
         """
         Just update one value in the header
         """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on read or create'
+            raise generic.LiDARInvalidSetting(msg)
+            
         if name not in self.headerDict:
             msg = 'Header field %s not supported in SPDV3 files' % name
             raise ValueError(msg)
