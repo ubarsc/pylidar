@@ -627,13 +627,13 @@ class SPDV4File(generic.LiDARFile):
         # TODO:
         pass
 
-    def preparePulsesForWriting(self, pulses):
+    def preparePulsesForWriting(self, pulses, points):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
         """
         if pulses.size == 0:
-            return None
+            return None, None
             
         if pulses.ndim == 3:
             # must flatten back to be 1d using the indexes
@@ -691,7 +691,11 @@ class SPDV4File(generic.LiDARFile):
             if self.mode == generic.UPDATE:
                 gridindexutils.updateBoolArray(self.lastPulsesBool, mask)
             
-        return pulses
+            elif self.mode == generic.CREATE and points is not None and points.ndim == 2:
+                # strip out points as well
+                points = points[..., mask]
+            
+        return pulses, points
 
     def preparePointsForWriting(self, points, pulses):
         """
@@ -747,7 +751,7 @@ class SPDV4File(generic.LiDARFile):
                 # unfortunately points.compressed() doesn't work
                 # for structured arrays. Use our own version instead
                 ptsCount = points[firstField].count()
-                outPoints = numpy.empty(ptsCount, dtype=points.dtype)
+                outPoints = numpy.empty(ptsCount, dtype=points.data.dtype)
                 returnNumber = numpy.empty(ptsCount, 
                                     dtype=POINT_FIELDS['RETURN_NUMBER'])
                                     
@@ -768,34 +772,6 @@ class SPDV4File(generic.LiDARFile):
                              'when writing new file') % essential
                     raise generic.LiDARInvalidData(msg)
 
-        # strip out the points that were originally outside
-        # the window and within the overlap.
-        if self.controls.spatialProcessing:
-            if self.mode == generic.UPDATE:
-                # get data in case it is not passed in or changed
-                xloc = self.readPulsesForExtent('X_IDX')
-                yloc = self.readPulsesForExtent('Y_IDX')
-                numReturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
-            else:
-                # on CREATE we can guarantee these exist (see above)
-                xloc = pulses['X_IDX']
-                yloc = pulses['Y_IDX']
-                numReturns = pulses['NUMBER_OF_RETURNS']
-
-            x_idx = numpy.repeat(xloc, numReturns)
-            y_idx = numpy.repeat(yloc, numReturns)
-                
-            mask = ( (x_idx >= self.extent.xMin) & 
-                (x_idx <= self.extent.xMax) &
-                (y_idx >= self.extent.yMin) &
-                (y_idx <= self.extent.yMax))
-            points = points[mask]
-            if returnNumber is not None:
-                returnNumber = returnNumber[mask]
-            if self.mode == generic.UPDATE:
-                gridindexutils.updateBoolArray(self.lastPointsBool, mask)
-
-        
         return points, pts_start, nreturns, returnNumber
         
     def prepareTransmittedForWriting(self, transmitted):
@@ -845,7 +821,7 @@ class SPDV4File(generic.LiDARFile):
                 raise generic.LiDARInvalidData(msg)
             
         if pulses is not None:
-            pulses = self.preparePulsesForWriting(pulses)
+            pulses, points = self.preparePulsesForWriting(pulses, points)
             
         if points is not None:
             points, pts_start, nreturns, returnNumber = (

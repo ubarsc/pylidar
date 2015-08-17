@@ -64,8 +64,8 @@ def flattenMaskedStructuredArray(inArray, inArrayMask, outArray, returnNumberArr
         for y in range(nY):
             if not inArrayMask[y, x]:
                 outArray[outIdx] = inArray[y, x]
-                outIdx += 1
                 returnNumberArray[outIdx] = retN
+                outIdx += 1
                 retN += 1
 
 @jit
