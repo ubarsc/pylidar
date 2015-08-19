@@ -535,6 +535,8 @@ controls.setReferenceImage()"""
             # update info class
             userContainer.info.setExtent(currentExtent)
             
+            # last block yet?
+            userContainer.info.lastBlock = nBlocksSoFar == (nTotalBlocks - 1)
         else:
             bMoreToDo = False # assume we have finished
             for driver in driverList:
@@ -543,6 +545,8 @@ controls.setReferenceImage()"""
                     bMoreToDo = True
             # update info class
             userContainer.info.setRange(currentRange)
+            # last block yet?
+            userContainer.info.lastBlock = not bMoreToDo
 
         # build the function args which is one thing, unless
         # there is user data
@@ -552,6 +556,9 @@ controls.setReferenceImage()"""
             
         # call it
         userFunc(*functionArgs)
+        
+        # no longer first block. Was set to True in UserInfo constructor
+        userContainer.info.firstBlock = False
         
         # write anything out that has been queued for output
         for name in nameList:

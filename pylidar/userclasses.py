@@ -141,8 +141,23 @@ class UserInfo(object):
         self.pixGrid = None
         self.extent = None # either extent is not None, or range. Not both.
         self.range = None
+        # for isFirstBlock() and isLastBlock()
+        self.firstBlock = True
+        self.lastBlock = False
         # take a copy so the user can't change it
         self.controls = copy.copy(controls)
+        
+    def isFirstBlock(self):
+        """
+        Returns True if this is the first block to be processed
+        """
+        return self.firstBlock
+        
+    def isLastBlock(self):
+        """
+        Returns True if this is the last block to be processed
+        """
+        return self.lastBlock
         
     def setPixGrid(self, pixGrid):
         """
