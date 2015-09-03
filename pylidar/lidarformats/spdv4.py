@@ -74,6 +74,8 @@ HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS', 'VERSION_SPD', 'RGB_FIELD')
 PULSES_ESSENTIAL_FIELDS = ('X_IDX', 'Y_IDX')
 # RETURN_NUMBER always created by pylidar
 POINTS_ESSENTIAL_FIELDS = ('X', 'Y', 'Z', 'CLASSIFICATION')
+# VERSION_SPD always created by pylidar
+HEADER_ESSENTIAL_FIELDS = ('SPATIAL_REFERENCE', 'VERSION_DATA')
 
 PULSE_FIELDS = {'PULSE_ID' : numpy.uint64, 'TIMESTAMP' : numpy.uint64,
 'NUMBER_OF_RETURNS' : numpy.uint8, 'AZIMUTH' : numpy.uint16, 
@@ -124,6 +126,10 @@ SPDV4_POINT_FLAGS_SYNTHETIC = 4
 SPDV4_POINT_FLAGS_KEY_POINT = 8
 SPDV4_POINT_FLAGS_WAVEFORM = 16
 
+# version
+SPDV4_VERSION_MAJOR = 3
+SPDV4_VERSION_MINOR = 0
+
 class SPDV4SpatialIndex(object):
     """
     Class that hides the details of different Spatial Indices
@@ -143,8 +149,6 @@ class SPDV4SpatialIndex(object):
         xMax = xMin + (shape[1] * binSize)
         yMin = yMax - (shape[0] * binSize)
         wkt = fileAttrs['SPATIAL_REFERENCE']
-        if sys.version_info[0] == 3:
-            wkt = wkt.decode()
             
         self.pixelGrid = pixelgrid.PixelGridDefn(projection=wkt, xMin=xMin,
                 xMax=xMax, yMin=yMin, yMax=yMax, xRes=binSize, yRes=binSize)
@@ -166,10 +170,10 @@ class SPDV4SpatialIndex(object):
         
         self.fileHandle = None
         
-    def getPulsesBoolForExtent(self, extent):
+    def getPulsesBoolForExtent(self, extent, overlap):
         raise NotImplementedError()
 
-    def getPointsBoolForExtent(self, extent, pulses):
+    def getPointsBoolForExtent(self, extent, overlap):
         raise NotImplementedError()
         
     def createNewIndex(self, pixelGrid):
@@ -215,6 +219,11 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         SPDV4SpatialIndex.__init__(self, fileHandle, mode)
         self.si_cnt = None
         self.si_idx = None
+        # for caching
+        self.lastExtent = None
+        self.lastPulseBool = None
+        self.lastPulseIdx = None
+        self.lastPulseIdxMask = None
         
         if mode == generic.READ or mode == generic.UPDATE:
             group = fileHandle[SPATIALINDEX_GROUP]
@@ -257,12 +266,77 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
                 offsetDataset[...] = self.si_idx
                     
         SPDV4SpatialIndex.close(self)
+        
+    def getSISubset(self, extent, overlap):
+        "internal method"
+        # snap the extent to the grid of the spatial index
+        pixGrid = self.pixelGrid
+        xMin = pixGrid.snapToGrid(extent.xMin, pixGrid.xMin, pixGrid.xRes)
+        xMax = pixGrid.snapToGrid(extent.xMax, pixGrid.xMax, pixGrid.xRes)
+        yMin = pixGrid.snapToGrid(extent.yMin, pixGrid.yMin, pixGrid.yRes)
+        yMax = pixGrid.snapToGrid(extent.yMax, pixGrid.yMax, pixGrid.yRes)
 
-    def getPulsesBoolForExtent(self, extent):
-        raise NotImplementedError()
+        # size of spatial index we need to read
+        nrows = int(numpy.ceil((yMax - yMin) / self.pixelGrid.yRes))
+        ncols = int(numpy.ceil((xMax - xMin) / self.pixelGrid.xRes))
+        # add overlap 
+        nrows += (overlap * 2)
+        ncols += (overlap * 2)
 
-    def getPointsBoolForExtent(self, extent, pulses):
-        raise NotImplementedError()
+        # create subset of spatial index to read data into
+        cnt_subset = numpy.zeros((nrows, ncols), dtype=SPDV4_SIMPLEGRID_COUNT_DTYPE)
+        idx_subset = numpy.zeros((nrows, ncols), dtype=SPDV4_SIMPLEGRID_INDEX_DTYPE)
+        
+        imageSlice, siSlice = gridindexutils.getSlicesForExtent(pixGrid, 
+             self.si_cnt.shape, overlap, xMin, xMax, yMin, yMax)
+             
+        if imageSlice is not None and siSlice is not None:
+
+            cnt_subset[imageSlice] = self.si_cnt[siSlice]
+            idx_subset[imageSlice] = self.si_idx[siSlice]
+
+        return idx_subset, cnt_subset
+
+    def getPulsesBoolForExtent(self, extent, overlap):
+        # return cache
+        if self.lastExtent is not None and self.lastExtent == extent:
+            return self.lastPulseBool, self.lastPulseIdx, self.lastPulseIdxMask
+        
+        idx_subset, cnt_subset = self.getSISubset(extent, overlap)
+        # h5py prefers to take it's index by numpy bool array
+        # of the same shape as the dataset
+        # so we do this. If you give it the indices themselves
+        # this must be done as a list which is slow
+        nOut = self.fileHandle['DATA']['PULSES']['PULSE_ID'].shape[0]
+        pulse_bool, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                idx_subset, cnt_subset, nOut)
+                
+        self.lastPulseBool = pulse_bool
+        self.lastPulseIdx = pulse_idx
+        self.lastPulseIdxMask = pulse_idx_mask
+        self.lastExtent = copy.copy(extent)
+                
+        return pulse_bool, pulse_idx, pulse_idx_mask
+
+    def getPointsBoolForExtent(self, extent, overlap):
+    
+        # should return cached if exists
+        pulse_bool, pulse_idx, pulse_idx_mask = self.getPulsesBoolForExtent(
+                                    extent, overlap)
+        
+        pulsesHandle = self.fileHandle['DATA']['PULSES']
+        nReturns = pulsesHandle['NUMBER_OF_RETURNS'][pulse_bool]
+        startIdxs = pulsesHandle['PTS_START_IDX'][pulse_bool]
+
+        # h5py prefers to take it's index by numpy bool array
+        # of the same shape as the dataset
+        # so we do this. If you give it the indices themselves
+        # this must be done as a list which is slow
+        nOut = self.fileHandle['DATA']['POINTS']['RETURN_NUMBER'].shape[0]
+        point_bool, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                        startIdxs, nReturns, nOut)
+                        
+        return point_bool, point_idx, point_idx_mask
 
     def createNewIndex(self, pixelGrid):
         nrows, ncols = pixelGrid.getDimensions()
@@ -343,7 +417,7 @@ class SPDV4File(generic.LiDARFile):
             if not 'VERSION_SPD' in fileAttrs:
                 msg = "File appears not to be SPD"
                 raise generic.LiDARFormatNotUnderstood(msg)
-            elif fileAttrs['VERSION_SPD'][0] != 3:
+            elif fileAttrs['VERSION_SPD'][0] != SPDV4_VERSION_MAJOR:
                 msg = "File seems to be wrong version for this driver"
                 raise generic.LiDARFormatNotUnderstood(msg)
                 
@@ -390,6 +464,9 @@ class SPDV4File(generic.LiDARFile):
         self.pulseRange = None
 
         self.pixGrid = None
+
+        self.extentAlignedWithSpatialIndex = True
+        self.unalignedWarningGiven = False
         
         # for writing a new file, we generate PULSE_ID uniquely
         self.lastPulseID = numpy.uint64(0)
@@ -422,23 +499,31 @@ class SPDV4File(generic.LiDARFile):
             raise generic.LiDARInvalidSetting(msg)
         self.extent = extent
         
-        # TODO: check grid
+        # need to check that the given extent is on the same grid as the 
+        # spatial index. If not a new spatial index will have to be calculated
+        # for each block before we can access the data.
+        totalPixGrid = self.getPixelGrid()
+        extentPixGrid = pixelgrid.PixelGridDefn(xMin=extent.xMin, 
+                xMax=extent.xMax, yMin=extent.yMin, yMax=extent.yMax,
+                xRes=extent.binSize, yRes=extent.binSize, projection=totalPixGrid.projection)
+        
+        self.extentAlignedWithSpatialIndex = (
+                extentPixGrid.alignedWith(totalPixGrid) and 
+                extent.binSize == totalPixGrid.xRes)
+        
+        if (not self.extentAlignedWithSpatialIndex and 
+                    not self.unalignedWarningGiven):
+            msg = """Extent not on same grid or resolution as file.
+spatial index will be recomputed on the fly"""
+            self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+            self.unalignedWarningGiven = True
         
     def getPixelGrid(self):
         """
         Return the PixelGridDefn for this file
         """
         if self.hasSpatialIndex():
-            if self.pixGrid is None:
-                pixGrid = pixelgrid.PixelGridDefn(projection=self.wkt,
-                    xMin=self.si_xMin, xMax=self.si_xMax,
-                    yMin=self.si_yMin, yMax=self.si_yMax,
-                    xRes=self.si_binSize, yRes=self.si_binSize)
-                # cache it
-                self.pixGrid = pixGrid
-            else:
-                # return cache
-                pixGrid = self.pixGrid
+            pixGrid = self.si_handler.pixelGrid
         else:
             # no spatial index - no pixgrid
             pixGrid = None
@@ -472,27 +557,33 @@ class SPDV4File(generic.LiDARFile):
         self.si_handler.close()
 
         # flush the scaling values
-        pulsesHandle = self.fileHandle['DATA']['PULSES']
-        for colName in self.pulseScalingValues.keys():
-            gain, offset = self.pulseScalingValues[colName]
-            if colName not in pulsesHandle:
-                msg = 'scaling set for column %s but no data written' % colName
-                raise generic.LiDARArrayColumnError(msg)
+        if self.mode != generic.READ:
+            pulsesHandle = self.fileHandle['DATA']['PULSES']
+            for colName in self.pulseScalingValues.keys():
+                gain, offset = self.pulseScalingValues[colName]
+                if colName not in pulsesHandle:
+                    msg = 'scaling set for column %s but no data written' % colName
+                    raise generic.LiDARArrayColumnError(msg)
                 
-            attrs = pulsesHandle[colName].attrs
-            attrs[GAIN_NAME] = gain
-            attrs[OFFSET_NAME] = offset
+                attrs = pulsesHandle[colName].attrs
+                attrs[GAIN_NAME] = gain
+                attrs[OFFSET_NAME] = offset
             
-        pointsHandle = self.fileHandle['DATA']['POINTS']
-        for colName in self.pointScalingValues.keys():
-            gain, offset = self.pointScalingValues[colName]
-            if colName not in pointsHandle:
-                msg = 'scaling set for column %s but no data written' % colName
-                raise generic.LiDARArrayColumnError(msg)
+            pointsHandle = self.fileHandle['DATA']['POINTS']
+            for colName in self.pointScalingValues.keys():
+                gain, offset = self.pointScalingValues[colName]
+                if colName not in pointsHandle:
+                    msg = 'scaling set for column %s but no data written' % colName
+                    raise generic.LiDARArrayColumnError(msg)
                 
-            attrs = pointsHandle[colName].attrs
-            attrs[GAIN_NAME] = gain
-            attrs[OFFSET_NAME] = offset
+                attrs = pointsHandle[colName].attrs
+                attrs[GAIN_NAME] = gain
+                attrs[OFFSET_NAME] = offset
+        
+            # write the version information
+            headerArray = numpy.array([SPDV4_VERSION_MAJOR, SPDV4_VERSION_MINOR], 
+                                HEADER_FIELDS['VERSION_SPD'])
+            self.setHeaderValue('VERSION_SPD', headerArray)
         
         # close
         self.fileHandle.close()
@@ -524,7 +615,7 @@ class SPDV4File(generic.LiDARFile):
         attrs = handle[name].attrs
         data = handle[name][boolArray]
         unScaled = name.endswith('_U')
-        
+
         if not unScaled and GAIN_NAME in attrs and OFFSET_NAME in attrs:
             data = (data / attrs[GAIN_NAME]) - attrs[OFFSET_NAME]
         return data
@@ -549,7 +640,8 @@ class SPDV4File(generic.LiDARFile):
             return self.lastPoints
         
         point_bool, idx, mask_idx = (
-                            self.si_handler.getPointsBoolForExtent(self.extent))
+                            self.si_handler.getPointsBoolForExtent(self.extent, 
+                                        self.controls.overlap))
         
         if isinstance(colNames, str):
             points = pointsHandle[colNames][point_bool]
@@ -558,8 +650,8 @@ class SPDV4File(generic.LiDARFile):
             # create a blank structured array to read the data into
             dtypeList = []
             for name in colNames:
-                dtype = pointsHandle[name].dtype
-                dtypeList.append(dtype)
+                s = pointsHandle[name].dtype.str
+                dtypeList.append((name, s))
             
             points = numpy.empty(point_bool.sum(), dtypeList)
         
@@ -567,11 +659,13 @@ class SPDV4File(generic.LiDARFile):
                 data = self.readFieldAndUnScale(pointsHandle, name, point_bool)
                 points[name] = data
             
+        self.lastExtent = copy.copy(self.extent)
         self.lastPoints = points
         self.lastPointsBool = point_bool
         self.lastPoints_Idx = idx
         self.lastPoints_IdxMask = mask_idx
         self.lastPointsColumns = colNames
+        return points
 
     def readPulsesForExtent(self, colNames=None):
         """
@@ -593,7 +687,8 @@ class SPDV4File(generic.LiDARFile):
             return self.lastPulses
         
         pulse_bool, idx, mask_idx = (
-                            self.si_handler.getPulsesBoolForExtent(self.extent))
+                            self.si_handler.getPulsesBoolForExtent(self.extent, 
+                                    self.controls.overlap))
         
         if isinstance(colNames, str):
             pulses = pulsesHandle[colNames][pulse_bool]
@@ -602,20 +697,46 @@ class SPDV4File(generic.LiDARFile):
             # create a blank structured array to read the data into
             dtypeList = []
             for name in colNames:
-                dtype = pulsesHandle[name].dtype
-                dtypeList.append(dtype)
+                s = pulsesHandle[name].dtype.str
+                dtypeList.append((name, s))
             
             pulses = numpy.empty(pulse_bool.sum(), dtypeList)
         
             for name in colNames:
-                data = self.readFieldAndUnScale(pulsesHandle, name, pulses_bool)
+                data = self.readFieldAndUnScale(pulsesHandle, name, pulse_bool)
                 pulses[name] = data
+
+        if not self.extentAlignedWithSpatialIndex:
+            # need to recompute subset of spatial index to bins
+            # are aligned with current extent
+            nrows = int(numpy.ceil((self.extent.yMax - self.extent.yMin) / 
+                        self.extent.binSize))
+            ncols = int(numpy.ceil((self.extent.xMax - self.extent.xMin) / 
+                        self.extent.binSize))
+            nrows += (self.controls.overlap * 2)
+            ncols += (self.controls.overlap * 2)
+            x_idx = self.readFieldAndUnScale(pulsesHandle, 'X_IDX', pulse_bool)
+            y_idx = self.readFieldAndUnScale(pulsesHandle, 'Y_IDX', pulse_bool)
+            mask, sortedbins, new_idx, new_cnt = gridindexutils.CreateSpatialIndex(
+                    x_idx, y_idx, 
+                    self.extent.binSize, 
+                    self.extent.yMax, self.extent.xMin, nrows, ncols, 
+                    SPDV4_SIMPLEGRID_INDEX_DTYPE, SPDV4_SIMPLEGRID_COUNT_DTYPE)
+            # ok calculate indices on new spatial indexes
+            pulse_bool, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                            new_idx, new_cnt, nOut)
+            # re-sort the pulses to match the new spatial index
+            pulses = pulses[mask]
+            pulses = pulses[sortedbins]
+
             
+        self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
         self.lastPulsesBool = pulse_bool
         self.lastPulses_Idx = idx
         self.lastPulses_IdxMask = mask_idx
         self.lastPulsesColumns = colNames
+        return pulses
     
     def readPulsesForExtentByBins(self, extent=None, colNames=None):
         """
@@ -645,8 +766,106 @@ class SPDV4File(generic.LiDARFile):
 
     def readPointsForExtentByBins(self, extent=None, colNames=None, 
                     indexByPulse=False, returnPulseIndex=False):
-        # TODO:
-        pass   
+        """
+        Return the points as a 3d structured masked array.
+        
+        Note that because the spatial index on a SPDV4 file currently is on pulses
+        this may miss points that are attached to pulses outside the current
+        extent. If this is a problem then select an overlap large enough.
+        
+        Pass indexByPulse=True to bin the points by the locations of the pulses
+            (using X_IDX and Y_IDX rather than the locations of the points)
+        Pass returnPulseIndex=True to also return a masked 3d array of 
+            the indices into the 1d pulse array (as returned by 
+            readPulsesForExtent())
+            
+        """
+        # if they have given us a new extent then use that
+        if extent is not None:
+            oldExtent = self.lastExtent
+            self.setExtent(extent)
+        # have to spatially index the points 
+        # since SPDV$ files have only a spatial index on pulses currently.
+        points = self.readPointsForExtent()
+        
+        nrows = int((self.lastExtent.yMax - self.lastExtent.yMin) / 
+                        self.lastExtent.binSize)
+        ncols = int((self.lastExtent.xMax - self.lastExtent.xMin) / 
+                        self.lastExtent.binSize)
+                        
+        # add overlap
+        nrows += (self.controls.overlap * 2)
+        ncols += (self.controls.overlap * 2)
+        xMin = self.lastExtent.xMin - (self.controls.overlap * self.lastExtent.binSize)
+        yMax = self.lastExtent.yMax + (self.controls.overlap * self.lastExtent.binSize)
+        
+        # create point spatial index
+        if indexByPulse:
+            # TODO: check if is there is a better way of going about this
+            # in theory spatial index already exists but may be more work 
+            # it is worth to use
+            pulsesHandle = self.fileHandle['DATA']['PULSES']
+            x_idx = self.readFieldAndUnScale(pulsesHandle, 'X_IDX', pulses_bool)
+            y_idx = self.readFieldAndUnScale(pulsesHandle, 'Y_IDX', pulses_bool)
+            nreturns = self.readFieldAndUnScale(pulsesHandle, 
+                                    'NUMBER_OF_RETURNS', pulses_bool)
+            x_idx = numpy.repeat(x_idx, nreturns)
+            y_idx = numpy.repeat(y_idx, nreturns)
+        else:
+            x_idx = points['X'] 
+            y_idx = points['Y']            
+        
+        mask, sortedbins, idx, cnt = gridindexutils.CreateSpatialIndex(
+                y_idx, x_idx, self.lastExtent.binSize, 
+                yMax, xMin, nrows, ncols, SPDV4_SIMPLEGRID_INDEX_DTYPE, 
+                SPDV4_SIMPLEGRID_COUNT_DTYPE)
+                
+        # TODO: don't really want the bool array returned - need
+        # to make it optional
+        nOut = len(points)
+        pts_bool, pts_idx, pts_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                                idx, cnt, nOut)
+
+        points = points[mask]                  
+        sortedPoints = points[sortedbins]
+        
+        pointsByBins = sortedPoints[pts_idx]
+
+        # set extent back to the 'normal' one for this block
+        # in case they call this again without the extent param
+        if extent is not None:
+            self.setExtent(oldExtent)
+
+        self.lastPoints3d_Idx = pts_idx
+        self.lastPoints3d_IdxMask = pts_idx_mask
+        self.lastPoints3d_InRegionMask = mask
+        self.lastPoints3d_InRegionSort = sortedbins
+        
+        pointsByBins = self.subsetColumns(pointsByBins, colNames)
+        points = numpy.ma.array(pointsByBins, mask=pts_idx_mask)
+        
+        if returnPulseIndex:
+            # have to generate array the same lengths as the 1d points
+            # but containing the indexes of the pulses
+            pulse_count = numpy.arange(0, self.lastPulses.size)
+            # convert this into an array with an element for each point
+            pulse_idx_1d = numpy.repeat(pulse_count, 
+                            self.lastPulses['NUMBER_OF_RETURNS'])
+            # mask the ones that are within the spatial index
+            pulse_idx_1d = pulse_idx_1d[mask]
+            # sort the right way
+            sortedpulse_idx_1d = pulse_idx_1d[sortedbins]
+            # turn into a 3d in the same way as the points themselves
+            pulse_idx_3d = sortedpulse_idx_1d[pts_idx]
+            
+            # create a masked array 
+            pulse_idx_3dmask = numpy.ma.array(pulse_idx_3d, mask=pts_idx_mask)
+            
+            # return 2 things
+            return points, pulse_idx_3dmask
+        else:
+            # just return the points
+            return points
         
     def readPointsByPulse(self, colNames=None):
         """
@@ -770,7 +989,7 @@ class SPDV4File(generic.LiDARFile):
             if self.mode == generic.UPDATE:
                 flatSize = self.lastPoints3d_Idx.max() + 1
                 flatPoints = numpy.empty((flatSize,), dtype=points.data.dtype)
-                flatten3dMaskedArray(flatPoints, points, 
+                gridindexutils.flatten3dMaskedArray(flatPoints, points, 
                             self.lastPoints3d_IdxMask, self.lastPoints3d_Idx)
                 points = flatPoints
             else:
@@ -817,7 +1036,47 @@ class SPDV4File(generic.LiDARFile):
             msg = 'Point array must be either 1d, 2 or 3d'
             raise generic.LiDARInvalidData(msg)
 
-        if self.mode == generic.CREATE:
+        if self.mode == generic.UPDATE:
+            # strip out the points connected with pulses that were 
+            # originally outside
+            # the window and within the overlap.
+            if self.controls.spatialProcessing:
+                pulsesHandle = self.fileHandle['DATA']['PULSES']
+                x_idx = self.readFieldAndUnScale(pulsesHandle, 'X_IDX', 
+                                self.lastPulsesBool)
+                y_idx = self.readFieldAndUnScale(pulsesHandle, 'Y_IDX', 
+                                self.lastPulsesBool)
+                nreturns = self.readFieldAndUnScale(pulsesHandle, 
+                                'NUMBER_OF_RETURNS', self.lastPulsesBool)
+                x_idx = numpy.repeat(x_idx, nreturns)
+                y_idx = numpy.repeat(y_idx, nreturns)
+                
+                mask = ( (x_idx >= self.extent.xMin) & 
+                    (x_idx <= self.extent.xMax) &
+                    (y_idx >= self.extent.yMin) &
+                    (y_idx <= self.extent.yMax))
+                if origPointsDims == 3:
+                    # just the ones that are within the region
+                    # this makes the length of origPoints the same as 
+                    # that returned by pointsbybins flattened
+                    origPoints = origPoints[self.lastPoints3d_InRegionMask]
+                    # ok as we sorted the points to fit into our binning
+                    # system we need to un-sort them so they can fit back into
+                    # the file
+                    sortedPointsundo = numpy.empty_like(points)
+                    gridindexutils.unsortArray(points, 
+                            self.lastPoints3d_InRegionSort, sortedPointsundo)
+                    points = sortedPointsundo
+                        
+                    mask = mask[self.lastPoints3d_InRegionMask]
+                    gridindexutils.updateBoolArray(self.lastPointsBool, 
+                                self.lastPoints3d_InRegionMask)
+                        
+                points = points[mask]
+                origPoints = origPoints[mask]
+                gridindexutils.updateBoolArray(self.lastPointsBool, mask)
+
+        else:
             # need to check that passed in data has all the required fields
             for essential in POINTS_ESSENTIAL_FIELDS:
                 if essential not in points.dtype.names:
@@ -1084,7 +1343,7 @@ class SPDV4File(generic.LiDARFile):
                     if name != 'X_IDX' and name != 'Y_IDX':
                         data = self.prepareDataForWriting(
                                     pulses[name], name, generic.ARRAY_TYPE_PULSES)
-                                    
+
                         pulsesHandle[self.lastPulsesBool] = data
                                     
             #if transmitted is not None:

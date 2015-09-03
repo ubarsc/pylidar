@@ -132,11 +132,14 @@ class SPDV3File(generic.LiDARFile):
         # check that it is indeed the right version
         # and get header
         if mode == generic.READ or mode == generic.UPDATE:
+            if 'HEADER' not in self.fileHandle:
+                msg = "File appears not to be SPD V3"
+                raise generic.LiDARFormatNotUnderstood(msg)
             header = self.fileHandle['HEADER']
             headerKeys = header.keys()
             if (not 'VERSION_MAJOR_SPD' in headerKeys or 
                         not 'VERSION_MINOR_SPD' in headerKeys):
-                msg = "File appears not to be SPD"
+                msg = "File appears not to be SPD V3"
                 raise generic.LiDARFormatNotUnderstood(msg)
             elif header['VERSION_MAJOR_SPD'][0] != 2:
                 msg = "File seems to be wrong version for this driver"
@@ -829,6 +832,35 @@ spatial index will be recomputed on the fly"""
             raise generic.LiDARInvalidData(msg)
 
         if self.mode == generic.UPDATE:
+        
+            # put back in the order we read so fields
+            # line up and spatial index still works
+            # the points have been re-ordered by binning
+            if self.controls.spatialProcessing and origPointsDims == 3:
+                sortedPointsundo = numpy.empty_like(points)
+                gridindexutils.unsortArray(points, 
+                        self.lastPoints3d_InRegionSort, sortedPointsundo)
+                points = sortedPointsundo
+
+                x_idx = numpy.repeat(self.lastPulses[self.si_xPulseColName],
+                    self.lastPulses['NUMBER_OF_RETURNS'])
+                y_idx = numpy.repeat(self.lastPulses[self.si_yPulseColName],
+                    self.lastPulses['NUMBER_OF_RETURNS'])
+
+                mask = ( (x_idx >= self.extent.xMin) & 
+                    (x_idx <= self.extent.xMax) &
+                    (y_idx >= self.extent.yMin) &
+                    (y_idx <= self.extent.yMax))
+
+                # strip out the points connected with pulses that were 
+                # originally outside
+                # the window and within the overlap.
+                mask = mask[self.lastPoints3d_InRegionMask]
+                gridindexutils.updateBoolArray(self.lastPointsBool, 
+                            self.lastPoints3d_InRegionMask)
+
+                points = points[mask]
+                gridindexutils.updateBoolArray(self.lastPointsBool, mask)
 
             if points.dtype != POINT_DTYPE:
                 # we need these for 
@@ -838,39 +870,15 @@ spatial index will be recomputed on the fly"""
                 else:
                     origPoints = self.readPointsForRange()
 
-                # strip out the points connected with pulses that were 
-                # originally outside
-                # the window and within the overlap.
                 if self.controls.spatialProcessing:
-                    x_idx = numpy.repeat(self.lastPulses[self.si_xPulseColName],
-                        self.lastPulses['NUMBER_OF_RETURNS'])
-                    y_idx = numpy.repeat(self.lastPulses[self.si_yPulseColName],
-                        self.lastPulses['NUMBER_OF_RETURNS'])
-
-                    mask = ( (x_idx >= self.extent.xMin) & 
-                        (x_idx <= self.extent.xMax) &
-                        (y_idx >= self.extent.yMin) &
-                        (y_idx <= self.extent.yMax))
                     if origPointsDims == 3:
                         # just the ones that are within the region
                         # this makes the length of origPoints the same as 
                         # that returned by pointsbybins flattened
                         origPoints = origPoints[self.lastPoints3d_InRegionMask]
-                        # ok as we sorted the points to fit into our binning
-                        # system we need to un-sort them so they can fit back into
-                        # the file
-                        sortedPointsundo = numpy.empty_like(points)
-                        gridindexutils.unsortArray(points, 
-                                self.lastPoints3d_InRegionSort, sortedPointsundo)
-                        points = sortedPointsundo
                         
-                        mask = mask[self.lastPoints3d_InRegionMask]
-                        gridindexutils.updateBoolArray(self.lastPointsBool, 
-                                    self.lastPoints3d_InRegionMask)
                         
-                    points = points[mask]
                     origPoints = origPoints[mask]
-                    gridindexutils.updateBoolArray(self.lastPointsBool, mask)
 
                 # passed in array does not have all the fields we need to write
                 # so get the original data read 

@@ -14,12 +14,12 @@ def readFunc(data):
     #trans = data.input1.getTransmitted()
     #if len(trans) > 0:
     #    print(trans[0])
-    recv = data.input1.getReceived()
-    nrets, npulses = recv.shape
-    for n in range(npulses):
-        ret = recv[..., n]
-        if ret.sum() > 0:
-            print(ret)
+    #recv = data.input1.getReceived()
+    #nrets, npulses = recv.shape
+    #for n in range(npulses):
+    #    ret = recv[..., n]
+    #    if ret.sum() > 0:
+    #        print(ret)
     
 def testRead(infile):
     dataFiles = lidarprocessor.DataFiles()
