@@ -824,6 +824,41 @@ class SPDV4File(generic.LiDARFile):
                     msg = ('Essential field %s must exist in point data ' +
                              'when writing new file') % essential
                     raise generic.LiDARInvalidData(msg)
+                    
+            # transparently convert the IGNORE column (if it exists)
+            # into the POINT_FLAGS
+            if 'IGNORE' in points.dtype.names:
+                ignoreField = points['IGNORE']
+                # create a new array without IGNORE
+                newDType = []
+                for name in points.dtype.names:
+                    if name != 'IGNORE':
+                        s = points.dtype[name].str
+                        newDType.append((name, s))
+                        
+                # ensure it has POINT_FLAGS
+                newFlags = numpy.where(points['IGNORE'] != 0, 
+                                SPDV4_POINT_FLAGS_IGNORE, 0)
+                if 'POINT_FLAGS' not in points.dtype.names:
+                    s = numpy.dtype(POINT_FIELDS['POINT_FLAGS']).str
+                    newDType.append(('POINT_FLAGS', s))
+                else:
+                    # combine
+                    newFlags = newFlags | points['POINT_FLAGS']
+                    
+                # create it
+                newpoints = numpy.empty(points.shape, dtype=newDType)
+                
+                # copy all the old fields accross
+                for name in points.dtype.names:
+                    if name != 'IGNORE' and name != 'POINT_FLAGS':
+                        newpoints[name] = points[name]
+                        
+                # make sure it has the updated 'POINT_FLAGS'
+                newpoints['POINT_FLAGS'] = newFlags
+                
+                points = newpoints
+                
 
         return points, pts_start, nreturns, returnNumber
         
