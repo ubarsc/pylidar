@@ -319,6 +319,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         return pulse_bool, pulse_idx, pulse_idx_mask
 
     def getPointsBoolForExtent(self, extent, overlap):
+        # TODO: cache
     
         # should return cached if exists
         pulse_bool, pulse_idx, pulse_idx_mask = self.getPulsesBoolForExtent(
@@ -630,10 +631,10 @@ spatial index will be recomputed on the fly"""
         selection can be an array of bools or a slice.
         """
         if isinstance(colNames, str):
-            unScaled = name.endswith('_U')
+            unScaled = colNames.endswith('_U')
             if unScaled:
-                name = name[:-2]
-            data = SPDV4File.readFieldAndUnScale(handle, name, 
+                colNames = colNames[:-2]
+            data = SPDV4File.readFieldAndUnScale(handle, colNames, 
                                 selection, unScaled)
 
         else:            
@@ -672,7 +673,7 @@ spatial index will be recomputed on the fly"""
                                 selection, unScaled)
                 data[name] = field
             
-            return data
+        return data
         
     def readPointsForExtent(self, colNames=None):
         """
@@ -691,6 +692,7 @@ spatial index will be recomputed on the fly"""
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
             not self.lastPoints is None and self.lastPointsColumns is not None
             and self.lastPointsColumns == colNames):
+            # TODO: deal with single column request when cached is multi column
             return self.lastPoints
         
         point_bool, idx, mask_idx = (
@@ -724,6 +726,7 @@ spatial index will be recomputed on the fly"""
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
             not self.lastPulses is None and self.lastPulsesColumns is not None
             and self.lastPulsesColumns == colNames):
+            # TODO: deal with single column request when cached is multi column
             return self.lastPulses
         
         pulse_bool, idx, mask_idx = (
@@ -811,8 +814,8 @@ spatial index will be recomputed on the fly"""
             oldExtent = self.lastExtent
             self.setExtent(extent)
         # have to spatially index the points 
-        # since SPDV$ files have only a spatial index on pulses currently.
-        points = self.readPointsForExtent()
+        # since SPDV4 files have only a spatial index on pulses currently.
+        points = self.readPointsForExtent(colNames)
         
         nrows = int((self.lastExtent.yMax - self.lastExtent.yMin) / 
                         self.lastExtent.binSize)
@@ -830,16 +833,16 @@ spatial index will be recomputed on the fly"""
             # TODO: check if is there is a better way of going about this
             # in theory spatial index already exists but may be more work 
             # it is worth to use
-            pulsesHandle = self.fileHandle['DATA']['PULSES']
-            x_idx = self.readFieldAndUnScale(pulsesHandle, 'X_IDX', pulses_bool)
-            y_idx = self.readFieldAndUnScale(pulsesHandle, 'Y_IDX', pulses_bool)
-            nreturns = self.readFieldAndUnScale(pulsesHandle, 
-                                    'NUMBER_OF_RETURNS', pulses_bool)
+            # TODO: check these fields aren't actually already read in
+            x_idx = self.readPulsesForExtent('X')
+            y_idx = self.readPulsesForExtent('Y')
+            nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
             x_idx = numpy.repeat(x_idx, nreturns)
             y_idx = numpy.repeat(y_idx, nreturns)
         else:
-            x_idx = points['X'] 
-            y_idx = points['Y']            
+            # TODO: check these fields aren't actually already read in
+            x_idx = self.readPointsForExtent('X')
+            y_idx = self.readPointsForExtent('Y')
         
         mask, sortedbins, idx, cnt = gridindexutils.CreateSpatialIndex(
                 y_idx, x_idx, self.lastExtent.binSize, 
@@ -867,7 +870,6 @@ spatial index will be recomputed on the fly"""
         self.lastPoints3d_InRegionMask = mask
         self.lastPoints3d_InRegionSort = sortedbins
         
-        pointsByBins = self.subsetColumns(pointsByBins, colNames)
         points = numpy.ma.array(pointsByBins, mask=pts_idx_mask)
         
         if returnPulseIndex:
@@ -939,7 +941,7 @@ spatial index will be recomputed on the fly"""
             if self.mode == generic.UPDATE:
                 flatSize = self.lastPulses_Idx.max() + 1
                 flatPulses = numpy.empty((flatSize,), dtype=pulses.data.dtype)
-                flatten3dMaskedArray(flatPulses, pulses,
+                gridindexutils.flatten3dMaskedArray(flatPulses, pulses,
                             self.lastPulses_IdxMask, self.lastPulses_Idx)
                 pulses = flatPulses
             else:
@@ -1028,7 +1030,7 @@ spatial index will be recomputed on the fly"""
             if self.mode == generic.UPDATE:
                 flatSize = self.lastPoints_Idx.max() + 1
                 flatPoints = numpy.empty((flatSize,), dtype=points.data.dtype)
-                flatten2dMaskedArray(flatPoints, points, 
+                gridindexutils.flatten2dMaskedArray(flatPoints, points, 
                             self.lastPoints_IdxMask, self.lastPoints_Idx)
                 points = flatPoints
             else:
@@ -1066,14 +1068,11 @@ spatial index will be recomputed on the fly"""
             # strip out the points connected with pulses that were 
             # originally outside
             # the window and within the overlap.
-            if self.controls.spatialProcessing:
-                pulsesHandle = self.fileHandle['DATA']['PULSES']
-                x_idx = self.readFieldAndUnScale(pulsesHandle, 'X_IDX', 
-                                self.lastPulsesBool)
-                y_idx = self.readFieldAndUnScale(pulsesHandle, 'Y_IDX', 
-                                self.lastPulsesBool)
-                nreturns = self.readFieldAndUnScale(pulsesHandle, 
-                                'NUMBER_OF_RETURNS', self.lastPulsesBool)
+            if self.controls.spatialProcessing and origPointsDims == 3:
+                x_idx = self.readPulsesForExtent('X_IDX')
+                y_idx = self.readPulsesForExtent('Y_IDX')
+                nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
+
                 x_idx = numpy.repeat(x_idx, nreturns)
                 y_idx = numpy.repeat(y_idx, nreturns)
                 
@@ -1082,13 +1081,6 @@ spatial index will be recomputed on the fly"""
                     (y_idx >= self.extent.yMin) &
                     (y_idx <= self.extent.yMax))
                 if origPointsDims == 3:
-                    # just the ones that are within the region
-                    # this makes the length of origPoints the same as 
-                    # that returned by pointsbybins flattened
-                    origPoints = origPoints[self.lastPoints3d_InRegionMask]
-                    # ok as we sorted the points to fit into our binning
-                    # system we need to un-sort them so they can fit back into
-                    # the file
                     sortedPointsundo = numpy.empty_like(points)
                     gridindexutils.unsortArray(points, 
                             self.lastPoints3d_InRegionSort, sortedPointsundo)
@@ -1097,9 +1089,8 @@ spatial index will be recomputed on the fly"""
                     mask = mask[self.lastPoints3d_InRegionMask]
                     gridindexutils.updateBoolArray(self.lastPointsBool, 
                                 self.lastPoints3d_InRegionMask)
-                        
+
                 points = points[mask]
-                origPoints = origPoints[mask]
                 gridindexutils.updateBoolArray(self.lastPointsBool, mask)
 
         else:
@@ -1144,7 +1135,6 @@ spatial index will be recomputed on the fly"""
                 
                 points = newpoints
                 
-
         return points, pts_start, nreturns, returnNumber
         
     def prepareTransmittedForWriting(self, transmitted):
@@ -1179,6 +1169,10 @@ spatial index will be recomputed on the fly"""
         Does unscaling if possible unless name ends with '_U'.
         Raises exception if column needs to have scale and offset
             defined, but aren't.
+            
+        Returns the data to write, plus the 'hdfname' which
+        is the field name the data should be written to. This has the 
+        '_U' removed.
         """
         try:
             gain, offset = self.getScaling(name, arrayType)
@@ -1204,9 +1198,11 @@ spatial index will be recomputed on the fly"""
         # other array types we don't worry for now
         
         # unless of course, they are passing the unscaled stuff in
+        hdfname = name
         if name.endswith('_U'):
             needsScaling = False
             hasScaling = False
+            hdfname = name[:-2]
         
         if needsScaling and not hasScaling:
             msg = "field %s requires scaling to be set before writing" % name
@@ -1219,7 +1215,7 @@ spatial index will be recomputed on the fly"""
         if dataType is not None:
             data = data.astype(dataType)
             
-        return data
+        return data, hdfname
         
     def writeData(self, pulses=None, points=None, transmitted=None, received=None):
         """
@@ -1286,25 +1282,25 @@ spatial index will be recomputed on the fly"""
                 for name in pulses.dtype.names:
                     # don't bother writing out the ones we generate ourselves
                     if name not in generatedColumns:
-                        data = self.prepareDataForWriting(
+                        data, hdfname = self.prepareDataForWriting(
                                     pulses[name], name, generic.ARRAY_TYPE_PULSES)
                     
-                        if name in pulsesHandle:
-                            pulsesHandle[name].resize((newSize,))
-                            pulsesHandle[name][oldSize:newSize+1] = data
+                        if hdfname in pulsesHandle:
+                            pulsesHandle[hdfname].resize((newSize,))
+                            pulsesHandle[hdfname][oldSize:newSize+1] = data
                         else:
-                            self.createDataColumn(pulsesHandle, name, data)
+                            self.createDataColumn(pulsesHandle, hdfname, data)
                     
                 # now write the generated ones
                 for name in generatedColumns.keys():
-                    data = self.prepareDataForWriting(
+                    data, hdfname = self.prepareDataForWriting(
                         generatedColumns[name], name, generic.ARRAY_TYPE_PULSES)
                         
-                    if name in pulsesHandle:
-                        pulsesHandle[name].resize((newSize,))
-                        pulsesHandle[name][oldSize:newSize+1] = data
+                    if hdfname in pulsesHandle:
+                        pulsesHandle[hdfname].resize((newSize,))
+                        pulsesHandle[hdfname][oldSize:newSize+1] = data
                     else:
-                        self.createDataColumn(pulsesHandle, name, data)
+                        self.createDataColumn(pulsesHandle, hdfname, data)
                 
             if points is not None and len(points) > 0:
 
@@ -1320,27 +1316,27 @@ spatial index will be recomputed on the fly"""
                 
                 for name in points.dtype.names:
                     if name not in generatedColumns:
-                        data = self.prepareDataForWriting(
+                        data, hdfname = self.prepareDataForWriting(
                                     points[name], name, generic.ARRAY_TYPE_POINTS)
 
-                        if name in pointsHandle:
-                            pointsHandle[name].resize((newSize,))
-                            pointsHandle[name][oldSize:newSize+1] = data
+                        if hdfname in pointsHandle:
+                            pointsHandle[hdfname].resize((newSize,))
+                            pointsHandle[hdfname][oldSize:newSize+1] = data
                         else:
-                            self.createDataColumn(pointsHandle, name, data)
+                            self.createDataColumn(pointsHandle, hdfname, data)
                             
                 # now write the generated ones
                 for name in generatedColumns.keys():
-                    data = self.prepareDataForWriting(
+                    data, hdfname = self.prepareDataForWriting(
                             generatedColumns[name], name, generic.ARRAY_TYPE_POINTS)
 
-                    if name in pointsHandle:
-                        pointsHandle[name].resize((newSize,))
-                        pointsHandle[name][oldSize:newSize+1] = data
+                    if hdfname in pointsHandle:
+                        pointsHandle[hdfname].resize((newSize,))
+                        pointsHandle[hdfname][oldSize:newSize+1] = data
                     else:
-                        self.createDataColumn(pointsHandle, name, data)
+                        self.createDataColumn(pointsHandle, hdfname, data)
                 
-                
+               
             # TODO:
             #if transmitted is not None:
             #    oldSize = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
@@ -1359,18 +1355,21 @@ spatial index will be recomputed on the fly"""
             if points is not None:
                 pointsHandle = self.fileHandle['DATA']['POINTS']
                 for name in points.dtype.names:
-                    data = self.prepareDataForWriting(
+                    data, hdfname = self.prepareDataForWriting(
                                     points[name], name, generic.ARRAY_TYPE_POINTS)
 
-                    pointsHandle[self.lastPointsBool] = data
+                    if data.size > 0:
+                        pointsHandle[hdfname][self.lastPointsBool] = data
+                    
             if pulses is not None:
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
                 for name in pulses.dtype.names:
-                    if name != 'X_IDX' and name != 'Y_IDX':
-                        data = self.prepareDataForWriting(
+                    if (name != 'X_IDX' and name != 'Y_IDX' and 
+                            name != 'X_IDX_U' and name != 'Y_IDX_U'):
+                        data, hdfname = self.prepareDataForWriting(
                                     pulses[name], name, generic.ARRAY_TYPE_PULSES)
-
-                        pulsesHandle[self.lastPulsesBool] = data
+                        if data.size > 0:
+                            pulsesHandle[hdfname][self.lastPulsesBool] = data
                                     
             #if transmitted is not None:
             #    self.fileHandle['DATA']['TRANSMITTED'][self.lastTransBool] = transmitted
