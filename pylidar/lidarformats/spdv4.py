@@ -1453,7 +1453,8 @@ spatial index will be recomputed on the fly"""
                 self.lastPulsesColumns != colNames):
             return self.lastPulses
 
-        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, pulse_bool)
+        selection = slice(self.pulseRange.startPulse, self.pulseRange.endPulse)
+        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, selection)
 
         self.lastPulses = pulses
         self.lastPulseRange = copy.copy(self.pulseRange)
@@ -1465,7 +1466,7 @@ spatial index will be recomputed on the fly"""
         """
         Return the total number of pulses
         """
-        return self.fileHandle['DATA']['PULSES'].shape[0]
+        return self.fileHandle['DATA']['PULSES']['PULSE_ID'].shape[0]
         
     def getHeader(self):
         """
