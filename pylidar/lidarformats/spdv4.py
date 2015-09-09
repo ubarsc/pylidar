@@ -607,18 +607,72 @@ spatial index will be recomputed on the fly"""
         self.pixGrid = None
 
     @staticmethod
-    def readFieldAndUnScale(handle, name, boolArray):
+    def readFieldAndUnScale(handle, name, selection, unScaled=False):
         """
-        Given a h5py handle, field name and bool array does
-        any unscaling necessary. 
+        Given a h5py handle, field name and selection does
+        any unscaling if asked (unScaled=False). 
         """
         attrs = handle[name].attrs
-        data = handle[name][boolArray]
-        unScaled = name.endswith('_U')
+        data = handle[name][selection]
 
         if not unScaled and GAIN_NAME in attrs and OFFSET_NAME in attrs:
-            data = (data / attrs[GAIN_NAME]) - attrs[OFFSET_NAME]
+            data = (data / attrs[GAIN_NAME]) + attrs[OFFSET_NAME]
         return data
+        
+    @staticmethod
+    def readFieldsAndUnScale(handle, colNames, selection):
+        """
+        Given a list of column names returns a structured array
+        of the data. If colNames is a string, a single un-structred
+        array will be returned.
+        It will work out of any of the column names end with '_U'
+        and deal with them appropriately.
+        selection can be an array of bools or a slice.
+        """
+        if isinstance(colNames, str):
+            unScaled = name.endswith('_U')
+            if unScaled:
+                name = name[:-2]
+            data = SPDV4File.readFieldAndUnScale(handle, name, 
+                                selection, unScaled)
+
+        else:            
+            # create a blank structured array to read the data into
+            dtypeList = []
+            # names in the HDF5 file ('_U' removed)
+            hdfNameList = []
+            # Whether they are unscaled fields or not
+            unScaledList = []
+            for name in colNames:
+                unScaled = name.endswith('_U')
+                hdfName = name
+                attrs = handle[name].attrs
+                hasScale = GAIN_NAME in attrs and OFFSET_NAME in attrs
+                if hasScale and not unScaled:
+                    s = 'f8'
+                else:
+                    if unScaled:
+                        hdfName = name[:-2]
+                    s = handle[hdfName].dtype.str
+                dtypeList.append((name, s))
+                hdfNameList.append(hdfName)
+                unScaledList.append(unScaled)
+            
+            if isinstance(selection, slice):
+                assert(selection.step is None)
+                numRecords = selection.stop - selection.start
+            else:
+                # assume array
+                numRecords = selection.sum()
+                
+            data = numpy.empty(numRecords, dtypeList)
+        
+            for name, hdfName, unScaled in zip(colNames, hdfNameList, unScaledList):
+                field = SPDV4File.readFieldAndUnScale(handle, hdfName, 
+                                selection, unScaled)
+                data[name] = field
+            
+            return data
         
     def readPointsForExtent(self, colNames=None):
         """
@@ -643,21 +697,7 @@ spatial index will be recomputed on the fly"""
                             self.si_handler.getPointsBoolForExtent(self.extent, 
                                         self.controls.overlap))
         
-        if isinstance(colNames, str):
-            points = pointsHandle[colNames][point_bool]
-
-        else:            
-            # create a blank structured array to read the data into
-            dtypeList = []
-            for name in colNames:
-                s = pointsHandle[name].dtype.str
-                dtypeList.append((name, s))
-            
-            points = numpy.empty(point_bool.sum(), dtypeList)
-        
-            for name in colNames:
-                data = self.readFieldAndUnScale(pointsHandle, name, point_bool)
-                points[name] = data
+        points = self.readFieldsAndUnScale(pointsHandle, colNames, point_bool)
             
         self.lastExtent = copy.copy(self.extent)
         self.lastPoints = points
@@ -689,23 +729,9 @@ spatial index will be recomputed on the fly"""
         pulse_bool, idx, mask_idx = (
                             self.si_handler.getPulsesBoolForExtent(self.extent, 
                                     self.controls.overlap))
-        
-        if isinstance(colNames, str):
-            pulses = pulsesHandle[colNames][pulse_bool]
 
-        else:            
-            # create a blank structured array to read the data into
-            dtypeList = []
-            for name in colNames:
-                s = pulsesHandle[name].dtype.str
-                dtypeList.append((name, s))
-            
-            pulses = numpy.empty(pulse_bool.sum(), dtypeList)
+        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, pulse_bool)
         
-            for name in colNames:
-                data = self.readFieldAndUnScale(pulsesHandle, name, pulse_bool)
-                pulses[name] = data
-
         if not self.extentAlignedWithSpatialIndex:
             # need to recompute subset of spatial index to bins
             # are aligned with current extent
@@ -1187,7 +1213,7 @@ spatial index will be recomputed on the fly"""
             raise generic.LiDARArrayColumnError(msg)
             
         if hasScaling:
-            data = (data - gain) * offset
+            data = (data - offset) * gain
             
         # cast to datatype if it has one
         if dataType is not None:
@@ -1400,21 +1426,7 @@ spatial index will be recomputed on the fly"""
         point_bool, point_idx, point_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
         
-        if isinstance(colNames, str):
-            points = pointsHandle[colNames][point_bool]
-
-        else:            
-            # create a blank structured array to read the data into
-            dtypeList = []
-            for name in colNames:
-                dtype = pointsHandle[name].dtype
-                dtypeList.append(dtype)
-            
-            points = numpy.empty(point_bool.sum(), dtypeList)
-        
-            for name in colNames:
-                data = self.readFieldAndUnScale(pointsHandle, name, point_bool)
-                points[name] = data
+        points = self.readFieldsAndUnScale(pointsHandle, colNames, point_bool)
         
         # keep these indices from pulses to points - handy for the indexing 
         # functions.
@@ -1441,25 +1453,8 @@ spatial index will be recomputed on the fly"""
                 self.lastPulsesColumns != colNames):
             return self.lastPulses
 
-        if isinstance(colNames, str):
-            pulses = pulsesHandle[colNames][
-                        self.pulseRange.startPulse:self.pulseRange.endPulse]
+        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, pulse_bool)
 
-        else:            
-            # create a blank structured array to read the data into
-            dtypeList = []
-            for name in colNames:
-                dtype = pulsesHandle[name].dtype
-                dtypeList.append(dtype)
-            
-            nPulses = self.pulseRange.endPulse - self.pulseRange.startPulse
-            pulses = numpy.empty(nPulses, dtypeList)
-        
-            for name in colNames:
-                data = self.readFieldAndUnScale(pulsesHandle, name,
-                    slice(self.pulseRange.startPulse,self.pulseRange.endPulse))
-                pulses[name] = data
-    
         self.lastPulses = pulses
         self.lastPulseRange = copy.copy(self.pulseRange)
         self.lastPoints = None # now invalid

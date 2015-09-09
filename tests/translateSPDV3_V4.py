@@ -11,11 +11,11 @@ MAX_UINT16 = 2**16
 
 def setOutputScaling(header, output):
     xOffset = header['X_MIN']
-    xGain = (header['X_MAX'] - header['X_MIN']) / MAX_UINT16
+    xGain = MAX_UINT16 / (header['X_MAX'] - header['X_MIN'])
     yOffset = header['Y_MAX']
-    yGain = (header['Y_MIN'] - header['Y_MAX']) / MAX_UINT16
+    yGain = MAX_UINT16 / (header['Y_MIN'] - header['Y_MAX'])
     zOffset = header['Z_MIN']
-    zGain = (header['Z_MAX'] - header['Z_MIN']) / MAX_UINT16
+    zGain = MAX_UINT16 / (header['Z_MAX'] - header['Z_MIN'])
     
     output.setScaling('X_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, xGain, xOffset)
     output.setScaling('Y_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, yGain, yOffset)
@@ -25,11 +25,11 @@ def setOutputScaling(header, output):
     output.setScaling('Y_IDX', lidarprocessor.ARRAY_TYPE_PULSES, yGain, yOffset)
     
     azOffset = header['AZIMUTH_MIN']
-    azGain = (header['AZIMUTH_MAX'] - header['AZIMUTH_MIN']) / MAX_UINT16
+    azGain = MAX_UINT16 / (header['AZIMUTH_MAX'] - header['AZIMUTH_MIN'])
     output.setScaling('AZIMUTH', lidarprocessor.ARRAY_TYPE_PULSES, azGain, azOffset)
     
     zenOffset = header['ZENITH_MIN']
-    zenGain = (header['ZENITH_MAX'] - header['ZENITH_MIN']) / MAX_UINT16
+    zenGain = MAX_UINT16 / (header['ZENITH_MAX'] - header['ZENITH_MIN'])
     output.setScaling('ZENITH', lidarprocessor.ARRAY_TYPE_PULSES, zenGain, zenOffset)
 
     output.setScaling('X', lidarprocessor.ARRAY_TYPE_POINTS, xGain, xOffset)
