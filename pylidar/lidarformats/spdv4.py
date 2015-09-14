@@ -747,7 +747,7 @@ spatial index will be recomputed on the fly"""
             x_idx = self.readFieldAndUnScale(pulsesHandle, 'X_IDX', pulse_bool)
             y_idx = self.readFieldAndUnScale(pulsesHandle, 'Y_IDX', pulse_bool)
             mask, sortedbins, new_idx, new_cnt = gridindexutils.CreateSpatialIndex(
-                    x_idx, y_idx, 
+                    y_idx, x_idx, 
                     self.extent.binSize, 
                     self.extent.yMax, self.extent.xMin, nrows, ncols, 
                     SPDV4_SIMPLEGRID_INDEX_DTYPE, SPDV4_SIMPLEGRID_COUNT_DTYPE)

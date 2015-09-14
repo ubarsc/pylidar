@@ -500,7 +500,7 @@ spatial index will be recomputed on the fly"""
             nrows += (self.controls.overlap * 2)
             ncols += (self.controls.overlap * 2)
             mask, sortedbins, new_idx, new_cnt = gridindexutils.CreateSpatialIndex(
-                    pulses[self.si_xPulseColName], pulses[self.si_yPulseColName], 
+                    pulses[self.si_yPulseColName], pulses[self.si_xPulseColName], 
                     self.extent.binSize, 
                     self.extent.yMax, self.extent.xMin, nrows, ncols, 
                     SPDV3_SI_INDEX_DTYPE, SPDV3_SI_COUNT_DTYPE)
