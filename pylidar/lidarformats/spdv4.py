@@ -367,6 +367,9 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
                 pulses['Y_IDX'], pulses['X_IDX'], self.pixelGrid.xRes, yMax, xMin,
                 nrows, ncols, SPDV4_SIMPLEGRID_INDEX_DTYPE, 
                 SPDV4_SIMPLEGRID_COUNT_DTYPE)
+                
+        # so we have unique indexes
+        idx_subset = idx_subset + lastPulseID
                    
         # note overlap is zero as we have already removed them by not including 
         # them in the spatial index
