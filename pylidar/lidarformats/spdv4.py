@@ -655,7 +655,7 @@ spatial index will be recomputed on the fly"""
                     if unScaled:
                         hdfName = name[:-2]
                     s = handle[hdfName].dtype.str
-                dtypeList.append((name, s))
+                dtypeList.append((str(name), s))
                 hdfNameList.append(hdfName)
                 unScaledList.append(unScaled)
             
@@ -665,13 +665,13 @@ spatial index will be recomputed on the fly"""
             else:
                 # assume array
                 numRecords = selection.sum()
-                
+               
             data = numpy.empty(numRecords, dtypeList)
         
             for name, hdfName, unScaled in zip(colNames, hdfNameList, unScaledList):
                 field = SPDV4File.readFieldAndUnScale(handle, hdfName, 
                                 selection, unScaled)
-                data[name] = field
+                data[str(name)] = field
             
         return data
         
@@ -835,8 +835,8 @@ spatial index will be recomputed on the fly"""
             # in theory spatial index already exists but may be more work 
             # it is worth to use
             # TODO: check these fields aren't actually already read in
-            x_idx = self.readPulsesForExtent('X')
-            y_idx = self.readPulsesForExtent('Y')
+            x_idx = self.readPulsesForExtent('X_IDX')
+            y_idx = self.readPulsesForExtent('Y_IDX')
             nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
             x_idx = numpy.repeat(x_idx, nreturns)
             y_idx = numpy.repeat(y_idx, nreturns)
