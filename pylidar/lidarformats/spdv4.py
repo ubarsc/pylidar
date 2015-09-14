@@ -336,7 +336,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         nOut = self.fileHandle['DATA']['POINTS']['RETURN_NUMBER'].shape[0]
         point_bool, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
-                        
+
         return point_bool, point_idx, point_idx_mask
 
     def createNewIndex(self, pixelGrid):
@@ -690,7 +690,7 @@ spatial index will be recomputed on the fly"""
             
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
-            not self.lastPoints is None and self.lastPointsColumns is not None
+            self.lastPoints is not None and self.lastPointsColumns is not None
             and self.lastPointsColumns == colNames):
             # TODO: deal with single column request when cached is multi column
             return self.lastPoints
@@ -724,7 +724,7 @@ spatial index will be recomputed on the fly"""
             
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
-            not self.lastPulses is None and self.lastPulsesColumns is not None
+            self.lastPulses is not None and self.lastPulsesColumns is not None
             and self.lastPulsesColumns == colNames):
             # TODO: deal with single column request when cached is multi column
             return self.lastPulses
@@ -765,6 +765,7 @@ spatial index will be recomputed on the fly"""
         self.lastPulses_Idx = idx
         self.lastPulses_IdxMask = mask_idx
         self.lastPulsesColumns = colNames
+        self.lastPoints = None # cache will now be out of date
         return pulses
     
     def readPulsesForExtentByBins(self, extent=None, colNames=None):
@@ -1047,7 +1048,7 @@ spatial index will be recomputed on the fly"""
                 if firstField in pointsHandle:
                     currPointsCount = pointsHandle[firstField].shape[0]
                     
-                pts_start = nreturns + currPointsCount
+                pts_start = numpy.cumsum(nreturns) + currPointsCount
                 # unfortunately points.compressed() doesn't work
                 # for structured arrays. Use our own version instead
                 ptsCount = points[firstField].count()
@@ -1157,7 +1158,7 @@ spatial index will be recomputed on the fly"""
         # From SPDLib
         dset = groupHandle.create_dataset(name, data.shape, 
                 chunks=(250,), dtype=data.dtype, shuffle=True, 
-                compression="gzip", compression_opts=1)
+                compression="gzip", compression_opts=1, maxshape=(None,))
         dset[:] = data
         
     def prepareDataForWriting(self, data, name, arrayType):

@@ -20,3 +20,4 @@ doProcessing() function and other useful things.
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 PYLIDAR_VERSION = '0.02'
+__version__ = PYLIDAR_VERSION
