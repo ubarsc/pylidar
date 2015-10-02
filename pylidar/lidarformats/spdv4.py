@@ -170,10 +170,10 @@ class SPDV4SpatialIndex(object):
         
         self.fileHandle = None
         
-    def getPulsesBoolForExtent(self, extent, overlap):
+    def getPulsesSpaceForExtent(self, extent, overlap):
         raise NotImplementedError()
 
-    def getPointsBoolForExtent(self, extent, overlap):
+    def getPointsSpaceForExtent(self, extent, overlap):
         raise NotImplementedError()
         
     def createNewIndex(self, pixelGrid):
@@ -221,7 +221,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         self.si_idx = None
         # for caching
         self.lastExtent = None
-        self.lastPulseBool = None
+        self.lastPulseSpace = None
         self.lastPulseIdx = None
         self.lastPulseIdxMask = None
         
@@ -297,47 +297,39 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
 
         return idx_subset, cnt_subset
 
-    def getPulsesBoolForExtent(self, extent, overlap):
+    def getPulsesSpaceForExtent(self, extent, overlap):
         # return cache
         if self.lastExtent is not None and self.lastExtent == extent:
-            return self.lastPulseBool, self.lastPulseIdx, self.lastPulseIdxMask
+            return self.lastPulseSpace, self.lastPulseIdx, self.lastPulseIdxMask
         
         idx_subset, cnt_subset = self.getSISubset(extent, overlap)
-        # h5py prefers to take it's index by numpy bool array
-        # of the same shape as the dataset
-        # so we do this. If you give it the indices themselves
-        # this must be done as a list which is slow
         nOut = self.fileHandle['DATA']['PULSES']['PULSE_ID'].shape[0]
-        pulse_bool, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        pulse_space, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                 idx_subset, cnt_subset, nOut)
                 
-        self.lastPulseBool = pulse_bool
+        self.lastPulseSpace = pulse_space
         self.lastPulseIdx = pulse_idx
         self.lastPulseIdxMask = pulse_idx_mask
         self.lastExtent = copy.copy(extent)
                 
-        return pulse_bool, pulse_idx, pulse_idx_mask
+        return pulse_space, pulse_idx, pulse_idx_mask
 
-    def getPointsBoolForExtent(self, extent, overlap):
+    def getPointsSpaceForExtent(self, extent, overlap):
         # TODO: cache
     
         # should return cached if exists
-        pulse_bool, pulse_idx, pulse_idx_mask = self.getPulsesBoolForExtent(
+        pulse_space, pulse_idx, pulse_idx_mask = self.getPulsesSpaceForExtent(
                                     extent, overlap)
         
         pulsesHandle = self.fileHandle['DATA']['PULSES']
-        nReturns = pulsesHandle['NUMBER_OF_RETURNS'][pulse_bool]
-        startIdxs = pulsesHandle['PTS_START_IDX'][pulse_bool]
+        nReturns = pulse_space.read(pulsesHandle['NUMBER_OF_RETURNS'])
+        startIdxs = pulse_space.read(pulsesHandle['PTS_START_IDX'])
 
-        # h5py prefers to take it's index by numpy bool array
-        # of the same shape as the dataset
-        # so we do this. If you give it the indices themselves
-        # this must be done as a list which is slow
         nOut = self.fileHandle['DATA']['POINTS']['RETURN_NUMBER'].shape[0]
-        point_bool, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
 
-        return point_bool, point_idx, point_idx_mask
+        return point_space, point_idx, point_idx_mask
 
     def createNewIndex(self, pixelGrid):
         nrows, ncols = pixelGrid.getDimensions()
@@ -450,12 +442,12 @@ class SPDV4File(generic.LiDARFile):
         self.lastExtent = None
         self.lastPulseRange = None
         self.lastPoints = None
-        self.lastPointsBool = None
+        self.lastPointsSpace = None
         self.lastPoints_Idx = None
         self.lastPoints_IdxMask = None
         self.lastPointsColumns = None
         self.lastPulses = None
-        self.lastPulsesBool = None
+        self.lastPulsesSpace = None
         self.lastPulses_Idx = None
         self.lastPulses_IdxMask = None
         self.lastPulsesColumns = None
@@ -594,13 +586,13 @@ spatial index will be recomputed on the fly"""
         self.fileHandle = None        
         self.lastExtent = None
         self.lastPoints = None
-        self.lastPointsBool = None
+        self.lastPointsSpace = None
         self.lastPoints_Idx = None
         self.lastPoints_IdxMask = None
         self.lastPointsColumns = None
         self.lastPulses = None
         self.lastPulseRange = None
-        self.lastPulsesBool = None
+        self.lastPulsesSpace = None
         self.lastPulses_Idx = None
         self.lastPulses_IdxMask = None
         self.lastPulsesColumns = None
@@ -617,7 +609,11 @@ spatial index will be recomputed on the fly"""
         any unscaling if asked (unScaled=False). 
         """
         attrs = handle[name].attrs
-        data = handle[name][selection]
+        if isinstance(selection, slice):
+            data = handle[name][selection]
+        else:
+            # assume H5Space
+            data = selection.read(handle[name])
 
         if not unScaled and GAIN_NAME in attrs and OFFSET_NAME in attrs:
             data = (data / attrs[GAIN_NAME]) + attrs[OFFSET_NAME]
@@ -631,7 +627,7 @@ spatial index will be recomputed on the fly"""
         array will be returned.
         It will work out of any of the column names end with '_U'
         and deal with them appropriately.
-        selection can be an array of bools or a slice.
+        selection can be a h5space.H5Space or a slice.
         """
         if isinstance(colNames, str):
             unScaled = colNames.endswith('_U')
@@ -666,8 +662,8 @@ spatial index will be recomputed on the fly"""
                 assert(selection.step is None)
                 numRecords = selection.stop - selection.start
             else:
-                # assume array
-                numRecords = selection.sum()
+                # assume H5Space
+                numRecords = selection.getSelectionSize()
                
             data = numpy.empty(numRecords, dtypeList)
         
@@ -698,15 +694,15 @@ spatial index will be recomputed on the fly"""
             # TODO: deal with single column request when cached is multi column
             return self.lastPoints
         
-        point_bool, idx, mask_idx = (
-                            self.si_handler.getPointsBoolForExtent(self.extent, 
+        point_space, idx, mask_idx = (
+                            self.si_handler.getPointsSpaceForExtent(self.extent, 
                                         self.controls.overlap))
         
-        points = self.readFieldsAndUnScale(pointsHandle, colNames, point_bool)
+        points = self.readFieldsAndUnScale(pointsHandle, colNames, point_space)
             
         self.lastExtent = copy.copy(self.extent)
         self.lastPoints = points
-        self.lastPointsBool = point_bool
+        self.lastPointsSpace = point_space
         self.lastPoints_Idx = idx
         self.lastPoints_IdxMask = mask_idx
         self.lastPointsColumns = colNames
@@ -732,11 +728,11 @@ spatial index will be recomputed on the fly"""
             # TODO: deal with single column request when cached is multi column
             return self.lastPulses
         
-        pulse_bool, idx, mask_idx = (
-                            self.si_handler.getPulsesBoolForExtent(self.extent, 
+        pulse_space, idx, mask_idx = (
+                            self.si_handler.getPulsesSpaceForExtent(self.extent, 
                                     self.controls.overlap))
 
-        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, pulse_bool)
+        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, pulse_space)
         
         if not self.extentAlignedWithSpatialIndex:
             # need to recompute subset of spatial index to bins
@@ -747,15 +743,15 @@ spatial index will be recomputed on the fly"""
                         self.extent.binSize))
             nrows += (self.controls.overlap * 2)
             ncols += (self.controls.overlap * 2)
-            x_idx = self.readFieldAndUnScale(pulsesHandle, 'X_IDX', pulse_bool)
-            y_idx = self.readFieldAndUnScale(pulsesHandle, 'Y_IDX', pulse_bool)
+            x_idx = self.readFieldAndUnScale(pulsesHandle, 'X_IDX', pulse_space)
+            y_idx = self.readFieldAndUnScale(pulsesHandle, 'Y_IDX', pulse_space)
             mask, sortedbins, new_idx, new_cnt = gridindexutils.CreateSpatialIndex(
                     y_idx, x_idx, 
                     self.extent.binSize, 
                     self.extent.yMax, self.extent.xMin, nrows, ncols, 
                     SPDV4_SIMPLEGRID_INDEX_DTYPE, SPDV4_SIMPLEGRID_COUNT_DTYPE)
             # ok calculate indices on new spatial indexes
-            pulse_bool, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+            pulse_space, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                             new_idx, new_cnt, nOut)
             # re-sort the pulses to match the new spatial index
             pulses = pulses[mask]
@@ -764,7 +760,7 @@ spatial index will be recomputed on the fly"""
             
         self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
-        self.lastPulsesBool = pulse_bool
+        self.lastPulsesSpace = pulse_space
         self.lastPulses_Idx = idx
         self.lastPulses_IdxMask = mask_idx
         self.lastPulsesColumns = colNames
@@ -853,10 +849,8 @@ spatial index will be recomputed on the fly"""
                 yMax, xMin, nrows, ncols, SPDV4_SIMPLEGRID_INDEX_DTYPE, 
                 SPDV4_SIMPLEGRID_COUNT_DTYPE)
                 
-        # TODO: don't really want the bool array returned - need
-        # to make it optional
         nOut = len(points)
-        pts_bool, pts_idx, pts_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        pts_space, pts_idx, pts_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                                 idx, cnt, nOut)
 
         points = points[mask]                  
@@ -993,7 +987,7 @@ spatial index will be recomputed on the fly"""
                         (y_idx <= self.extent.yMax))
             pulses = pulses[mask]
             if self.mode == generic.UPDATE:
-                gridindexutils.updateBoolArray(self.lastPulsesBool, mask)
+                self.lastPulsesSpace.updateBoolArray(mask)
             
             elif self.mode == generic.CREATE and points is not None and points.ndim == 2:
                 # strip out points as well
@@ -1091,11 +1085,10 @@ spatial index will be recomputed on the fly"""
                     points = sortedPointsundo
                         
                     mask = mask[self.lastPoints3d_InRegionMask]
-                    gridindexutils.updateBoolArray(self.lastPointsBool, 
-                                self.lastPoints3d_InRegionMask)
+                    self.lastPointsSpace.updateBoolArray(self.lastPoints3d_InRegionMask)
 
                 points = points[mask]
-                gridindexutils.updateBoolArray(self.lastPointsBool, mask)
+                self.lastPointsSpace.updateBoolArray(mask)
 
         else:
             # need to check that passed in data has all the required fields
@@ -1363,7 +1356,7 @@ spatial index will be recomputed on the fly"""
                                     points[name], name, generic.ARRAY_TYPE_POINTS)
 
                     if data.size > 0:
-                        pointsHandle[hdfname][self.lastPointsBool] = data
+                        self.lastPointsShape.write(pointsHandle[hdfname], data)
                     
             if pulses is not None:
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
@@ -1373,7 +1366,7 @@ spatial index will be recomputed on the fly"""
                         data, hdfname = self.prepareDataForWriting(
                                     pulses[name], name, generic.ARRAY_TYPE_PULSES)
                         if data.size > 0:
-                            pulsesHandle[hdfname][self.lastPulsesBool] = data
+                            self.lastPulsesShape.write(pulsesHandle[hdfname], data)
                                     
             #if transmitted is not None:
             #    self.fileHandle['DATA']['TRANSMITTED'][self.lastTransBool] = transmitted
@@ -1405,6 +1398,7 @@ spatial index will be recomputed on the fly"""
         """
         Read all the points for the specified range of pulses
         """
+        # TODO: cache
         pointsHandle = self.fileHandle['DATA']['POINTS']
         if colNames is None:
             # get all names
@@ -1421,15 +1415,11 @@ spatial index will be recomputed on the fly"""
         nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
         startIdxs = self.readPulsesForRange('PTS_START_IDX')
         
-        # h5py prefers to take it's index by numpy bool array
-        # of the same shape as the dataset
-        # so we do this. If you give it the indices themselves
-        # this must be done as a list which is slow
         nOut = pointsHandle['RETURN_NUMBER'].shape[0]
-        point_bool, point_idx, point_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
+        point_space, point_idx, point_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
         
-        points = self.readFieldsAndUnScale(pointsHandle, colNames, point_bool)
+        points = self.readFieldsAndUnScale(pointsHandle, colNames, point_space)
         
         # keep these indices from pulses to points - handy for the indexing 
         # functions.

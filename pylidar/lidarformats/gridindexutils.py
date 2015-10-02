@@ -19,20 +19,7 @@ Common utility functions for dealing with grid spatial indices
 
 import numpy
 from numba import jit
-
-@jit
-def updateBoolArray(boolArray, mask):
-    """
-    Used by readPointsForExtentByBins and writeData to update the mask of 
-    elements that are to be written. Often elements need to be dropped
-    since they are outside the window etc.
-    """
-    nBool = boolArray.shape[0]
-    maskIdx = 0
-    for n in range(nBool):
-        if boolArray[n]:
-            boolArray[n] = mask[maskIdx]
-            maskIdx += 1
+from . import h5space
 
 @jit
 def unsortArray(inArray, sortIndices, outArray):
@@ -131,7 +118,7 @@ def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
         si_count[row, col] += 1
     
 @jit
-def convertIdxBool2D(start_idx_array, count_array, outBool, outRow, outCol, 
+def convertIdxBool2D(start_idx_array, count_array, outBool, boolStart, outRow, outCol, 
                         outIdx, counts, outMask):
     """
     Internal function called by convertSPDIdxToReadIdxAndMaskInfo
@@ -169,7 +156,7 @@ def convertIdxBool2D(start_idx_array, count_array, outBool, outRow, outCol,
             # go through each bin in the spatial index
         
             cnt = count_array[row, col]
-            startidx = start_idx_array[row, col]
+            startidx = start_idx_array[row, col] - boolStart
             for i in range(cnt):
                 # work out the location in the file we need
                 # to read this element from
@@ -203,7 +190,7 @@ def convertIdxBool2D(start_idx_array, count_array, outBool, outRow, outCol,
             counter += 1
 
 @jit
-def convertIdxBool1D(start_idx_array, count_array, outBool, outRow, outIdx, 
+def convertIdxBool1D(start_idx_array, count_array, outBool, boolStart, outRow, outIdx, 
                         counts, outMask):
     """
     Internal function called by convertSPDIdxToReadIdxAndMaskInfo
@@ -240,7 +227,7 @@ def convertIdxBool1D(start_idx_array, count_array, outBool, outRow, outIdx,
         # go through each bin in the index
         
         cnt = count_array[row]
-        startidx = start_idx_array[row]
+        startidx = start_idx_array[row] - boolStart
         for i in range(cnt):
             # work out the location in the file we need
             # to read this element from
@@ -341,7 +328,7 @@ def CreateSpatialIndex(coordOne, coordTwo, binSize, coordOneMax,
     # and the new spatial index
     return validMask, sortedBinNumNdx, si_start, si_count
 
-def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize):
+def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize=None):
     """
     Convert either a 2d SPD spatial index or 1d index (pulse to points, 
     pulse to waveform etc) information for reading with h5py and creating
@@ -350,11 +337,11 @@ def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize):
     Parameters:
     start_idx_array is the 2 or 1d input array of file start indices from SPD
     count_array is the 2 or 1d input array of element counts from SPD
-    outSize is the size of the h5py dataset to be read. 
+    outSize is the size of the h5py dataset to be read. Set to None to not return
+        the h5space.H5Space object
         
     Returns:
-    A 1d bool array to pass to h5py for reading the info out of the dataset.
-        This will be outSize elements long
+    If outSize is not None, A h5space.H5Space object for reading and writing data.
     A 3 or 2d (depending on if a 2 or 1 array was input) array containing
         indices into the new subset of the data. This array is arranged so
         that the first axis contains the indices for each bin (or pulse)
@@ -366,8 +353,13 @@ def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize):
         can be used as a mask in a masked array of the ragged array (above)
         of the actual data.
     """
-    # create the bool array for h5py
-    outBool = numpy.zeros((outSize,), dtype=numpy.bool)
+    # work out the index of the start of the bool array
+    boolStart = int(start_idx_array.min())
+    # work out the size 
+    end_idx_array = start_idx_array + count_array
+    boolSize = int(end_idx_array.max() - boolStart)
+    outBool = numpy.zeros((boolSize,), dtype=numpy.bool)
+    
     # work out the size of the first dimension of the index
     if count_array.size > 0:
         maxCount = count_array.max()
@@ -380,11 +372,11 @@ def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize):
         outIdx = numpy.zeros((maxCount, nRows, nCols), dtype=numpy.uint32)
         outMask = numpy.ones((maxCount, nRows, nCols), numpy.bool)
         # for internal use by convertIdxBool2D
-        outRow = numpy.empty((outSize,), dtype=numpy.uint32)
-        outCol = numpy.empty((outSize,), dtype=numpy.uint32)
+        outRow = numpy.empty((boolSize,), dtype=numpy.uint32)
+        outCol = numpy.empty((boolSize,), dtype=numpy.uint32)
         counts = numpy.zeros((nRows, nCols), dtype=numpy.uint32)
         
-        convertIdxBool2D(start_idx_array, count_array, outBool, outRow, 
+        convertIdxBool2D(start_idx_array, count_array, outBool, boolStart, outRow, 
                         outCol, outIdx, counts, outMask)
                             
     elif count_array.ndim == 1:
@@ -393,17 +385,22 @@ def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize):
         outIdx = numpy.zeros((maxCount, nRows), dtype=numpy.uint32)
         outMask = numpy.ones((maxCount, nRows), numpy.bool)
         # for internal use by convertIdxBool1D
-        outRow = numpy.empty((outSize,), dtype=numpy.uint32)
+        outRow = numpy.empty((boolSize,), dtype=numpy.uint32)
         counts = numpy.zeros((nRows,), dtype=numpy.uint32)
             
-        convertIdxBool1D(start_idx_array, count_array, outBool, outRow,
+        convertIdxBool1D(start_idx_array, count_array, outBool, boolStart, outRow,
                             outIdx, counts, outMask)
     else:
         msg = 'only 1 or 2d indexing supported'
         raise ValueError(msg)
         
-    # return the arrays
-    return outBool, outIdx, outMask
+    if outSize is not None:
+        space = h5space.H5Space(outSize, outBool, boolStart)
+        
+        # return the arrays
+        return space, outIdx, outMask
+    else:
+        return outIdx, outMask
 
 def getSlicesForExtent(siPixGrid, siShape, overlap, xMin, xMax, yMin, yMax):
     """

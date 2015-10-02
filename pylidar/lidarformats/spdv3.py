@@ -233,14 +233,14 @@ class SPDV3File(generic.LiDARFile):
         self.extent = None
         self.pulseRange = None
         
-        # bool array to pass to h5py to read/write current pts
-        self.lastPointsBool = None
+        # h5space.H5Space
+        self.lastPointsSpace = None
         # index to turn into 2d pointsbypulse
         self.lastPoints_Idx = None
         # mask for 2d pointsbypulse
         self.lastPoints_IdxMask = None
-         # bool array to pass to h5py to read/write current pls
-        self.lastPulsesBool = None
+        # h5space.H5Space
+        self.lastPulsesSpace = None
         # index to turn into 3d pulsebybins
         self.lastPulses_Idx = None
         # mask for 3d pulsebybins
@@ -254,14 +254,14 @@ class SPDV3File(generic.LiDARFile):
         self.lastPoints3d_InRegionMask = None
         # needs sorting also
         self.lastPoints3d_InRegionSort = None
-        # bool array to pass to h5py to read/write current transmitted
-        self.lastTransBool = None
+        # h5space.H5Space
+        self.lastTransSpace = None
         # index to turn into 2d transbypulses
         self.lastTrans_Idx = None
         # mask for 2d transbypulses
         self.lastTrans_IdxMask = None
-         # bool array to pass to h5py to read/write current received
-        self.lastRecvBool = None
+        # h5space.H5Space
+        self.lastRecvSpace = None
         # index to turn into 2d recvbypulses
         self.lastRecv_Idx = None
         # mask for 2d recvbypulses
@@ -427,20 +427,16 @@ spatial index will be recomputed on the fly"""
         nReturns = pulses['NUMBER_OF_RETURNS']
         startIdxs = pulses['PTS_START_IDX']
         
-        # h5py prefers to take it's index by numpy bool array
-        # of the same shape as the dataset
-        # so we do this. If you give it the indices themselves
-        # this must be done as a list which is slow
         nOut = self.fileHandle['DATA']['POINTS'].shape[0]
-        point_bool, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
         
-        points = self.fileHandle['DATA']['POINTS'][point_bool]
+        points = point_space.read(self.fileHandle['DATA']['POINTS'])
         
         # self.lastExtent updated in readPulsesForExtent()
         # keep these indices from pulses to points - handy for the indexing 
         # functions.
-        self.lastPointsBool = point_bool
+        self.lastPointsSpace = point_space
         self.lastPoints = points
         self.lastPoints_Idx = point_idx
         self.lastPoints_IdxMask = point_idx_mask
@@ -481,14 +477,10 @@ spatial index will be recomputed on the fly"""
             cnt_subset[imageSlice] = self.si_cnt[siSlice]
             idx_subset[imageSlice] = self.si_idx[siSlice]
         
-        # h5py prefers to take it's index by numpy bool array
-        # of the same shape as the dataset
-        # so we do this. If you give it the indices themselves
-        # this must be done as a list which is slow
         nOut = self.fileHandle['DATA']['PULSES'].shape[0]
-        pulse_bool, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        pulse_space, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                 idx_subset, cnt_subset, nOut)
-        pulses = self.fileHandle['DATA']['PULSES'][pulse_bool]
+        pulses = pulse_space.read(self.fileHandle['DATA']['PULSES'])
 
         if not self.extentAlignedWithSpatialIndex:
             # need to recompute subset of spatial index to bins
@@ -505,7 +497,7 @@ spatial index will be recomputed on the fly"""
                     self.extent.yMax, self.extent.xMin, nrows, ncols, 
                     SPDV3_SI_INDEX_DTYPE, SPDV3_SI_COUNT_DTYPE)
             # ok calculate indices on new spatial indexes
-            pulse_bool, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+            pulse_space, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                             new_idx, new_cnt, nOut)
             # re-sort the pulses to match the new spatial index
             pulses = pulses[mask]
@@ -516,7 +508,7 @@ spatial index will be recomputed on the fly"""
         self.lastPulses = pulses
         # keep these indices from spatial index to pulses as they are
         # handy for the ByBins functions
-        self.lastPulsesBool = pulse_bool
+        self.lastPulsesSpace = pulse_space
         self.lastPulses_Idx = pulse_idx
         self.lastPulses_IdxMask = pulse_idx_mask
         self.lastPoints = None # are now invalid
@@ -601,11 +593,8 @@ spatial index will be recomputed on the fly"""
                 y_idx, x_idx, self.lastExtent.binSize, 
                 yMax, xMin, nrows, ncols, SPDV3_SI_INDEX_DTYPE, SPDV3_SI_COUNT_DTYPE)
                 
-        # TODO: don't really want the bool array returned - need
-        # to make it optional
-        nOut = len(points)
-        pts_bool, pts_idx, pts_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
-                                idx, cnt, nOut)
+        pts_idx, pts_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                                idx, cnt)
 
         points = points[mask]                  
         sortedPoints = points[sortedbins]
@@ -679,15 +668,15 @@ spatial index will be recomputed on the fly"""
         cnt = pulses['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
         
         nOut = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
-        trans_bool, trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        trans_shape, trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                     idx, cnt, nOut)
         
-        transmitted = self.fileHandle['DATA']['TRANSMITTED'][trans_bool]
+        transmitted = trans_shape.read(self.fileHandle['DATA']['TRANSMITTED'])
         
         transByPulse = transmitted[trans_idx]
         trans_masked = numpy.ma.array(transByPulse, mask=trans_idx_mask)
         
-        self.lastTransBool = trans_bool
+        self.lastTransShape = trans_shape
         self.lastTrans_Idx = trans_idx
         self.lastTrans_IdxMask = trans_idx_mask
         
@@ -707,15 +696,15 @@ spatial index will be recomputed on the fly"""
         cnt = pulses['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
         
         nOut = self.fileHandle['DATA']['RECEIVED'].shape[0]
-        recv_bool, recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        recv_shape, recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                     idx, cnt, nOut)
         
-        received = self.fileHandle['DATA']['RECEIVED'][recv_bool]
+        received = recv_shape.read(self.fileHandle['DATA']['RECEIVED'])
         
         recvByPulse = received[recv_idx]
         recv_masked = numpy.ma.array(recvByPulse, mask=recv_idx_mask)
         
-        self.lastRecvBool = recv_bool
+        self.lastRecvShape = recv_shape
         self.lastRecv_Idx = recv_idx
         self.lastRecv_IdxMask = recv_idx_mask
         
@@ -787,7 +776,7 @@ spatial index will be recomputed on the fly"""
                         (pulses[self.si_yPulseColName] >= self.extent.yMin) &
                         (pulses[self.si_yPulseColName] <= self.extent.yMax))
             pulses = pulses[mask]
-            gridindexutils.updateBoolArray(self.lastPulsesBool, mask)
+            self.lastPulsesSpace.updateBoolArray(mask)
             
         return pulses
 
@@ -856,11 +845,10 @@ spatial index will be recomputed on the fly"""
                 # originally outside
                 # the window and within the overlap.
                 mask = mask[self.lastPoints3d_InRegionMask]
-                gridindexutils.updateBoolArray(self.lastPointsBool, 
-                            self.lastPoints3d_InRegionMask)
+                self.lastPointsSpace.updateBoolArray(self.lastPoints3d_InRegionMask)
 
                 points = points[mask]
-                gridindexutils.updateBoolArray(self.lastPointsBool, mask)
+                self.lastPointsSpace.updateBoolArray(mask)
 
             if points.dtype != POINT_DTYPE:
                 # we need these for 
@@ -954,7 +942,7 @@ spatial index will be recomputed on the fly"""
                     self.lastTrans_IdxMask, self.lastTrans_Idx)
             
                 transmitted = transmitted[flatMask]
-                gridindexutils.updateBoolArray(self.lastTransBool, flatMask)
+                self.lastTransSpace.updateBoolArray(flatMask)
                 
         else:
             raise NotImplementedError()
@@ -1005,7 +993,7 @@ spatial index will be recomputed on the fly"""
                     self.lastRecv_IdxMask, self.lastRecv_Idx)
             
                 received = received[flatMask]
-                gridindexutils.updateBoolArray(self.lastRecvBool, flatMask)
+                self.lastRecvSpace.updateBoolArray(flatMask)
 
         else:
             raise NotImplementedError()
@@ -1078,13 +1066,17 @@ spatial index will be recomputed on the fly"""
                 
         else:
             if points is not None:
-                self.fileHandle['DATA']['POINTS'][self.lastPointsBool] = points
+                ds = self.fileHandle['DATA']['POINTS']
+                self.lastPointsSpace.write(ds, points)
             if pulses is not None:
-                self.fileHandle['DATA']['PULSES'][self.lastPulsesBool] = pulses
+                ds = self.fileHandle['DATA']['PULSES']
+                self.lastPulsesSpace.write(ds, pulses)
             if transmitted is not None:
-                self.fileHandle['DATA']['TRANSMITTED'][self.lastTransBool] = transmitted
+                ds = self.fileHandle['DATA']['TRANSMITTED']
+                self.lastTransSpace.write(ds, transmitted)
             if received is not None:
-                self.fileHandle['DATA']['RECEIVED'][self.lastRecvBool] = received
+                ds = self.fileHandle['DATA']['RECEIVED']
+                self.lastRecvSpace.write(ds, received)
         # TODO: now update the spatial index
         pass
         
@@ -1130,15 +1122,11 @@ spatial index will be recomputed on the fly"""
         nReturns = pulses['NUMBER_OF_RETURNS']
         startIdxs = pulses['PTS_START_IDX']
         
-        # h5py prefers to take it's index by numpy bool array
-        # of the same shape as the dataset
-        # so we do this. If you give it the indices themselves
-        # this must be done as a list which is slow
         nOut = self.fileHandle['DATA']['POINTS'].shape[0]
-        point_bool, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        point_shape, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
         
-        points = self.fileHandle['DATA']['POINTS'][point_bool]
+        points = point_shape.read(self.fileHandle['DATA']['POINTS'])
         
         # keep these indices from pulses to points - handy for the indexing 
         # functions.
