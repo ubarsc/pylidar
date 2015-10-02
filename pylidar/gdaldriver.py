@@ -151,6 +151,7 @@ class GDALDriver(basedriver.Driver):
             msg = 'Only 3d arrays can be written'
             raise GDALException(msg)
 
+        # remove overlap
         nbands, nrows, ncols = data.shape
         nrows -= (self.controls.overlap * 2)
         ncols -= (self.controls.overlap * 2)

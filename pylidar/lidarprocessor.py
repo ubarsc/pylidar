@@ -337,66 +337,8 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
     userContainer = userclasses.DataContainer(controls)
 
     # First Open all the files
-    gridList = []
-    driverList = []
-    nameList = dataFiles.__dict__.keys()
-    for name in nameList:
-        
-        inputFiles = getattr(dataFiles, name)
-        # check if we are dealing with a list of inputs
-        if isinstance(inputFiles, list):
-            setattr(userContainer, name, list())
-        else:
-            inputFiles = [inputFiles]
-        
-        for inputFile in inputFiles:
-            if isinstance(inputFile, LidarFile):
-                if inputFile.mode == generic.CREATE:
-                    # TODO: Creation options
-                    driver = generic.getWriterForLiDARFormat(inputFile.lidarDriver,
-                        inputFile.fname, inputFile.mode, controls, inputFile)
-                else:
-                    driver = generic.getReaderForLiDARFile(inputFile.fname,
-                                    inputFile.mode, controls, inputFile)
-                driverList.append(driver)
-
-                # create a class to wrap this for the users function
-                userClass = userclasses.LidarData(inputFile.mode, driver)
-                if hasattr(userContainer, name):
-                    getattr(userContainer, name).append(userClass)
-                else:
-                    setattr(userContainer, name, userClass)
-
-                # grab the pixel grid while we are at it - if reading
-                if inputFile.mode != CREATE:
-                    pixGrid = driver.getPixelGrid()
-                    gridList.append(pixGrid)
-
-            elif isinstance(inputFile, ImageFile):
-                driver = gdaldriver.GDALDriver(inputFile.fname,
-                                    inputFile.mode, controls, inputFile)
-                driverList.append(driver)
-
-                # create a class to wrap this for the users function
-                userClass = userclasses.ImageData(inputFile.mode, driver)
-                if hasattr(userContainer, name):
-                    getattr(userContainer, name).append(userClass)
-                else:
-                    setattr(userContainer, name, userClass)
-
-                # grab the pixel grid while we are at it - if reading
-                if inputFile.mode != CREATE:
-                    pixGrid = driver.getPixelGrid()
-                    gridList.append(pixGrid)
-
-            else:
-                msg = "File type not understood"
-                raise generic.LiDARFileException(msg)
+    gridList, driverList = openFiles(dataFiles, userContainer, controls)
             
-    if len(gridList) == 0:
-        msg = 'No input files selected'
-        raise generic.LiDARFileException(msg)
-        
     # need to determine if we have a spatial index for all LiDAR files
     if controls.spatialProcessing:
         for driver in driverList:
@@ -422,68 +364,8 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
     # set up depending on if spatial or non spatial processing
     if controls.spatialProcessing:
         
-        # work out the reference pixgrid. This is used when the footprint
-        # is BOUNDS_FROM_REFERENCE            
-        referenceGrid = controls.referencePixgrid
-        if referenceGrid is None and controls.referenceImage is not None:
-            referenceGrid = pixelgrid.pixelGridFromFile(controls.referenceImage)
-        if referenceGrid is None:
-            # default to first image
-            referenceGrid = gridList[0]
-        
-        # override the resolution and snap the coords    
-        if controls.referenceResolution is not None or controls.snapGrid:
-            res = controls.referenceResolution
-            if controls.snapGrid:
-                # just use the already calculated res
-                res = referenceGrid.xRes
-        
-            referenceGrid.xMin = referenceGrid.snapToGrid(referenceGrid.xMin, 
-                    referenceGrid.xMin, res)
-            referenceGrid.xMax = referenceGrid.snapToGrid(referenceGrid.xMax, 
-                    referenceGrid.xMax, res)
-            referenceGrid.yMin = referenceGrid.snapToGrid(referenceGrid.yMin, 
-                    referenceGrid.yMin, res)
-            referenceGrid.yMax = referenceGrid.snapToGrid(referenceGrid.yMax, 
-                    referenceGrid.yMax, res)
-            referenceGrid.xRes = res
-            referenceGrid.yRes = res
-
-        # Check they all have the same projection
-        # the LiDAR files don't need to align since we can recompute the spatial 
-        # index on the fly.
-        for pixGrid in gridList:
-            if pixGrid.projection != '' and referenceGrid.projection != '':
-                if not referenceGrid.equalProjection(pixGrid):
-                    msg = 'Un-aligned datasets not yet supported'
-                    raise generic.LiDARFileException(msg)
-        
-        # work out common extent
-        workingPixGrid = findCommonPixelGridRegion(gridList, referenceGrid, 
-                                controls.footprint)
-                                
-        # we don't support reprojection of raster datasets yet.
-        # use RIOS for that. Need to ensure that any input raster datasets
-        # are on the workingPixGrid.
-        # we can deal with reprojection of LiDAR datasets so don't worry
-        # about them.
-        for driver in driverList:
-            if (isinstance(driver, gdaldriver.GDALDriver) and 
-                                driver.mode != CREATE):
-                pixGrid = driver.getPixelGrid()
-                if not pixGrid.alignedWith(workingPixGrid):
-                    msg = """Input image file(s) not aligned with calculated 
-grid. Resample input images to match, or set grid explicitly with 
-controls.setReferenceImage()"""
-                    raise generic.LiDARFileException(msg)
-                            
-        # tell all drivers that are creating files what pixel grid is
-        for driver in driverList:
-            if driver.mode == CREATE:
-                driver.setPixelGrid(workingPixGrid)
-            
-        # tell info class
-        userContainer.info.setPixGrid(workingPixGrid)
+        workingPixGrid = getWorkingPixGrid(controls, userContainer, 
+                                gridList, driverList)
             
         # work out where the first block is
         # controls.windowSize is in bins. Convert to meters
@@ -561,7 +443,7 @@ controls.setReferenceImage()"""
         userContainer.info.firstBlock = False
         
         # write anything out that has been queued for output
-        for name in nameList:
+        for name in dataFiles.__dict__.keys():
             userClass = getattr(userContainer, name)
             if isinstance(userClass, list):
                 for userClassItem in userClass:
@@ -610,6 +492,141 @@ controls.setReferenceImage()"""
     for driver in driverList:
         driver.close()
 
+def openFiles(dataFiles, userContainer, controls):
+    """
+    Open all the files required by doProcessing
+    """
+    gridList = []
+    driverList = []
+    nameList = dataFiles.__dict__.keys()
+    for name in nameList:
+        
+        inputFiles = getattr(dataFiles, name)
+        # check if we are dealing with a list of inputs
+        if isinstance(inputFiles, list):
+            setattr(userContainer, name, list())
+        else:
+            inputFiles = [inputFiles]
+        
+        for inputFile in inputFiles:
+            if isinstance(inputFile, LidarFile):
+                if inputFile.mode == generic.CREATE:
+                    # TODO: Creation options?
+                    driver = generic.getWriterForLiDARFormat(inputFile.lidarDriver,
+                        inputFile.fname, inputFile.mode, controls, inputFile)
+                else:
+                    driver = generic.getReaderForLiDARFile(inputFile.fname,
+                                    inputFile.mode, controls, inputFile)
+                driverList.append(driver)
+
+                # create a class to wrap this for the users function
+                userClass = userclasses.LidarData(inputFile.mode, driver)
+                if hasattr(userContainer, name):
+                    getattr(userContainer, name).append(userClass)
+                else:
+                    setattr(userContainer, name, userClass)
+
+                # grab the pixel grid while we are at it - if reading
+                if inputFile.mode != CREATE:
+                    pixGrid = driver.getPixelGrid()
+                    gridList.append(pixGrid)
+
+            elif isinstance(inputFile, ImageFile):
+                driver = gdaldriver.GDALDriver(inputFile.fname,
+                                    inputFile.mode, controls, inputFile)
+                driverList.append(driver)
+
+                # create a class to wrap this for the users function
+                userClass = userclasses.ImageData(inputFile.mode, driver)
+                if hasattr(userContainer, name):
+                    getattr(userContainer, name).append(userClass)
+                else:
+                    setattr(userContainer, name, userClass)
+
+                # grab the pixel grid while we are at it - if reading
+                if inputFile.mode != CREATE:
+                    pixGrid = driver.getPixelGrid()
+                    gridList.append(pixGrid)
+
+            else:
+                msg = "File type not understood"
+                raise generic.LiDARFileException(msg)
+                
+    if len(gridList) == 0:
+        msg = 'No input files selected'
+        raise generic.LiDARFileException(msg)
+
+    return gridList, driverList
+
+def getWorkingPixGrid(controls, userContainer, gridList, driverList):
+    """
+    Calculates the working pixel grid and informs the drivers
+    and userContainer.
+    """
+    # work out the reference pixgrid. This is used when the footprint
+    # is BOUNDS_FROM_REFERENCE            
+    referenceGrid = controls.referencePixgrid
+    if referenceGrid is None and controls.referenceImage is not None:
+        referenceGrid = pixelgrid.pixelGridFromFile(controls.referenceImage)
+    if referenceGrid is None:
+        # default to first image
+        referenceGrid = gridList[0]
+        
+    # override the resolution and snap the coords    
+    if controls.referenceResolution is not None or controls.snapGrid:
+        res = controls.referenceResolution
+        if controls.snapGrid:
+            # just use the already calculated res
+            res = referenceGrid.xRes
+        
+        referenceGrid.xMin = referenceGrid.snapToGrid(referenceGrid.xMin, 
+                referenceGrid.xMin, res)
+        referenceGrid.xMax = referenceGrid.snapToGrid(referenceGrid.xMax, 
+                referenceGrid.xMax, res)
+        referenceGrid.yMin = referenceGrid.snapToGrid(referenceGrid.yMin, 
+                referenceGrid.yMin, res)
+        referenceGrid.yMax = referenceGrid.snapToGrid(referenceGrid.yMax, 
+                referenceGrid.yMax, res)
+        referenceGrid.xRes = res
+        referenceGrid.yRes = res
+
+    # Check they all have the same projection
+    # the LiDAR files don't need to align since we can recompute the spatial 
+    # index on the fly.
+    for pixGrid in gridList:
+        if pixGrid.projection != '' and referenceGrid.projection != '':
+            if not referenceGrid.equalProjection(pixGrid):
+                msg = 'Un-aligned datasets not yet supported'
+                raise generic.LiDARFileException(msg)
+        
+    # work out common extent
+    workingPixGrid = findCommonPixelGridRegion(gridList, referenceGrid, 
+                            controls.footprint)
+                                
+    # we don't support reprojection of raster datasets yet.
+    # use RIOS for that. Need to ensure that any input raster datasets
+    # are on the workingPixGrid.
+    # we can deal with reprojection of LiDAR datasets so don't worry
+    # about them.
+    for driver in driverList:
+        if (isinstance(driver, gdaldriver.GDALDriver) and 
+                            driver.mode != CREATE):
+            pixGrid = driver.getPixelGrid()
+            if not pixGrid.alignedWith(workingPixGrid):
+                msg = """Input image file(s) not aligned with calculated 
+grid. Resample input images to match, or set grid explicitly with 
+controls.setReferenceImage()"""
+                raise generic.LiDARFileException(msg)
+                            
+    # tell all drivers that are creating files what pixel grid is
+    for driver in driverList:
+        if driver.mode == CREATE:
+            driver.setPixelGrid(workingPixGrid)
+            
+    # tell info class
+    userContainer.info.setPixGrid(workingPixGrid)
+    
+    return workingPixGrid
 
 def findCommonPixelGridRegion(gridList, refGrid, combine=INTERSECTION):
     """

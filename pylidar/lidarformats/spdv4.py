@@ -27,6 +27,7 @@ from rios import pixelgrid
 from . import generic
 from . import gridindexutils
 
+# Header fields have defined type in SPDV4
 HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float32, 'AZIMUTH_MIN' : numpy.float32,
 'BANDWIDTHS' : numpy.float32, 'BIN_SIZE' : numpy.float32,
 'BLOCK_SIZE_POINT' : numpy.uint16, 'BLOCK_SIZE_PULSE' : numpy.uint16,
@@ -77,6 +78,7 @@ POINTS_ESSENTIAL_FIELDS = ('X', 'Y', 'Z', 'CLASSIFICATION')
 # VERSION_SPD always created by pylidar
 HEADER_ESSENTIAL_FIELDS = ('SPATIAL_REFERENCE', 'VERSION_DATA')
 
+# The following fields have defined type
 PULSE_FIELDS = {'PULSE_ID' : numpy.uint64, 'TIMESTAMP' : numpy.uint64,
 'NUMBER_OF_RETURNS' : numpy.uint8, 'AZIMUTH' : numpy.uint16, 
 'ZENITH' : numpy.uint16, 'SOURCE_ID' : numpy.uint16, 
@@ -88,6 +90,7 @@ PULSE_FIELDS = {'PULSE_ID' : numpy.uint64, 'TIMESTAMP' : numpy.uint64,
 'AMPLITUDE_PULSE' : numpy.float32, 'WIDTH_PULSE' : numpy.float32, 
 'SCAN_ANGLE_RANK' : numpy.int16, 'PRISM_FACET' : numpy.uint8}
 
+# The following fields have defined type
 POINT_FIELDS = {'RANGE' : numpy.uint16, 'RETURN_NUMBER' : numpy.uint8,
 'X' : numpy.uint16, 'Y' : numpy.uint16, 'Z' : numpy.uint16, 
 'HEIGHT' : numpy.uint16, 'CLASSIFICATION' : numpy.uint8, 
@@ -215,6 +218,10 @@ SPATIALINDEX_GROUP = 'SPATIALINDEX'
 SIMPLEPULSEGRID_GROUP = 'SIMPLEPULSEGRID'
         
 class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
+    """
+    Implementation of a simple grid index, which is currently
+    the only type used in SPD V4 files.
+    """
     def __init__(self, fileHandle, mode):
         SPDV4SpatialIndex.__init__(self, fileHandle, mode)
         self.si_cnt = None
@@ -226,6 +233,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         self.lastPulseIdxMask = None
         
         if mode == generic.READ or mode == generic.UPDATE:
+            # read it in if it exists.
             group = fileHandle[SPATIALINDEX_GROUP]
             if group is not None:
                 group = group[SIMPLEPULSEGRID_GROUP]
@@ -268,7 +276,10 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         SPDV4SpatialIndex.close(self)
         
     def getSISubset(self, extent, overlap):
-        "internal method"
+        """
+        Internal method. Reads the required block out of the spatial
+        index for the requested extent.
+        """
         # snap the extent to the grid of the spatial index
         pixGrid = self.pixelGrid
         xMin = pixGrid.snapToGrid(extent.xMin, pixGrid.xMin, pixGrid.xRes)
@@ -298,6 +309,9 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         return idx_subset, cnt_subset
 
     def getPulsesSpaceForExtent(self, extent, overlap):
+        """
+        Get the space and indexed for pulses of the given extent.
+        """
         # return cache
         if self.lastExtent is not None and self.lastExtent == extent:
             return self.lastPulseSpace, self.lastPulseIdx, self.lastPulseIdxMask
@@ -315,6 +329,9 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         return pulse_space, pulse_idx, pulse_idx_mask
 
     def getPointsSpaceForExtent(self, extent, overlap):
+        """
+        Get the space and indexed for points of the given extent.
+        """
         # TODO: cache
     
         # should return cached if exists
@@ -332,6 +349,9 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         return point_space, point_idx, point_idx_mask
 
     def createNewIndex(self, pixelGrid):
+        """
+        Create a new spatial index
+        """
         nrows, ncols = pixelGrid.getDimensions()
         self.si_cnt = numpy.zeros((nrows, ncols), 
                         dtype=SPDV4_SIMPLEGRID_COUNT_DTYPE)
@@ -342,6 +362,10 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         self.pixelGrid = pixelGrid
 
     def setPointsAndPulsesForExtent(self, extent, points, pulses, lastPulseID):
+        """
+        Update the spatial index. Given extent and data works out what
+        needs to be written.
+        """
         xMin = self.pixelGrid.snapToGrid(extent.xMin, self.pixelGrid.xMin, 
                 self.pixelGrid.xRes)
         xMax = self.pixelGrid.snapToGrid(extent.xMax, self.pixelGrid.xMax, 
@@ -954,6 +978,7 @@ spatial index will be recomputed on the fly"""
         # and Y_IDX fields since they shouldn't be updated.
         # SPDV3 gives you a warning if you change these fields
         # in SPDV4 the updates are silently lost        
+        # TODO: surely we can do better than this?
 
         # essential fields exist?
         if self.mode == generic.CREATE:
@@ -1032,8 +1057,6 @@ spatial index will be recomputed on the fly"""
                             self.lastPoints_IdxMask, self.lastPoints_Idx)
                 points = flatPoints
             else:
-                # flatten somehow
-                
                 # get the number of returns for each pulse
                 # this doesn't work with structured arrays so need
                 # to use one of the fields
@@ -1459,6 +1482,7 @@ spatial index will be recomputed on the fly"""
         """
         Return the total number of pulses
         """
+        # PULSE_ID is always present.
         return self.fileHandle['DATA']['PULSES']['PULSE_ID'].shape[0]
         
     def getHeader(self):

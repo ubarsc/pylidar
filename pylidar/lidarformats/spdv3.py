@@ -197,6 +197,7 @@ class SPDV3File(generic.LiDARFile):
                     self.wkt = self.wkt.decode()
 
             else:
+                # no spatial index
                 self.si_cnt = None
                 self.si_idx = None
                 self.si_binSize = None
@@ -343,7 +344,7 @@ class SPDV3File(generic.LiDARFile):
         self.wkt = pixGrid.projection
         
         # create spatial index - assume existing one (if it exists)
-        # is invalid
+        # is invalid. This function is only called for spatial processing anyway.
         if self.userClass.writeSpatialIndex:
             (nrows, ncols) = pixGrid.getDimensions()
             self.si_cnt = numpy.zeros((ncols, nrows), dtype=SPDV3_SI_COUNT_DTYPE)
@@ -471,7 +472,8 @@ spatial index will be recomputed on the fly"""
         
         imageSlice, siSlice = gridindexutils.getSlicesForExtent(pixGrid, 
              self.si_cnt.shape, self.controls.overlap, xMin, xMax, yMin, yMax)
-             
+
+        # chop out the data             
         if imageSlice is not None and siSlice is not None:
 
             cnt_subset[imageSlice] = self.si_cnt[siSlice]
@@ -1131,6 +1133,7 @@ spatial index will be recomputed on the fly"""
         # keep these indices from pulses to points - handy for the indexing 
         # functions.
         self.lastPoints = points
+        self.lastPointsShape = point_shape
         self.lastPoints_Idx = point_idx
         self.lastPoints_IdxMask = point_idx_mask
         # self.lastPulseRange copied in readPulsesForRange()
@@ -1148,6 +1151,7 @@ spatial index will be recomputed on the fly"""
         pulses = self.fileHandle['DATA']['PULSES'][
             self.pulseRange.startPulse:self.pulseRange.endPulse]
             
+        # TODO: keep shape?
         self.lastPulses = pulses
         self.lastPulseRange = copy.copy(self.pulseRange)
         self.lastPoints = None # now invalid
