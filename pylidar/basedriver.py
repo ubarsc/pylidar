@@ -24,6 +24,11 @@ to use for reading or writing the current block.
 
 from __future__ import print_function, division
 
+# access modes passed to driver constructor
+READ = 0
+UPDATE = 1
+CREATE = 2
+
 class Extent(object):
     """
     Class that defines the extent in world coords

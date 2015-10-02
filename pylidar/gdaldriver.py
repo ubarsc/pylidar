@@ -41,11 +41,11 @@ class GDALDriver(basedriver.Driver):
     def __init__(self, fname, mode, controls, userClass):
         basedriver.Driver.__init__(self, fname, mode, controls, userClass)
         
-        if mode != generic.CREATE:
+        if mode != basedriver.CREATE:
             # file already exists
-            if mode == generic.READ:
+            if mode == basedriver.READ:
                 gdalMode = gdal.GA_ReadOnly
-            elif mode == generic.UPDATE:
+            elif mode == basedriver.UPDATE:
                 gdalMode = gdal.GA_Update
     
             # open it in the right mode
@@ -116,7 +116,7 @@ class GDALDriver(basedriver.Driver):
         Calculate stats etc
         """
         from rios import calcstats
-        if self.mode != generic.READ:
+        if self.mode != basedriver.READ:
             progress = self.controls.progress
             ignore = self.userClass.rasterIgnore
             calcstats.calcStats(self.ds, progress, ignore)
@@ -127,7 +127,7 @@ class GDALDriver(basedriver.Driver):
         """
         Read a 3d numpy array with data for the current extent
         """
-        if self.mode == generic.CREATE:
+        if self.mode == basedriver.CREATE:
             msg = 'Can only read raster data in READ or UPDATE modes'
             raise GDALException(msg)
         
@@ -142,7 +142,7 @@ class GDALDriver(basedriver.Driver):
         """
         Write a 3d numpy array to the image
         """
-        if self.mode == generic.READ or data is None:
+        if self.mode == basedriver.READ or data is None:
             # the user class always call this as the processor makes no
             # distinction with read/write when calling flush()
             return
