@@ -35,6 +35,8 @@ try:
 except ImportError as pltErr:
     haveMatPlotLib = False
 
+class VisualisationError(Exception):
+    "A Visualisation error has occured"
 
 def rescaleRGB(r, g, b, bit8=True):
     """
@@ -62,7 +64,7 @@ def rescaleRGB(r, g, b, bit8=True):
     return r,g,b
 
 def getClassColoursDict():
-    colourDict = dict()
+    colourDict = {}
     
     colourDict[0] = [1,1,1,1] # Unknown
     colourDict[1] = [0,0,0,1] # Unclassified
@@ -115,7 +117,8 @@ def createRGB4Param(data, stretch='linear', colourMap='Spectral'):
     """
     # Check matplotlib is available
     if not haveMatPlotLib:
-        raise Exception("The matplotlib module is required for this function could not be imported\n\t" + str(pltErr))
+        msg = "The matplotlib module is required for this function could not be imported\n\t" + str(pltErr)
+        raise VisualisationError(msg)
     
     if stretch == 'stddev':
         min = numpy.min(data)
@@ -158,7 +161,8 @@ def displayPointCloud(x, y, z, r, g, b, s):
     """
     # Check if pylidarviewer is available
     if not havepylidarviewer:
-        raise Exception("The pylidarviewer module is required for this function could not be imported\n\t" + str(pylidarviewerErr))
+        msg = "The pylidarviewer module is required for this function could not be imported\n\t" + str(pylidarviewerErr)
+        raise VisualisationError(msg)
     
     x = x - numpy.min(x)
     y = y - numpy.min(y)
