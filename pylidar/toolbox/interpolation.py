@@ -23,18 +23,30 @@ import os
 import numpy
 import scipy.interpolate
 
+# See which interpolator we have access to
+
+# https://bitbucket.org/chchrsc/cgalinterp
+# Have had trouble with CGAL on some datasets
+# Current preference is to use PyNNInterp (below)
+# But we have left support in just in case.
 haveCGALInterpPy = True
 try:
     import cgalinterp
 except ImportError as cgalInterpErr:
     haveCGALInterpPy = False
     
+# https://bitbucket.org/petebunting/pynninterp
+# Preferred interpolator
 havePyNNInterp = True
 try:
     import pynninterp
 except ImportError as pyNNInterpErr:
     havePyNNInterp = False
 
+# Exception type for this module
+InterpolationError(Exception):
+    "Interpolation Error"
+    
 def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
     """
     A function to interpolate values to a regular gridCoords given 
@@ -50,17 +62,18 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
     """
     
     if (xVals.shape != yVals.shape) & (yVals.shape != zVals.shape):
-        raise Exception("X, Y and Z inputs did not have the same shapes.")
+        raise InterpolationError("X, Y and Z inputs did not have the same shapes.")
     
     if xVals.shape[0] < 4:
-        raise Exception("Must have at least 4 input points to create interpolator")
+        raise InterpolationError("Must have at least 4 input points to create interpolator")
     
     if checkPtDist:
         if xVals.shape[0] < 100:
             if (numpy.var(xVals) < 4.0) | (numpy.var(yVals) < 4.0):
                 print("X Var: ", numpy.var(xVals))
                 print("Y Var: ", numpy.var(yVals))
-                raise Exception("Both the X and Y input coordinates must have a variance > 4 when the number of points is < 100.")
+                msg = "Both the X and Y input coordinates must have a variance > 4 when the number of points is < 100."
+                raise InterpolationError(msg)
           
     if method == 'nearest' or method == 'linear' or method == 'cubic':
         interpZ = scipy.interpolate.griddata((xVals, yVals), zVals, (gridCoords[0].flatten(), gridCoords[1].flatten()), method=method, rescale=True)
@@ -68,25 +81,40 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
         out = numpy.reshape(interpZ, gridCoords[0].shape)
     elif method == 'cgalnn':
         if not haveCGALInterpPy:
-            raise Exception("The cgalinterp python bindings required for natural neighbour interpolation and could not be imported\n\t" + cgalInterpErr)        
+            msg = "The cgalinterp python bindings required for natural neighbour interpolation and could not be imported\n\t" + cgalInterpErr
+            raise InterpolationError(msg)
         xVals = xVals.astype(numpy.float64)
         yVals = yVals.astype(numpy.float64)
         zVals = zVals.astype(numpy.float64)
-        out = cgalinterp.NaturalNeighbour(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+        try:
+            out = cgalinterp.NaturalNeighbour(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+        except Exception as e:
+            # rethrow cgalinterp exception type so it can be more easily caught
+            raise InterpolationError(str(e))
     elif method == 'pynn':
         if not havePyNNInterp:
-            raise Exception("The PyNNInterp python bindings required for natural neighbour interpolation and could not be imported\n\t" + pyNNInterpErr)        
+            msg = "The PyNNInterp python bindings required for natural neighbour interpolation and could not be imported\n\t" + pyNNInterpErr
+            raise InterpolationError(msg)
         xVals = xVals.astype(numpy.float64)
         yVals = yVals.astype(numpy.float64)
         zVals = zVals.astype(numpy.float64)
-        out = pynninterp.NaturalNeighbour(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+        try:
+            out = pynninterp.NaturalNeighbour(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+        except Exception as e:
+            # rethrow pynninterp exception type so it can be more easily caught
+            raise InterpolationError(str(e))
     elif method == 'pylinear':
         if not havePyNNInterp:
-            raise Exception("The PyNNInterp python bindings required for linear (TIN?) interpolation and could not be imported\n\t" + pyNNInterpErr)        
+            msg = "The PyNNInterp python bindings required for linear (TIN?) interpolation and could not be imported\n\t" + pyNNInterpErr
+            raise InterpolationError(msg)
         xVals = xVals.astype(numpy.float64)
         yVals = yVals.astype(numpy.float64)
         zVals = zVals.astype(numpy.float64)
-        out = pynninterp.Linear(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+        try:
+            out = pynninterp.Linear(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+        except Exception as e:
+            # rethrow pynninterp exception type so it can be more easily caught
+            raise InterpolationError(str(e))
     else:
-        raise Exception("Interpolaton method was not recognised")
+        raise InterpolationError("Interpolaton method '%s' was not recognised" % method)
     return out
