@@ -13,6 +13,7 @@ Processing
 .. toctree::
    :maxdepth: 2
 
+   userclasses
    lidarprocessor
    toolbox/toolbox
 
@@ -24,7 +25,11 @@ Drivers
 
    gdaldriver
    basedriver
-   lidarformats
+   lidarformats/generic
+   lidarformats/spdv3
+   lidarformats/spdv4
+   lidarformats/h5space
+   lidarformats/gridindexutils
 
 
 Indices and tables

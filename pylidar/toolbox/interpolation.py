@@ -44,7 +44,7 @@ except ImportError as pyNNInterpErr:
     havePyNNInterp = False
 
 # Exception type for this module
-InterpolationError(Exception):
+class InterpolationError(Exception):
     "Interpolation Error"
     
 def interpGrid(xVals, yVals, zVals, gridCoords, method, checkPtDist=True):
