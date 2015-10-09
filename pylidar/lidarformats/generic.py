@@ -181,7 +181,7 @@ class LiDARFile(basedriver.Driver):
         
     def readPointsByPulse(self):     
         """
-        Read a 2d structured masked array containing the points
+        Read a 3d structured masked array containing the points
         for each pulse.
         """
         raise NotImplementedError()
@@ -189,7 +189,7 @@ class LiDARFile(basedriver.Driver):
     def readTransmitted(self):
         """
         Read the transmitted waveform for all pulses
-        returns a 2d masked array. 
+        returns a 3d masked array. 
         """
         raise NotImplementedError()
         
@@ -309,6 +309,50 @@ class LiDARFileInfo(basedriver.FileInfo):
     """
     def __init__(self, fname):
         basedriver.FileInfo.__init__(self, fname)
+        
+class WaveformInfo(object):
+    """
+    Class that contains information for understanding a waveform
+    array. A waveform array is a 3d masked array. First dimension is
+    the number of the waveform (can be multiple for spdv4 etc). Second
+    is the number of the bins, last is the pulse. 
+    
+    This is object is returned from the readReceived and readTransmitted 
+    driver calls along with the actual waveform.
+    
+    This class contains ways of obtaining the radiance and range to start.
+    
+    This is a default implementation that uses gain and offset. It
+    is possible for a driver to return a derived class if needed.
+    
+    """
+    def __init__(self, gain=None, offset=None, rangeToStart=None):
+        self.gain = gain
+        self.offset = offset
+        self.rangeToStart = rangeToStart
+        
+    def convertDNToRadiance(self, waveformDN):
+        """
+        Returns the waveform converted to radiance
+        """
+        return (waveformDN / self.gain) + self.offset
+        
+    def convertRadianceToDN(self, waveformRad):
+        """
+        Converts a waveform returned by convertDNToRadiance to
+        DN suitable to writing back to a file.
+        Converts back to uint32.
+        """
+        dn = (waveformRad - self.offset) * self.gain
+        return dn.astype(numpy.uint32)
+        
+    def getRangeToStart(self):
+        """
+        Returns the array of range to start times (in metres)
+        - one per pulse. This should be a 2d array - first index
+        is the number of the waveform.
+        """
+        return self.rangeToStart
 
 def getWriterForLiDARFormat(driverName, fname, mode, controls, userClass):
     """

@@ -462,9 +462,10 @@ class LidarData(object):
         
     def getTransmitted(self):
         """
-        Returns a masked 2d integer array. The first axis will be the same
-        length as the pulses. The second axis will contain the transmitted 
-        waveform.
+        Returns a masked 3d integer array and a generic.WaveformInfo object. 
+        The first axis is the number waveform number, the second axis will 
+        be the waveform bins and the third axis axis will be the same length
+        as the pulses.
         
         Because some pulses will have a longer waveform than others a masked
         array is returned.
@@ -473,9 +474,10 @@ class LidarData(object):
         
     def getReceived(self):
         """
-        Returns a masked 2d integer array. The first axis will be the same
-        length as the pulses. The second axis will contain the received
-        waveform.
+        Returns a masked 3d integer array and a generic.WaveformInfo object. 
+        The first axis is the number waveform number, the second axis will 
+        be the waveform bins and the third axis axis will be the same length
+        as the pulses.
         
         Because some pulses will have a longer waveform than others a masked
         array is returned.

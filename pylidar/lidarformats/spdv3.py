@@ -658,9 +658,12 @@ spatial index will be recomputed on the fly"""
 
     def readTransmitted(self):
         """
-        Return the 2d masked integer array of transmitted for each of the
-        current pulses. 
+        Return the 3d masked integer array of transmitted for each of the
+        current pulses and a WaveformInfo object describing how to use it.
+        SPDV3 only has 1 transmitted per pulse so the first axis is empty.
+        Second axis is waveform bin and last is pulse.
         """
+        # TODO: cache?
         if self.controls.spatialProcessing:
             pulses = self.readPulsesForExtent()
         else:
@@ -676,19 +679,32 @@ spatial index will be recomputed on the fly"""
         transmitted = trans_shape.read(self.fileHandle['DATA']['TRANSMITTED'])
         
         transByPulse = transmitted[trans_idx]
-        trans_masked = numpy.ma.array(transByPulse, mask=trans_idx_mask)
+        # add a dummy axis
+        transByPulse = numpy.expand_dims(transByPulse, 0)
+        trans_idx_mask3d = numpy.expand_dims(trans_idx_mask, 0)
+        
+        trans_masked = numpy.ma.array(transByPulse, mask=trans_idx_mask3d)
         
         self.lastTransShape = trans_shape
         self.lastTrans_Idx = trans_idx
         self.lastTrans_IdxMask = trans_idx_mask
+
+        # create a WaveformInfo object
+        gain = pulses['TRANS_WAVE_GAIN']
+        offset = pulses['TRANS_WAVE_OFFSET']
+        rangeToStart = pulses['RANGE_TO_WAVEFORM_START']
+        wi = generic.WaveformInfo(gain, offset, rangeToStart)
         
-        return trans_masked
+        return trans_masked, wi
         
     def readReceived(self):
         """
-        Return the 2d masked integer array of received for each of the
-        current pulses. 
+        Return the 3d masked integer array of received for each of the
+        current pulses and a WaveformInfo object describing how to use it.
+        SPDV3 only has 1 transmitted per pulse so the first axis is empty.
+        Second axis is waveform bin and last is pulse.
         """
+        # TODO: cache?
         if self.controls.spatialProcessing:
             pulses = self.readPulsesForExtent()
         else:
@@ -704,13 +720,23 @@ spatial index will be recomputed on the fly"""
         received = recv_shape.read(self.fileHandle['DATA']['RECEIVED'])
         
         recvByPulse = received[recv_idx]
-        recv_masked = numpy.ma.array(recvByPulse, mask=recv_idx_mask)
+        # add a dummy axis
+        recvByPulse = numpy.expand_dims(recvByPulse, 0)
+        recv_idx_mask3d = numpy.expand_dims(recv_idx_mask, 0)
+
+        recv_masked = numpy.ma.array(recvByPulse, mask=recv_idx_mask3d)
         
         self.lastRecvShape = recv_shape
         self.lastRecv_Idx = recv_idx
         self.lastRecv_IdxMask = recv_idx_mask
         
-        return recv_masked
+        # create a WaveformInfo object
+        gain = pulses['RECEIVE_WAVE_GAIN']
+        offset = pulses['RECEIVE_WAVE_OFFSET']
+        rangeToStart = pulses['RANGE_TO_WAVEFORM_START']
+        wi = generic.WaveformInfo(gain, offset, rangeToStart)
+        
+        return recv_masked, wi
         
     def preparePulsesForWriting(self, pulses):
         """
