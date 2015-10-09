@@ -28,6 +28,8 @@ import ctypes
 # within the HDF5 library so we can call it from numba
 if sys.platform == 'win32':
     HDF5_DLL = ctypes.CDLL('hdf5.dll')
+elif sys.platform == 'darwin':
+    HDF5_DLL = ctypes.CDLL('libhdf5.dylib')
 else:
     HDF5_DLL = ctypes.CDLL('libhdf5.so')
 H5Sselect_hyperslab = HDF5_DLL.H5Sselect_hyperslab
@@ -123,6 +125,14 @@ def updateFromBool(spaceid, boolStart, boolArray, mask, start, count,
         count[0] = (lastN+1) - startRange
         select_hyperslab(spaceid, selectNotb, start.ctypes.data,
             0, count.ctypes.data, 0)
+
+def createSpaceFromRange(start, end):
+    """
+    Creates a H5Space object given the start and end of a range
+    """
+    boolArray = numpy.ones((end - start), dtype=numpy.bool)
+    space = H5Space(boolArray, start)
+    return space
 
 class H5Space(object):
     """

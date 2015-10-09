@@ -1125,7 +1125,7 @@ spatial index will be recomputed on the fly"""
         startIdxs = pulses['PTS_START_IDX']
         
         nOut = self.fileHandle['DATA']['POINTS'].shape[0]
-        point_shape, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
         
         points = point_shape.read(self.fileHandle['DATA']['POINTS'])
@@ -1133,7 +1133,7 @@ spatial index will be recomputed on the fly"""
         # keep these indices from pulses to points - handy for the indexing 
         # functions.
         self.lastPoints = points
-        self.lastPointsShape = point_shape
+        self.lastPointsSpace = point_space
         self.lastPoints_Idx = point_idx
         self.lastPoints_IdxMask = point_idx_mask
         # self.lastPulseRange copied in readPulsesForRange()
@@ -1148,11 +1148,12 @@ spatial index will be recomputed on the fly"""
                 self.lastPulses is not None):
             return self.subsetColumns(self.lastPulses, colNames)
     
-        pulses = self.fileHandle['DATA']['PULSES'][
-            self.pulseRange.startPulse:self.pulseRange.endPulse]
-            
-        # TODO: keep shape?
+        space = h5space.createSpaceFromRange(self.pulseRange.startPulse,
+                    self.pulseRange.endPulse)
+        pulses = space.read(self.fileHandle['DATA']['PULSES'])
+                    
         self.lastPulses = pulses
+        self.lastPulsesSpace = space
         self.lastPulseRange = copy.copy(self.pulseRange)
         self.lastPoints = None # now invalid
         return self.subsetColumns(pulses, colNames)

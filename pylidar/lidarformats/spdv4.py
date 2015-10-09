@@ -633,11 +633,7 @@ spatial index will be recomputed on the fly"""
         any unscaling if asked (unScaled=False). 
         """
         attrs = handle[name].attrs
-        if isinstance(selection, slice):
-            data = handle[name][selection]
-        else:
-            # assume H5Space
-            data = selection.read(handle[name])
+        data = selection.read(handle[name])
 
         if not unScaled and GAIN_NAME in attrs and OFFSET_NAME in attrs:
             data = (data / attrs[GAIN_NAME]) + attrs[OFFSET_NAME]
@@ -651,7 +647,7 @@ spatial index will be recomputed on the fly"""
         array will be returned.
         It will work out of any of the column names end with '_U'
         and deal with them appropriately.
-        selection can be a h5space.H5Space or a slice.
+        selection should be a h5space.H5Space.
         """
         if isinstance(colNames, str):
             unScaled = colNames.endswith('_U')
@@ -682,12 +678,7 @@ spatial index will be recomputed on the fly"""
                 hdfNameList.append(hdfName)
                 unScaledList.append(unScaled)
             
-            if isinstance(selection, slice):
-                assert(selection.step is None)
-                numRecords = selection.stop - selection.start
-            else:
-                # assume H5Space
-                numRecords = selection.getSelectionSize()
+            numRecords = selection.getSelectionSize()
                
             data = numpy.empty(numRecords, dtypeList)
         
@@ -1421,7 +1412,6 @@ spatial index will be recomputed on the fly"""
         """
         Read all the points for the specified range of pulses
         """
-        # TODO: cache
         pointsHandle = self.fileHandle['DATA']['POINTS']
         if colNames is None:
             # get all names
@@ -1430,6 +1420,7 @@ spatial index will be recomputed on the fly"""
         if (self.lastPulseRange is not None and
                 self.lastPulseRange == self.pulseRange and
                 self.lastPoints is not None and
+                self.lastPointsColumns is not None and 
                 colNames == self.lastPointsColumns):
             return self.lastPoints
             
@@ -1447,6 +1438,7 @@ spatial index will be recomputed on the fly"""
         # keep these indices from pulses to points - handy for the indexing 
         # functions.
         self.lastPoints = points
+        self.lastPointsSpace = point_space
         self.lastPoints_Idx = point_idx
         self.lastPoints_IdxMask = point_idx_mask
         self.lastPointsColumns = colNames
@@ -1466,13 +1458,15 @@ spatial index will be recomputed on the fly"""
                 self.lastPulseRange == self.pulseRange and 
                 self.lastPulses is not None and
                 self.lastPulsesColumns is not None and 
-                self.lastPulsesColumns != colNames):
+                self.lastPulsesColumns == colNames):
             return self.lastPulses
 
-        selection = slice(self.pulseRange.startPulse, self.pulseRange.endPulse)
-        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, selection)
+        space = h5space.createSpaceFromRange(self.pulseRange.startPulse, 
+                        self.pulseRange.endPulse)
+        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, space)
 
         self.lastPulses = pulses
+        self.lastPulsesSpace = space
         self.lastPulseRange = copy.copy(self.pulseRange)
         self.lastPoints = None # now invalid
         self.lastPointsColumns = colNames
