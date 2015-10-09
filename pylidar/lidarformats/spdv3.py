@@ -28,26 +28,26 @@ from . import generic
 from . import gridindexutils
 
 # so we can check the user has passed in expected array type
-PULSE_DTYPE = numpy.dtype([('GPS_TIME', '<u8'), ('PULSE_ID', '<u8'), 
-('X_ORIGIN', '<f8'), ('Y_ORIGIN', '<f8'), ('Z_ORIGIN', '<f4'), 
-('H_ORIGIN', '<f4'), ('X_IDX', '<f8'), ('Y_IDX', '<f8'), ('AZIMUTH', '<f4'), 
-('ZENITH', '<f4'), ('NUMBER_OF_RETURNS', 'u1'), 
-('NUMBER_OF_WAVEFORM_TRANSMITTED_BINS', '<u2'), 
-('NUMBER_OF_WAVEFORM_RECEIVED_BINS', '<u2'), ('RANGE_TO_WAVEFORM_START', '<f4'),
-('AMPLITUDE_PULSE', '<f4'), ('WIDTH_PULSE', '<f4'), ('USER_FIELD', '<u4'), 
-('SOURCE_ID', '<u2'), ('SCANLINE', '<u4'), ('SCANLINE_IDX', '<u2'), 
-('RECEIVE_WAVE_NOISE_THRES', '<f4'), ('TRANS_WAVE_NOISE_THRES', '<f4'), 
-('WAVELENGTH', '<f4'), ('RECEIVE_WAVE_GAIN', '<f4'), 
-('RECEIVE_WAVE_OFFSET', '<f4'), ('TRANS_WAVE_GAIN', '<f4'), 
-('TRANS_WAVE_OFFSET', '<f4'), ('PTS_START_IDX', '<u8'), 
-('TRANSMITTED_START_IDX', '<u8'), ('RECEIVED_START_IDX', '<u8')])
+PULSE_DTYPE = numpy.dtype([('GPS_TIME', 'u8'), ('PULSE_ID', 'u8'), 
+('X_ORIGIN', 'f8'), ('Y_ORIGIN', 'f8'), ('Z_ORIGIN', 'f4'), 
+('H_ORIGIN', 'f4'), ('X_IDX', 'f8'), ('Y_IDX', 'f8'), ('AZIMUTH', 'f4'), 
+('ZENITH', 'f4'), ('NUMBER_OF_RETURNS', 'u1'), 
+('NUMBER_OF_WAVEFORM_TRANSMITTED_BINS', 'u2'), 
+('NUMBER_OF_WAVEFORM_RECEIVED_BINS', 'u2'), ('RANGE_TO_WAVEFORM_START', 'f4'),
+('AMPLITUDE_PULSE', 'f4'), ('WIDTH_PULSE', 'f4'), ('USER_FIELD', 'u4'), 
+('SOURCE_ID', 'u2'), ('SCANLINE', 'u4'), ('SCANLINE_IDX', 'u2'), 
+('RECEIVE_WAVE_NOISE_THRES', 'f4'), ('TRANS_WAVE_NOISE_THRES', 'f4'), 
+('WAVELENGTH', 'f4'), ('RECEIVE_WAVE_GAIN', 'f4'), 
+('RECEIVE_WAVE_OFFSET', 'f4'), ('TRANS_WAVE_GAIN', 'f4'), 
+('TRANS_WAVE_OFFSET', 'f4'), ('PTS_START_IDX', 'u8'), 
+('TRANSMITTED_START_IDX', 'u8'), ('RECEIVED_START_IDX', 'u8')])
 
-POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', '<f8'), 
-('X', '<f8'), ('Y', '<f8'), ('Z', '<f4'), ('HEIGHT', '<f4'), ('RANGE', '<f4'), 
-('AMPLITUDE_RETURN', '<f4'), ('WIDTH_RETURN', '<f4'), ('RED', '<u2'), 
-('GREEN', '<u2'), ('BLUE', '<u2'), ('CLASSIFICATION', 'u1'), 
-('USER_FIELD', '<u4'), ('IGNORE', 'u1'), ('WAVE_PACKET_DESC_IDX', '<i2'), 
-('WAVEFORM_OFFSET', '<u4')])
+POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', 'f8'), 
+('X', 'f8'), ('Y', 'f8'), ('Z', 'f4'), ('HEIGHT', 'f4'), ('RANGE', 'f4'), 
+('AMPLITUDE_RETURN', 'f4'), ('WIDTH_RETURN', 'f4'), ('RED', 'u2'), 
+('GREEN', 'u2'), ('BLUE', 'u2'), ('CLASSIFICATION', 'u1'), 
+('USER_FIELD', 'u4'), ('IGNORE', 'u1'), ('WAVE_PACKET_DESC_IDX', 'i2'), 
+('WAVEFORM_OFFSET', 'u4')])
 
 HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'BANDWIDTHS' : numpy.float32, 'BIN_SIZE' : numpy.float32,
