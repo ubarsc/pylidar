@@ -44,11 +44,10 @@ def convertBoolToHDF5Space(boolArray, boolStart, spaceid, start, count,
     """
     Convert boolArray and boolStart into a newly created h5.h5s.SpaceID object.
 
-    spaceid should be the .id of the h5.h5s.SpaceID object.
-    start and count should be empty length 1 numpy.uint64 arrays
-    select_hyperslab should be the global H5Sselect_hyperslab.
-    selectSet and selectOr shold be the value of h5py.h5s.SELECT_SET
-        and h5py.h5s.SELECT_OR respectively.
+    * spaceid should be the .id of the h5.h5s.SpaceID object.
+    * start and count should be empty length 1 numpy.uint64 arrays
+    * select_hyperslab should be the global H5Sselect_hyperslab.
+    * selectSet and selectOr shold be the value of h5py.h5s.SELECT_SET and h5py.h5s.SELECT_OR respectively.
 
     """
     nVals = boolArray.shape[0]

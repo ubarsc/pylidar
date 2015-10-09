@@ -1175,11 +1175,11 @@ spatial index will be recomputed on the fly"""
         """
         Prepares data for writing to a field. 
         
-        arrayType is one of the ARRAY_TYPE_ values from .generic.
+        arrayType is one of the ARRAY_TYPE values from .generic.
         
         Does unscaling if possible unless name ends with '_U'.
         Raises exception if column needs to have scale and offset
-            defined, but aren't.
+        defined, but aren't.
             
         Returns the data to write, plus the 'hdfname' which
         is the field name the data should be written to. This has the 

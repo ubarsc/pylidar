@@ -23,8 +23,8 @@ Drivers
 .. toctree::
    :maxdepth: 2
 
-   gdaldriver
    basedriver
+   gdaldriver
    lidarformats/generic
    lidarformats/spdv3
    lidarformats/spdv4

@@ -355,7 +355,7 @@ class SPDV3File(generic.LiDARFile):
     
     def setExtent(self, extent):
         """
-        Set the extent to use for the *ForExtent() functions.
+        Set the extent to use for the ForExtent() functions.
         """
         if not self.hasSpatialIndex():
             msg = 'Format has no spatial Index. Processing must be done non-spatially'

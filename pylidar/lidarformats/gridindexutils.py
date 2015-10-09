@@ -92,8 +92,7 @@ def BuildSpatialIndexInternal(binNum, sortedBinNumNdx, si_start, si_count):
     
     Fills in the spatial index from the sorted bins created by CreateSpatialIndex.
     
-    binNum is row * nCols + col where row and col are arrays of the row and col 
-        of each element being spatially indexed.
+    binNum is row * nCols + col where row and col are arrays of the row and col of each element being spatially indexed.
     sortedBinNumNdx is argsorted binNum    
     si_start and si_count are output spatial indices
     """
@@ -130,22 +129,23 @@ def convertIdxBool2D(start_idx_array, count_array, outBool, boolStart, outRow, o
     
     Note: indexes returned are relative to the subset, not the file.
 
-    start_idx_array 2d - array of start indexes
-       input - from the SPD spatial index
-    count_array 2d - array of counts
-       input - from the SPD spatial index
-    outBool 1d - same shape as the dataset size, but bool inited to False
-       for passing to h5py for reading data
-    outIdx 3d - (max(count_array), nRows, nCols) int32 inited to 0
-       for constructing a masked array - relative to subset size
-    outMask 3d - bool same shape as outIdx inited to True
-       for constructing a masked array. Result will be False were valid data
-    outRow same shape as outBool but uint32 created with numpy.empty()
-       used internally only
-    outCol same shape as outBool but uint32 empty()
-       used internally only
-    counts (nRows, nCols) int32 inited to 0
-       used internally only
+    * start_idx_array 2d - array of start indexes
+      input - from the SPD spatial index
+    * count_array 2d - array of counts
+      input - from the SPD spatial index
+    * outBool 1d - same shape as the dataset size, but bool inited to False
+      for passing to h5py for reading data
+    * outIdx 3d - (max(count_array), nRows, nCols) int32 inited to 0
+      for constructing a masked array - relative to subset size
+    * outMask 3d - bool same shape as outIdx inited to True
+      for constructing a masked array. Result will be False were valid data
+    * outRow same shape as outBool but uint32 created with numpy.empty()
+      used internally only
+    * outCol same shape as outBool but uint32 empty()
+      used internally only
+    * counts (nRows, nCols) int32 inited to 0
+      used internally only
+
     """
     
     nRows = start_idx_array.shape[0]
@@ -202,20 +202,20 @@ def convertIdxBool1D(start_idx_array, count_array, outBool, boolStart, outRow, o
     
     Note: indexes returned are relative to the subset, not the file.
     
-    start_idx_array 1d - array of start indexes
-       input - from the SPD index
-    count_array 1d - array of counts
-       input - from the SPD index
-    outBool 1d - same shape as the dataset size, but bool inited to False
-       for passing to h5py for reading data
-    outIdx 2d - (max(count_array), nRows) int32 inited to 0
-       for constructing a masked array - relative to subset size
-    outMask 2d - bool same shape as outIdx inited to True
-       for constructing a masked array. Result will be False were valid data
-    outRow same shape as outBool but uint32 created with numpy.empty()
-       used internally only
-    counts (nRows, nCols) int32 inited to 0
-       used internally only
+    * start_idx_array 1d - array of start indexes
+      input - from the SPD index
+    * count_array 1d - array of counts
+      input - from the SPD index
+    * outBool 1d - same shape as the dataset size, but bool inited to False
+      for passing to h5py for reading data
+    * outIdx 2d - (max(count_array), nRows) int32 inited to 0
+      for constructing a masked array - relative to subset size
+    * outMask 2d - bool same shape as outIdx inited to True
+      for constructing a masked array. Result will be False were valid data
+    * outRow same shape as outBool but uint32 created with numpy.empty()
+      used internally only
+    * counts (nRows, nCols) int32 inited to 0
+      used internally only
 
     """
     
@@ -271,32 +271,34 @@ def CreateSpatialIndex(coordOne, coordTwo, binSize, coordOneMax,
     arrays returned will not refer to them.
 
     Parameters:
-        coordOne is the coordinate corresponding to bin row. 
-        coordTwo corresponds to bin col.
+
+    * coordOne is the coordinate corresponding to bin row. 
+    * coordTwo corresponds to bin col.
             Note that coordOne will always be reversed, in keeping with widespread
             conventions that a Y coordinate increases going north, but a grid row number
             increases going south. This same assumption will be applied even when
             the coordinates are not cartesian (e.g. angles). 
-        binSize is the size (in world coords) of each bin. The V3/4 index definition
+    * binSize is the size (in world coords) of each bin. The V3/4 index definition
             requires that bins are square. 
-        coordOneMax and coordTwoMin define the top left of the 
+    * coordOneMax and coordTwoMin define the top left of the 
             spatial index to be built. This is the world coordinate of the
             top-left corner of the top-left bin
-        nRows, nCols - size of the spatial index
-        indexDtype is the numpy dtype for the index (si_start, below)
-        countDtype is the numpy dtype for the count (si_count, below)
+    * nRows, nCols - size of the spatial index
+    * indexDtype is the numpy dtype for the index (si_start, below)
+    * countDtype is the numpy dtype for the count (si_count, below)
             
     Returns:
-        mask - a 1d array of bools of the valid elements. This must be applied
+
+    * mask - a 1d array of bools of the valid elements. This must be applied
             before sortedBins.
-        sortedBins - a 1d array of indices that is used to 
+    * sortedBins - a 1d array of indices that is used to 
             re-sort the data into the correct order for using 
             the created spatial index. Since the spatial index puts
             all elements in the same bin together this is a very important
             step!
-        si_start - a 2d array of start indexes into the sorted data (see
+    * si_start - a 2d array of start indexes into the sorted data (see
             above)
-        si_count - the count of elements in each bin.
+    * si_count - the count of elements in each bin.
     """
     # work out the row and column of each element to be put into the
     # spatial index
@@ -335,23 +337,24 @@ def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize=None
     a masked array with the indices into the read subset.
         
     Parameters:
-    start_idx_array is the 2 or 1d input array of file start indices from SPD
-    count_array is the 2 or 1d input array of element counts from SPD
-    outSize is the size of the h5py dataset to be read. Set to None to not return
-        the h5space.H5Space object
+
+    * start_idx_array is the 2 or 1d input array of file start indices from SPD
+    * count_array is the 2 or 1d input array of element counts from SPD
+    * outSize is the size of the h5py dataset to be read. Set to None to not return the h5space.H5Space object
         
     Returns:
-    If outSize is not None, A h5space.H5Space object for reading and writing data.
-    A 3 or 2d (depending on if a 2 or 1 array was input) array containing
-        indices into the new subset of the data. This array is arranged so
-        that the first axis contains the indices for each bin (or pulse)
-        and the other axis is the row (and col axis for 3d output)
-        This array can be used to rearrange the data ready from h5py into
-        a ragged array of the correct shape constaining the data from 
-        each bin.
-    A 3 or 2d (depending on if a 2 or 1 array was input) bool array that
-        can be used as a mask in a masked array of the ragged array (above)
-        of the actual data.
+
+    * If outSize is not None, A h5space.H5Space object for reading and writing data.
+    * A 3 or 2d (depending on if a 2 or 1 array was input) array containing
+      indices into the new subset of the data. This array is arranged so
+      that the first axis contains the indices for each bin (or pulse)
+      and the other axis is the row (and col axis for 3d output)
+      This array can be used to rearrange the data ready from h5py into
+      a ragged array of the correct shape constaining the data from 
+      each bin.
+    * A 3 or 2d (depending on if a 2 or 1 array was input) bool array that
+      can be used as a mask in a masked array of the ragged array (above)
+      of the actual data.
     """
     # work out the index of the start of the bool array
     boolStart = int(start_idx_array.min())

@@ -39,24 +39,24 @@ def stratify3DArrayByValueIdx(inValues, inValuesMask, outIdxs_row, outIdxs_col, 
     
     Parameters:
     
-    inValues         3d (ragged) array of values to stratify on (e.g. height)  (nPts, nrows, ncols)
-    inValuesMask     Mask for inValues.
-    outIndxs_row     4d array of row coord of stratified values (nPtsPerHgtBin, nBins, nrows, ncols)
-    outIdxs_col      4d array of col coord of stratified values (nPtsPerHgtBin, nBins, nrows, ncols)
-    outIdxs_p        4d array of p coord (nPtsPerHgtBin, nBins, nrows, ncols)
-    outIdxsMask      4d bool array - True for unused elements (nPtsPerHgtBin, nBins, nrows, ncols)
-    outIdxsCount     3d int array of counts per bin (nBins, rows, ncols) (initialized to zero, always)
-    bins             1d array of height bins. Includes end points, i.e. the number of height bins is
+    * inValues         3d (ragged) array of values to stratify on (e.g. height)  (nPts, nrows, ncols)
+    * inValuesMask     Mask for inValues.
+    * outIndxs_row     4d array of row coord of stratified values (nPtsPerHgtBin, nBins, nrows, ncols)
+    * outIdxs_col      4d array of col coord of stratified values (nPtsPerHgtBin, nBins, nrows, ncols)
+    * outIdxs_p        4d array of p coord (nPtsPerHgtBin, nBins, nrows, ncols)
+    * outIdxsMask      4d bool array - True for unused elements (nPtsPerHgtBin, nBins, nrows, ncols)
+    * outIdxsCount     3d int array of counts per bin (nBins, rows, ncols) (initialized to zero, always)
+    * bins             1d array of height bins. Includes end points, i.e. the number of height bins is
                      (len(bins) - 1). A point is in i-th bin when bin[i] <= z < bins[i+1]. Assumes
                      no points are outside the range of bin values given. 
-    counting         bool flag. If True, then we are just counting, and filling in outIdxsCount,
+    * counting         bool flag. If True, then we are just counting, and filling in outIdxsCount,
                          otherwise we are filling in outIdxs_* arrays, too. 
                          
     Returns:
         Nothing
     
     Usage: Call first with counting=True, then find outIdxsCount.max(), use this as nPtsPerHgtBin
-        to create other out arrays. Then zero outIdxsCount again, and call again with counting=False. 
+    to create other out arrays. Then zero outIdxsCount again, and call again with counting=False. 
     
     """
     (nPts, nRows, nCols) = inValues.shape
@@ -90,25 +90,26 @@ def stratify3DArrayByValue(inValues, inValuesMask, rebinnedByHeight,
     
     Parameters:
     
-    inValues         3d (ragged) structured array of values to stratify  (nPts, nrows, ncols)
-    inValuesMask     Mask for inValues - note this must be a plain bool array not just inValues.mask
-                        since inValues.mask will have a bool per record. Best to pass mask for a single
-                        record - ie heightValues.mask.
-    rebinnedByHeight 4d Output array (nPtsPerHgtBin, nBins, nrows, ncols)
-    rebinnedByHeight_mask 4d output mask for creating ragged array (should be inited to True).
-    outIdxsCount     3d int array of counts per bin (nBins, rows, ncols) (initialized to zero, always)
-    bins             1d array of height bins. Includes end points, i.e. the number of height bins is
-                     (len(bins) - 1). A point is in i-th bin when bin[i] <= z < bins[i+1]. Assumes
-                     no points are outside the range of bin values given. 
-    counting         bool flag. If True, then we are just counting, and filling in outIdxsCount,
-                         otherwise we are filling in inValues* arrays, too. 
-    heightValues    3d (ragged) array of a single value from inValues to stratify on ie inValues['Z'].
+    * inValues         3d (ragged) structured array of values to stratify  (nPts, nrows, ncols)
+    * inValuesMask     Mask for inValues - note this must be a plain bool array not just inValues.mask
+      since inValues.mask will have a bool per record. Best to pass mask for a single
+      record - ie heightValues.mask.
+    * rebinnedByHeight 4d Output array (nPtsPerHgtBin, nBins, nrows, ncols)
+    * rebinnedByHeight_mask 4d output mask for creating ragged array (should be inited to True).
+    * outIdxsCount     3d int array of counts per bin (nBins, rows, ncols) (initialized to zero, always)
+    * bins             1d array of height bins. Includes end points, i.e. the number of height bins is
+      (len(bins) - 1). A point is in i-th bin when bin[i] <= z < bins[i+1]. Assumes
+      no points are outside the range of bin values given. 
+    * counting         bool flag. If True, then we are just counting, and filling in outIdxsCount,
+      otherwise we are filling in inValues* arrays, too. 
+    * heightValues    3d (ragged) array of a single value from inValues to stratify on ie inValues['Z'].
                          
     Returns:
-        Nothing
+
+    * Nothing
     
     Usage: Call first with counting=True, then find outIdxsCount.max(), use this as nPtsPerHgtBin
-        to create other out arrays. Then zero outIdxsCount again, and call again with counting=False. 
+    to create other out arrays. Then zero outIdxsCount again, and call again with counting=False. 
     
     """
     (nPts, nRows, nCols) = inValues.shape
@@ -217,8 +218,10 @@ class UserInfo(object):
         """
         Return a tuple of the world coordinates for every pixel
         in the current block. Each array has the same shape as the 
-        current block. Return value is a tuple
+        current block. Return value is a tuple::
+
             (xBlock, yBlock)
+
         where the values in xBlock are the X coordinates of the centre
         of each pixel, and similarly for yBlock. 
                                                     

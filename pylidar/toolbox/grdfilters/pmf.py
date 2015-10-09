@@ -75,19 +75,19 @@ def disk(radius, dtype=numpy.uint8):
     Generates a flat, disk-shaped structuring element.
     A pixel is within the neighborhood if the euclidean distance between
     it and the origin is no greater than radius.
-    Parameters
-    ----------
-    radius : int
-        The radius of the disk-shaped structuring element.
-    Other Parameters
-    ----------------
-    dtype : data-type
-        The data type of the structuring element.
-    Returns
-    -------
-    selem : ndarray
-        The structuring element where elements of the neighborhood
-        are 1 and 0 otherwise.
+    Parameters:
+
+    * radius : int The radius of the disk-shaped structuring element.
+
+    Other Parameters:
+
+    * dtype : data-type The data type of the structuring element.
+
+    Returns:
+
+    * selem : ndarray The structuring element where elements of the neighborhood
+      are 1 and 0 otherwise.
+
     """
     L = numpy.arange(-radius, radius + 1)
     X, Y = numpy.meshgrid(L, L)
@@ -130,9 +130,9 @@ def applyPMF(dataArr, noDataMask, binGeoSize, initWinSize=1, maxWinSize=12, winS
     filtering the surface to remove regions which are not ground.
     
     * dataArr is a numpy array, usually defined as minimum Z LiDAR return within bin, on 
-    which the filter is to be applied.
+      which the filter is to be applied.
     * noDataMask is a numpy array specifying the cells in the input dataArr which do not
-    have data (i.e., there were no points in the bin)
+      have data (i.e., there were no points in the bin)
     * binGeoSize is the geographic (i.e., in metres) size of each square bin (i.e., 1 m)
     * initWinSize is the initial window size (Default = 1)
     * maxWinSize is the maximum window size (Default = 12)
@@ -143,8 +143,8 @@ def applyPMF(dataArr, noDataMask, binGeoSize, initWinSize=1, maxWinSize=12, winS
     * expWinSizes is a boolean specifying whether the windows sizes should increase exponentially or not (Default = False)
     
     Returns:
-    --------
     PMF Filtered array with the same data type as the input.   
+
     """
     
     # Parameter k (array of values to increment the window size) k = 1,2,..., M

@@ -65,11 +65,14 @@ def setDefaultDrivers():
     what defaults we should use for GDAL and LiDAR  drivers. On any given
     output file these can be over-ridden, and can be over-ridden globally
     using the environment variables (for GDAL):
-        $PYLIDAR_DFLT_RASTERDRIVER
-        $PYLIDAR_DFLT_RASTERDRIVEROPTIONS
+
+    * $PYLIDAR_DFLT_RASTERDRIVER
+    * $PYLIDAR_DFLT_RASTERDRIVEROPTIONS
+
     (And for LiDAR):
-        $PYLIDAR_DFLT_LIDARDRIVER
-        $PYLIDAR_DFLT_LIDARDRIVEROPTIONS
+
+    * $PYLIDAR_DFLT_LIDARDRIVER
+    * $PYLIDAR_DFLT_LIDARDRIVEROPTIONS
     
     If PYLIDAR_DFLT_RASTERDRIVER is set, then it should be a gdal short driver name
     If PYLIDAR_DFLT_RASTERDRIVEROPTIONS is set, it should be a space-separated list
