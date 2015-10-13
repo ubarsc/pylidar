@@ -677,15 +677,15 @@ spatial index will be recomputed on the fly"""
                     idx, cnt, nOut)
         
         transmitted = trans_shape.read(self.fileHandle['DATA']['TRANSMITTED'])
+
+        # add a dummy axis
+        trans_idx = numpy.expand_dims(trans_idx, 0)
+        trans_idx_mask = numpy.expand_dims(trans_idx_mask, 0)
         
         transByPulse = transmitted[trans_idx]
-        # add a dummy axis
-        transByPulse = numpy.expand_dims(transByPulse, 0)
-        trans_idx_mask3d = numpy.expand_dims(trans_idx_mask, 0)
+        trans_masked = numpy.ma.array(transByPulse, mask=trans_idx_mask)
         
-        trans_masked = numpy.ma.array(transByPulse, mask=trans_idx_mask3d)
-        
-        self.lastTransShape = trans_shape
+        self.lastTransSpace = trans_shape
         self.lastTrans_Idx = trans_idx
         self.lastTrans_IdxMask = trans_idx_mask
 
@@ -693,6 +693,9 @@ spatial index will be recomputed on the fly"""
         gain = pulses['TRANS_WAVE_GAIN']
         offset = pulses['TRANS_WAVE_OFFSET']
         rangeToStart = pulses['RANGE_TO_WAVEFORM_START']
+        # add a dummy axis to match
+        rangeToStart = numpy.expand_dims(rangeToStart, 0)
+        
         wi = generic.WaveformInfo(gain, offset, rangeToStart)
         
         return trans_masked, wi
@@ -718,15 +721,15 @@ spatial index will be recomputed on the fly"""
                     idx, cnt, nOut)
         
         received = recv_shape.read(self.fileHandle['DATA']['RECEIVED'])
+
+        # add a dummy axis
+        recv_idx = numpy.expand_dims(recv_idx, 0)
+        recv_idx_mask = numpy.expand_dims(recv_idx_mask, 0)
         
         recvByPulse = received[recv_idx]
-        # add a dummy axis
-        recvByPulse = numpy.expand_dims(recvByPulse, 0)
-        recv_idx_mask3d = numpy.expand_dims(recv_idx_mask, 0)
-
-        recv_masked = numpy.ma.array(recvByPulse, mask=recv_idx_mask3d)
+        recv_masked = numpy.ma.array(recvByPulse, mask=recv_idx_mask)
         
-        self.lastRecvShape = recv_shape
+        self.lastRecvSpace = recv_shape
         self.lastRecv_Idx = recv_idx
         self.lastRecv_IdxMask = recv_idx_mask
         
@@ -734,6 +737,9 @@ spatial index will be recomputed on the fly"""
         gain = pulses['RECEIVE_WAVE_GAIN']
         offset = pulses['RECEIVE_WAVE_OFFSET']
         rangeToStart = pulses['RANGE_TO_WAVEFORM_START']
+        # add a dummy axis to match
+        rangeToStart = numpy.expand_dims(rangeToStart, 0)
+        
         wi = generic.WaveformInfo(gain, offset, rangeToStart)
         
         return recv_masked, wi
@@ -934,8 +940,8 @@ spatial index will be recomputed on the fly"""
         if transmitted.size == 0:
             return None
 
-        if transmitted.ndim != 2:
-            msg = 'transmitted data must be 2d'
+        if transmitted.ndim != 3:
+            msg = 'transmitted data must be 3d'
             raise generic.LiDARInvalidData(msg)
 
         if self.mode == generic.UPDATE:
@@ -945,7 +951,7 @@ spatial index will be recomputed on the fly"""
             # flatten it back to 1d so it can be written
             flatSize = self.lastTrans_Idx.max() + 1
             flatTrans = numpy.empty((flatSize,), dtype=transmitted.data.dtype)
-            gridindexutils.flatten2dMaskedArray(flatTrans, transmitted,
+            gridindexutils.flatten3dMaskedArray(flatTrans, transmitted,
                 self.lastTrans_IdxMask, self.lastTrans_Idx)
             transmitted = flatTrans
                 
@@ -964,9 +970,10 @@ spatial index will be recomputed on the fly"""
                 # We can't do this earlier since removing from transmitted
                 # would mean the above flattening trick won't work.
                 mask = numpy.expand_dims(mask, axis=0)
-                mask = numpy.repeat(mask, origShape[1], axis=1)
+                mask = numpy.expand_dims(mask, axis=0)
+                mask = numpy.repeat(mask, origShape[1], axis=2)
                 flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
-                gridindexutils.flatten2dMaskedArray(flatMask, mask, 
+                gridindexutils.flatten3dMaskedArray(flatMask, mask, 
                     self.lastTrans_IdxMask, self.lastTrans_Idx)
             
                 transmitted = transmitted[flatMask]
@@ -985,8 +992,8 @@ spatial index will be recomputed on the fly"""
         if received.size == 0:
             return None
 
-        if received.ndim != 2:
-            msg = 'received data must be 2d'
+        if received.ndim != 3:
+            msg = 'received data must be 3d'
             raise generic.LiDARInvalidData(msg)
 
         if self.mode == generic.UPDATE:
@@ -996,7 +1003,7 @@ spatial index will be recomputed on the fly"""
             # flatten it back to 1d so it can be written
             flatSize = self.lastRecv_Idx.max() + 1
             flatRecv = numpy.empty((flatSize,), dtype=received.data.dtype)
-            gridindexutils.flatten2dMaskedArray(flatRecv, received,
+            gridindexutils.flatten3dMaskedArray(flatRecv, received,
                 self.lastRecv_IdxMask, self.lastRecv_Idx)
             received = flatRecv
                 
@@ -1015,9 +1022,10 @@ spatial index will be recomputed on the fly"""
                 # We can't do this earlier since removing from received
                 # would mean the above flattening trick won't work.
                 mask = numpy.expand_dims(mask, axis=0)
-                mask = numpy.repeat(mask, origShape[0], axis=1)
+                mask = numpy.expand_dims(mask, axis=0)
+                mask = numpy.repeat(mask, origShape[1], axis=2)
                 flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
-                gridindexutils.flatten2dMaskedArray(flatMask, mask, 
+                gridindexutils.flatten3dMaskedArray(flatMask, mask, 
                     self.lastRecv_IdxMask, self.lastRecv_Idx)
             
                 received = received[flatMask]

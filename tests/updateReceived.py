@@ -10,8 +10,10 @@ from rios import pixelgrid
 
 def updateRecvFunc(data):
 
-    recv = data.input1.getReceived()
-    recv = recv * 2
+    recv, info = data.input1.getReceived()
+    rad = info.convertDNToRadiance(recv)
+    rad = rad * 2
+    recv = info.convertRadianceToDN(rad)
     
     data.input1.setReceived(recv)
     
