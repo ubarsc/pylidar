@@ -21,6 +21,7 @@ from __future__ import print_function, division
 
 import numpy
 from .. import basedriver
+from .. import __version__
 
 # access modes passed to driver constructor
 READ = basedriver.READ
@@ -41,6 +42,9 @@ FIELD_PULSES_TIMESTAMP = 2
 ARRAY_TYPE_POINTS = 0
 ARRAY_TYPE_PULSES = 1
 ARRAY_TYPE_WAVEFORMS = 3
+
+# For writing to files when needed
+SOFTWARE_NAME = 'PyLidar %s' % __version__
 
 class LiDARFileException(Exception):
     "Base class for LiDAR format reader/writers"
