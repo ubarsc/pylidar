@@ -1098,6 +1098,15 @@ spatial index will be recomputed on the fly"""
                 raise generic.LiDARInvalidData(msg)
             
         writeWaveformInfo = waveformInfo is not None
+        if writeWaveformInfo and pulses is None:
+            # the waveform info actually lives in the pulses
+            # waveformInfo actually has the same field names 
+            # as pulses, so we can just pretend they are the 
+            # same the self.preparePulsesForWriting will add the 
+            # other fields
+            pulses = writeWaveformInfo
+            # else case is handled below when we know
+            # all the pulses fields exist
             
         # so we can unscale the transmitted and received
         if waveformInfo is None and transmitted is not None or received is not None:
@@ -1105,6 +1114,13 @@ spatial index will be recomputed on the fly"""
             
         if pulses is not None:
             pulses = self.preparePulsesForWriting(pulses)
+            
+            if writeWaveformInfo:
+                # since waveformInfo takes precedence copy 
+                # data into now that preparePulsesForWriting has
+                # ensured all fields exist
+                for name in waveformInfo.dtype.fields.keys():
+                    pulses[name] = waveformInfo[name]
             
         if points is not None:
             points = self.preparePointsForWriting(points, pulses)

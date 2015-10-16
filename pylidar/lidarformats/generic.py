@@ -300,11 +300,12 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
 
-    def writeData(self, pulses=None, points=None, transmitted=None, received=None):
+    def writeData(self, pulses=None, points=None, transmitted=None, 
+                received=None, waveformInfo=None):
         """
         Write data to file. pulses to be 1d structured array. points to be
-        2d points-by-pulses format. transmitted and received to be 2d
-        by-pulses format.
+        2d points-by-pulses format. waveformInfo, transmitted and 
+        received to be 2d by-pulses format. 
         
         Pass None if no data to be written or data unchanged (for update).
         """

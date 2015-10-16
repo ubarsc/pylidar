@@ -274,6 +274,7 @@ class LidarData(object):
         self.pulsesToWrite = None
         self.receivedToWrite = None
         self.transmittedToWrite = None
+        self.waveformInfoToWrite = None
         
     def translateFieldNames(self, otherLidarData, array, arrayType):
         """
@@ -538,18 +539,24 @@ class LidarData(object):
         arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
         """
         return self.driver.getScaling(colName, arrayType)
+        
+    def setWaveformInfo(self, info):
+        """
+        Set the waveform info as a masked 2d array
+        """
+        self.waveformInfoToWrite = info
 
     def setTransmitted(self, transmitted):
         """
         Set the transmitted waveform for each pulse as 
-        a masked 2d integer array.
+        a masked 3d integer array.
         """
         self.transmittedToWrite = transmitted
         
     def setReceived(self, received):
         """
         Set the received waveform for each pulse as 
-        a masked 2d integer array.
+        a masked 3d integer array.
         """
         self.receivedToWrite = received
         
@@ -578,12 +585,14 @@ class LidarData(object):
         writes data to file set via the set*() functions
         """
         self.driver.writeData(self.pulsesToWrite, self.pointsToWrite, 
-            self.transmittedToWrite, self.receivedToWrite)
+            self.transmittedToWrite, self.receivedToWrite, 
+            self.waveformInfoToWrite)
         # reset for next time
         self.pointsToWrite = None
         self.pulsesToWrite = None
         self.receivedToWrite = None
         self.transmittedToWrite = None
+        self.waveformInfoToWrite = None
         
 class ImageData(object):
     """
