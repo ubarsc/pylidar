@@ -461,7 +461,7 @@ class LidarData(object):
         """
         return self.driver.readPointsByPulse(colNames)
         
-    def readWaveformInfo(self):
+    def getWaveformInfo(self):
         """
         Returns a 2d masked structured array with information about 
         the waveforms. First axis will be the waveform number,

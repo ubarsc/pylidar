@@ -105,7 +105,9 @@ WAVEFORM_FIELDS = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : numpy.uint16,
 'NUMBER_OF_WAVEFORM_TRANSMITTED_BINS' : numpy.uint16, 
 'RANGE_TO_WAVEFORM_START' : numpy.uint16, 'RECEIVED_START_IDX' : numpy.uint64,
 'TRANSMITTED_START_IDX' : numpy.uint64, 'CHANNEL' : numpy.uint8,
-'WAVEFORM_FLAGS' : numpy.uint8, 'WFM_WAVELENGTH_IDX' : numpy.uint8}
+'WAVEFORM_FLAGS' : numpy.uint8, 'WFM_WAVELENGTH_IDX' : numpy.uint8, 
+'RECEIVE_WAVE_GAIN' : numpy.float32, 'RECEIVE_WAVE_OFFSET' :  numpy.float32,
+'TRANS_WAVE_GAIN' : numpy.float32, 'TRANS_WAVE_OFFSET' : numpy.float32}
 
 # need scaling applied 
 PULSE_SCALED_FIELDS = ('AZIMUTH', 'ZENITH', 'X_IDX', 'Y_IDX', 'Y_IDX', 
@@ -486,6 +488,7 @@ class SPDV4File(generic.LiDARFile):
             data = self.fileHandle.create_group('DATA')
             data.create_group('POINTS')
             data.create_group('PULSES')
+            data.create_group('WAVEFORMS')
 
         # Spatial Index
         # TODO: prefType
@@ -509,6 +512,7 @@ class SPDV4File(generic.LiDARFile):
         # flushed by close()
         self.pulseScalingValues = {}
         self.pointScalingValues = {}
+        self.waveFormScalingValues = {}
         
         # the current extent or range for data being read
         self.extent = None
@@ -628,6 +632,17 @@ spatial index will be recomputed on the fly"""
                     raise generic.LiDARArrayColumnError(msg)
                 
                 attrs = pointsHandle[colName].attrs
+                attrs[GAIN_NAME] = gain
+                attrs[OFFSET_NAME] = offset
+                
+            waveHandle = self.fileHandle['DATA']['WAVEFORMS']
+            for colName in self.waveFormScalingValues.keys():
+                gain, offset = self.waveFormScalingValues[colName]
+                if colName not in waveHandle:
+                    msg = 'scaling set for column %s but no data written' % colName
+                    raise generic.LiDARArrayColumnError(msg)
+                
+                attrs = waveHandle[colName].attrs
                 attrs[GAIN_NAME] = gain
                 attrs[OFFSET_NAME] = offset
         
@@ -1179,14 +1194,173 @@ spatial index will be recomputed on the fly"""
                 
         return points, pts_start, nreturns, returnNumber
         
-    def prepareTransmittedForWriting(self, transmitted):
-        # TODO:
-        return transmitted
+    def prepareTransmittedForWriting(self, transmitted, waveformInfo):
+        """
+        Called from writeData(). Massages what the user has passed into something
+        we can write back to the file.
+        """
+        if transmitted.size == 0:
+            return None, None, None
+
+        if transmitted.ndim != 3:
+            msg = 'transmitted data must be 3d'
+            raise generic.LiDARInvalidData(msg)
+        
+        trans_start = None
+        ntrans = None
+
+        if self.mode == generic.UPDATE:
+
+            origShape = transmitted.shape
+
+            # un scale back to DN
+            for waveform in range(waveformInfo.shape[0]):
+                offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
+                gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
+                transmitted[waveform] = (transmitted[waveform] - offset) * gain
+
+            # flatten it back to 1d so it can be written
+            flatSize = self.lastTrans_Idx.max() + 1
+            flatTrans = numpy.empty((flatSize,), dtype=transmitted.data.dtype)
+            gridindexutils.flatten3dMaskedArray(flatTrans, transmitted,
+                self.lastTrans_IdxMask, self.lastTrans_Idx)
+            transmitted = flatTrans
+                
+            # mask out those in the overlap using the pulses
+            if self.controls.spatialProcessing:
+
+                x_idx = self.readPulsesForExtent('X_IDX')
+                y_idx = self.readPulsesForExtent('Y_IDX')
+                mask = ( (x_idx >= self.extent.xMin) & 
+                        (x_idx <= self.extent.xMax) & 
+                        (y_idx >= self.extent.yMin) &
+                        (y_idx <= self.extent.yMax))
+
+                # Repeat the mask so that it is the same shape as the 
+                # original transmitted and then flatten in the same way
+                # we can then remove the transmitted outside the extent.         
+                # We can't do this earlier since removing from transmitted
+                # would mean the above flattening trick won't work.
+                mask = numpy.expand_dims(mask, axis=0)
+                mask = numpy.expand_dims(mask, axis=0)
+                mask = numpy.repeat(mask, origShape[1], axis=2)
+                flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
+                gridindexutils.flatten3dMaskedArray(flatMask, mask, 
+                    self.lastTrans_IdxMask, self.lastTrans_Idx)
+            
+                transmitted = transmitted[flatMask]
+                self.lastTransSpace.updateBoolArray(flatMask)
+                
+        else:
+            ntrans = transmitted.count(axis=1)
+            currTransCount = 0
+            if ['TRANSMITTED'] in self.fileHandle['DATA']:
+                transHandle = self.fileHandle['DATA']['TRANSMITTED']
+                currWaveformsCount = transHandle.shape[0]
+            
+            trans_start = numpy.cumsum(ntrans) + currWaveformsCount
+            # unfortunately points.compressed() doesn't work
+            # for structured arrays. Use our own version instead
+            transCount = transmitted.count()
+            outTrans = numpy.empty(transCount, dtype=transmitted.data.dtype)
+            # not needed, but have to provide
+            returnNumber = numpy.empty(transCount, 
+                                dtype=numpy.uint32)
+                                    
+            gridindexutils.flattenMaskedStructuredArray(transmitted.data, 
+                        transmitted.mask, outTrans, returnNumber)
+                
+            transmitted = outTrans
+                
+        return transmitted, trans_start, ntrans
         
     def prepareReceivedForWriting(self, received):
-        # TODO:
+        """
+        Called from writeData(). Massages what the user has passed into something
+        we can write back to the file.
+        """
+        if received.size == 0:
+            return None, None, None
+
+        if received.ndim != 3:
+            msg = 'received data must be 3d'
+            raise generic.LiDARInvalidData(msg)
+
+        if self.mode == generic.UPDATE:
+
+            origShape = received.shape
+            
+            # un scale back to DN
+            for waveform in range(waveformInfo.shape[0]):
+                offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
+                gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
+                received[waveform] = (received[waveform] - offset) * gain
+
+            # flatten it back to 1d so it can be written
+            flatSize = self.lastRecv_Idx.max() + 1
+            flatRecv = numpy.empty((flatSize,), dtype=received.data.dtype)
+            gridindexutils.flatten3dMaskedArray(flatRecv, received,
+                self.lastRecv_IdxMask, self.lastRecv_Idx)
+            received = flatRecv
+                
+            # mask out those in the overlap using the pulses
+            if self.controls.spatialProcessing:
+
+                x_idx = self.readPulsesForExtent('X_IDX')
+                y_idx = self.readPulsesForExtent('Y_IDX')
+                mask = ( (x_idx >= self.extent.xMin) & 
+                        (x_idx <= self.extent.xMax) & 
+                        (y_idx >= self.extent.yMin) &
+                        (y_idx <= self.extent.yMax))
+
+                # Repeat the mask so that it is the same shape as the 
+                # original received and then flatten in the same way
+                # we can then remove the received outside the extent.         
+                # We can't do this earlier since removing from received
+                # would mean the above flattening trick won't work.
+                mask = numpy.expand_dims(mask, axis=0)
+                mask = numpy.expand_dims(mask, axis=0)
+                mask = numpy.repeat(mask, origShape[1], axis=2)
+                flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
+                gridindexutils.flatten3dMaskedArray(flatMask, mask, 
+                    self.lastRecv_IdxMask, self.lastRecv_Idx)
+            
+                received = received[flatMask]
+                self.lastRecvSpace.updateBoolArray(flatMask)
+
+        else:
+            raise NotImplementedError()
+
         return received
 
+    def prepareWaveformInfoForWriting(self, waveformInfo):
+        """
+        Flattens the waveformInfo back out so it can be written
+        """
+    
+        firstField = waveformInfo.dtype.names[0]
+        # matches the pulses
+        nwaveforms = waveformInfo[firstField].count(axis=0)
+        waveHandle = self.fileHandle['DATA']['WAVEFORMS']
+        currWaveformsCount = 0
+        if firstField in waveHandle:
+            currWaveformsCount = waveHandle[firstField].shape[0]
+                    
+        wfm_start = numpy.cumsum(nwaveforms) + currWaveformsCount
+        
+        # unfortunately points.compressed() doesn't work
+        # for structured arrays. Use our own version instead
+        waveCount = waveformInfo[firstField].count()
+        outWave = numpy.empty(waveCount, dtype=waveformInfo.data.dtype)
+        # we don't actually need this, but need to provide it
+        returnNumber = numpy.empty(waveCount, 
+                            dtype=numpy.uint32)
+                                    
+        gridindexutils.flattenMaskedStructuredArray(waveformInfo.data, 
+                    waveformInfo[firstField].mask, outWave, returnNumber)
+                    
+        return outWave, wfm_start, nwaveforms
+        
     @staticmethod
     def createDataColumn(groupHandle, name, data):
         """
@@ -1236,6 +1410,12 @@ spatial index will be recomputed on the fly"""
                 needsScaling = True
             if name in PULSE_FIELDS:
                 dataType = PULSE_FIELDS[name]
+                
+        elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
+            if name in WAVEFORM_SCALED_FIELDS:
+                needsScaling = True
+            if name in WAVEFORM_FIELDS:
+                dataType = WAVEFORM_FIELDS[name]
 
         # other array types we don't worry for now
         
@@ -1259,7 +1439,8 @@ spatial index will be recomputed on the fly"""
             
         return data, hdfname
         
-    def writeData(self, pulses=None, points=None, transmitted=None, received=None):
+    def writeData(self, pulses=None, points=None, transmitted=None, 
+                received=None, waveformInfo=None):
         """
         Write all the updated data. Pass None for data that do not need to be updated.
         It is assumed that each parameter has been read by the reading functions
@@ -1281,7 +1462,11 @@ spatial index will be recomputed on the fly"""
             if points.ndim != 2:
                 msg = 'points must be 2d as returned from getPointsByPulse'
                 raise generic.LiDARInvalidData(msg)
-            
+        
+            if (transmitted is not None or received is not None) and waveformInfo is None:
+                msg = 'If transmitted or received is supplied, so must waveformInfo'
+                raise generic.LiDARInvalidData(msg)
+        
         if pulses is not None:
             pulses, points = self.preparePulsesForWriting(pulses, points)
             
@@ -1289,11 +1474,18 @@ spatial index will be recomputed on the fly"""
             points, pts_start, nreturns, returnNumber = (
                                 self.preparePointsForWriting(points, pulses))
             
-        if transmitted is not None:
-            transmitted = self.prepareTransmittedForWriting(transmitted)
+        #if transmitted is not None:
+        #    transmitted, revc_start, nrecv = (
+        #        self.prepareTransmittedForWriting(transmitted, waveformInfo))
             
-        if received is not None:
-            received = self.prepareReceivedForWriting(received)
+        #if received is not None:
+        #    received, trans_start, ntrans = (
+        #        self.prepareReceivedForWriting(received, waveformInfo))
+            
+        #if waveformInfo is not None:
+        #    waveformInfo, wfm_start, nwaveforms = (
+        #                self.prepareWaveformInfoForWriting(waveformInfo))
+        waveformInfo = None
             
         if self.mode == generic.CREATE:
 
@@ -1377,8 +1569,45 @@ spatial index will be recomputed on the fly"""
                         pointsHandle[hdfname][oldSize:newSize+1] = data
                     else:
                         self.createDataColumn(pointsHandle, hdfname, data)
+                        
+            if waveformInfo is not None and len(waveformInfo) > 0:
+            
+                waveHandle = self.fileHandle['DATA']['WAVEFORMS']
+                firstField = waveformInfo.dtype.names[0]
+                if firstField in waveHandle:
+                    oldSize = waveHandle[firstField].shape[0]
+                else:
+                    oldSize = 0
+                    
+                nWaves = len(waveformInfo)
+                newSize = oldSize + nWaves
+                generatedColumns = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : nrecv,
+                    'NUMBER_OF_WAVEFORM_TRANSMITTED_BINS' : ntrans,
+                    'RECEIVED_START_IDX' : revc_start,
+                    'TRANSMITTED_START_IDX' : trans_start}
                 
-               
+                for name in waveformInfo.dtype.names:
+                    if name not in generatedColumns:
+                        data, hdfname = self.prepareDataForWriting(
+                            waveformInfo[name], name. generic.ARRAY_TYPE_WAVEFORMS)
+                            
+                        if hdfname in waveHandle:
+                            waveHandle[hdfname].resize((newSize,))
+                            waveHandle[hdfname][oldSize:newSize+1] = data
+                        else:
+                            self.createDataColumn(waveHandle, hdfname, data)
+
+                # now write the generated ones
+                for name in generatedColumns.keys():
+                    data, hdfname = self.prepareDataForWriting(
+                            generatedColumns[name], name, generic.ARRAY_TYPE_WAVEFORMS)
+
+                    if hdfname in waveHandle:
+                        waveHandle[hdfname].resize((newSize,))
+                        waveHandle[hdfname][oldSize:newSize+1] = data
+                    else:
+                        self.createDataColumn(waveHandle, hdfname, data)
+
             # TODO:
             #if transmitted is not None:
             #    oldSize = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
@@ -1553,6 +1782,8 @@ spatial index will be recomputed on the fly"""
             self.pulseScalingValues[colName] = (gain, offset)
         elif arrayType == generic.ARRAY_TYPE_POINTS:
             self.pointScalingValues[colName] = (gain, offset)
+        elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
+            self.waveFormScalingValues[colName] = (gain, offset)
         else:
             raise generic.LiDARInvalidSetting('Unsupported array type')
             

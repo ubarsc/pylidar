@@ -16,6 +16,8 @@ def setOutputScaling(header, output):
     yGain = MAX_UINT16 / (header['Y_MIN'] - header['Y_MAX'])
     zOffset = header['Z_MIN']
     zGain = MAX_UINT16 / (header['Z_MAX'] - header['Z_MIN'])
+    rangeOffset = header['RANGE_MIN']
+    rangeGain = MAX_UINT16 / (header['RANGE_MAX'] - header['RANGE_MIN'])
     
     output.setScaling('X_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, xGain, xOffset)
     output.setScaling('Y_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, yGain, yOffset)
@@ -36,10 +38,16 @@ def setOutputScaling(header, output):
     output.setScaling('Y', lidarprocessor.ARRAY_TYPE_POINTS, yGain, yOffset)
     output.setScaling('Z', lidarprocessor.ARRAY_TYPE_POINTS, zGain, zOffset)
     output.setScaling('HEIGHT', lidarprocessor.ARRAY_TYPE_POINTS, zGain, zOffset)
+    
+    #output.setScaling('RANGE_TO_WAVEFORM_START', lidarprocessor.ARRAY_TYPE_WAVEFORMS, 
+    #        rangeGain, rangeOffset)
 
 def transFunc(data):
     pulses = data.input1.getPulses()
     points = data.input1.getPointsByPulse()
+    waveformInfo = data.input1.getWaveformInfo()
+    revc = data.input1.getReceived()
+    trans = data.input1.getTransmitted()
     
     data.output1.translateFieldNames(data.input1, points, 
             lidarprocessor.ARRAY_TYPE_POINTS)
@@ -53,6 +61,9 @@ def transFunc(data):
     
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
+    data.output1.setWaveformInfo(waveformInfo)
+    data.output1.setReceived(revc)
+    data.output1.setTransmitted(trans)
     
 def testConvert(infile, outfile):
     dataFiles = lidarprocessor.DataFiles()

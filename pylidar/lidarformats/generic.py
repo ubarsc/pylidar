@@ -41,7 +41,7 @@ FIELD_PULSES_TIMESTAMP = 2
 # For use in userclass.LidarData.translateFieldNames() and LiDARFile.getTranslationDict()
 ARRAY_TYPE_POINTS = 0
 ARRAY_TYPE_PULSES = 1
-ARRAY_TYPE_WAVEFORMS = 3
+ARRAY_TYPE_WAVEFORMS = 2
 
 # For writing to files when needed
 SOFTWARE_NAME = 'PyLidar %s' % __version__
