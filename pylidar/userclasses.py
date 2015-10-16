@@ -460,10 +460,18 @@ class LidarData(object):
         """
         return self.driver.readPointsByPulse(colNames)
         
+    def readWaveformInfo(self):
+        """
+        Returns a 2d masked structured array with information about 
+        the waveforms. First axis will be the waveform number,
+        second will be same length as the pulses
+        """
+        return self.driver.readWaveformInfo()
+        
     def getTransmitted(self):
         """
-        Returns a masked 3d integer array and a generic.WaveformInfo object. 
-        The first axis is the number waveform number, the second axis will 
+        Returns a masked 3d radiance array. 
+        The first axis is the waveform number, the second axis will 
         be the waveform bins and the third axis axis will be the same length
         as the pulses.
         
@@ -474,8 +482,8 @@ class LidarData(object):
         
     def getReceived(self):
         """
-        Returns a masked 3d integer array and a generic.WaveformInfo object. 
-        The first axis is the number waveform number, the second axis will 
+        Returns a masked 3d radiance array. 
+        The first axis is the waveform number, the second axis will 
         be the waveform bins and the third axis axis will be the same length
         as the pulses.
         

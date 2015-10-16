@@ -304,9 +304,10 @@ Fields marked with Scaling = Yes must have these attributes.
 Waveform Data
 -------------
 
-Waveform data live under the DATA/POINTS group. Each column is a separate dataset. These are the fields that
+Waveform data live under the DATA/WAVEFORMS group. Each column is a separate dataset. These are the fields that
 PyLidar recognises. Other optional fields can be created. If a field has 'GAIN' and 'OFFSET' attributes
 these will be applied to data transparently. Request unscaled versions by appending '_U' to field name.
+The actual transmitted and received data is in the DATA/TRANSMITTED and DATA/RECEIVED datasets respectively.
 
 Fields marked with Scaling = Yes must have these attributes.
 

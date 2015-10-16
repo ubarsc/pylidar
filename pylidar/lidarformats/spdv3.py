@@ -656,10 +656,43 @@ spatial index will be recomputed on the fly"""
         points = numpy.ma.array(pointsByPulse, mask=idxMask)
         return points
 
+    def readWaveformInfo(self):
+        if self.controls.spatialProcessing:
+            pulses = self.readPulsesForExtent()
+        else:
+            pulses = self.readPulsesForRange()
+
+        trans_gain = pulses['TRANS_WAVE_GAIN']
+        trans_offset = pulses['TRANS_WAVE_OFFSET']
+        recv_gain = pulses['RECEIVE_WAVE_GAIN']
+        recv_offset = pulses['RECEIVE_WAVE_OFFSET']
+        rangeToStart = pulses['RANGE_TO_WAVEFORM_START']
+        
+        # create an empty array and copy info in
+        infoDtype = [('TRANS_WAVE_GAIN', trans_gain.dtype), 
+            ('TRANS_WAVE_OFFSET', trans_offset.dtype), 
+            ('RECEIVE_WAVE_GAIN', recv_gain.dtype),
+            ('RECEIVE_WAVE_OFFSET', recv_offset.dtype),
+            ('RANGE_TO_WAVEFORM_START', rangeToStart.dtype)]
+        info = numpy.empty((1, trans_gain.size), dtype=infoDtype)
+        info[0]['TRANS_WAVE_GAIN'] = trans_gain
+        info[0]['TRANS_WAVE_OFFSET'] = trans_gain
+        info[0]['RECEIVE_WAVE_GAIN'] = trans_gain
+        info[0]['RECEIVE_WAVE_OFFSET'] = trans_gain
+        info[0]['RANGE_TO_WAVEFORM_START'] = rangeToStart
+        
+        # mask where there is no data
+        mask = ((pulses['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS'] == 0) & 
+                    (pulses['NUMBER_OF_WAVEFORM_RECEIVED_BINS'] == 0))
+        mask = numpy.expand_dims(mask, axis=0)
+        
+        return numpy.ma.array(info, mask=mask)
+        
+
     def readTransmitted(self):
         """
         Return the 3d masked integer array of transmitted for each of the
-        current pulses and a WaveformInfo object describing how to use it.
+        current pulses.
         SPDV3 only has 1 transmitted per pulse so the first axis is empty.
         Second axis is waveform bin and last is pulse.
         """
@@ -671,6 +704,8 @@ spatial index will be recomputed on the fly"""
         
         idx = pulses['TRANSMITTED_START_IDX']
         cnt = pulses['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
+        gain = pulses['TRANS_WAVE_GAIN']
+        offset = pulses['TRANS_WAVE_OFFSET']
         
         nOut = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
         trans_shape, trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
@@ -682,28 +717,23 @@ spatial index will be recomputed on the fly"""
         trans_idx = numpy.expand_dims(trans_idx, 0)
         trans_idx_mask = numpy.expand_dims(trans_idx_mask, 0)
         
+        # reshape
         transByPulse = transmitted[trans_idx]
+        # apply scaling
+        transByPulse = (transByPulse / gain) + offset
+        # create masked array
         trans_masked = numpy.ma.array(transByPulse, mask=trans_idx_mask)
         
         self.lastTransSpace = trans_shape
         self.lastTrans_Idx = trans_idx
         self.lastTrans_IdxMask = trans_idx_mask
 
-        # create a WaveformInfo object
-        gain = pulses['TRANS_WAVE_GAIN']
-        offset = pulses['TRANS_WAVE_OFFSET']
-        rangeToStart = pulses['RANGE_TO_WAVEFORM_START']
-        # add a dummy axis to match
-        rangeToStart = numpy.expand_dims(rangeToStart, 0)
-        
-        wi = generic.WaveformInfo(gain, offset, rangeToStart)
-        
-        return trans_masked, wi
+        return trans_masked
         
     def readReceived(self):
         """
         Return the 3d masked integer array of received for each of the
-        current pulses and a WaveformInfo object describing how to use it.
+        current pulses.
         SPDV3 only has 1 transmitted per pulse so the first axis is empty.
         Second axis is waveform bin and last is pulse.
         """
@@ -715,6 +745,8 @@ spatial index will be recomputed on the fly"""
             
         idx = pulses['RECEIVED_START_IDX']
         cnt = pulses['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
+        gain = pulses['RECEIVE_WAVE_GAIN']
+        offset = pulses['RECEIVE_WAVE_OFFSET']
         
         nOut = self.fileHandle['DATA']['RECEIVED'].shape[0]
         recv_shape, recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
@@ -726,23 +758,18 @@ spatial index will be recomputed on the fly"""
         recv_idx = numpy.expand_dims(recv_idx, 0)
         recv_idx_mask = numpy.expand_dims(recv_idx_mask, 0)
         
+        # reshape
         recvByPulse = received[recv_idx]
+        # apply scaling
+        recvByPulse = (recvByPulse / gain) + offset
+        # create masked array
         recv_masked = numpy.ma.array(recvByPulse, mask=recv_idx_mask)
         
         self.lastRecvSpace = recv_shape
         self.lastRecv_Idx = recv_idx
         self.lastRecv_IdxMask = recv_idx_mask
         
-        # create a WaveformInfo object
-        gain = pulses['RECEIVE_WAVE_GAIN']
-        offset = pulses['RECEIVE_WAVE_OFFSET']
-        rangeToStart = pulses['RANGE_TO_WAVEFORM_START']
-        # add a dummy axis to match
-        rangeToStart = numpy.expand_dims(rangeToStart, 0)
-        
-        wi = generic.WaveformInfo(gain, offset, rangeToStart)
-        
-        return recv_masked, wi
+        return recv_masked
         
     def preparePulsesForWriting(self, pulses):
         """
@@ -932,7 +959,7 @@ spatial index will be recomputed on the fly"""
         
         return points
 
-    def prepareTransmittedForWriting(self, transmitted):
+    def prepareTransmittedForWriting(self, transmitted, waveformInfo):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -947,6 +974,11 @@ spatial index will be recomputed on the fly"""
         if self.mode == generic.UPDATE:
 
             origShape = transmitted.shape
+
+            # un scale back to DN
+            offset = waveformInfo[0]['TRANS_WAVE_OFFSET']
+            gain = waveformInfo[0]['TRANS_WAVE_GAIN']
+            transmitted = (transmitted - offset) * gain
 
             # flatten it back to 1d so it can be written
             flatSize = self.lastTrans_Idx.max() + 1
@@ -984,7 +1016,7 @@ spatial index will be recomputed on the fly"""
                 
         return transmitted
 
-    def prepareReceivedForWriting(self, received):
+    def prepareReceivedForWriting(self, received, waveformInfo):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -999,6 +1031,11 @@ spatial index will be recomputed on the fly"""
         if self.mode == generic.UPDATE:
 
             origShape = received.shape
+            
+            # un scale back to DN
+            offset = waveformInfo[0]['RECEIVE_WAVE_OFFSET']
+            gain = waveformInfo[0]['RECEIVE_WAVE_GAIN']
+            received = (received - offset) * gain
 
             # flatten it back to 1d so it can be written
             flatSize = self.lastRecv_Idx.max() + 1
@@ -1036,7 +1073,8 @@ spatial index will be recomputed on the fly"""
 
         return received
     
-    def writeData(self, pulses=None, points=None, transmitted=None, received=None):
+    def writeData(self, pulses=None, points=None, transmitted=None, 
+                received=None, waveformInfo=None):
         """
         Write all the updated data. Pass None for data that do not need to be updated.
         It is assumed that each parameter has been read by the reading functions
@@ -1059,6 +1097,12 @@ spatial index will be recomputed on the fly"""
                 msg = 'points must be 2d as returned from getPointsByPulse'
                 raise generic.LiDARInvalidData(msg)
             
+        writeWaveformInfo = waveformInfo is not None
+            
+        # so we can unscale the transmitted and received
+        if waveformInfo is None and transmitted is not None or received is not None:
+            waveformInfo = self.readWaveformInfo()
+            
         if pulses is not None:
             pulses = self.preparePulsesForWriting(pulses)
             
@@ -1066,10 +1110,10 @@ spatial index will be recomputed on the fly"""
             points = self.preparePointsForWriting(points, pulses)
             
         if transmitted is not None:
-            transmitted = self.prepareTransmittedForWriting(transmitted)
+            transmitted = self.prepareTransmittedForWriting(transmitted, waveformInfo)
             
         if received is not None:
-            received = self.prepareReceivedForWriting(received)
+            received = self.prepareReceivedForWriting(received, waveformInfo)
             
         if self.mode == generic.CREATE:
             # need to extend the hdf5 dataset before writing
