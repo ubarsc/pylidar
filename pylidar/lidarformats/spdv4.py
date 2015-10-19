@@ -512,6 +512,18 @@ class SPDV4File(generic.LiDARFile):
         self.lastPulses_Idx = None
         self.lastPulses_IdxMask = None
         self.lastPulsesColumns = None
+        # h5space.H5Space
+        self.lastTransSpace = None
+        # index to turn into 2d transbypulses
+        self.lastTrans_Idx = None
+        # mask for 2d transbypulses
+        self.lastTrans_IdxMask = None
+        # h5space.H5Space
+        self.lastRecvSpace = None
+        # index to turn into 2d recvbypulses
+        self.lastRecv_Idx = None
+        # mask for 2d recvbypulses
+        self.lastRecv_IdxMask = None
         # flushed by close()
         self.pulseScalingValues = {}
         self.pointScalingValues = {}
@@ -669,6 +681,12 @@ spatial index will be recomputed on the fly"""
         self.lastPulses_Idx = None
         self.lastPulses_IdxMask = None
         self.lastPulsesColumns = None
+        self.lastTransSpace = None
+        self.lastTrans_Idx = None
+        self.lastTrans_IdxMask = None
+        self.lastRecvSpace = None
+        self.lastRecv_Idx = None
+        self.lastRecv_IdxMask = None
         self.pulseScalingValues = None
         self.pointScalingValues = None
         self.extent = None
@@ -699,6 +717,9 @@ spatial index will be recomputed on the fly"""
         selection should be a h5space.H5Space.
         """
         if isinstance(colNames, str):
+            if colNames not in handle:
+                msg = 'column %s not found in file' % colNames
+                raise generic.LiDARArrayColumnError(msg)
             unScaled = colNames.endswith('_U')
             if unScaled:
                 colNames = colNames[:-2]
@@ -713,6 +734,9 @@ spatial index will be recomputed on the fly"""
             # Whether they are unscaled fields or not
             unScaledList = []
             for name in colNames:
+                if name not in handle:
+                    msg = 'column %s not found in file' % name
+                    raise generic.LiDARArrayColumnError(msg)
                 unScaled = name.endswith('_U')
                 hdfName = name
                 attrs = handle[name].attrs
@@ -972,23 +996,133 @@ spatial index will be recomputed on the fly"""
         pointsByPulse = points[idx]
         points = numpy.ma.array(pointsByPulse, mask=idxMask)
         return points
+
+    def readWaveformInfo(self):
+        """
+        Return 2d masked array of information about
+        the waveforms.
+        """
+        if self.controls.spatialProcessing:
+            try:
+                # optional fields - fail if they don't exist
+                idx = self.readPulsesForExtent('WFM_START_IDX')
+                cnt = self.readPulsesForExtent('NUMBER_OF_WAVEFORM_SAMPLES')
+            except generic.LiDARArrayColumnError:
+                return None
+        else:
+            try:
+                # optional fields - fail if they don't exist
+                idx = self.readPulsesForRange('WFM_START_IDX')
+                cnt = self.readPulsesForRange('NUMBER_OF_WAVEFORM_SAMPLES')
+            except generic.LiDARArrayColumnError:
+                return None
+
+        waveHandle = self.fileHandle['DATA']['WAVEFORMS']
+        colNames = waveHandle.keys()
+        if len(colNames) == 0:
+            return None
+        nOut = waveHandle['NUMBER_OF_WAVEFORM_RECEIVED_BINS'].shape[0]
+        wave_space, wave_idx, wave_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                    idx, cnt, nOut)
+        
+        waveformInfo = self.readFieldsAndUnScale(waveHandle, colNames, wave_space)
+        waveformInfo = waveformInfo[wave_idx]
+        wave_masked = numpy.ma.array(waveformInfo, mask=wave_idx_mask)
+        
+        return wave_masked
         
     def readTransmitted(self):
         """
-        Return the 2d masked integer array of transmitted for each of the
-        current pulses. 
+        Return the 3d masked integer array of transmitted for each of the
+        current pulses.
+        First axis is the waveform number.
+        Second axis is waveform bin and last is pulse.
         """
-        # TODO:
-        pass
+        waveformInfo = self.readWaveformInfo()
+        if waveformInfo is None:
+            return None
+
+        if 'TRANSMITTED' not in self.fileHandle['DATA']:
+            return None
+        nOut = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
+        # just do this for each dimension
+        trans_list = []
+        trnas_mask_list = []
+        for nwave in range(waveformInfo.shape[0]):
+            idx = waveformInfo[nwave]['TRANSMITTED_START_IDX']
+            cnt = waveformInfo[nwave]['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
+            
+            trans_shape, trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                        idx, cnt, nOut)
+            
+            trans = trans_shape.read(self.fileHandle['DATA']['TRANSMITTED'])
+
+            offset = numpy.repeat(waveformInfo[nwave]['TRANS_WAVE_OFFSET'], cnt)
+            gain = numpy.repeat(waveformInfo[nwave]['TRANS_WAVE_GAIN'], cnt)
+            trans = (trans / gain) + offset
+
+            trans = trans[trans_idx]
+            trans_list.append(trans)
+            trans_mask_list.append(trans_idx_mask)
+
+        # ok lets stack them
+        trans = numpy.array(trans_list)
+        trans_mask = numpy.array(trans_mask_list)
+
+        self.lastTransSpace = trans_shape
+        self.lastTrans_Idx = trans_idx
+        self.lastTrans_IdxMask = trans_idx_mask
+
+        # create masked array
+        return numpy.ma.array(trans, mask=trans_mask)
+            
 
     def readReceived(self):
         """
-        Return the 2d masked integer array of received for each of the
-        current pulses. 
+        Return the 3d masked integer array of received for each of the
+        current pulses.
+        First axis is the waveform number.
+        Second axis is waveform bin and last is pulse.
         """
-        # TODO:
-        pass
+        waveformInfo = self.readWaveformInfo()
+        if waveformInfo is None:
+            return None
 
+        if 'RECEIVED' not in self.fileHandle['DATA']:
+            return None
+        nOut = self.fileHandle['DATA']['RECEIVED'].shape[0]
+        # just do this for each dimension
+        recv_list = []
+        recv_mask_list = []
+        for nwave in range(waveformInfo.shape[0]):
+            idx = waveformInfo[nwave]['RECEIVED_START_IDX']
+            cnt = waveformInfo[nwave]['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
+            
+            recv_shape, recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                        idx, cnt, nOut)
+            
+            recv = recv_shape.read(self.fileHandle['DATA']['RECEIVED'])
+
+            offset = numpy.repeat(waveformInfo[nwave]['RECEIVE_WAVE_OFFSET'], cnt)
+            gain = numpy.repeat(waveformInfo[nwave]['RECEIVE_WAVE_GAIN'], cnt)
+            recv = (recv / gain) + offset
+
+            recv = recv[recv_idx]
+            recv_list.append(recv)
+            recv_mask_list.append(recv_idx_mask)
+            
+            
+        # ok lets stack them
+        recv = numpy.array(recv_list)
+        recv_mask = numpy.array(recv_mask_list)
+
+        self.lastRecvSpace = recv_shape
+        self.lastRecv_Idx = recv_idx
+        self.lastRecv_IdxMask = recv_idx_mask
+        
+        # create masked array
+        return numpy.ma.array(recv, mask=recv_mask)
+            
     def preparePulsesForWriting(self, pulses, points):
         """
         Called from writeData(). Massages what the user has passed into something
@@ -1108,7 +1242,7 @@ spatial index will be recomputed on the fly"""
                 if firstField in pointsHandle:
                     currPointsCount = pointsHandle[firstField].shape[0]
                     
-                pts_start = numpy.cumsum(nreturns) + currPointsCount
+                pts_start = numpy.cumsum(nreturns) - nreturns[0] + currPointsCount
                 # unfortunately points.compressed() doesn't work
                 # for structured arrays. Use our own version instead
                 ptsCount = points[firstField].count()
@@ -1264,7 +1398,7 @@ spatial index will be recomputed on the fly"""
                 transHandle = self.fileHandle['DATA']['TRANSMITTED']
                 currTransCount = transHandle.shape[0]
             
-            trans_start = numpy.cumsum(ntrans) + currTransCount
+            trans_start = numpy.cumsum(ntrans) - ntrans[0] + currTransCount
             # unfortunately points.compressed() doesn't work
             # for structured arrays. Use our own version instead
             transCount = transmitted.count()
@@ -1347,7 +1481,7 @@ spatial index will be recomputed on the fly"""
                 recvHandle = self.fileHandle['DATA']['RECEIVED']
                 currRecvCount = recvHandle.shape[0]
             
-            recv_start = numpy.cumsum(nrecv) + currRecvCount
+            recv_start = numpy.cumsum(nrecv) - nrecv[0] + currRecvCount
             # unfortunately points.compressed() doesn't work
             # for structured arrays. Use our own version instead
             recvCount = received.count()
@@ -1376,7 +1510,7 @@ spatial index will be recomputed on the fly"""
         if firstField in waveHandle:
             currWaveformsCount = waveHandle[firstField].shape[0]
                     
-        wfm_start = numpy.cumsum(nwaveforms) + currWaveformsCount
+        wfm_start = numpy.cumsum(nwaveforms) - nwaveforms[0] + currWaveformsCount
         
         # unfortunately points.compressed() doesn't work
         # for structured arrays. Use our own version instead
@@ -1532,6 +1666,10 @@ spatial index will be recomputed on the fly"""
             if (transmitted is not None or received is not None) and waveformInfo is None:
                 msg = 'If transmitted or received is supplied, so must waveformInfo'
                 raise generic.LiDARInvalidData(msg)
+
+        writeWavefromInfo = waveformInfo is not None
+        if waveformInfo is None:
+            waveformInfo = self.readWaveformInfo()
         
         if pulses is not None:
             pulses, points = self.preparePulsesForWriting(pulses, points)
@@ -1541,23 +1679,23 @@ spatial index will be recomputed on the fly"""
                                 self.preparePointsForWriting(points, pulses))
             
         if transmitted is not None:
-            transmitted, revc_start, nrecv = (
+            transmitted, trans_start, ntrans = (
                 self.prepareTransmittedForWriting(transmitted, waveformInfo))
             
         if received is not None:
-            received, trans_start, ntrans = (
+            received, recv_start, nrecv = (
                 self.prepareReceivedForWriting(received, waveformInfo))
                 
         # deal with situation where there is transmitted but not
         # received etc. Assume other wise they will be the same length.
-        if (revc_start is None and nrecv is None and trans_start is not None 
+        if (recv_start is None and nrecv is None and trans_start is not None 
                     and ntrans is not None):
-            revc_start = numpy.zeros_like(trans_start)
+            recv_start = numpy.zeros_like(trans_start)
             nrecv = numpy.zeros_like(ntrans)
             
-        if (trans_start is None and ntrans is None and revc_start is not None
+        if (trans_start is None and ntrans is None and recv_start is not None
                     and nrecv is not None):
-            trans_start = numpy.zeros_like(revc_start)
+            trans_start = numpy.zeros_like(recv_start)
             ntrans = numpy.zeros_like(nrecv)
             
         if waveformInfo is not None:
@@ -1583,6 +1721,11 @@ spatial index will be recomputed on the fly"""
                 self.lastPulseID = self.lastPulseID + nPulses
                 generatedColumns = {'PTS_START_IDX' : pts_start,
                         'NUMBER_OF_RETURNS' : nreturns, 'PULSE_ID' : pulseid}
+                        
+                if waveformInfo is not None and len(waveformInfo) > 0:
+                    # write extra columns
+                    generatedColumns['WFM_START_IDX'] = wfm_start
+                    generatedColumns['NUMBER_OF_WAVEFORM_SAMPLES'] = nwaveforms
 
                 self.writeStructuredArray(pulsesHandle, pulses, 
                         generatedColumns, generic.ARRAY_TYPE_PULSES)
@@ -1595,12 +1738,12 @@ spatial index will be recomputed on the fly"""
                 self.writeStructuredArray(pointsHandle, points, 
                         generatedColumns, generic.ARRAY_TYPE_POINTS)
                 
-            if waveformInfo is not None and len(waveformInfo) > 0:
+            if waveformInfo is not None and len(waveformInfo) > 0 and writeWavefromInfo:
             
                 waveHandle = self.fileHandle['DATA']['WAVEFORMS']
                 generatedColumns = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : nrecv,
                     'NUMBER_OF_WAVEFORM_TRANSMITTED_BINS' : ntrans,
-                    'RECEIVED_START_IDX' : revc_start,
+                    'RECEIVED_START_IDX' : recv_start,
                     'TRANSMITTED_START_IDX' : trans_start}
 
                 self.writeStructuredArray(waveHandle, waveformInfo, 

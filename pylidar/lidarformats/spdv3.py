@@ -657,6 +657,10 @@ spatial index will be recomputed on the fly"""
         return points
 
     def readWaveformInfo(self):
+        """
+        Return 2d masked array of information about
+        the waveforms.
+        """
         if self.controls.spatialProcessing:
             pulses = self.readPulsesForExtent()
         else:

@@ -11,7 +11,10 @@ def readFunc(data):
     print('pulses', len(pulses))
     points = data.input1.getPoints()
     print('points', len(points))
-    #trans = data.input1.getTransmitted()
+    recv = data.input1.getReceived()
+    print(recv)
+    trans = data.input1.getTransmitted()
+    print(trans)
     #if len(trans) > 0:
     #    print(trans[0])
     #recv = data.input1.getReceived()
