@@ -56,6 +56,25 @@ def flattenMaskedStructuredArray(inArray, inArrayMask, outArray, returnNumberArr
                 retN += 1
 
 @jit
+def flattenMaskedStructuredArray3d(inArray, inArrayMask, outArray, returnNumberArray):
+    """
+    Like flattenMaskedStructuredArray, but inArray and inArrayMask are 3d.
+    """
+    nX = inArray.shape[2]
+    nY = inArray.shape[1]
+    nZ = inArray.shape[0]
+    outIdx = 0
+    for z in range(nZ):
+        for x in range(nX):
+            retN = 1
+            for y in range(nY):
+                if not inArrayMask[z, y, x]:
+                    outArray[outIdx] = inArray[z, y, x]
+                    returnNumberArray[outIdx] = retN
+                    outIdx += 1
+                    retN += 1
+
+@jit
 def flatten3dMaskedArray(flatArray, in3d, mask3d, idx3d):
     """
     Used by writeData to flatten out masked 3d data into a 1d

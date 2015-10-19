@@ -117,6 +117,9 @@ POINT_SCALED_FIELDS = ('X', 'Y', 'Z', 'HEIGHT', 'INTENSITY')
 
 WAVEFORM_SCALED_FIELDS = ('RANGE_TO_WAVEFORM_START',)
 
+TRANSMITTED_DTYPE = numpy.uint32
+RECEIVED_DTYPE = numpy.uint32
+
 GAIN_NAME = 'GAIN'
 OFFSET_NAME = 'OFFSET'
 
@@ -1209,15 +1212,18 @@ spatial index will be recomputed on the fly"""
         trans_start = None
         ntrans = None
 
+        # un scale back to DN
+        for waveform in range(waveformInfo.shape[0]):
+            offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
+            gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
+            transmitted[waveform] = (transmitted[waveform] - offset) * gain
+            
+        # cast to type to write to file
+        transmitted = transmitted.astype(TRANSMITTED_DTYPE)
+
         if self.mode == generic.UPDATE:
 
             origShape = transmitted.shape
-
-            # un scale back to DN
-            for waveform in range(waveformInfo.shape[0]):
-                offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
-                gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
-                transmitted[waveform] = (transmitted[waveform] - offset) * gain
 
             # flatten it back to 1d so it can be written
             flatSize = self.lastTrans_Idx.max() + 1
@@ -1252,13 +1258,13 @@ spatial index will be recomputed on the fly"""
                 self.lastTransSpace.updateBoolArray(flatMask)
                 
         else:
-            ntrans = transmitted.count(axis=1)
+            ntrans = transmitted.count(axis=1).flatten()
             currTransCount = 0
-            if ['TRANSMITTED'] in self.fileHandle['DATA']:
+            if 'TRANSMITTED' in self.fileHandle['DATA']:
                 transHandle = self.fileHandle['DATA']['TRANSMITTED']
-                currWaveformsCount = transHandle.shape[0]
+                currTransCount = transHandle.shape[0]
             
-            trans_start = numpy.cumsum(ntrans) + currWaveformsCount
+            trans_start = numpy.cumsum(ntrans) + currTransCount
             # unfortunately points.compressed() doesn't work
             # for structured arrays. Use our own version instead
             transCount = transmitted.count()
@@ -1267,14 +1273,14 @@ spatial index will be recomputed on the fly"""
             returnNumber = numpy.empty(transCount, 
                                 dtype=numpy.uint32)
                                     
-            gridindexutils.flattenMaskedStructuredArray(transmitted.data, 
+            gridindexutils.flattenMaskedStructuredArray3d(transmitted.data, 
                         transmitted.mask, outTrans, returnNumber)
                 
             transmitted = outTrans
                 
         return transmitted, trans_start, ntrans
         
-    def prepareReceivedForWriting(self, received):
+    def prepareReceivedForWriting(self, received, waveformInfo):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -1286,16 +1292,22 @@ spatial index will be recomputed on the fly"""
             msg = 'received data must be 3d'
             raise generic.LiDARInvalidData(msg)
 
+        recv_start = None
+        nrecv = None
+
+        # un scale back to DN
+        for waveform in range(waveformInfo.shape[0]):
+            offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
+            gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
+            received[waveform] = (received[waveform] - offset) * gain
+            
+        # cast to type to write to file
+        received = received.astype(RECEIVED_DTYPE)
+
         if self.mode == generic.UPDATE:
 
             origShape = received.shape
             
-            # un scale back to DN
-            for waveform in range(waveformInfo.shape[0]):
-                offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
-                gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
-                received[waveform] = (received[waveform] - offset) * gain
-
             # flatten it back to 1d so it can be written
             flatSize = self.lastRecv_Idx.max() + 1
             flatRecv = numpy.empty((flatSize,), dtype=received.data.dtype)
@@ -1329,9 +1341,27 @@ spatial index will be recomputed on the fly"""
                 self.lastRecvSpace.updateBoolArray(flatMask)
 
         else:
-            raise NotImplementedError()
+            nrecv = received.count(axis=1).flatten()
+            currRecvCount = 0
+            if 'RECEIVED' in self.fileHandle['DATA']:
+                recvHandle = self.fileHandle['DATA']['RECEIVED']
+                currRecvCount = recvHandle.shape[0]
+            
+            recv_start = numpy.cumsum(nrecv) + currRecvCount
+            # unfortunately points.compressed() doesn't work
+            # for structured arrays. Use our own version instead
+            recvCount = received.count()
+            outRecv = numpy.empty(recvCount, dtype=received.data.dtype)
+            # not needed, but have to provide
+            returnNumber = numpy.empty(recvCount, 
+                                dtype=numpy.uint32)
 
-        return received
+            gridindexutils.flattenMaskedStructuredArray3d(received.data, 
+                        received.mask, outRecv, returnNumber)
+                
+            received = outRecv
+
+        return received, recv_start, nrecv
 
     def prepareWaveformInfoForWriting(self, waveformInfo):
         """
@@ -1438,6 +1468,42 @@ spatial index will be recomputed on the fly"""
             data = data.astype(dataType)
             
         return data, hdfname
+
+    def writeStructuredArray(self, hdfHandle, structArray, 
+                    generatedColumns, arrayType):
+        """
+        Writes a structured array as named datasets under hdfHandle. Also writes
+        columns in dictionary generatedColumns to the same place.
+        """
+        firstField = structArray.dtype.names[0]
+        if firstField in hdfHandle:
+            oldSize = hdfHandle[firstField].shape[0]
+        else:
+            oldSize = 0
+        newSize = oldSize + len(structArray)
+
+        for name in structArray.dtype.names:
+            # don't bother writing out the ones we generate ourselves
+            if name not in generatedColumns:
+                data, hdfname = self.prepareDataForWriting(
+                            structArray[name], name, arrayType)
+                    
+                if hdfname in hdfHandle:
+                    hdfHandle[hdfname].resize((newSize,))
+                    hdfHandle[hdfname][oldSize:newSize+1] = data
+                else:
+                    self.createDataColumn(hdfHandle, hdfname, data)
+                    
+        # now write the generated ones
+        for name in generatedColumns.keys():
+            data, hdfname = self.prepareDataForWriting(
+                generatedColumns[name], name, arrayType)
+                        
+            if hdfname in hdfHandle:
+                hdfHandle[hdfname].resize((newSize,))
+                hdfHandle[hdfname][oldSize:newSize+1] = data
+            else:
+                self.createDataColumn(hdfHandle, hdfname, data)
         
     def writeData(self, pulses=None, points=None, transmitted=None, 
                 received=None, waveformInfo=None):
@@ -1474,18 +1540,29 @@ spatial index will be recomputed on the fly"""
             points, pts_start, nreturns, returnNumber = (
                                 self.preparePointsForWriting(points, pulses))
             
-        #if transmitted is not None:
-        #    transmitted, revc_start, nrecv = (
-        #        self.prepareTransmittedForWriting(transmitted, waveformInfo))
+        if transmitted is not None:
+            transmitted, revc_start, nrecv = (
+                self.prepareTransmittedForWriting(transmitted, waveformInfo))
             
-        #if received is not None:
-        #    received, trans_start, ntrans = (
-        #        self.prepareReceivedForWriting(received, waveformInfo))
+        if received is not None:
+            received, trans_start, ntrans = (
+                self.prepareReceivedForWriting(received, waveformInfo))
+                
+        # deal with situation where there is transmitted but not
+        # received etc. Assume other wise they will be the same length.
+        if (revc_start is None and nrecv is None and trans_start is not None 
+                    and ntrans is not None):
+            revc_start = numpy.zeros_like(trans_start)
+            nrecv = numpy.zeros_like(ntrans)
             
-        #if waveformInfo is not None:
-        #    waveformInfo, wfm_start, nwaveforms = (
-        #                self.prepareWaveformInfoForWriting(waveformInfo))
-        waveformInfo = None
+        if (trans_start is None and ntrans is None and revc_start is not None
+                    and nrecv is not None):
+            trans_start = numpy.zeros_like(revc_start)
+            ntrans = numpy.zeros_like(nrecv)
+            
+        if waveformInfo is not None:
+            waveformInfo, wfm_start, nwaveforms = (
+                        self.prepareWaveformInfoForWriting(waveformInfo))
             
         if self.mode == generic.CREATE:
 
@@ -1498,129 +1575,59 @@ spatial index will be recomputed on the fly"""
             if pulses is not None and len(pulses) > 0:
                         
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
-                firstField = pulses.dtype.names[0]
-                if firstField in pulsesHandle:
-                    oldSize = pulsesHandle[firstField].shape[0]
-                else:
-                    oldSize = 0
-                nPulses = len(pulses)
-                newSize = oldSize + nPulses
                 
                 # index into points and pulseid generated fields
+                nPulses = len(pulses)
                 pulseid = numpy.arange(self.lastPulseID, 
                         self.lastPulseID + nPulses, dtype=PULSE_FIELDS['PULSE_ID'])
                 self.lastPulseID = self.lastPulseID + nPulses
                 generatedColumns = {'PTS_START_IDX' : pts_start,
                         'NUMBER_OF_RETURNS' : nreturns, 'PULSE_ID' : pulseid}
 
-                for name in pulses.dtype.names:
-                    # don't bother writing out the ones we generate ourselves
-                    if name not in generatedColumns:
-                        data, hdfname = self.prepareDataForWriting(
-                                    pulses[name], name, generic.ARRAY_TYPE_PULSES)
-                    
-                        if hdfname in pulsesHandle:
-                            pulsesHandle[hdfname].resize((newSize,))
-                            pulsesHandle[hdfname][oldSize:newSize+1] = data
-                        else:
-                            self.createDataColumn(pulsesHandle, hdfname, data)
-                    
-                # now write the generated ones
-                for name in generatedColumns.keys():
-                    data, hdfname = self.prepareDataForWriting(
-                        generatedColumns[name], name, generic.ARRAY_TYPE_PULSES)
-                        
-                    if hdfname in pulsesHandle:
-                        pulsesHandle[hdfname].resize((newSize,))
-                        pulsesHandle[hdfname][oldSize:newSize+1] = data
-                    else:
-                        self.createDataColumn(pulsesHandle, hdfname, data)
+                self.writeStructuredArray(pulsesHandle, pulses, 
+                        generatedColumns, generic.ARRAY_TYPE_PULSES)
                 
             if points is not None and len(points) > 0:
 
                 pointsHandle = self.fileHandle['DATA']['POINTS']
-                firstField = points.dtype.names[0]
-                if firstField in pointsHandle:
-                    oldSize = pointsHandle[firstField].shape[0]
-                else:
-                    oldSize = 0
-                nPoints = len(points)
-                newSize = oldSize + nPoints
                 generatedColumns = {'RETURN_NUMBER' : returnNumber}
                 
-                for name in points.dtype.names:
-                    if name not in generatedColumns:
-                        data, hdfname = self.prepareDataForWriting(
-                                    points[name], name, generic.ARRAY_TYPE_POINTS)
-
-                        if hdfname in pointsHandle:
-                            pointsHandle[hdfname].resize((newSize,))
-                            pointsHandle[hdfname][oldSize:newSize+1] = data
-                        else:
-                            self.createDataColumn(pointsHandle, hdfname, data)
-                            
-                # now write the generated ones
-                for name in generatedColumns.keys():
-                    data, hdfname = self.prepareDataForWriting(
-                            generatedColumns[name], name, generic.ARRAY_TYPE_POINTS)
-
-                    if hdfname in pointsHandle:
-                        pointsHandle[hdfname].resize((newSize,))
-                        pointsHandle[hdfname][oldSize:newSize+1] = data
-                    else:
-                        self.createDataColumn(pointsHandle, hdfname, data)
-                        
+                self.writeStructuredArray(pointsHandle, points, 
+                        generatedColumns, generic.ARRAY_TYPE_POINTS)
+                
             if waveformInfo is not None and len(waveformInfo) > 0:
             
                 waveHandle = self.fileHandle['DATA']['WAVEFORMS']
-                firstField = waveformInfo.dtype.names[0]
-                if firstField in waveHandle:
-                    oldSize = waveHandle[firstField].shape[0]
-                else:
-                    oldSize = 0
-                    
-                nWaves = len(waveformInfo)
-                newSize = oldSize + nWaves
                 generatedColumns = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : nrecv,
                     'NUMBER_OF_WAVEFORM_TRANSMITTED_BINS' : ntrans,
                     'RECEIVED_START_IDX' : revc_start,
                     'TRANSMITTED_START_IDX' : trans_start}
+
+                self.writeStructuredArray(waveHandle, waveformInfo, 
+                        generatedColumns, generic.ARRAY_TYPE_WAVEFORMS)
                 
-                for name in waveformInfo.dtype.names:
-                    if name not in generatedColumns:
-                        data, hdfname = self.prepareDataForWriting(
-                            waveformInfo[name], name. generic.ARRAY_TYPE_WAVEFORMS)
-                            
-                        if hdfname in waveHandle:
-                            waveHandle[hdfname].resize((newSize,))
-                            waveHandle[hdfname][oldSize:newSize+1] = data
-                        else:
-                            self.createDataColumn(waveHandle, hdfname, data)
+            if transmitted is not None and len(transmitted) > 0:
+                if 'TRANSMITTED' in self.fileHandle['DATA']:
+                    tHandle = self.fileHandle['DATA']['TRANSMITTED']
+                    oldSize = tHandle.shape[0]
+                    newSize = oldSize + len(transmitted)
+                    tHandle.resize((newSize,))
+                    tHandle[oldSize:newSize+1] = transmitted
+                else:
+                    self.createDataColumn(self.fileHandle['DATA'], 
+                                'TRANSMITTED', transmitted)
 
-                # now write the generated ones
-                for name in generatedColumns.keys():
-                    data, hdfname = self.prepareDataForWriting(
-                            generatedColumns[name], name, generic.ARRAY_TYPE_WAVEFORMS)
-
-                    if hdfname in waveHandle:
-                        waveHandle[hdfname].resize((newSize,))
-                        waveHandle[hdfname][oldSize:newSize+1] = data
-                    else:
-                        self.createDataColumn(waveHandle, hdfname, data)
-
-            # TODO:
-            #if transmitted is not None:
-            #    oldSize = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
-            #    nTrans = len(transmitted)
-            #    newSize = oldSize + nTrans
-            #    self.fileHandle['DATA']['TRANSMITTED'].resize((newSize,))
+            if received is not None and len(received) > 0:
+                if 'RECEIVED' in self.fileHandle['DATA']:
+                    rHandle = self.fileHandle['DATA']['RECEIVED']
+                    oldSize = rHandle.shape[0]
+                    newSize = oldSize + len(received)
+                    rHandle.resize((newSize,))
+                    rHandle[oldSize:newSize+1] = received
+                else:
+                    self.createDataColumn(self.fileHandle['DATA'], 
+                                'RECEIVED', received)
                 
-            #if received is not None:
-            #    oldSize = self.fileHandle['DATA']['RECEIVED'].shape[0]
-            #    nRecv = len(received)
-            #    newSize = oldSize + nRecv
-            #    self.fileHandle['DATA']['RECEIVED'].resize((newSize,))
-
         else:
             # TODO: ignore X_IDX, Y_IDX
             if points is not None:
@@ -1802,6 +1809,11 @@ spatial index will be recomputed on the fly"""
                 return self.pointScalingValues[colName]
         
             handle = self.fileHandle['DATA']['POINTS']
+        elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
+            if colName in self.waveFormScalingValues:
+                return self.waveFormScalingValues[colName]
+            
+            handle = self.fileHandle['DATA']['WAVEFORMS']
         else:
             raise generic.LiDARInvalidSetting('Unsupported array type')
         

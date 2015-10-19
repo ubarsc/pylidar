@@ -39,8 +39,8 @@ def setOutputScaling(header, output):
     output.setScaling('Z', lidarprocessor.ARRAY_TYPE_POINTS, zGain, zOffset)
     output.setScaling('HEIGHT', lidarprocessor.ARRAY_TYPE_POINTS, zGain, zOffset)
     
-    #output.setScaling('RANGE_TO_WAVEFORM_START', lidarprocessor.ARRAY_TYPE_WAVEFORMS, 
-    #        rangeGain, rangeOffset)
+    output.setScaling('RANGE_TO_WAVEFORM_START', lidarprocessor.ARRAY_TYPE_WAVEFORMS, 
+            rangeGain, rangeOffset)
 
 def transFunc(data):
     pulses = data.input1.getPulses()
