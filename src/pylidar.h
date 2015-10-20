@@ -3,6 +3,7 @@
 #define PYLIDAR_H
 
 #include <Python.h>
+#include "numpy/arrayobject.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,8 +39,11 @@ extern "C" {
 
 /* call first - preferably in the init() of your module
  this sets up the connection to numpy */
+#if PY_MAJOR_VERSION >= 3
+PyObject *pylidar_init();
+#else
 DllExport void pylidar_init();
-
+#endif
 /* print error - used internally */
 DllExport void pylidar_error(char *errstr, ...);
 
@@ -88,7 +92,7 @@ static SpylidarFieldDefn fields[] = {
 */
 /* Wrap an existing C array of structures and return as a numpy array */
 /* Python will free data when finished */
-DLLExport PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn);
+DllExport PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn);
 
 #ifdef __cplusplus
 }

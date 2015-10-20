@@ -1,17 +1,22 @@
 
 #include "pylidar.h"
 
-#include "numpy/arrayobject.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 
 /* call first - preferably in the init() of your module
  this sets up the connection to numpy */
+#if PY_MAJOR_VERSION >= 3
+PyObject *pylidar_init()
+#else
 void pylidar_init()
+#endif
 {
     import_array();
+#if PY_MAJOR_VERSION >= 3
+    return NULL;
+#endif
 }
 
 /* print error - used internally */
@@ -111,8 +116,8 @@ PyArray_Descr *pSubDescr;
                         *pnLength = PyLong_AsLong( PyTuple_GetItem(pSubDescr->subarray->shape, 0) );
 #else
                         *pnLength = PyInt_AsLong( PyTuple_GetItem(pSubDescr->subarray->shape, 0) );
-                    }
 #endif
+                    }
                 }
                 else
                 {
@@ -123,8 +128,8 @@ PyArray_Descr *pSubDescr;
                         *pnOffset = PyLong_AsLong(pOffset);
 #else
                         *pnOffset = PyInt_AsLong(pOffset);
-                    }
 #endif
+                    }
                     if( pcKind != NULL )
                         *pcKind = pSubDescr->kind;
                     if( pnSize != NULL )
@@ -371,7 +376,7 @@ npy_double fDoubleVal;
 PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn)
 {
 PyObject *pNameList, *pFormatList, *pOffsetList;
-PyObject *pNameString, *pFormatString, *pOffsetInt;
+PyObject *pNameString, *pFormatString, *pOffsetInt, *pItemSizeObj;
 PyObject *pDtypeDict, *pNamesKey, *pFormatsKey, *pOffsetsKey, *pItemSizeKey;
 PyArray_Descr *pDescr;
 PyObject *pOut;
@@ -398,7 +403,11 @@ int nStructTotalSize;
 #endif
         PyList_Append(pFormatList, pFormatString);
 
+#if PY_MAJOR_VERSION >= 3
+        pOffsetInt = PyLong_FromLong(pDefn->nOffset);
+#else
         pOffsetInt = PyInt_FromLong(pDefn->nOffset);
+#endif
         PyList_Append(pOffsetList, pOffsetInt);
 
         nStructTotalSize = pDefn->nStructTotalSize;
@@ -421,7 +430,12 @@ int nStructTotalSize;
     PyDict_SetItem(pDtypeDict, pNamesKey, pNameList);
     PyDict_SetItem(pDtypeDict, pFormatsKey, pFormatList);
     PyDict_SetItem(pDtypeDict, pOffsetsKey, pOffsetList);
-    PyDict_SetItem(pDtypeDict, pItemSizeKey, PyInt_FromLong(nStructTotalSize) );
+#if PY_MAJOR_VERSION >= 3
+    pItemSizeObj = PyLong_FromLong(nStructTotalSize);
+#else
+    pItemSizeObj = PyInt_FromLong(nStructTotalSize);
+#endif
+    PyDict_SetItem(pDtypeDict, pItemSizeKey, pItemSizeObj );
 
     /* Convert dictionary to array description */
     if( !PyArray_DescrConverter(pDtypeDict, &pDescr) )
