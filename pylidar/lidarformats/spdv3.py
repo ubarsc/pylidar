@@ -697,8 +697,8 @@ spatial index will be recomputed on the fly"""
         """
         Return the 3d masked integer array of transmitted for each of the
         current pulses.
-        SPDV3 only has 1 transmitted per pulse so the first axis is empty.
-        Second axis is waveform bin and last is pulse.
+        SPDV3 only has 1 transmitted per pulse so the second axis is empty.
+        First axis is waveform bin and last is pulse.
         """
         # TODO: cache?
         if self.controls.spatialProcessing:
@@ -718,8 +718,8 @@ spatial index will be recomputed on the fly"""
         transmitted = trans_shape.read(self.fileHandle['DATA']['TRANSMITTED'])
 
         # add a dummy axis
-        trans_idx = numpy.expand_dims(trans_idx, 0)
-        trans_idx_mask = numpy.expand_dims(trans_idx_mask, 0)
+        trans_idx = numpy.expand_dims(trans_idx, 1)
+        trans_idx_mask = numpy.expand_dims(trans_idx_mask, 1)
         
         # reshape
         transByPulse = transmitted[trans_idx]
@@ -738,8 +738,8 @@ spatial index will be recomputed on the fly"""
         """
         Return the 3d masked integer array of received for each of the
         current pulses.
-        SPDV3 only has 1 transmitted per pulse so the first axis is empty.
-        Second axis is waveform bin and last is pulse.
+        SPDV3 only has 1 transmitted per pulse so the second axis is empty.
+        First axis is waveform bin and last is pulse.
         """
         # TODO: cache?
         if self.controls.spatialProcessing:
@@ -759,8 +759,8 @@ spatial index will be recomputed on the fly"""
         received = recv_shape.read(self.fileHandle['DATA']['RECEIVED'])
 
         # add a dummy axis
-        recv_idx = numpy.expand_dims(recv_idx, 0)
-        recv_idx_mask = numpy.expand_dims(recv_idx_mask, 0)
+        recv_idx = numpy.expand_dims(recv_idx, 1)
+        recv_idx_mask = numpy.expand_dims(recv_idx_mask, 1)
         
         # reshape
         recvByPulse = received[recv_idx]

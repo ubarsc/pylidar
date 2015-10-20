@@ -472,8 +472,8 @@ class LidarData(object):
     def getTransmitted(self):
         """
         Returns a masked 3d radiance array. 
-        The first axis is the waveform number, the second axis will 
-        be the waveform bins and the third axis axis will be the same length
+        The first axis is the waveform bins, the second axis will 
+        be the waveform number and the third axis axis will be the same length
         as the pulses.
         
         Because some pulses will have a longer waveform than others a masked
@@ -484,8 +484,8 @@ class LidarData(object):
     def getReceived(self):
         """
         Returns a masked 3d radiance array. 
-        The first axis is the waveform number, the second axis will 
-        be the waveform bins and the third axis axis will be the same length
+        The first axis is the waveform bins, the second axis will 
+        be the waveform number and the third axis axis will be the same length
         as the pulses.
         
         Because some pulses will have a longer waveform than others a masked
