@@ -1035,8 +1035,8 @@ spatial index will be recomputed on the fly"""
         """
         Return the 3d masked integer array of transmitted for each of the
         current pulses.
-        First axis is the waveform number.
-        Second axis is waveform bin and last is pulse.
+        First axis is the waveform bin.
+        Second axis is waveform number and last is pulse.
         """
         waveformInfo = self.readWaveformInfo()
         if waveformInfo is None:
@@ -1045,44 +1045,40 @@ spatial index will be recomputed on the fly"""
         if 'TRANSMITTED' not in self.fileHandle['DATA']:
             return None
         nOut = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
-        # just do this for each dimension
-        trans_list = []
-        trnas_mask_list = []
-        for nwave in range(waveformInfo.shape[0]):
-            idx = waveformInfo[nwave]['TRANSMITTED_START_IDX']
-            cnt = waveformInfo[nwave]['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
-            
-            trans_shape, trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+
+        idx = waveformInfo['TRANSMITTED_START_IDX']
+        cnt = waveformInfo['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
+        
+        trans_shape, trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         idx, cnt, nOut)
             
-            trans = trans_shape.read(self.fileHandle['DATA']['TRANSMITTED'])
+        trans = trans_shape.read(self.fileHandle['DATA']['TRANSMITTED'])
+        # so we can apply scaling, below
+        trans = trans.astype(numpy.float32)
+        trans = trans[trans_idx]
 
-            offset = numpy.repeat(waveformInfo[nwave]['TRANS_WAVE_OFFSET'], cnt)
-            gain = numpy.repeat(waveformInfo[nwave]['TRANS_WAVE_GAIN'], cnt)
-            trans = (trans / gain) + offset
-
-            trans = trans[trans_idx]
-            trans_list.append(trans)
-            trans_mask_list.append(trans_idx_mask)
-
-        # ok lets stack them
-        trans = numpy.array(trans_list)
-        trans_mask = numpy.array(trans_mask_list)
-
+        # apply gain and offset
+        for waveform in range(waveformInfo.shape[0]):
+            offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
+            gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
+            trans[waveform] = (trans[waveform] / gain) + offset
+            
         self.lastTransSpace = trans_shape
         self.lastTrans_Idx = trans_idx
         self.lastTrans_IdxMask = trans_idx_mask
-
+        
         # create masked array
-        return numpy.ma.array(trans, mask=trans_mask)
+        trans = numpy.ma.array(trans, mask=trans_idx_mask)
+        
+        return trans
             
 
     def readReceived(self):
         """
         Return the 3d masked integer array of received for each of the
         current pulses.
-        First axis is the waveform number.
-        Second axis is waveform bin and last is pulse.
+        First axis is the waveform bin.
+        Second axis is waveform number and last is pulse.
         """
         waveformInfo = self.readWaveformInfo()
         if waveformInfo is None:
@@ -1091,37 +1087,32 @@ spatial index will be recomputed on the fly"""
         if 'RECEIVED' not in self.fileHandle['DATA']:
             return None
         nOut = self.fileHandle['DATA']['RECEIVED'].shape[0]
-        # just do this for each dimension
-        recv_list = []
-        recv_mask_list = []
-        for nwave in range(waveformInfo.shape[0]):
-            idx = waveformInfo[nwave]['RECEIVED_START_IDX']
-            cnt = waveformInfo[nwave]['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
-            
-            recv_shape, recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        
+        idx = waveformInfo['RECEIVED_START_IDX']
+        cnt = waveformInfo['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
+        
+        recv_shape, recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         idx, cnt, nOut)
             
-            recv = recv_shape.read(self.fileHandle['DATA']['RECEIVED'])
+        recv = recv_shape.read(self.fileHandle['DATA']['RECEIVED'])
+        # so we can apply scaling, below
+        recv = recv.astype(numpy.float32)
+        recv = recv[recv_idx]
 
-            offset = numpy.repeat(waveformInfo[nwave]['RECEIVE_WAVE_OFFSET'], cnt)
-            gain = numpy.repeat(waveformInfo[nwave]['RECEIVE_WAVE_GAIN'], cnt)
-            recv = (recv / gain) + offset
-
-            recv = recv[recv_idx]
-            recv_list.append(recv)
-            recv_mask_list.append(recv_idx_mask)
+        # apply gain and offset
+        for waveform in range(waveformInfo.shape[0]):
+            offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
+            gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
+            recv[waveform] = (recv[waveform] / gain) + offset
             
-            
-        # ok lets stack them
-        recv = numpy.array(recv_list)
-        recv_mask = numpy.array(recv_mask_list)
-
         self.lastRecvSpace = recv_shape
         self.lastRecv_Idx = recv_idx
         self.lastRecv_IdxMask = recv_idx_mask
         
         # create masked array
-        return numpy.ma.array(recv, mask=recv_mask)
+        recv = numpy.ma.array(recv, mask=recv_idx_mask)
+        
+        return recv
             
     def preparePulsesForWriting(self, pulses, points):
         """
@@ -1466,11 +1457,12 @@ spatial index will be recomputed on the fly"""
                 # would mean the above flattening trick won't work.
                 mask = numpy.expand_dims(mask, axis=0)
                 mask = numpy.expand_dims(mask, axis=0)
+                mask = numpy.repeat(mask, origShape[0], axis=0)
                 mask = numpy.repeat(mask, origShape[1], axis=2)
                 flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
                 gridindexutils.flatten3dMaskedArray(flatMask, mask, 
                     self.lastRecv_IdxMask, self.lastRecv_Idx)
-            
+                
                 received = received[flatMask]
                 self.lastRecvSpace.updateBoolArray(flatMask)
 
@@ -1677,11 +1669,15 @@ spatial index will be recomputed on the fly"""
         if points is not None:
             points, pts_start, nreturns, returnNumber = (
                                 self.preparePointsForWriting(points, pulses))
-            
+
+        trans_start = None
+        ntrans = None            
         if transmitted is not None:
             transmitted, trans_start, ntrans = (
                 self.prepareTransmittedForWriting(transmitted, waveformInfo))
             
+        recv_start = None
+        nrecv = None
         if received is not None:
             received, recv_start, nrecv = (
                 self.prepareReceivedForWriting(received, waveformInfo))
@@ -1792,10 +1788,12 @@ spatial index will be recomputed on the fly"""
                         if data.size > 0:
                             self.lastPulsesShape.write(pulsesHandle[hdfname], data)
                                     
-            #if transmitted is not None:
-            #    self.fileHandle['DATA']['TRANSMITTED'][self.lastTransBool] = transmitted
-            #if received is not None:
-            #    self.fileHandle['DATA']['RECEIVED'][self.lastRecvBool] = received
+            if transmitted is not None:
+                self.lastTransSpace.write(self.fileHandle['DATA']['TRANSMITTED'], 
+                                transmitted)
+            if received is not None:
+                self.lastRecvSpace.write(self.fileHandle['DATA']['RECEIVED'], 
+                                received)
         
     # The functions below are for when there is no spatial index.
     def setPulseRange(self, pulseRange):
