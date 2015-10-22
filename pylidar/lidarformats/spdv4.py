@@ -1971,3 +1971,46 @@ spatial index will be recomputed on the fly"""
             
         return gain, offset
         
+
+class SPDV4FileInfo(generic.LiDARFileInfo):
+    """
+    Class that gets information about a SPDV4 file
+    and makes it available as fields.
+    """
+    def __init__(self, fname):
+        generic.LiDARFileInfo.__init__(self, fname)
+    
+        # attempt to open the file
+        try:
+            fileHandle = h5py.File(fname, 'r')
+        except OSError as err:
+            # always seems to through an OSError
+            raise generic.LiDARFormatNotUnderstood(str(err))
+
+        # check that it is indeed the right version
+        # and get attributes
+        fileAttrs = fileHandle.attrs
+        if not 'VERSION_SPD' in fileAttrs:
+            msg = "File appears not to be SPD"
+            raise generic.LiDARFormatNotUnderstood(msg)
+        elif fileAttrs['VERSION_SPD'][0] != SPDV4_VERSION_MAJOR:
+            msg = "File seems to be wrong version for this driver"
+            raise generic.LiDARFormatNotUnderstood(msg)
+            
+        # save the header as a dictionary
+        self.header = {}
+        for key in fileHandle.attrs.keys():
+            self.header[key] = fileHandle.attrs[key]
+
+        # pull a few things out to the top level
+        self.wkt = fileHandle.attrs['SPATIAL_REFERENCE']
+
+        self.zMax = fileHandle.attrs['Z_MAX']
+        self.zMin = fileHandle.attrs['Z_MIN']
+        self.wavelengths = fileHandle.attrs['WAVELENGTHS']
+        self.bandwidths = fileHandle.attrs['BANDWIDTHS']
+        # probably other things too
+        
+        
+        
+        

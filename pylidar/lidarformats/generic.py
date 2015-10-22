@@ -373,8 +373,8 @@ def getLidarFileInfo(fname):
         except LiDARFileException:
             # failed - onto the next one
             pass
-        # none worked
-        msg = 'Cannot open LiDAR file %s' % fname
-        raise LiDARFormatDriverNotFound(msg)
+    # none worked
+    msg = 'Cannot open LiDAR file %s' % fname
+    raise LiDARFormatDriverNotFound(msg)
                                             
 

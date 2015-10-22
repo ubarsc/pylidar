@@ -1367,6 +1367,10 @@ class SPDV3FileInfo(generic.LiDARFileInfo):
             raise generic.LiDARFormatNotUnderstood(str(err))
             
         # check that it is indeed the right version
+        if 'HEADER' not in fileHandle:
+            msg = 'File does not appear to be SPD V3'
+            raise generic.LiDARFormatNotUnderstood(msg)
+            
         header = fileHandle['HEADER']
         headerKeys = header.keys()
         if (not 'VERSION_MAJOR_SPD' in headerKeys or 
