@@ -45,6 +45,7 @@ typedef struct
 {
     PyObject_HEAD
     std::shared_ptr<scanlib::basic_rconnection> rc;
+    Py_ssize_t nCurrPulse;
 } PyRieglScanFile;
 
 /* destructor - close and delete tc */
@@ -69,14 +70,78 @@ char *pszFname = NULL;
 
     /* Raises exception on failure? */
     self->rc = scanlib::basic_rconnection::create(pszFname);
+
+    self->nCurrPulse = 0;
     return 0;
 }
 
-static PyObject *PyRieglScanFile_readPulses(PyRieglScanFile *self, PyObject *args)
-{
-int nPulseStart, nPulseEnd;
+/* Structure for pulses */
+typedef struct {
+    uint64_t pulseID;
+    uint64_t gpsTime;
+    float azimuth;
+    float zenith;
+    uint32_t scanline;
+    uint16_t scanlineIdx;
+    double xIdx;
+    double yIdx;
+    uint16_t sourceId;
+    double xOrigin;
+    double yOrigin;
+    float zOrigin;
+    uint32_t pointStartIdx;
+    uint16_t pointCount;
+} SRieglPulse;
 
-    if( !PyArg_ParseTuple(args, "ii:readPulses", &nPulseStart, &nPulseEnd ) )
+/* field info for pylidar_structArrayToNumpy */
+static SpylidarFieldDefn RieglPulseFields[] = {
+    CREATE_FIELD_DEFN(SRieglPulse, pulseID, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, gpsTime, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, azimuth, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, zenith, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, scanline, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, scanlineIdx, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, yIdx, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, xIdx, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, sourceId, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, xOrigin, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, yOrigin, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, zOrigin, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, pointStartIdx, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, pointCount, 'u'),
+    {NULL} // Sentinel
+};
+
+/* Structure for points */
+typedef struct {
+    uint64_t returnId;
+    uint64_t gpsTime;
+    float amplitudeReturn;
+    float widthReturn;
+    uint8_t classification;
+    double x;
+    double y;
+    float z;
+} SRieglPoint;
+
+/* field info for pylidar_structArrayToNumpy */
+static SpylidarFieldDefn RieglPointFields[] = {
+    CREATE_FIELD_DEFN(SRieglPoint, returnId, 'u'),
+    CREATE_FIELD_DEFN(SRieglPoint, gpsTime, 'u'),
+    CREATE_FIELD_DEFN(SRieglPoint, amplitudeReturn, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, widthReturn, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, classification, 'u'),
+    CREATE_FIELD_DEFN(SRieglPoint, x, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, y, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, z, 'f'),
+    {NULL} // Sentinel
+};
+
+static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
+{
+Py_ssize_t nPulseStart, nPulseEnd;
+
+    if( !PyArg_ParseTuple(args, "nn:readData", &nPulseStart, &nPulseEnd ) )
         return NULL;
 
     Py_RETURN_NONE;
@@ -84,7 +149,7 @@ int nPulseStart, nPulseEnd;
 
 /* Table of methods */
 static PyMethodDef PyRieglScanFile_methods[] = {
-    {"readPulses", (PyCFunction)PyRieglScanFile_readPulses, METH_VARARGS, NULL},
+    {"readData", (PyCFunction)PyRieglScanFile_readData, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 

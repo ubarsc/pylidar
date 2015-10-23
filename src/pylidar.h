@@ -70,7 +70,7 @@ typedef struct
 } SpylidarFieldDefn;
 
 #define CREATE_FIELD_DEFN(STRUCT, FIELD, KIND) \
-    {#FIELD, KIND, sizeof(STRUCT.FIELD), offsetof(STRUCT, FIELD), sizeof(STRUCT)}
+    {#FIELD, KIND, sizeof(((STRUCT*)0)->FIELD), offsetof(STRUCT, FIELD), sizeof(STRUCT)}
 
 /* 
 Here is an example of use:
@@ -79,15 +79,26 @@ typedef struct {
     double x,
     double y,
     int count
-}
+} SMyStruct;
 
 //Create an array of structures defining the fields like this:
 static SpylidarFieldDefn fields[] = {
     CREATE_FIELD_DEFN(SMyStruct, x, 'f'),
     CREATE_FIELD_DEFN(SMyStruct, y, 'f'),
-    CREATE_FIELD_DEFNS(MyStruct, count, 'i'),
+    CREATE_FIELD_DEFN(SMyStruct, count, 'i'),
     {NULL} // Sentinel 
 };
+
+// Kind is one of the following (see http://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html)
+'b'     boolean
+'i'     (signed) integer
+'u'     unsigned integer
+'f'     floating-point
+'c'     complex-floating point
+'O'     (Python) objects
+'S', 'a'    (byte-)string
+'U'     Unicode
+'V'     raw data (void)
 
 */
 /* Wrap an existing C array of structures and return as a numpy array */
