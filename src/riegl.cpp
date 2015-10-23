@@ -25,6 +25,7 @@
 #include "pylidar.h"
 
 #include <riegl/scanlib.hpp>
+#include <cmath>
 
 /* An exception object for this module */
 /* created in the init function */
@@ -45,7 +46,7 @@ typedef struct
 {
     PyObject_HEAD
     std::shared_ptr<scanlib::basic_rconnection> rc;
-    Py_ssize_t nCurrPulse;
+    Py_ssize_t nTotalPulsesRead;
 } PyRieglScanFile;
 
 /* destructor - close and delete tc */
@@ -71,7 +72,7 @@ char *pszFname = NULL;
     /* Raises exception on failure? */
     self->rc = scanlib::basic_rconnection::create(pszFname);
 
-    self->nCurrPulse = 0;
+    self->nTotalPulsesRead = 0;
     return 0;
 }
 
@@ -85,7 +86,6 @@ typedef struct {
     uint16_t scanlineIdx;
     double xIdx;
     double yIdx;
-    uint16_t sourceId;
     double xOrigin;
     double yOrigin;
     float zOrigin;
@@ -103,7 +103,6 @@ static SpylidarFieldDefn RieglPulseFields[] = {
     CREATE_FIELD_DEFN(SRieglPulse, scanlineIdx, 'u'),
     CREATE_FIELD_DEFN(SRieglPulse, yIdx, 'f'),
     CREATE_FIELD_DEFN(SRieglPulse, xIdx, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, sourceId, 'u'),
     CREATE_FIELD_DEFN(SRieglPulse, xOrigin, 'f'),
     CREATE_FIELD_DEFN(SRieglPulse, yOrigin, 'f'),
     CREATE_FIELD_DEFN(SRieglPulse, zOrigin, 'f'),
@@ -137,14 +136,160 @@ static SpylidarFieldDefn RieglPointFields[] = {
     {NULL} // Sentinel
 };
 
+class RieglReader : public scanlib::pointcloud
+{
+public:
+    RieglReader(Py_ssize_t nPulses, Py_ssize_t nTotalPulsesRead) : 
+        scanlib::pointcloud(false), 
+        m_nPulses(nPulses),
+        m_nTotalPulsesRead(nTotalPulsesRead),
+        m_nCountPulses(0),
+        m_nCountPoints(0),
+        m_scanline(0),
+        m_scanlineIdx(0)
+    {
+        // avoid new etc so we can realloc
+        m_pPulses = (SRieglPulse*)malloc(sizeof(SRieglPulse) * nPulses);
+        if( m_pPulses == NULL )
+            throw std::bad_alloc();
+
+        // guess the same as nPulses
+        m_pPoints = (SRieglPoint*)malloc(sizeof(SRieglPoint) * nPulses);
+        if( m_pPoints == NULL )
+        {
+            free(m_pPulses);
+            throw std::bad_alloc();
+        }
+    }
+
+    bool done()
+    {
+        return m_nCountPulses < m_nPulses;
+    }
+
+    Py_ssize_t getNumPulsesRead()
+    {
+        return m_nCountPulses;
+    }
+
+    SRieglPulse *getPulses()
+    {
+        return m_pPulses;
+    }
+
+    SRieglPoint *getPoints()
+    {
+        return m_pPoints;
+    }
+
+protected:
+    // This call is invoked for every pulse, even if there is no return
+    void on_shot()
+    {
+        if( done() )
+        {
+            fprintf(stderr, "Have got all pulses, but on_shot() still called\n");
+            return;
+        }
+        m_scanlineIdx++;
+
+        SRieglPulse *pPulse = &m_pPulses[m_nCountPulses];
+        pPulse->pulseID = m_nCountPulses + m_nTotalPulsesRead;
+        pPulse->gpsTime = time_sorg * 1e9 + 0.5;
+
+        // Get spherical coordinates. TODO: matrix transform
+        double magnitude = std::sqrt(beam_direction[0] * beam_direction[0] + \
+                           beam_direction[1] * beam_direction[1] + \
+                           beam_direction[2] * beam_direction[2]);
+        double shot_zenith = std::acos(beam_direction[2]/magnitude) * 180.0 / pi;
+        double shot_azimuth = shot_azimuth = std::atan2(beam_direction[0],beam_direction[1]) * 180.0 / pi;      
+        if( beam_direction[0] < 0 )
+        {
+            shot_azimuth += 360.0;            
+        }
+
+        pPulse->azimuth = shot_azimuth;
+        pPulse->zenith = shot_zenith;
+        pPulse->scanline = m_scanline;
+        pPulse->scanlineIdx = m_scanlineIdx;
+        // do we need these separate?
+        pPulse->xIdx = m_scanline;
+        pPulse->yIdx = m_scanlineIdx;
+        // TODO: matric transform
+        pPulse->xOrigin = beam_origin[0];
+        pPulse->yOrigin = beam_origin[1];
+        pPulse->zOrigin = beam_origin[2];
+        // TODO: pointStartIdx etc
+
+        m_nCountPulses++;
+    }
+
+    // start of a scan line going in the up direction
+    void on_line_start_up(const scanlib::line_start_up<iterator_type>& arg) 
+    {
+        pointcloud::on_line_start_up(arg);
+        ++m_scanline;
+        m_scanlineIdx = 0;
+    }
+    
+    // start of a scan line going in the down direction
+    void on_line_start_dn(const scanlib::line_start_dn<iterator_type>& arg) 
+    {
+        pointcloud::on_line_start_dn(arg);
+        ++m_scanline;
+        m_scanlineIdx = 0;
+    }
+
+private:
+    Py_ssize_t m_nPulses;
+    Py_ssize_t m_nCountPulses;
+    Py_ssize_t m_nCountPoints;
+    Py_ssize_t m_nTotalPulsesRead;
+    SRieglPulse *m_pPulses;
+    SRieglPoint *m_pPoints;
+    uint32_t m_scanline;
+    uint16_t m_scanlineIdx;
+};
+
 static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 {
-Py_ssize_t nPulseStart, nPulseEnd;
-
+    Py_ssize_t nPulseStart, nPulseEnd, nPulses, nCount;
     if( !PyArg_ParseTuple(args, "nn:readData", &nPulseStart, &nPulseEnd ) )
         return NULL;
 
-    Py_RETURN_NONE;
+    nPulses = nPulseEnd - nPulseStart;
+
+    // our reader class
+    RieglReader reader(nPulses, self->nTotalPulsesRead);
+
+    // The decoder class scans off distinct packets from the continuous data stream
+    // i.e. the rxp format and manages the packets in a buffer.
+    scanlib::decoder_rxpmarker dec(self->rc);
+
+    // The buffer is a structure that holds pointers into the decoder buffer
+    // thereby avoiding unnecessary copies of the data.
+    scanlib::buffer buf;
+
+    // loop through the requested number of pulses
+    for( dec.get(buf); !dec.eoi() && !reader.done(); dec.get(buf) )
+    {
+        reader.dispatch(buf.begin(), buf.end());
+    }
+
+    // update how many were actually read
+    self->nTotalPulsesRead += reader.getNumPulsesRead();
+
+    // get pulse array as numpy array
+    PyObject *pPulses = pylidar_structArrayToNumpy(reader.getPulses(), 
+                reader.getNumPulsesRead(), RieglPulseFields);
+
+    // build tuple
+    PyObject *pTuple = PyTuple_New(2);
+    PyTuple_SetItem(pTuple, 0, pPulses);
+    Py_INCREF(Py_None);
+    PyTuple_SetItem(pTuple, 1, Py_None);
+
+    return pTuple;
 }
 
 /* Table of methods */
