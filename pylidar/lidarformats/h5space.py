@@ -125,12 +125,12 @@ def updateFromBool(spaceid, boolStart, boolArray, mask, start, count,
         select_hyperslab(spaceid, selectNotb, start.ctypes.data,
             0, count.ctypes.data, 0)
 
-def createSpaceFromRange(start, end):
+def createSpaceFromRange(start, end, size):
     """
     Creates a H5Space object given the start and end of a range
     """
     boolArray = numpy.ones((end - start), dtype=numpy.bool)
-    space = H5Space(boolArray, start)
+    space = H5Space(size, boolArray, start)
     return space
 
 class H5Space(object):

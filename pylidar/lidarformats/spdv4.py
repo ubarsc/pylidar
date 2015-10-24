@@ -26,6 +26,7 @@ from numba import jit
 from rios import pixelgrid
 from . import generic
 from . import gridindexutils
+from . import h5space
 
 # Header fields have defined type in SPDV4
 HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float32, 'AZIMUTH_MIN' : numpy.float32,
@@ -1805,14 +1806,16 @@ spatial index will be recomputed on the fly"""
         self.pulseRange = copy.copy(pulseRange)
         nTotalPulses = self.getTotalNumberPulses()
         bMore = True
-        if self.pulseRange.startPulse > nTotalPulses:
+        if self.pulseRange.startPulse >= (nTotalPulses - 1):
             # no data to read
             self.pulseRange.startPulse = 0
             self.pulseRange.endPulse = 0
             bMore = False
             
         elif self.pulseRange.endPulse > nTotalPulses:
-            self.pulseRange.endPulse = nTotalPulses + 1
+            self.pulseRange.endPulse = nTotalPulses
+            # no more blocks after the current one
+            bMore = False
             
         return bMore
 
@@ -1837,7 +1840,7 @@ spatial index will be recomputed on the fly"""
         nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
         startIdxs = self.readPulsesForRange('PTS_START_IDX')
         
-        nOut = pointsHandle['RETURN_NUMBER'].shape[0]
+        nOut = pointsHandle.shape[0]
         point_space, point_idx, point_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
         
@@ -1868,9 +1871,10 @@ spatial index will be recomputed on the fly"""
                 self.lastPulsesColumns is not None and 
                 self.lastPulsesColumns == colNames):
             return self.lastPulses
-
+        
+        size = pulsesHandle.shape[0]
         space = h5space.createSpaceFromRange(self.pulseRange.startPulse, 
-                        self.pulseRange.endPulse)
+                        self.pulseRange.endPulse, size)
         pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, space)
 
         self.lastPulses = pulses

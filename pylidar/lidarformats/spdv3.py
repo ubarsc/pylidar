@@ -26,6 +26,7 @@ from numba import jit
 from rios import pixelgrid
 from . import generic
 from . import gridindexutils
+from . import h5space
 
 # so we can check the user has passed in expected array type
 PULSE_DTYPE = numpy.dtype([('GPS_TIME', 'u8'), ('PULSE_ID', 'u8'), 
@@ -160,55 +161,72 @@ class SPDV3File(generic.LiDARFile):
             self.headerUpdated = False
                 
         # read in the bits I need for the spatial index
-        if mode == generic.READ or mode == generic.UPDATE:
-            indexKeys = self.fileHandle['INDEX'].keys()
-            if 'PLS_PER_BIN' in indexKeys and 'BIN_OFFSETS' in indexKeys:
-                self.si_cnt = self.fileHandle['INDEX']['PLS_PER_BIN'][...]
-                self.si_idx = self.fileHandle['INDEX']['BIN_OFFSETS'][...]
-                self.si_binSize = header['BIN_SIZE'][0]
+        # need to handle case where SPDV3 does not have an index
+        if (mode == generic.READ or mode == generic.UPDATE):
+            if 'INDEX' in self.fileHandle:
+                indexKeys = self.fileHandle['INDEX'].keys()
+                if 'PLS_PER_BIN' in indexKeys and 'BIN_OFFSETS' in indexKeys:
+                    self.si_cnt = self.fileHandle['INDEX']['PLS_PER_BIN'][...]
+                    self.si_idx = self.fileHandle['INDEX']['BIN_OFFSETS'][...]
+                    self.si_binSize = header['BIN_SIZE'][0]
 
-                # also check the type of indexing used on this file
-                self.indexType = header['INDEX_TYPE'][0]
-                if self.indexType == SPDV3_INDEX_CARTESIAN:
-                    self.si_xMin = header['X_MIN'][0]
-                    self.si_yMax = header['Y_MAX'][0]
-                    self.si_xPulseColName = 'X_IDX'
-                    self.si_yPulseColName = 'Y_IDX'
-                elif self.indexType == SPDV3_INDEX_SPHERICAL:
-                    self.si_xMin = header['AZIMUTH_MIN'][0]
-                    self.si_yMax = header['ZENITH_MIN'][0]
-                    self.si_xPulseColName = 'AZIMUTH'
-                    self.si_yPulseColName = 'ZENITH'
-                elif self.indexType == SPDV3_INDEX_SCAN:
-                    self.si_xMin = header['SCANLINE_IDX_MIN'][0]
-                    self.si_yMax = header['SCANLINE_MIN'][0]
-                    self.si_xPulseColName = 'SCANLINE_IDX'
-                    self.si_yPulseColName = 'SCANLINE'
+                    # also check the type of indexing used on this file
+                    self.indexType = header['INDEX_TYPE'][0]
+                    if self.indexType == SPDV3_INDEX_CARTESIAN:
+                        self.si_xMin = header['X_MIN'][0]
+                        self.si_yMax = header['Y_MAX'][0]
+                        self.si_xPulseColName = 'X_IDX'
+                        self.si_yPulseColName = 'Y_IDX'
+                    elif self.indexType == SPDV3_INDEX_SPHERICAL:
+                        self.si_xMin = header['AZIMUTH_MIN'][0]
+                        self.si_yMax = header['ZENITH_MIN'][0]
+                        self.si_xPulseColName = 'AZIMUTH'
+                        self.si_yPulseColName = 'ZENITH'
+                    elif self.indexType == SPDV3_INDEX_SCAN:
+                        self.si_xMin = header['SCANLINE_IDX_MIN'][0]
+                        self.si_yMax = header['SCANLINE_MIN'][0]
+                        self.si_xPulseColName = 'SCANLINE_IDX'
+                        self.si_yPulseColName = 'SCANLINE'
+                    else:
+                        msg = 'Unsupported index type %d' % self.indexType
+                        raise generic.LiDARInvalidSetting(msg)                    
+
+                    # bottom right coords don't seem right (of data rather than si)
+                    self.si_xMax = self.si_xMin + (self.si_idx.shape[1] * self.si_binSize)
+                    self.si_yMin = self.si_yMax - (self.si_idx.shape[0] * self.si_binSize)
+
+                    self.wkt = header['SPATIAL_REFERENCE'][0]
+                    if sys.version_info[0] == 3:
+                        self.wkt = self.wkt.decode()
+
                 else:
-                    msg = 'Unsupported index type %d' % self.indexType
-                    raise generic.LiDARInvalidSetting(msg)                    
-                    
-                # bottom right coords don't seem right (of data rather than si)
-                self.si_xMax = self.si_xMin + (self.si_idx.shape[1] * self.si_binSize)
-                self.si_yMin = self.si_yMax - (self.si_idx.shape[0] * self.si_binSize)
+                    self.si_cnt = None
+                    self.si_idx = None
+                    self.si_binSize = None
+                    self.indexType = None
+                    self.si_xMin = None
+                    self.si_yMax = None
+                    self.si_xMax = None
+                    self.si_yMin = None
+                    self.si_xPulseColName = None
+                    self.si_yPulseColName = None
+                    self.wkt = None
             
-                self.wkt = header['SPATIAL_REFERENCE'][0]
-                if sys.version_info[0] == 3:
-                    self.wkt = self.wkt.decode()
-
             else:
                 # no spatial index
                 self.si_cnt = None
                 self.si_idx = None
                 self.si_binSize = None
-                self.indexType = SPDV3_INDEX_CARTESIAN
+                self.indexType = None
                 self.si_xMin = None
                 self.si_yMax = None
                 self.si_xMax = None
                 self.si_yMin = None
                 self.si_xPulseColName = None
                 self.si_yPulseColName = None
-                self.wkt = None
+                self.wkt = None            
+                
+                
         else:
             # set on setPixelGrid
             self.si_cnt = None
@@ -712,10 +730,10 @@ spatial index will be recomputed on the fly"""
         offset = pulses['TRANS_WAVE_OFFSET']
         
         nOut = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
-        trans_shape, trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        trans_space, trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                     idx, cnt, nOut)
         
-        transmitted = trans_shape.read(self.fileHandle['DATA']['TRANSMITTED'])
+        transmitted = trans_space.read(self.fileHandle['DATA']['TRANSMITTED'])
 
         # add a dummy axis
         trans_idx = numpy.expand_dims(trans_idx, 1)
@@ -728,7 +746,7 @@ spatial index will be recomputed on the fly"""
         # create masked array
         trans_masked = numpy.ma.array(transByPulse, mask=trans_idx_mask)
         
-        self.lastTransSpace = trans_shape
+        self.lastTransSpace = trans_space
         self.lastTrans_Idx = trans_idx
         self.lastTrans_IdxMask = trans_idx_mask
 
@@ -753,10 +771,10 @@ spatial index will be recomputed on the fly"""
         offset = pulses['RECEIVE_WAVE_OFFSET']
         
         nOut = self.fileHandle['DATA']['RECEIVED'].shape[0]
-        recv_shape, recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+        recv_space, recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                     idx, cnt, nOut)
         
-        received = recv_shape.read(self.fileHandle['DATA']['RECEIVED'])
+        received = recv_space.read(self.fileHandle['DATA']['RECEIVED'])
 
         # add a dummy axis
         recv_idx = numpy.expand_dims(recv_idx, 1)
@@ -769,7 +787,7 @@ spatial index will be recomputed on the fly"""
         # create masked array
         recv_masked = numpy.ma.array(recvByPulse, mask=recv_idx_mask)
         
-        self.lastRecvSpace = recv_shape
+        self.lastRecvSpace = recv_space
         self.lastRecv_Idx = recv_idx
         self.lastRecv_IdxMask = recv_idx_mask
         
@@ -928,17 +946,15 @@ spatial index will be recomputed on the fly"""
                         # just the ones that are within the region
                         # this makes the length of origPoints the same as 
                         # that returned by pointsbybins flattened
-                        origPoints = origPoints[self.lastPoints3d_InRegionMask]
-                        
-                        
-                    origPoints = origPoints[mask]
+                        origPoints = origPoints[self.lastPoints3d_InRegionMask]                           
+                        origPoints = origPoints[mask]
 
                 # passed in array does not have all the fields we need to write
                 # so get the original data read 
                 for fieldName in points.dtype.fields.keys():
                     origPoints[fieldName] = points[fieldName]
 
-                # change them over so we have the full data
+                #change them over so we have the full data
                 points = origPoints
 
         else:
@@ -953,7 +969,7 @@ spatial index will be recomputed on the fly"""
                         pulses['NUMBER_OF_RETURNS'])
                 y_idx = numpy.repeat(pulses[self.si_yPulseColName],
                         pulses['NUMBER_OF_RETURNS'])
-                    
+                
                 mask = ( (x_idx >= self.extent.xMin) & 
                         (x_idx <= self.extent.xMax) &
                         (y_idx >= self.extent.yMin) &
@@ -998,8 +1014,8 @@ spatial index will be recomputed on the fly"""
                 mask = ( (origPulses[self.si_xPulseColName] >= self.extent.xMin) & 
                         (origPulses[self.si_xPulseColName] <= self.extent.xMax) & 
                         (origPulses[self.si_yPulseColName] >= self.extent.yMin) &
-                        (origPulses[self.si_yPulseColName] <= self.extent.yMax))
-
+                        (origPulses[self.si_yPulseColName] <= self.extent.yMax) )
+                
                 # Repeat the mask so that it is the same shape as the 
                 # original transmitted and then flatten in the same way
                 # we can then remove the transmitted outside the extent.         
@@ -1169,8 +1185,8 @@ spatial index will be recomputed on the fly"""
                 ds = self.fileHandle['DATA']['POINTS']
                 self.lastPointsSpace.write(ds, points)
             if pulses is not None:
-                ds = self.fileHandle['DATA']['PULSES']
-                self.lastPulsesSpace.write(ds, pulses)
+                ds = self.fileHandle['DATA']['PULSES']               
+                self.lastPulsesSpace.write(ds, pulses)                
             if transmitted is not None:
                 ds = self.fileHandle['DATA']['TRANSMITTED']
                 self.lastTransSpace.write(ds, transmitted)
@@ -1196,14 +1212,16 @@ spatial index will be recomputed on the fly"""
         self.pulseRange = copy.copy(pulseRange)
         nTotalPulses = self.getTotalNumberPulses()
         bMore = True
-        if self.pulseRange.startPulse > nTotalPulses:
+        if self.pulseRange.startPulse >= (nTotalPulses - 1):
             # no data to read
             self.pulseRange.startPulse = 0
             self.pulseRange.endPulse = 0
             bMore = False
             
         elif self.pulseRange.endPulse > nTotalPulses:
-            self.pulseRange.endPulse = nTotalPulses + 1
+            self.pulseRange.endPulse = nTotalPulses
+            # no more blocks after the current one
+            bMore = False
             
         return bMore
         
@@ -1223,10 +1241,14 @@ spatial index will be recomputed on the fly"""
         startIdxs = pulses['PTS_START_IDX']
         
         nOut = self.fileHandle['DATA']['POINTS'].shape[0]
-        point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
-                        startIdxs, nReturns, nOut)
         
-        points = point_shape.read(self.fileHandle['DATA']['POINTS'])
+        try:
+            point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                        startIdxs, nReturns, nOut)
+        except:
+            print(pulses.size,nReturns,startIdxs,self.pulseRange.startPulse,self.pulseRange.endPulse)
+                
+        points = point_space.read(self.fileHandle['DATA']['POINTS'])
         
         # keep these indices from pulses to points - handy for the indexing 
         # functions.
@@ -1246,10 +1268,11 @@ spatial index will be recomputed on the fly"""
                 self.lastPulses is not None):
             return self.subsetColumns(self.lastPulses, colNames)
     
+        size = self.fileHandle['DATA']['PULSES'].shape[0]
         space = h5space.createSpaceFromRange(self.pulseRange.startPulse,
-                    self.pulseRange.endPulse)
+                    self.pulseRange.endPulse, size)
         pulses = space.read(self.fileHandle['DATA']['PULSES'])
-                    
+                  
         self.lastPulses = pulses
         self.lastPulsesSpace = space
         self.lastPulseRange = copy.copy(self.pulseRange)

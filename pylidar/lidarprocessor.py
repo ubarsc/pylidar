@@ -419,9 +419,6 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
                 driver.setExtent(currentExtent)
             # update info class
             userContainer.info.setExtent(currentExtent)
-            
-            # last block yet?
-            userContainer.info.lastBlock = nBlocksSoFar == (nTotalBlocks - 1)
         else:
             bMoreToDo = False # assume we have finished
             for driver in driverList:
@@ -430,9 +427,10 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
                     bMoreToDo = True
             # update info class
             userContainer.info.setRange(currentRange)
-            # last block yet?
-            userContainer.info.lastBlock = not bMoreToDo
-
+        
+        # last block yet?
+        userContainer.info.lastBlock = nBlocksSoFar == (nTotalBlocks - 1)
+        
         # build the function args which is one thing, unless
         # there is user data
         functionArgs = (userContainer,)
