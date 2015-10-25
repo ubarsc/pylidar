@@ -162,7 +162,7 @@ class SPDV3File(generic.LiDARFile):
                 
         # read in the bits I need for the spatial index
         # need to handle case where SPDV3 does not have an index
-        if (mode == generic.READ or mode == generic.UPDATE):
+        if mode == generic.READ or mode == generic.UPDATE:
             if 'INDEX' in self.fileHandle:
                 indexKeys = self.fileHandle['INDEX'].keys()
                 if 'PLS_PER_BIN' in indexKeys and 'BIN_OFFSETS' in indexKeys:
@@ -1212,7 +1212,7 @@ spatial index will be recomputed on the fly"""
         self.pulseRange = copy.copy(pulseRange)
         nTotalPulses = self.getTotalNumberPulses()
         bMore = True
-        if self.pulseRange.startPulse >= (nTotalPulses - 1):
+        if self.pulseRange.startPulse >= nTotalPulses:
             # no data to read
             self.pulseRange.startPulse = 0
             self.pulseRange.endPulse = 0

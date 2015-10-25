@@ -1806,7 +1806,7 @@ spatial index will be recomputed on the fly"""
         self.pulseRange = copy.copy(pulseRange)
         nTotalPulses = self.getTotalNumberPulses()
         bMore = True
-        if self.pulseRange.startPulse >= (nTotalPulses - 1):
+        if self.pulseRange.startPulse >= nTotalPulses:
             # no data to read
             self.pulseRange.startPulse = 0
             self.pulseRange.endPulse = 0
