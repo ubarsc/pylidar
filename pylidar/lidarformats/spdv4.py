@@ -1812,7 +1812,7 @@ spatial index will be recomputed on the fly"""
             self.pulseRange.endPulse = 0
             bMore = False
             
-        elif self.pulseRange.endPulse > nTotalPulses:
+        elif self.pulseRange.endPulse >= nTotalPulses:
             self.pulseRange.endPulse = nTotalPulses
             # no more blocks after the current one
             bMore = False

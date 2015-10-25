@@ -1218,7 +1218,7 @@ spatial index will be recomputed on the fly"""
             self.pulseRange.endPulse = 0
             bMore = False
             
-        elif self.pulseRange.endPulse > nTotalPulses:
+        elif self.pulseRange.endPulse >= nTotalPulses:
             self.pulseRange.endPulse = nTotalPulses
             # no more blocks after the current one
             bMore = False
@@ -1242,11 +1242,8 @@ spatial index will be recomputed on the fly"""
         
         nOut = self.fileHandle['DATA']['POINTS'].shape[0]
         
-        try:
-            point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
-                        startIdxs, nReturns, nOut)
-        except:
-            print(pulses.size,nReturns,startIdxs,self.pulseRange.startPulse,self.pulseRange.endPulse)
+        point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                    startIdxs, nReturns, nOut)
                 
         points = point_space.read(self.fileHandle['DATA']['POINTS'])
         
