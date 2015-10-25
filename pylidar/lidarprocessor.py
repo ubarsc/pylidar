@@ -419,6 +419,8 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
                 driver.setExtent(currentExtent)
             # update info class
             userContainer.info.setExtent(currentExtent)
+            # last block yet?
+            userContainer.info.lastBlock = nBlocksSoFar == (nTotalBlocks - 1)            
         else:
             bMoreToDo = False # assume we have finished
             for driver in driverList:
@@ -427,9 +429,8 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
                     bMoreToDo = True
             # update info class
             userContainer.info.setRange(currentRange)
-        
-        # last block yet?
-        userContainer.info.lastBlock = nBlocksSoFar == (nTotalBlocks - 1)
+            # last block yet? we may not know how many pulses there are
+            userContainer.info.lastBlock = not bMoreToDo
         
         # build the function args which is one thing, unless
         # there is user data
@@ -437,8 +438,9 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
         if not otherArgs is None:
             functionArgs += (otherArgs, )
             
-        # call it
-        userFunc(*functionArgs)
+        # call it if we still have data
+        if bMoreToDo:
+            userFunc(*functionArgs)
         
         # no longer first block. Was set to True in UserInfo constructor
         userContainer.info.firstBlock = False
