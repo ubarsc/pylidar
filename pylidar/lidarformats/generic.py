@@ -73,6 +73,9 @@ class LiDARArrayColumnError(LiDARFileException):
 class LiDARSpatialIndexNotAvailable(LiDARFileException):
     "The specified spatial index not available for this file"
     
+class LiDARWritingNotSupported(LiDARFunctionUnsupported):
+    "driver does not support writing"
+    
 class PulseRange(object):
     """
     Class for setting the range of pulses to read/write

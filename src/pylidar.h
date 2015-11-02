@@ -106,7 +106,94 @@ static SpylidarFieldDefn fields[] = {
 DllExport PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn);
 
 #ifdef __cplusplus
-}
+} // extern C
+
+#include <new>
+
+template <class T>
+class PylidarVector
+{
+public:
+    PylidarVector(npy_intp nStartSize, npy_intp nGrowBy)
+    {
+        m_pData = (T*)malloc(nStartSize * sizeof(T));
+        m_nElems = 0;
+        m_nTotalSize = nStartSize;
+        m_nGrowBy = nGrowBy;
+        m_bOwned = true;
+    }
+    ~PylidarVector()
+    {
+        if( m_bOwned )
+            free(m_pData);
+    }
+
+    npy_intp getNumElems()
+    {
+        return m_nElems;
+    }
+
+    void push(T *pNewElem)
+    {
+        if( !m_bOwned )
+        {
+            throw std::bad_alloc();
+        }
+        if( m_nElems == m_nTotalSize )
+        {
+            // realloc
+            m_nTotalSize += m_nGrowBy;
+            T *pNewData = (T*)realloc(m_pData, m_nTotalSize * sizeof(T));
+            if( pNewData == NULL )
+            {
+                throw std::bad_alloc();
+            }
+            m_pData = pNewData;
+        }
+        memcpy(&m_pData[m_nElems], pNewElem, sizeof(T));
+        m_nElems++;
+    }
+
+    PyObject *getNumpyArray(SpylidarFieldDefn *pDefn)
+    {
+        // TODO: resize array down to nElems?
+        m_bOwned = false;
+        return pylidar_structArrayToNumpy(m_pData, m_nElems, pDefn);
+    }
+
+    PylidarVector split(npy_intp nUpper)
+    {
+        if( !m_bOwned )
+        {
+            throw std::bad_alloc();
+        }
+        // split from nUpper to the end out as a new
+        // PylidarVector
+        npy_intp nNewSize = m_nElems - nUpper;
+        PylidarVector splitted(nNewSize, m_nGrowBy);
+        memcpy(splitted.m_pData, &m_pData[nUpper], nNewSize * sizeof(T));
+
+        // resize this one down
+        m_nElems = nUpper;
+        m_nTotalSize = nUpper;
+        T *pNewData = (T*)realloc(m_pData, m_nTotalSize * sizeof(T));
+        if( pNewData == NULL )
+        {
+            throw std::bad_alloc();
+        }
+        m_pData = pNewData;
+
+        return splitted;
+    }
+
+private:
+    T *m_pData;
+    bool m_bOwned;
+    npy_intp m_nElems;
+    npy_intp m_nTotalSize;
+    npy_intp m_nGrowBy;
+};
+
 #endif
 
 #endif /*PYLIDAR_H*/

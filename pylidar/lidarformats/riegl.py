@@ -32,15 +32,36 @@ class RieglFile(generic.LiDARFile):
     """
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
+
+        # The riegl supplied functions only return an error when 
+        # we actually start reading but PyLidar needs to know straight
+        # away. Workaround is to read the start of the file and see
+        # if it contains 'Riegl'. Normally at byte position 9 but we check
+        # any of the first 32 bytes.
+        fh = open(fname, 'rb')
+        data = fh.read(32)
+        fh.close()
+        
+        if data.find(b'Riegl') == -1:
+            msg = 'not a riegl file'
+            raise generic.LiDARFileException(msg)
         
         self.range = None
         self.lastRange = None
         self.lastPoints = None
         self.lastPulses = None
+        self.scanFile = _riegl.ScanFile(fname)
                           
     @staticmethod        
     def getDriverName():
         return 'riegl'
+        
+    def close(self):
+        self.range = None
+        self.lastRange = None
+        self.lastPoints = None
+        self.lastPulses = None
+        self.scanFile = None
         
     def readPointsByPulse(self):     
         """
@@ -72,7 +93,7 @@ class RieglFile(generic.LiDARFile):
 
     def hasSpatialIndex(self):
         """
-        Riegl files aren't spatiall indexed
+        Riegl files aren't spatially indexed
         """
         return False
         
@@ -82,6 +103,10 @@ class RieglFile(generic.LiDARFile):
         reads/writes.
         """
         self.range = copy.copy(pulseRange)
+        # return True if we can still read data
+        # we just assume we can until we find out
+        # after a read that we can't
+        return not self.scanFile.finished
     
     def readPointsForRange(self, colNames=None):
         """
@@ -92,8 +117,8 @@ class RieglFile(generic.LiDARFile):
         colNames can be a list of column names to return. By default
         all columns are returned.
         """
-        if self.range != self.lastRange:
-            pulses, points = _riegl.readData(self.range.startPulse, 
+        if self.lastRange is None or self.range != self.lastRange:
+            pulses, points = self.scanFile.readData(self.range.startPulse, 
                             self.range.endPulse)
             self.lastRange = self.range        
             self.lastPoints = points
@@ -110,18 +135,33 @@ class RieglFile(generic.LiDARFile):
         colNames can be a list of column names to return. By default
         all columns are returned.
         """
-        if self.range != self.lastRange:
-            pulses, points = _riegl.readData(self.range.startPulse, 
+        print('readPulsesForRange')
+        if self.lastRange is None or self.range != self.lastRange:
+            pulses, points = self.scanFile.readData(self.range.startPulse, 
                             self.range.endPulse)
             self.lastRange = self.range        
             self.lastPoints = points
             self.lastPulses = pulses
                             
-        raise self.lastPulses
+        return self.lastPulses
         
     def getTotalNumberPulses(self):
         """
         No idea how to find out how many pulses so unsupported
         """
         raise generic.LiDARFunctionUnsupported()
+
+    def writeData(self, pulses=None, points=None, transmitted=None, 
+                received=None, waveformInfo=None):
+        """
+        This driver does not support writing so ignore if reading,
+        throw and error otherwise.
+        """
+        if self.mode == generic.READ:
+            # the processor always calls this so if a reading driver just ignore
+            return
+        
+        msg = 'riegl driver does not support update/creating'
+        raise generic.LiDARWritingNotSupported(msg)
+        
         

@@ -33,6 +33,11 @@ from .lidarformats import generic
 # we can use the __subclasses__() python feature
 from .lidarformats import spdv3
 from .lidarformats import spdv4
+try:
+    from .lidarformats import riegl
+except ImportError:
+    # libraries not available
+    pass
 from . import userclasses
 
 # to be passed to ImageData and LidarData class constructors
@@ -530,7 +535,7 @@ def openFiles(dataFiles, userContainer, controls):
                     setattr(userContainer, name, userClass)
 
                 # grab the pixel grid while we are at it - if reading
-                if inputFile.mode != CREATE:
+                if inputFile.mode != CREATE and controls.spatialProcessing:
                     pixGrid = driver.getPixelGrid()
                     gridList.append(pixGrid)
 
@@ -555,7 +560,7 @@ def openFiles(dataFiles, userContainer, controls):
                 msg = "File type not understood"
                 raise generic.LiDARFileException(msg)
                 
-    if len(gridList) == 0:
+    if len(driverList) == 0:
         msg = 'No input files selected'
         raise generic.LiDARFileException(msg)
 

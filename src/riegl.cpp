@@ -46,8 +46,37 @@ typedef struct
 {
     PyObject_HEAD
     std::shared_ptr<scanlib::basic_rconnection> rc;
+    scanlib::decoder_rxpmarker *pDecoder;
+    scanlib::buffer *pBuffer;
     Py_ssize_t nTotalPulsesRead;
+    bool bFinishedReading;
 } PyRieglScanFile;
+
+#if PY_MAJOR_VERSION >= 3
+static int riegl_traverse(PyObject *m, visitproc visit, void *arg) 
+{
+    Py_VISIT(GETSTATE(m)->error);
+    return 0;
+}
+
+static int riegl_clear(PyObject *m) 
+{
+    Py_CLEAR(GETSTATE(m)->error);
+    return 0;
+}
+
+static struct PyModuleDef moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "_riegl",
+        NULL,
+        sizeof(struct RieglState),
+        NULL,
+        NULL,
+        riegl_traverse,
+        riegl_clear,
+        NULL
+};
+#endif
 
 /* destructor - close and delete tc */
 static void 
@@ -55,6 +84,8 @@ PyRieglScanFile_dealloc(PyRieglScanFile *self)
 {
     self->rc->close();
     self->rc.reset();
+    delete self->pDecoder;
+    delete self->pBuffer;
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -69,10 +100,32 @@ char *pszFname = NULL;
         return -1;
     }
 
-    /* Raises exception on failure? */
-    self->rc = scanlib::basic_rconnection::create(pszFname);
+    try
+    {
+        self->rc = scanlib::basic_rconnection::create(pszFname);
 
+        // The decoder class scans off distinct packets from the continuous data stream
+        // i.e. the rxp format and manages the packets in a buffer.
+        self->pDecoder = new scanlib::decoder_rxpmarker(self->rc);
+
+        // The buffer is a structure that holds pointers into the decoder buffer
+        // thereby avoiding unnecessary copies of the data.
+        self->pBuffer = new scanlib::buffer();
+    }
+    catch(scanlib::scanlib_exception e)
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_Format(GETSTATE(m)->error, "Error from Riegl lib: %s", e.what());
+        return -1;
+    }   
     self->nTotalPulsesRead = 0;
+    self->bFinishedReading = false;
     return 0;
 }
 
@@ -143,43 +196,31 @@ public:
         scanlib::pointcloud(false), 
         m_nPulses(nPulses),
         m_nTotalPulsesRead(nTotalPulsesRead),
-        m_nCountPulses(0),
-        m_nCountPoints(0),
         m_scanline(0),
-        m_scanlineIdx(0)
+        m_scanlineIdx(0),
+        m_Pulses(nPulses, 100),
+        m_Points(nPulses, 100)
     {
-        // avoid new etc so we can realloc
-        m_pPulses = (SRieglPulse*)malloc(sizeof(SRieglPulse) * nPulses);
-        if( m_pPulses == NULL )
-            throw std::bad_alloc();
-
-        // guess the same as nPulses
-        m_pPoints = (SRieglPoint*)malloc(sizeof(SRieglPoint) * nPulses);
-        if( m_pPoints == NULL )
-        {
-            free(m_pPulses);
-            throw std::bad_alloc();
-        }
     }
 
     bool done()
     {
-        return m_nCountPulses < m_nPulses;
+        return m_Pulses.getNumElems() >= m_nPulses;
     }
 
     Py_ssize_t getNumPulsesRead()
     {
-        return m_nCountPulses;
+        return m_Pulses.getNumElems();
     }
 
-    SRieglPulse *getPulses()
+    PyObject *getPulses()
     {
-        return m_pPulses;
+        return m_Pulses.getNumpyArray(RieglPulseFields);
     }
 
-    SRieglPoint *getPoints()
+    PyObject *getPoints()
     {
-        return m_pPoints;
+        return m_Points.getNumpyArray(RieglPointFields);
     }
 
 protected:
@@ -193,9 +234,9 @@ protected:
         }
         m_scanlineIdx++;
 
-        SRieglPulse *pPulse = &m_pPulses[m_nCountPulses];
-        pPulse->pulseID = m_nCountPulses + m_nTotalPulsesRead;
-        pPulse->gpsTime = time_sorg * 1e9 + 0.5;
+        SRieglPulse pulse;
+        pulse.pulseID = m_Pulses.getNumElems() + m_nTotalPulsesRead;
+        pulse.gpsTime = time_sorg * 1e9 + 0.5;
 
         // Get spherical coordinates. TODO: matrix transform
         double magnitude = std::sqrt(beam_direction[0] * beam_direction[0] + \
@@ -208,26 +249,26 @@ protected:
             shot_azimuth += 360.0;            
         }
 
-        pPulse->azimuth = shot_azimuth;
-        pPulse->zenith = shot_zenith;
-        pPulse->scanline = m_scanline;
-        pPulse->scanlineIdx = m_scanlineIdx;
+        pulse.azimuth = shot_azimuth;
+        pulse.zenith = shot_zenith;
+        pulse.scanline = m_scanline;
+        pulse.scanlineIdx = m_scanlineIdx;
         // do we need these separate?
-        pPulse->xIdx = m_scanline;
-        pPulse->yIdx = m_scanlineIdx;
-        // TODO: matric transform
-        pPulse->xOrigin = beam_origin[0];
-        pPulse->yOrigin = beam_origin[1];
-        pPulse->zOrigin = beam_origin[2];
+        pulse.xIdx = m_scanline;
+        pulse.yIdx = m_scanlineIdx;
+        // TODO: matrix transform
+        pulse.xOrigin = beam_origin[0];
+        pulse.yOrigin = beam_origin[1];
+        pulse.zOrigin = beam_origin[2];
         // TODO: pointStartIdx etc
 
-        m_nCountPulses++;
+        m_Pulses.push(&pulse);
     }
 
     // start of a scan line going in the up direction
     void on_line_start_up(const scanlib::line_start_up<iterator_type>& arg) 
     {
-        pointcloud::on_line_start_up(arg);
+        scanlib::pointcloud::on_line_start_up(arg);
         ++m_scanline;
         m_scanlineIdx = 0;
     }
@@ -235,18 +276,16 @@ protected:
     // start of a scan line going in the down direction
     void on_line_start_dn(const scanlib::line_start_dn<iterator_type>& arg) 
     {
-        pointcloud::on_line_start_dn(arg);
+        scanlib::pointcloud::on_line_start_dn(arg);
         ++m_scanline;
         m_scanlineIdx = 0;
     }
 
 private:
     Py_ssize_t m_nPulses;
-    Py_ssize_t m_nCountPulses;
-    Py_ssize_t m_nCountPoints;
     Py_ssize_t m_nTotalPulsesRead;
-    SRieglPulse *m_pPulses;
-    SRieglPoint *m_pPoints;
+    PylidarVector<SRieglPulse> m_Pulses;
+    PylidarVector<SRieglPoint> m_Points;
     uint32_t m_scanline;
     uint16_t m_scanlineIdx;
 };
@@ -262,26 +301,38 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
     // our reader class
     RieglReader reader(nPulses, self->nTotalPulsesRead);
 
-    // The decoder class scans off distinct packets from the continuous data stream
-    // i.e. the rxp format and manages the packets in a buffer.
-    scanlib::decoder_rxpmarker dec(self->rc);
-
-    // The buffer is a structure that holds pointers into the decoder buffer
-    // thereby avoiding unnecessary copies of the data.
-    scanlib::buffer buf;
-
     // loop through the requested number of pulses
-    for( dec.get(buf); !dec.eoi() && !reader.done(); dec.get(buf) )
+    try
     {
-        reader.dispatch(buf.begin(), buf.end());
+        for( self->pDecoder->get(*self->pBuffer); 
+                !self->pDecoder->eoi() && !reader.done(); self->pDecoder->get(*self->pBuffer) )
+        {
+            //fprintf(stderr, "starting loop %ld %ld\n", reader.getNumPulsesRead(), self->rc->tellg());
+            reader.dispatch(self->pBuffer->begin(), self->pBuffer->end());
+            //fprintf(stderr, "ending loop %ld %ld\n", reader.getNumPulsesRead(), self->rc->tellg());
+        }
+    }
+    catch(scanlib::scanlib_exception e)
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_Format(GETSTATE(m)->error, "Error from Riegl lib: %s", e.what());
+        return NULL;
     }
 
     // update how many were actually read
     self->nTotalPulsesRead += reader.getNumPulsesRead();
 
+    // we have finished if we are at the end
+    self->bFinishedReading = self->pDecoder->eoi();
+
     // get pulse array as numpy array
-    PyObject *pPulses = pylidar_structArrayToNumpy(reader.getPulses(), 
-                reader.getNumPulsesRead(), RieglPulseFields);
+    PyObject *pPulses = reader.getPulses(); 
 
     // build tuple
     PyObject *pTuple = PyTuple_New(2);
@@ -295,6 +346,26 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 /* Table of methods */
 static PyMethodDef PyRieglScanFile_methods[] = {
     {"readData", (PyCFunction)PyRieglScanFile_readData, METH_VARARGS, NULL},
+    {NULL}  /* Sentinel */
+};
+
+static PyObject *PyRieglScanFile_getFinished(PyRieglScanFile *self, void *closure)
+{
+    if( self->bFinishedReading )
+        Py_RETURN_TRUE;
+    else
+        Py_RETURN_FALSE;
+}
+
+static PyObject *PyRieglScanFile_getPulsesRead(PyRieglScanFile *self, void *closure)
+{
+    return PyLong_FromSsize_t(self->nTotalPulsesRead);
+}
+
+/* get/set */
+static PyGetSetDef PyRieglScanFile_getseters[] = {
+    {"finished", (getter)PyRieglScanFile_getFinished, NULL, "Get Finished reading state", NULL}, 
+    {"pulsesRead", (getter)PyRieglScanFile_getPulsesRead, NULL, "Get number of pulses read", NULL},
     {NULL}  /* Sentinel */
 };
 
@@ -333,7 +404,7 @@ static PyTypeObject PyRieglScanFileType = {
     0,                     /* tp_iternext */
     PyRieglScanFile_methods,             /* tp_methods */
     0,             /* tp_members */
-    0,           /* tp_getset */
+    PyRieglScanFile_getseters,           /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
@@ -344,30 +415,6 @@ static PyTypeObject PyRieglScanFileType = {
     0,                 /* tp_new */
 };
 #if PY_MAJOR_VERSION >= 3
-
-static int riegl_traverse(PyObject *m, visitproc visit, void *arg) 
-{
-    Py_VISIT(GETSTATE(m)->error);
-    return 0;
-}
-
-static int riegl_clear(PyObject *m) 
-{
-    Py_CLEAR(GETSTATE(m)->error);
-    return 0;
-}
-
-static struct PyModuleDef moduledef = {
-        PyModuleDef_HEAD_INIT,
-        "_riegl",
-        NULL,
-        sizeof(struct RieglState),
-        NULL,
-        NULL,
-        riegl_traverse,
-        riegl_clear,
-        NULL
-};
 
 #define INITERROR return NULL
 
