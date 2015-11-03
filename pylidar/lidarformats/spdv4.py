@@ -1852,7 +1852,7 @@ spatial index will be recomputed on the fly"""
         self.lastPoints_IdxMask = point_idx_mask
         self.lastPointsColumns = colNames
         # self.lastPulseRange copied in readPulsesForRange()
-        return self.subsetColumns(points, colNames)
+        return points
     
     def readPulsesForRange(self, colNames=None):
         """
