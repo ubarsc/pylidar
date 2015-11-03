@@ -24,6 +24,7 @@ import numpy
 
 from . import generic
 from . import _riegl
+from . import gridindexutils
 
 class RieglFile(generic.LiDARFile):
     """
@@ -63,12 +64,31 @@ class RieglFile(generic.LiDARFile):
         self.lastPulses = None
         self.scanFile = None
         
-    def readPointsByPulse(self):     
+    def readPointsByPulse(self, colNames=None):
         """
         Read a 3d structured masked array containing the points
         for each pulse.
         """
-        raise NotImplementedError()
+        pulses = self.readPulsesForRange()
+        points = self.readPointsForRange()
+        nReturns = pulses['pointCount']
+        startIdxs = pulses['pointStartIdx']
+
+        point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(        
+                startIdxs, nReturns)
+                
+        pointsByPulse = points[point_idx]
+        
+        if colNames is None:
+            # workaround - seems a structured array returned from
+            # C doesn't work with masked arrays. The dtype looks different.
+            # TODO: check this with a later numpy
+            colNames = pointsByPulse.dtype.names
+            
+        pointsByPulse = self.subsetColumns(pointsByPulse, colNames)
+        points = numpy.ma.array(pointsByPulse, mask=point_idx_mask)
+        
+        return points
         
     def readWaveformInfo(self):
         """
