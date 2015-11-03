@@ -27,6 +27,8 @@
 #include <riegl/scanlib.hpp>
 #include <cmath>
 
+static const int nGrowBy = 100;
+
 /* An exception object for this module */
 /* created in the init function */
 struct RieglState
@@ -40,94 +42,6 @@ struct RieglState
 #define GETSTATE(m) (&_state)
 static struct RieglState _state;
 #endif
-
-/* Python object wrapping a scanlib::basic_rconnection */
-typedef struct
-{
-    PyObject_HEAD
-    std::shared_ptr<scanlib::basic_rconnection> rc;
-    scanlib::decoder_rxpmarker *pDecoder;
-    scanlib::buffer *pBuffer;
-    Py_ssize_t nTotalPulsesRead;
-    bool bFinishedReading;
-} PyRieglScanFile;
-
-#if PY_MAJOR_VERSION >= 3
-static int riegl_traverse(PyObject *m, visitproc visit, void *arg) 
-{
-    Py_VISIT(GETSTATE(m)->error);
-    return 0;
-}
-
-static int riegl_clear(PyObject *m) 
-{
-    Py_CLEAR(GETSTATE(m)->error);
-    return 0;
-}
-
-static struct PyModuleDef moduledef = {
-        PyModuleDef_HEAD_INIT,
-        "_riegl",
-        NULL,
-        sizeof(struct RieglState),
-        NULL,
-        NULL,
-        riegl_traverse,
-        riegl_clear,
-        NULL
-};
-#endif
-
-/* destructor - close and delete tc */
-static void 
-PyRieglScanFile_dealloc(PyRieglScanFile *self)
-{
-    self->rc->close();
-    self->rc.reset();
-    delete self->pDecoder;
-    delete self->pBuffer;
-    Py_TYPE(self)->tp_free((PyObject*)self);
-}
-
-/* init method - open file */
-static int 
-PyRieglScanFile_init(PyRieglScanFile *self, PyObject *args, PyObject *kwds)
-{
-char *pszFname = NULL;
-
-    if( !PyArg_ParseTuple(args, "s", &pszFname ) )
-    {
-        return -1;
-    }
-
-    try
-    {
-        self->rc = scanlib::basic_rconnection::create(pszFname);
-
-        // The decoder class scans off distinct packets from the continuous data stream
-        // i.e. the rxp format and manages the packets in a buffer.
-        self->pDecoder = new scanlib::decoder_rxpmarker(self->rc);
-
-        // The buffer is a structure that holds pointers into the decoder buffer
-        // thereby avoiding unnecessary copies of the data.
-        self->pBuffer = new scanlib::buffer();
-    }
-    catch(scanlib::scanlib_exception e)
-    {
-        // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_Format(GETSTATE(m)->error, "Error from Riegl lib: %s", e.what());
-        return -1;
-    }   
-    self->nTotalPulsesRead = 0;
-    self->bFinishedReading = false;
-    return 0;
-}
 
 /* Structure for pulses */
 typedef struct {
@@ -189,17 +103,125 @@ static SpylidarFieldDefn RieglPointFields[] = {
     {NULL} // Sentinel
 };
 
+/* Python object wrapping a scanlib::basic_rconnection */
+typedef struct
+{
+    PyObject_HEAD
+    std::shared_ptr<scanlib::basic_rconnection> rc;
+    scanlib::decoder_rxpmarker *pDecoder;
+    scanlib::buffer *pBuffer;
+    Py_ssize_t nTotalPulsesRead;
+    bool bFinishedReading;
+
+    uint32_t nscanline;
+    uint16_t nscanlineIdx;
+
+    // Riegl often gives us more data than we need
+    // for the range of pulses. Stash the extra ones
+    // here so we can pick them up next time if needed.
+    PylidarVector<SRieglPulse> *pExtraPulses;
+    PylidarVector<SRieglPoint> *pExtraPoints;
+    Py_ssize_t nStartExtra;
+
+} PyRieglScanFile;
+
+#if PY_MAJOR_VERSION >= 3
+static int riegl_traverse(PyObject *m, visitproc visit, void *arg) 
+{
+    Py_VISIT(GETSTATE(m)->error);
+    return 0;
+}
+
+static int riegl_clear(PyObject *m) 
+{
+    Py_CLEAR(GETSTATE(m)->error);
+    return 0;
+}
+
+static struct PyModuleDef moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "_riegl",
+        NULL,
+        sizeof(struct RieglState),
+        NULL,
+        NULL,
+        riegl_traverse,
+        riegl_clear,
+        NULL
+};
+#endif
+
+/* destructor - close and delete tc */
+static void 
+PyRieglScanFile_dealloc(PyRieglScanFile *self)
+{
+    self->rc->close();
+    self->rc.reset();
+    delete self->pDecoder;
+    delete self->pBuffer;
+    delete self->pExtraPoints;
+    delete self->pExtraPulses;
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+/* init method - open file */
+static int 
+PyRieglScanFile_init(PyRieglScanFile *self, PyObject *args, PyObject *kwds)
+{
+char *pszFname = NULL;
+
+    if( !PyArg_ParseTuple(args, "s", &pszFname ) )
+    {
+        return -1;
+    }
+
+    try
+    {
+        self->rc = scanlib::basic_rconnection::create(pszFname);
+
+        // The decoder class scans off distinct packets from the continuous data stream
+        // i.e. the rxp format and manages the packets in a buffer.
+        self->pDecoder = new scanlib::decoder_rxpmarker(self->rc);
+
+        // The buffer is a structure that holds pointers into the decoder buffer
+        // thereby avoiding unnecessary copies of the data.
+        self->pBuffer = new scanlib::buffer();
+    }
+    catch(scanlib::scanlib_exception e)
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_Format(GETSTATE(m)->error, "Error from Riegl lib: %s", e.what());
+        return -1;
+    }   
+    self->nTotalPulsesRead = 0;
+    self->bFinishedReading = false;
+    self->nscanline = 0;
+    self->nscanlineIdx = 0;
+    self->nStartExtra = 0;
+    self->pExtraPulses = NULL;
+    self->pExtraPoints = NULL;
+    return 0;
+}
+
 class RieglReader : public scanlib::pointcloud
 {
 public:
-    RieglReader(Py_ssize_t nPulses, Py_ssize_t nTotalPulsesRead) : 
+    RieglReader(Py_ssize_t nPulses, Py_ssize_t nTotalPulsesRead, Py_ssize_t nPulsesToIgnore,
+            uint32_t nscanline, uint16_t nscanlineIdx) : 
         scanlib::pointcloud(false), 
         m_nPulses(nPulses),
         m_nTotalPulsesRead(nTotalPulsesRead),
-        m_scanline(0),
-        m_scanlineIdx(0),
-        m_Pulses(nPulses, 100),
-        m_Points(nPulses, 100)
+        m_nPulsesToIgnore(nPulsesToIgnore),
+        m_scanline(nscanline),
+        m_scanlineIdx(nscanlineIdx),
+        m_Pulses(nPulses, nGrowBy),
+        m_Points(nPulses, nGrowBy)
     {
     }
 
@@ -223,16 +245,48 @@ public:
         return m_Points.getNumpyArray(RieglPointFields);
     }
 
+    PylidarVector<SRieglPulse> *splitExtraPulses(npy_intp nUpper)
+    {
+        return m_Pulses.splitUpper(nUpper);
+    }
+
+    PylidarVector<SRieglPoint> *splitExtraPoints(npy_intp nUpper)
+    {
+        return m_Points.splitUpper(nUpper);
+    }
+
+    // add in stuff from previous read split out by splitExtraPoints
+    void appendPointsArray(PylidarVector<SRieglPoint> *otherPoints)
+    {
+        m_Points.appendArray(otherPoints);
+    }
+
+    void appendPulsesArray(PylidarVector<SRieglPulse> *otherPulses)
+    {
+        m_Pulses.appendArray(otherPulses);
+        m_nTotalPulsesRead += otherPulses->getNumElems();
+    }
+
+    uint32_t getScanline()
+    {
+        return m_scanline;
+    }
+    uint16_t getScanlineIdx()
+    {
+        return m_scanlineIdx;
+    }
+
 protected:
     // This call is invoked for every pulse, even if there is no return
     void on_shot()
     {
-        if( done() )
+        m_scanlineIdx++;
+
+        if( m_nPulsesToIgnore > 0 )
         {
-            fprintf(stderr, "Have got all pulses, but on_shot() still called\n");
+            m_nPulsesToIgnore--;
             return;
         }
-        m_scanlineIdx++;
 
         SRieglPulse pulse;
         pulse.pulseID = m_Pulses.getNumElems() + m_nTotalPulsesRead;
@@ -284,11 +338,21 @@ protected:
 private:
     Py_ssize_t m_nPulses;
     Py_ssize_t m_nTotalPulsesRead;
+    Py_ssize_t m_nPulsesToIgnore;
     PylidarVector<SRieglPulse> m_Pulses;
     PylidarVector<SRieglPoint> m_Points;
     uint32_t m_scanline;
     uint16_t m_scanlineIdx;
 };
+
+void PyRieglScanFile_resetExtra(PyRieglScanFile *self)
+{
+    delete self->pExtraPulses;
+    self->pExtraPulses = NULL;
+    //delete self->pExtraPoints;
+    //self->pExtraPoints = NULL;
+    self->nStartExtra = 0;
+}
 
 static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 {
@@ -298,31 +362,80 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 
     nPulses = nPulseEnd - nPulseStart;
 
+    Py_ssize_t nPulsesToIgnore = 0; // how many to ignore before doing stuff
+    if( nPulseStart < self->nTotalPulsesRead )
+    {
+        // need to read earlier stuff in the file. 
+        // reset to beginning and start looping
+        self->rc->seekg(0);
+        // ensure buffers are flushed
+        delete self->pDecoder;
+        delete self->pBuffer;
+        self->pDecoder = new scanlib::decoder_rxpmarker(self->rc);
+        self->pBuffer = new scanlib::buffer();
+
+        self->nTotalPulsesRead = nPulseStart;
+        nPulsesToIgnore = nPulseStart;
+        PyRieglScanFile_resetExtra(self);
+        self->nscanline = 0;
+        self->nscanlineIdx = 0;
+    }
+    else if( nPulseStart > self->nTotalPulsesRead )
+    {
+        // requested range is after current location
+        nPulsesToIgnore = nPulseStart - self->nTotalPulsesRead;
+        self->nTotalPulsesRead = nPulseStart;
+        PyRieglScanFile_resetExtra(self);
+    }
+
     // our reader class
-    RieglReader reader(nPulses, self->nTotalPulsesRead);
+    RieglReader reader(nPulses, self->nTotalPulsesRead, nPulsesToIgnore,
+                        self->nscanline, self->nscanlineIdx);
+
+    // There is stuff in the 'extra' that leads on
+    // add it into the reader's buffer first
+    if( ( self->nStartExtra == nPulseStart ) && ( self->pExtraPulses != NULL ) && 
+            ( self->pExtraPulses->getNumElems() > 0 ) )
+    {
+        reader.appendPulsesArray(self->pExtraPulses);
+        //reader.appendPointsArray(self->extraPoints);
+        PyRieglScanFile_resetExtra(self);
+        // TODO: reset the point indexes in the pulse array
+    }
 
     // loop through the requested number of pulses
-    try
+    if( !reader.done() ) // don't bother if 'extra' has given us enough
     {
-        for( self->pDecoder->get(*self->pBuffer); 
-                !self->pDecoder->eoi() && !reader.done(); self->pDecoder->get(*self->pBuffer) )
+        try
         {
-            //fprintf(stderr, "starting loop %ld %ld\n", reader.getNumPulsesRead(), self->rc->tellg());
-            reader.dispatch(self->pBuffer->begin(), self->pBuffer->end());
-            //fprintf(stderr, "ending loop %ld %ld\n", reader.getNumPulsesRead(), self->rc->tellg());
+            for( self->pDecoder->get(*self->pBuffer); 
+                !self->pDecoder->eoi() && !reader.done(); self->pDecoder->get(*self->pBuffer) )
+            {
+                reader.dispatch(self->pBuffer->begin(), self->pBuffer->end());
+            }
+        }
+        catch(scanlib::scanlib_exception e)
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_Format(GETSTATE(m)->error, "Error from Riegl lib: %s", e.what());
+            return NULL;
         }
     }
-    catch(scanlib::scanlib_exception e)
+
+    // OK Riegl often gives us more data than we need because
+    // of the way the packet decoding works. Split any extra into
+    // the 'extra' arrays.
+    if( reader.getNumPulsesRead() > nPulses )
     {
-        // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_Format(GETSTATE(m)->error, "Error from Riegl lib: %s", e.what());
-        return NULL;
+        self->pExtraPulses = reader.splitExtraPulses(nPulses);
+        //self->pExtraPoints = 
+        self->nStartExtra = self->nTotalPulsesRead + nPulses;
     }
 
     // update how many were actually read
@@ -330,6 +443,10 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 
     // we have finished if we are at the end
     self->bFinishedReading = self->pDecoder->eoi();
+
+    // update our scanline and scanline IDX
+    self->nscanline = reader.getScanline();
+    self->nscanlineIdx = reader.getScanlineIdx();
 
     // get pulse array as numpy array
     PyObject *pPulses = reader.getPulses(); 
@@ -439,7 +556,7 @@ init_riegl(void)
 #if PY_MAJOR_VERSION >= 3
     pModule = PyModule_Create(&moduledef);
 #else
-    pModule = Py_InitModule("_riegl", RieglMethods);
+    pModule = Py_InitModule("_riegl", NULL);
 #endif
     if( pModule == NULL )
         INITERROR;

@@ -114,6 +114,14 @@ template <class T>
 class PylidarVector
 {
 public:
+    PylidarVector()
+    {
+        m_pData = NULL;
+        m_nElems = 0;
+        m_nTotalSize = 0;
+        m_nGrowBy = 0;
+        m_bOwned = false;
+    }
     PylidarVector(npy_intp nStartSize, npy_intp nGrowBy)
     {
         m_pData = (T*)malloc(nStartSize * sizeof(T));
@@ -124,9 +132,19 @@ public:
     }
     ~PylidarVector()
     {
-        if( m_bOwned )
-            free(m_pData);
+        reset();
     }
+
+    void reset()
+    {
+        if( m_bOwned && ( m_pData != NULL) )
+            free(m_pData);
+        m_nElems = 0;
+        m_nTotalSize = 0;
+        m_nGrowBy = 0;
+        m_bOwned = false;
+        m_pData = NULL;
+    }   
 
     npy_intp getNumElems()
     {
@@ -158,10 +176,14 @@ public:
     {
         // TODO: resize array down to nElems?
         m_bOwned = false;
-        return pylidar_structArrayToNumpy(m_pData, m_nElems, pDefn);
+        PyObject *p = pylidar_structArrayToNumpy(m_pData, m_nElems, pDefn);
+        return p;
     }
 
-    PylidarVector split(npy_intp nUpper)
+    // split the upper part of this array into another
+    // object. Takes elements from nUpper upwards into the 
+    // new object.
+    PylidarVector<T> *splitUpper(npy_intp nUpper)
     {
         if( !m_bOwned )
         {
@@ -170,8 +192,9 @@ public:
         // split from nUpper to the end out as a new
         // PylidarVector
         npy_intp nNewSize = m_nElems - nUpper;
-        PylidarVector splitted(nNewSize, m_nGrowBy);
-        memcpy(splitted.m_pData, &m_pData[nUpper], nNewSize * sizeof(T));
+        PylidarVector<T> *splitted = new PylidarVector<T>(nNewSize, m_nGrowBy);
+        memcpy(splitted->m_pData, &m_pData[nUpper], nNewSize * sizeof(T));
+        splitted->m_nElems = nNewSize;
 
         // resize this one down
         m_nElems = nUpper;
@@ -182,8 +205,30 @@ public:
             throw std::bad_alloc();
         }
         m_pData = pNewData;
-
         return splitted;
+    }
+
+    void appendArray(PylidarVector<T> *other)
+    {
+        npy_intp nNewElems = m_nElems + other->m_nElems;
+        npy_intp nNewTotalSize = m_nTotalSize;
+        while( nNewTotalSize < nNewElems )
+            nNewTotalSize += m_nGrowBy;
+
+        if( nNewTotalSize > m_nTotalSize )
+        {
+            m_nTotalSize = nNewTotalSize;
+            T *pNewData = (T*)realloc(m_pData, m_nTotalSize * sizeof(T));
+            if( pNewData == NULL )
+            {
+                throw std::bad_alloc();
+            }
+            m_pData = pNewData;
+        }
+
+        memcpy(&m_pData[m_nElems], other->m_pData, other->m_nElems * sizeof(T));
+
+        m_nElems = nNewElems;
     }
 
 private:

@@ -124,7 +124,7 @@ class RieglFile(generic.LiDARFile):
             self.lastPoints = points
             self.lastPulses = pulses
                             
-        return self.lastPoints
+        return self.subsetColumns(self.lastPoints, colNames)
         
     def readPulsesForRange(self, colNames=None):
         """
@@ -135,7 +135,6 @@ class RieglFile(generic.LiDARFile):
         colNames can be a list of column names to return. By default
         all columns are returned.
         """
-        print('readPulsesForRange')
         if self.lastRange is None or self.range != self.lastRange:
             pulses, points = self.scanFile.readData(self.range.startPulse, 
                             self.range.endPulse)
@@ -143,7 +142,7 @@ class RieglFile(generic.LiDARFile):
             self.lastPoints = points
             self.lastPulses = pulses
                             
-        return self.lastPulses
+        return self.subsetColumns(self.lastPulses, colNames)
         
     def getTotalNumberPulses(self):
         """
@@ -164,4 +163,35 @@ class RieglFile(generic.LiDARFile):
         msg = 'riegl driver does not support update/creating'
         raise generic.LiDARWritingNotSupported(msg)
         
+    @staticmethod
+    def subsetColumns(array, colNames):
+        """
+        Internal method. Subsets the given column names from the array and
+        returns it. colNames can be either a string or a sequence of column
+        names. If None the input array is returned.
+        """
+        if colNames is not None:
+            if isinstance(colNames, str):
+                array = array[colNames]
+            else:
+                # assume a sequence. For some reason numpy
+                # doesn't like a tuple here
+                colNames = list(colNames)
+                
+                # need to check that all the named columns
+                # actually exist in the structured array.
+                # Numpy gives no error/warning if they do not
+                # just simply ignores ones that don't exist.
+                existingNames = array.dtype.fields.keys()
+                for col in colNames:
+                    if col not in existingNames:
+                        msg = 'column %s does not exist for this format' % col
+                        raise generic.LiDARArrayColumnError(msg)
+                
+                # have to do a copy to avoid numpy warning
+                # that updating returned array will break in future
+                # numpy release.
+                array = array[colNames].copy()
+            
+        return array
         
