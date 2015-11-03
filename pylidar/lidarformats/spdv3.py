@@ -399,38 +399,6 @@ spatial index will be recomputed on the fly"""
             self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
             self.unalignedWarningGiven = True
         
-    @staticmethod
-    def subsetColumns(array, colNames):
-        """
-        Internal method. Subsets the given column names from the array and
-        returns it. colNames can be either a string or a sequence of column
-        names. If None the input array is returned.
-        """
-        if colNames is not None:
-            if isinstance(colNames, str):
-                array = array[colNames]
-            else:
-                # assume a sequence. For some reason numpy
-                # doesn't like a tuple here
-                colNames = list(colNames)
-                
-                # need to check that all the named columns
-                # actually exist in the structured array.
-                # Numpy gives no error/warning if they do not
-                # just simply ignores ones that don't exist.
-                existingNames = array.dtype.fields.keys()
-                for col in colNames:
-                    if col not in existingNames:
-                        msg = 'column %s does not exist for this format' % col
-                        raise generic.LiDARArrayColumnError(msg)
-                
-                # have to do a copy to avoid numpy warning
-                # that updating returned array will break in future
-                # numpy release.
-                array = array[colNames].copy()
-            
-        return array
-    
     def readPointsForExtent(self, colNames=None):
         """
         Read out the points for the given extent as a 1d structured array.
