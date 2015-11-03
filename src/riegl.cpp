@@ -26,6 +26,7 @@
 
 #include <riegl/scanlib.hpp>
 #include <cmath>
+#include <limits>
 
 static const int nGrowBy = 100;
 
@@ -85,6 +86,8 @@ typedef struct {
     float amplitudeReturn;
     float widthReturn;
     uint8_t classification;
+    double range;
+    double papp;
     double x;
     double y;
     float z;
@@ -97,6 +100,8 @@ static SpylidarFieldDefn RieglPointFields[] = {
     CREATE_FIELD_DEFN(SRieglPoint, amplitudeReturn, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, widthReturn, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, classification, 'u'),
+    CREATE_FIELD_DEFN(SRieglPoint, range, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, papp, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, x, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, y, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, z, 'f'),
@@ -235,6 +240,11 @@ public:
         return m_Pulses.getNumElems();
     }
 
+    Py_ssize_t getNumPointsRead()
+    {
+        return m_Points.getNumElems();
+    }
+
     PyObject *getPulses()
     {
         return m_Pulses.getNumpyArray(RieglPulseFields);
@@ -314,9 +324,60 @@ protected:
         pulse.xOrigin = beam_origin[0];
         pulse.yOrigin = beam_origin[1];
         pulse.zOrigin = beam_origin[2];
-        // TODO: pointStartIdx etc
+
+        // point idx - start with 0
+        pulse.pointStartIdx = 0;
+        pulse.pointCount = 0;
 
         m_Pulses.push(&pulse);
+    }
+
+    // overridden from pointcloud class
+    void on_echo_transformed(echo_type echo)
+    {
+        // we assume that this point will be
+        // connected to the last pulse...
+        SRieglPulse *pPulse = m_Pulses.getLastElement();
+        if(pPulse == NULL)
+        {
+            throw scanlib::scanlib_exception("Point before Pulse.");
+        }
+        if(pPulse->pointCount == 0)
+        {
+            // note: haven't pushed point yet
+            pPulse->pointStartIdx = m_Points.getNumElems();
+        }
+        pPulse->pointCount++;
+
+        SRieglPoint point;
+
+        // the current echo is always indexed by target_count-1.
+        scanlib::target& current_target(targets[target_count-1]);
+
+        point.returnId = target_count;
+        point.gpsTime = current_target.time * 1e9 + 0.5;
+        point.amplitudeReturn = current_target.amplitude;
+        point.widthReturn = current_target.deviation;
+        point.classification = 1;
+
+        // Get range from optical centre of scanner
+        // vertex[i] = beam_origin[i] + echo_range * beam_direction[i]
+        double point_range = current_target.echo_range;
+        if (point_range <= std::numeric_limits<double>::epsilon()) 
+        {
+            current_target.vertex[0] = current_target.vertex[1] = current_target.vertex[2] = 0;
+            point_range = 0;
+        }
+        point.range = point_range;
+
+        // Rescale reflectance from dB to papp
+        point.papp = std::pow(10.0, current_target.reflectance / 10.0);
+
+        point.x = current_target.vertex[0];
+        point.y = current_target.vertex[1];
+        point.z = current_target.vertex[2];
+
+        m_Points.push(&point);
     }
 
     // start of a scan line going in the up direction
@@ -349,8 +410,8 @@ void PyRieglScanFile_resetExtra(PyRieglScanFile *self)
 {
     delete self->pExtraPulses;
     self->pExtraPulses = NULL;
-    //delete self->pExtraPoints;
-    //self->pExtraPoints = NULL;
+    delete self->pExtraPoints;
+    self->pExtraPoints = NULL;
     self->nStartExtra = 0;
 }
 
@@ -398,9 +459,8 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
             ( self->pExtraPulses->getNumElems() > 0 ) )
     {
         reader.appendPulsesArray(self->pExtraPulses);
-        //reader.appendPointsArray(self->extraPoints);
+        reader.appendPointsArray(self->pExtraPoints);
         PyRieglScanFile_resetExtra(self);
-        // TODO: reset the point indexes in the pulse array
     }
 
     // loop through the requested number of pulses
@@ -434,7 +494,17 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
     if( reader.getNumPulsesRead() > nPulses )
     {
         self->pExtraPulses = reader.splitExtraPulses(nPulses);
-        //self->pExtraPoints = 
+        uint32_t nPointIdx = self->pExtraPulses->getFirstElement()->pointStartIdx;
+        self->pExtraPoints = reader.splitExtraPoints(nPointIdx);
+        // reset all the pointStartIdx fields in the pulses to match
+        // the now shorter array of points
+        for( npy_intp n = 0; n < self->pExtraPulses->getNumElems(); n++ )
+        {
+            SRieglPulse *pPulse = self->pExtraPulses->getElem(n);
+            if( pPulse->pointCount > 0 )
+                pPulse->pointStartIdx -= nPointIdx;
+        }
+
         self->nStartExtra = self->nTotalPulsesRead + nPulses;
     }
 
@@ -450,12 +520,13 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 
     // get pulse array as numpy array
     PyObject *pPulses = reader.getPulses(); 
+    // points
+    PyObject *pPoints = reader.getPoints();
 
     // build tuple
     PyObject *pTuple = PyTuple_New(2);
     PyTuple_SetItem(pTuple, 0, pPulses);
-    Py_INCREF(Py_None);
-    PyTuple_SetItem(pTuple, 1, Py_None);
+    PyTuple_SetItem(pTuple, 1, pPoints);
 
     return pTuple;
 }

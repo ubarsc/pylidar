@@ -172,6 +172,25 @@ public:
         m_nElems++;
     }
 
+    T *getLastElement()
+    {
+        if(m_nElems == 0)
+            return NULL;
+        return &m_pData[m_nElems-1];
+    }
+
+    T *getFirstElement()
+    {
+        if(m_nElems == 0)
+            return NULL;
+        return &m_pData[0];
+    }
+
+    T *getElem(npy_intp n)
+    {
+        return &m_pData[n];
+    }
+
     PyObject *getNumpyArray(SpylidarFieldDefn *pDefn)
     {
         // TODO: resize array down to nElems?
