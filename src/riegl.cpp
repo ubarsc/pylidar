@@ -27,6 +27,7 @@
 #include <riegl/scanlib.hpp>
 #include <cmath>
 #include <limits>
+#include "fwifc.h"
 
 static const int nGrowBy = 100;
 
@@ -128,6 +129,9 @@ typedef struct
     PylidarVector<SRieglPoint> *pExtraPoints;
     Py_ssize_t nStartExtra;
 
+    // for waveforms, if present
+    fwifc_file waveHandle;
+
 } PyRieglScanFile;
 
 #if PY_MAJOR_VERSION >= 3
@@ -162,6 +166,10 @@ PyRieglScanFile_dealloc(PyRieglScanFile *self)
 {
     self->rc->close();
     self->rc.reset();
+    if( self->waveHandle != NULL )
+    {
+        fwifc_close(self->waveHandle);
+    }
     delete self->pDecoder;
     delete self->pBuffer;
     delete self->pExtraPoints;
@@ -169,13 +177,28 @@ PyRieglScanFile_dealloc(PyRieglScanFile *self)
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
+/* Set a Python exception from wave errorcode */
+void setWaveError(fwifc_int32_t result)
+{
+    fwifc_csz message;
+    fwifc_get_last_error(&message);
+    // raise Python exception
+    PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+    // best way I could find for obtaining module reference
+    // from inside a class method. Not needed for Python < 3.
+    m = PyState_FindModule(&moduledef);
+#endif
+    PyErr_Format(GETSTATE(m)->error, "Error from Riegl wave lib: %s", message);
+}
+
 /* init method - open file */
 static int 
 PyRieglScanFile_init(PyRieglScanFile *self, PyObject *args, PyObject *kwds)
 {
-char *pszFname = NULL;
+char *pszFname = NULL, *pszWaveFname;
 
-    if( !PyArg_ParseTuple(args, "s", &pszFname ) )
+    if( !PyArg_ParseTuple(args, "sz", &pszFname, &pszWaveFname ) )
     {
         return -1;
     }
@@ -204,6 +227,33 @@ char *pszFname = NULL;
         PyErr_Format(GETSTATE(m)->error, "Error from Riegl lib: %s", e.what());
         return -1;
     }   
+
+
+    if( pszWaveFname != NULL )
+    {
+        // waveforms are present. Open the file
+        fwifc_int32_t result = fwifc_open(pszWaveFname, &self->waveHandle);
+        if(result != 0)
+        {
+            setWaveError(result);
+            return -1;
+        }
+
+        // TODO: set time to relative? linkwfm has absolute (the default)
+
+        fwifc_uint32_t number_of_records, nn;
+        fwifc_tell(self->waveHandle, &nn);
+        fprintf(stderr, "cur wave %d\n", nn);
+        fwifc_seek(self->waveHandle, 0xFFFFFFFF);
+        fwifc_tell(self->waveHandle, &number_of_records);
+        fwifc_seek(self->waveHandle, nn);
+        fprintf(stderr, "number of wave records %d\n", number_of_records);
+    }
+    else
+    {
+        self->waveHandle = NULL;
+    }
+
     self->nTotalPulsesRead = 0;
     self->bFinishedReading = false;
     self->nscanline = 0;
@@ -531,9 +581,61 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
     return pTuple;
 }
 
+static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *args)
+{
+    Py_ssize_t nPulseStart, nPulseEnd, nPulses, nCount;
+    if( !PyArg_ParseTuple(args, "nn:readWaveforms", &nPulseStart, &nPulseEnd ) )
+        return NULL;
+
+    nPulses = nPulseEnd - nPulseStart;
+
+    fwifc_float64_t time_sorg;      /* start of range gate in s */
+    fwifc_float64_t time_external;  /* external time in s relative to epoch */
+    fwifc_float64_t origin[3];      /* origin vector in m */
+    fwifc_float64_t direction[3];   /* direction vector (dimensionless) */
+    fwifc_uint16_t  facet;          /* facet number (0 to num_facets-1) */
+    fwifc_uint32_t  sbl_count;      /* number of sample blocks */
+    fwifc_uint32_t  sbl_size;       /* size of sample block in bytes */
+    fwifc_sbl_t*    psbl_first;     /* pointer to first sample block */
+    fwifc_float64_t time_ref;       /* emission time in s */
+    fwifc_float64_t time_start;     /* start of waveform recording time in s */
+    fwifc_uint16_t flags;           /* GPS synchronized, ... */
+
+    int nChannel1 = 0;
+    while(1)
+    {
+        fwifc_int32_t result = fwifc_read(
+                            self->waveHandle,
+                            &time_sorg,
+                            &time_external,
+                            &origin[0],
+                            &direction[0],
+                            &flags,
+                            &facet,
+                            &sbl_count,
+                            &sbl_size,
+                            &psbl_first);
+        if(result != 0)
+        {
+            setWaveError(result);
+            return NULL;
+        }
+        fwifc_sbl_t* psbl = psbl_first;
+        for (fwifc_uint32_t sbi = 0; sbi < sbl_count; ++sbi)
+        {
+            if(psbl->channel == 1)
+                nChannel1++;
+            psbl++;
+        }
+        fprintf(stderr, "number of waves %d\n", nChannel1);
+    }
+    Py_RETURN_NONE;
+}
+
 /* Table of methods */
 static PyMethodDef PyRieglScanFile_methods[] = {
     {"readData", (PyCFunction)PyRieglScanFile_readData, METH_VARARGS, NULL},
+    {"readWaveforms", (PyCFunction)PyRieglScanFile_readWaveforms, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 

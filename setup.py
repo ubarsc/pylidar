@@ -28,21 +28,26 @@ import pylidar
 # work out if we need to build any of the C/C++ extension
 # modules
 externalModules = []
-if 'RIVLIB_ROOT' in os.environ:
+if 'RIVLIB_ROOT' in os.environ and 'RIWAVELIB_ROOT' in os.environ:
     print('Building Riegl Extension...')
     rivlibRoot = os.environ['RIVLIB_ROOT']
+    riwavelibRoot = os.environ['RIWAVELIB_ROOT']
     rieglModule = Extension(name='pylidar.lidarformats._riegl', 
             sources=['src/riegl.cpp', 'src/pylidar.c'],
-            include_dirs=[os.path.join(rivlibRoot, 'include')],
+            include_dirs=[os.path.join(rivlibRoot, 'include'),
+                            os.path.join(riwavelibRoot, 'include')],
             extra_compile_args=['-std=c++0x'], # needed on my old version of Intel, not sure if it will cause problems elsewere
             libraries=['scanlib-mt', 'riboost_chrono-mt', 'riboost_date_time-mt',
                  'riboost_filesystem-mt', 'riboost_regex-mt', 
-                 'riboost_system-mt', 'riboost_thread-mt'],
-            library_dirs=[os.path.join(rivlibRoot, 'lib')])
+                 'riboost_system-mt', 'riboost_thread-mt', 'wfmifc-mt'],
+            library_dirs=[os.path.join(rivlibRoot, 'lib'),
+                            os.path.join(riwavelibRoot, 'lib')])
                  
     externalModules.append(rieglModule)
 else:
-    print('Riegl Libraries not found. If installed set $RIVLIB_ROOT to the install location')
+    print('Riegl Libraries not found.')
+    print('If installed set $RIVLIB_ROOT to the install location of RiVLib')
+    print('and $RIWAVELIB_ROOT to the install location of the waveform extraction library (riwavelib)')
 
 setup(name='pylidar',
       version=pylidar.PYLIDAR_VERSION,

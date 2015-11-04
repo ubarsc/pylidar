@@ -19,6 +19,7 @@ Driver for riegl rxp files
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function, division
 
+import os
 import copy
 import numpy
 
@@ -47,11 +48,19 @@ class RieglFile(generic.LiDARFile):
             msg = 'not a riegl file'
             raise generic.LiDARFileException(msg)
         
+        # test if there is a .wfm file with the same base name
+        root, ext = os.path.splitext(fname)
+        waveName = root + '.wfm'
+        if not os.path.exists(waveName):
+            waveName = None
+            msg = '.wfm file not found. Use rxp2wfm to extract first.'
+            controls.messageHandler(msg, generic.MESSAGE_WARNING)
+        
         self.range = None
         self.lastRange = None
         self.lastPoints = None
         self.lastPulses = None
-        self.scanFile = _riegl.ScanFile(fname)
+        self.scanFile = _riegl.ScanFile(fname, waveName)
                           
     @staticmethod        
     def getDriverName():
@@ -95,6 +104,8 @@ class RieglFile(generic.LiDARFile):
         2d structured masked array containing information
         about the waveforms.
         """
+        self.scanFile.readWaveforms(self.range.startPulse, 
+                                    self.range.endPulse)
         raise NotImplementedError()
         
     def readTransmitted(self):
