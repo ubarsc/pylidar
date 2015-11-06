@@ -180,7 +180,7 @@ class Controls(object):
         """
         Size of the window in bins/pixels that the processing is to be
         performed in. Same in the X and Y direction.
-        If doing non spatial processing 'size' pulses are read in at
+        If doing non spatial processing 'size*size' pulses are read in at
         each iteration.
         """
         self.windowSize = size
@@ -396,6 +396,7 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
         bMoreToDo = currentExtent.yMax > workingPixGrid.yMin
         
     else:
+        windowSizeSq = controls.windowSize * controls.windowSize
         try:
             nTotalPulses = max([driver.getTotalNumberPulses() for 
                         driver in driverList])
@@ -404,9 +405,9 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
             # how many pulses they have in total
             nTotalBlocks = -1
         else:
-            nTotalBlocks = int(numpy.ceil(nTotalPulses / controls.windowSize))
+            nTotalBlocks = int(numpy.ceil(nTotalPulses / windowSizeSq))
             
-        currentRange = generic.PulseRange(0, controls.windowSize)
+        currentRange = generic.PulseRange(0, windowSizeSq)
         if nTotalBlocks != -1:
             bMoreToDo = currentRange.startPulse < nTotalPulses
         else:
@@ -483,8 +484,8 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
             # done?
             bMoreToDo = currentExtent.yMax > workingPixGrid.yMin
         else:
-            currentRange.startPulse += controls.windowSize
-            currentRange.endPulse += controls.windowSize
+            currentRange.startPulse += windowSizeSq
+            currentRange.endPulse += windowSizeSq
             # done?
             # bMoreToDo is updated when the pulse range is set (above)
 
