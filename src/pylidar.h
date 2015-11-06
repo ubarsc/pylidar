@@ -30,16 +30,6 @@
 extern "C" {
 #endif
 
-/* mark all exported classes/functions with DllExport to have
- them exported by Visual Studio */
-#ifndef DllExport
-    #ifdef _MSC_VER
-        #define DllExport   __declspec( dllexport )
-    #else
-        #define DllExport
-    #endif
-#endif
-
 /* MSVC 2008 uses different names.... */
 #ifdef _MSC_VER
     #if _MSC_VER >= 1600
@@ -63,20 +53,20 @@ extern "C" {
 #if PY_MAJOR_VERSION >= 3
 PyObject *pylidar_init();
 #else
-DllExport void pylidar_init();
+void pylidar_init();
 #endif
 /* print error - used internally */
-DllExport void pylidar_error(char *errstr, ...);
+void pylidar_error(char *errstr, ...);
 
 /* Helper function to get information about a named field within an array
  pass null for params you not interested in */
-DllExport int pylidar_getFieldDescr(PyObject *pArray, const char *pszName, int *pnOffset, char *pcKind, int *pnSize, int *pnLength);
+int pylidar_getFieldDescr(PyObject *pArray, const char *pszName, int *pnOffset, char *pcKind, int *pnSize, int *pnLength);
 
 /* return a field as a int64_t array. Caller to delete */
-DllExport int64_t *pylidar_getFieldAsInt64(PyObject *pArray, const char *pszName);
+int64_t *pylidar_getFieldAsInt64(PyObject *pArray, const char *pszName);
 
 /* return a field as a double array. Caller to delete */
-DllExport double *pylidar_getFieldAsFloat64(PyObject *pArray, const char *pszName);
+double *pylidar_getFieldAsFloat64(PyObject *pArray, const char *pszName);
 
 
 /* structure for defining a numpy structured array from a C one
@@ -124,7 +114,7 @@ static SpylidarFieldDefn fields[] = {
 */
 /* Wrap an existing C array of structures and return as a numpy array */
 /* Python will free data when finished */
-DllExport PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn);
+PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn);
 
 #ifdef __cplusplus
 } // extern C
