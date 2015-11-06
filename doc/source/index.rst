@@ -50,6 +50,11 @@ Example
 
 See :doc:`processorexamples` for more information.
 
+Downloads
+---------
+
+Source code is available from `BitBucket <https://bitbucket.org/chchrsc/pylidar>`_.
+
 Processing
 -----------
 
