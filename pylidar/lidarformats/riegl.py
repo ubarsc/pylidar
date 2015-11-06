@@ -1,6 +1,14 @@
 
 """
-Driver for riegl rxp files
+Driver for riegl rxp files. Note that the requires access to Riegl's 
+'rivlib' and 'riwavelib' closed source libraries that can be obtained from Riegl.
+
+To build Riegl support the $RIVLIB_ROOT and $RIWAVELIB_ROOT environment variables
+must be set before running setup.py.
+
+These variables must point into the directories that rivlib and riwavelib
+created when they were unzipped.
+
 """
 # This file is part of PyLidar
 # Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
