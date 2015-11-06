@@ -130,6 +130,7 @@ DllExport PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nEle
 } // extern C
 
 #include <new>
+#include <algorithm>
 
 template <class T>
 class PylidarVector
@@ -209,7 +210,25 @@ public:
 
     T *getElem(npy_intp n)
     {
+        //if( n >= m_nElems )
+        //    return NULL;
         return &m_pData[n];
+    }
+
+    void removeFront(npy_intp nRemove)
+    {
+        if( nRemove >= m_nElems )
+        {
+            // total removal
+            m_nElems = 0;
+        }
+        else
+        {
+            // partial - first shuffle down
+            npy_intp nRemain = m_nElems - nRemove;
+            memmove(&m_pData[0], &m_pData[nRemove], nRemain * sizeof(T));
+            m_nElems = nRemain;
+        }
     }
 
     PyObject *getNumpyArray(SpylidarFieldDefn *pDefn)
@@ -245,6 +264,28 @@ public:
             throw std::bad_alloc();
         }
         m_pData = pNewData;
+        return splitted;
+    }
+
+    // split the lower part of this array into another
+    // object. Takes elements from 0 up to (but not including) nUpper into the 
+    // new object.
+    PylidarVector<T> *splitLower(npy_intp nUpper)
+    {
+        if( !m_bOwned )
+        {
+            throw std::bad_alloc();
+        }
+        // split from 0 to nUpper as a new
+        // PylidarVector
+        npy_intp nNewSize = std::min(nUpper, m_nElems);
+        PylidarVector<T> *splitted = new PylidarVector<T>(nNewSize, m_nGrowBy);
+        memcpy(splitted->m_pData, &m_pData[0], nNewSize * sizeof(T));
+        splitted->m_nElems = nNewSize;
+
+        // resize this one down
+        removeFront(nNewSize);
+
         return splitted;
     }
 
