@@ -48,19 +48,19 @@ static struct RieglState _state;
 
 /* Structure for pulses */
 typedef struct {
-    uint64_t pulseID;
-    uint64_t gpsTime;
+    npy_uint64 pulseID;
+    npy_uint64 gpsTime;
     float azimuth;
     float zenith;
-    uint32_t scanline;
-    uint16_t scanlineIdx;
+    npy_uint32 scanline;
+    npy_uint16 scanlineIdx;
     double xIdx;
     double yIdx;
     double xOrigin;
     double yOrigin;
     float zOrigin;
-    uint32_t pointStartIdx;
-    uint16_t pointCount;
+    npy_uint32 pointStartIdx;
+    npy_uint16 pointCount;
 } SRieglPulse;
 
 /* field info for pylidar_structArrayToNumpy */
@@ -83,11 +83,11 @@ static SpylidarFieldDefn RieglPulseFields[] = {
 
 /* Structure for points */
 typedef struct {
-    uint64_t returnId;
-    uint64_t gpsTime;
+    npy_uint64 returnId;
+    npy_uint64 gpsTime;
     float amplitudeReturn;
     float widthReturn;
-    uint8_t classification;
+    npy_uint8 classification;
     double range;
     double papp;
     double x;
@@ -159,9 +159,9 @@ public:
         }
     }
 
-    uint32_t getFirstPointIdx()
+    npy_uint32 getFirstPointIdx()
     {
-        uint32_t idx = 0;
+        npy_uint32 idx = 0;
         SRieglPulse *p = m_Pulses.getFirstElement();
         if( p != NULL )
         {
@@ -172,7 +172,7 @@ public:
 
     void renumberPointIdxs()
     {
-        uint32_t nPointIdx = getFirstPointIdx();
+        npy_uint32 nPointIdx = getFirstPointIdx();
         if( nPointIdx == 0 )
             return;
         // reset all the pointStartIdx fields in the pulses to match
@@ -185,9 +185,19 @@ public:
         }
     }
 
-    PyObject *getPulses(Py_ssize_t n)
+    PyObject *getPulses(Py_ssize_t n, Py_ssize_t *pPointIdx)
     {
         PylidarVector<SRieglPulse> *lower = m_Pulses.splitLower(n);
+        // record the index of the last pulse + 1
+        SRieglPulse *pLastPulse = lower->getLastElement();
+        if( pLastPulse != NULL )
+        {
+            *pPointIdx = (pLastPulse->pointStartIdx + 1);
+        }
+        else
+        {
+            *pPointIdx = 0;
+        }
         PyObject *p = lower->getNumpyArray(RieglPulseFields);
         delete lower; // linked mem now owned by numpy
         renumberPointIdxs();
@@ -197,6 +207,7 @@ public:
     PyObject *getPoints(Py_ssize_t n)
     {
         PylidarVector<SRieglPoint> *lower = m_Points.splitLower(n);
+        //fprintf(stderr, "points %ld %ld %ld\n", m_Points.getNumElems(), lower->getNumElems(), n);
         PyObject *p = lower->getNumpyArray(RieglPointFields);
         delete lower; // linked mem now owned by numpy
         return p;
@@ -328,8 +339,8 @@ private:
     Py_ssize_t m_nPulsesToIgnore;
     PylidarVector<SRieglPulse> m_Pulses;
     PylidarVector<SRieglPoint> m_Points;
-    uint32_t m_scanline;
-    uint16_t m_scanlineIdx;
+    npy_uint32 m_scanline;
+    npy_uint16 m_scanlineIdx;
 };
 
 /* Python object wrapping a scanlib::basic_rconnection */
@@ -526,7 +537,9 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
     // there may be stuff in the reader's buffer already but that should
     // be ok since we have handled making it ok above
 
-    // loop through the requested number of pulses
+    // loop through the requested number of pulses - always 
+    // do one more so we get all the points (which are normally after
+    // each pulse).
     if( self->pReader->getNumPulsesRead() < (nPulses+1) ) // don't bother if we already have enough from last time
     {
         try
@@ -552,11 +565,10 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
     }
 
     // get pulse array as numpy array
-    PyObject *pPulses = self->pReader->getPulses(nPulses); 
+    Py_ssize_t point_idx;
+    PyObject *pPulses = self->pReader->getPulses(nPulses, &point_idx); 
     // points
-    uint32_t idx = self->pReader->getFirstPointIdx();
-    //fprintf(stderr, "idx = %d\n", idx);
-    PyObject *pPoints = self->pReader->getPoints(idx);
+    PyObject *pPoints = self->pReader->getPoints(point_idx);
 
     // we have finished if we are at the end
     self->bFinishedReading = self->pDecoder->eoi() && (self->pReader->getNumPulsesRead() == 0);

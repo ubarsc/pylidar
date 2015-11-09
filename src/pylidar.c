@@ -403,7 +403,8 @@ PyObject *pNameString, *pFormatString, *pOffsetInt, *pItemSizeObj;
 PyObject *pDtypeDict, *pNamesKey, *pFormatsKey, *pOffsetsKey, *pItemSizeKey;
 PyArray_Descr *pDescr;
 PyObject *pOut;
-int nStructTotalSize = 0;
+int nStructTotalSize = 0, i;
+char *pszName;
 
     /* create a dictionary with all the info about the fields as 
      in http://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html*/
@@ -412,12 +413,19 @@ int nStructTotalSize = 0;
     pOffsetList = PyList_New(0);
     while( pDefn->pszName != NULL )
     {
+        /* Convert to upper case */
+        pszName = strdup(pDefn->pszName);
+        for( i = 0; pszName[i] != '\0'; i++ )
+        {
+            pszName[i] = toupper(pszName[i]);
+        }
 #if PY_MAJOR_VERSION >= 3
-        pNameString = PyUnicode_FromString(pDefn->pszName);
+        pNameString = PyUnicode_FromString(pszName);
 #else
-        pNameString = PyString_FromString(pDefn->pszName);
+        pNameString = PyString_FromString(pszName);
 #endif
         PyList_Append(pNameList, pNameString);
+        free(pszName);
 
 #if PY_MAJOR_VERSION >= 3
         pFormatString = PyUnicode_FromFormat("%c%d", (int)pDefn->cKind, pDefn->nSize);

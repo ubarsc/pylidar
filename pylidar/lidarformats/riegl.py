@@ -88,8 +88,8 @@ class RieglFile(generic.LiDARFile):
         """
         pulses = self.readPulsesForRange()
         points = self.readPointsForRange()
-        nReturns = pulses['pointCount']
-        startIdxs = pulses['pointStartIdx']
+        nReturns = pulses['POINTCOUNT']
+        startIdxs = pulses['POINTSTARTIDX']
 
         point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(        
                 startIdxs, nReturns)
