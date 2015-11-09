@@ -30,24 +30,6 @@
 extern "C" {
 #endif
 
-/* MSVC 2008 uses different names.... */
-#ifdef _MSC_VER
-    #if _MSC_VER >= 1600
-        #include <stdint.h>
-    #else        
-        typedef __int8              int8_t;
-        typedef __int16             int16_t;
-        typedef __int32             int32_t;
-        typedef __int64             int64_t;
-        typedef unsigned __int8     uint8_t;
-        typedef unsigned __int16    uint16_t;
-        typedef unsigned __int32    uint32_t;
-        typedef unsigned __int64    uint64_t;
-    #endif
-#else
-    #include <stdint.h>
-#endif
-
 /* call first - preferably in the init() of your module
  this sets up the connection to numpy */
 #if PY_MAJOR_VERSION >= 3
@@ -62,8 +44,8 @@ void pylidar_error(char *errstr, ...);
  pass null for params you not interested in */
 int pylidar_getFieldDescr(PyObject *pArray, const char *pszName, int *pnOffset, char *pcKind, int *pnSize, int *pnLength);
 
-/* return a field as a int64_t array. Caller to delete */
-int64_t *pylidar_getFieldAsInt64(PyObject *pArray, const char *pszName);
+/* return a field as a npy_int64 array. Caller to delete */
+npy_int64 *pylidar_getFieldAsInt64(PyObject *pArray, const char *pszName);
 
 /* return a field as a double array. Caller to delete */
 double *pylidar_getFieldAsFloat64(PyObject *pArray, const char *pszName);

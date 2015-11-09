@@ -184,15 +184,15 @@ PyArray_Descr *pSubDescr;
         { \
             pRow = PyArray_GETPTR1( pArray, nIdx ); \
             memcpy(&tempVar, (char*)pRow + nOffset, sizeof(tempVar)); \
-            pOut[nIdx] = (int64_t)tempVar; \
+            pOut[nIdx] = (npy_int64)tempVar; \
         } 
 
 
-int64_t *pylidar_getFieldAsInt64(PyObject *pArray, const char *pszName)
+npy_int64 *pylidar_getFieldAsInt64(PyObject *pArray, const char *pszName)
 {
 int nOffset, nSize, nLength;
 char cKind;
-int64_t *pOut;
+npy_int64 *pOut;
 npy_intp nArraySize, nIdx;
 void *pRow;
 npy_char nCharVal;
@@ -226,7 +226,7 @@ npy_double fDoubleVal;
     }
 
     nArraySize = PyArray_DIM(pArray, 0);
-    pOut = (int64_t*)malloc(nArraySize * sizeof(int64_t));
+    pOut = (npy_int64*)malloc(nArraySize * sizeof(npy_int64));
     if( pOut == NULL )
     {
         pylidar_error("memory alloc failed");
