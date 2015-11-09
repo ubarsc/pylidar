@@ -202,4 +202,16 @@ class RieglFile(generic.LiDARFile):
         msg = 'riegl driver does not support update/creating'
         raise generic.LiDARWritingNotSupported(msg)
         
+    def getHeader(self):
+        """
+        Riegl doesn't seem to have a header as such
+        """
+        return {}
+        
+    def getHeaderValue(self, name):
+        """
+        Just extract the one value and return it
+        """
+        return self.getHeader()[name]
+    
         
