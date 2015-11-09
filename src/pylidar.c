@@ -58,7 +58,9 @@ int pylidar_getFieldDescr(PyObject *pArray, const char *pszName, int *pnOffset, 
 PyObject *pKey, *pValue;
 Py_ssize_t pos = 0;
 int bFound = 0;
+#if PY_MAJOR_VERSION >= 3
 PyObject *bytesKey;
+#endif
 char *pszElementName;
 PyObject *pOffset;
 PyArray_Descr *pSubDescr;
@@ -401,7 +403,7 @@ PyObject *pNameString, *pFormatString, *pOffsetInt, *pItemSizeObj;
 PyObject *pDtypeDict, *pNamesKey, *pFormatsKey, *pOffsetsKey, *pItemSizeKey;
 PyArray_Descr *pDescr;
 PyObject *pOut;
-int nStructTotalSize;
+int nStructTotalSize = 0;
 
     /* create a dictionary with all the info about the fields as 
      in http://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html*/
