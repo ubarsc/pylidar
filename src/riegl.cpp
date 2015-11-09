@@ -251,12 +251,21 @@ protected:
     // overridden from pointcloud class
     void on_echo_transformed(echo_type echo)
     {
+        if( m_nPulsesToIgnore > 0 )
+        {
+            // if we aren't reading pulses, we should ignore
+            // points also
+            return;
+        }
         // we assume that this point will be
         // connected to the last pulse...
         SRieglPulse *pPulse = m_Pulses.getLastElement();
         if(pPulse == NULL)
         {
-            throw scanlib::scanlib_exception("Point before Pulse.");
+            // removed throw since this seems to happen when
+            // the file pointer is reset. Ignore for now.
+            //throw scanlib::scanlib_exception("Point before Pulse.");
+            return;
         }
         if(pPulse->pointCount == 0)
         {
@@ -325,6 +334,7 @@ private:
 typedef struct
 {
     PyObject_HEAD
+    char *pszFilename; // so we can re-create the file obj if needed
     std::shared_ptr<scanlib::basic_rconnection> rc;
     scanlib::decoder_rxpmarker *pDecoder;
     scanlib::buffer *pBuffer;
@@ -366,6 +376,7 @@ static struct PyModuleDef moduledef = {
 static void 
 PyRieglScanFile_dealloc(PyRieglScanFile *self)
 {
+    free(self->pszFilename);
     self->rc->close();
     self->rc.reset();
     if( self->waveHandle != NULL )
@@ -407,6 +418,10 @@ char *pszFname = NULL, *pszWaveFname;
 
     try
     {
+        // take a copy of the filename so we can re
+        // create the file pointer.
+        self->pszFilename = strdup(pszFname);
+
         self->rc = scanlib::basic_rconnection::create(pszFname);
 
         // The decoder class scans off distinct packets from the continuous data stream
@@ -476,10 +491,14 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
     Py_ssize_t nTotalRead = self->pReader->getNumPulsesReadFile() - self->pReader->getNumPulsesRead();
     if( nPulseStart < nTotalRead )
     {
-        fprintf(stderr, "going back to start\n");
+        //fprintf(stderr, "going back to start\n");
         // need to read earlier stuff in the file. 
         // reset to beginning and start looping
-        self->rc->seekg(0);
+        // I couldn't get the seekg call to work so 
+        // re create basic_rconnection instead.
+        self->rc.reset();
+        self->rc = scanlib::basic_rconnection::create(self->pszFilename);
+        fprintf(stderr, "tellg = %ld\n", self->rc->tellg());
         // ensure buffers are flushed
         delete self->pDecoder;
         delete self->pBuffer;
@@ -499,7 +518,10 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
         // so we can use any still in the buffer that we will need
         self->pReader->removeLowerPulses(nPulsesToIgnore);
     }
-
+    else
+    {
+        self->pReader->setPulsesToIgnore(0);
+    }
     // there may be stuff in the reader's buffer already but that should
     // be ok since we have handled making it ok above
 
