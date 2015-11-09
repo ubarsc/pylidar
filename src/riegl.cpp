@@ -30,6 +30,7 @@
 #include "fwifc.h"
 
 static const int nGrowBy = 100;
+static const int nInitSize = 200;
 
 /* An exception object for this module */
 /* created in the init function */
@@ -118,8 +119,8 @@ public:
         m_nPulsesToIgnore(0),
         m_scanline(0),
         m_scanlineIdx(0),
-        m_Pulses(200, nGrowBy),
-        m_Points(200, nGrowBy)
+        m_Pulses(nInitSize, nGrowBy),
+        m_Points(nInitSize, nGrowBy)
     {
     }
 
@@ -215,7 +216,8 @@ protected:
         }
 
         SRieglPulse pulse;
-        pulse.pulseID = m_Pulses.getNumElems() + m_nTotalPulsesReadFile;
+        pulse.pulseID = m_nTotalPulsesReadFile;
+        // TODO: where does 1e9 come from??
         pulse.gpsTime = time_sorg * 1e9 + 0.5;
 
         // Get spherical coordinates. TODO: matrix transform
@@ -498,7 +500,6 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
         // re create basic_rconnection instead.
         self->rc.reset();
         self->rc = scanlib::basic_rconnection::create(self->pszFilename);
-        fprintf(stderr, "tellg = %ld\n", self->rc->tellg());
         // ensure buffers are flushed
         delete self->pDecoder;
         delete self->pBuffer;
@@ -512,7 +513,7 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
     {
         // requested range is after current location
         nPulsesToIgnore = nPulseStart - self->pReader->getNumPulsesReadFile();
-        fprintf(stderr, "missing values\n");
+        //fprintf(stderr, "missing values %ld\n", nPulsesToIgnore);
         self->pReader->setPulsesToIgnore(nPulsesToIgnore);
         // move the extra data down by that many too
         // so we can use any still in the buffer that we will need
