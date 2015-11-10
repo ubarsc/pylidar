@@ -20,8 +20,8 @@
  *
  */
 
-#ifndef MATRIX_H
-#define MATRIX_H
+#ifndef PYLMATRIX_H
+#define PYLMATRIX_H
 
 // This class implements simple matrix addition and 
 // multiplication.
@@ -172,4 +172,4 @@ private:
 
 } // namespace pylidar
 
-#endif //MATRIX_H
+#endif //PYLMATRIX_H

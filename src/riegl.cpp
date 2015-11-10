@@ -23,7 +23,7 @@
 #include <Python.h>
 #include "numpy/arrayobject.h"
 #include "pylvector.h"
-#include "matrix.h"
+#include "pylmatrix.h"
 
 #include <riegl/scanlib.hpp>
 #include <cmath>
