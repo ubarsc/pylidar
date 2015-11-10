@@ -53,6 +53,32 @@ public:
         m_nCols = nCols;
         m_pData = (T*)malloc(sizeof(T) * nRows * nCols);
     }
+    // assumed type matches T - no checking happens
+    // apart from a rough check on size
+    CMatrix(PyArrayObject *pNumpyArray)
+    {
+        if( PyArray_NDIM(pNumpyArray) != 2)
+        {
+            throw std::length_error("numpy array must be 2 dimensional");
+        }
+        if( PyArray_ITEMSIZE(pNumpyArray) != sizeof(T) )
+        {
+            throw std::invalid_argument("numpy array elements not same size as matrix type");
+        }
+        
+        m_nRows = PyArray_DIM(pNumpyArray, 0);
+        m_nCols = PyArray_DIM(pNumpyArray, 1);
+        m_pData = (T*)malloc(sizeof(T) * nRows * nCols);
+        T *p;
+        for(int r = 0; r < m_nRows; ++r)
+        {
+            for(int c = 0; c < m_nCols; ++c)
+            {
+                p = (T*)PyArray_GETPTR2(pNumpyArray, r, c);
+                set(r, c, *p);
+            }
+        }
+    }
     ~CMatrix()
     {
         free(m_pData);
@@ -113,6 +139,26 @@ public:
         }
 
         return result;
+    }
+
+    // return a new numpy array with the contents
+    // of this object. typenum should correspond to T.
+    PyObject *getAsNumpyArray(int typenum=NPY_FLOAT) const
+    {
+        npy_intp dims[2];
+        dims[0] = m_nRows;
+        dims[1] = m_nCols;
+        PyObject *pNumpyArray = PyArray_SimpleNew(2, dims, typenum);
+        T *p;
+        for(int r = 0; r < m_nRows; ++r)
+        {
+            for(int c = 0; c < m_nCols; ++c)
+            {
+                p = (T*)PyArray_GETPTR2(pNumpyArray, r, c);
+                *p = get(r, c);
+            }
+        }
+        return pNumpyArray;
     }
 
     int getNumRows() const { return m_nRows; }

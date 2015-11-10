@@ -23,6 +23,7 @@
 #include <Python.h>
 #include "numpy/arrayobject.h"
 #include "pylidar.h"
+#include "matrix.h"
 
 #include <riegl/scanlib.hpp>
 #include <cmath>
@@ -110,6 +111,8 @@ static SpylidarFieldDefn RieglPointFields[] = {
     {NULL} // Sentinel
 };
 
+// This class is the main reader. It reads the points
+// and pulses in chunks from the datastream.
 class RieglReader : public scanlib::pointcloud
 {
 public:
@@ -343,6 +346,215 @@ private:
     npy_uint16 m_scanlineIdx;
 };
 
+// This class just reads the 'pose' parameters and is used by the
+// _info function.
+// This reads through the whole file and interepts relevant
+// packets. If more than one packet has the info, then the values
+// from the last one will be recorded at the end of the read.
+class RieglParamReader : public scanlib::pointcloud
+{
+public:
+    RieglParamReader() : scanlib::pointcloud(false),
+        m_fLat(0), 
+        m_fLong(0),
+        m_fHeight(0),
+        m_fHMSL(0),
+        m_fRoll(NAN),
+        m_fPitch(NAN),
+        m_fYaw(NAN),
+        m_bHaveData(false)
+    {
+
+    }
+
+    // get all the information gathered in the read 
+    // as a Python dictionary.
+    PyObject *getInfoDictionary()
+    {
+        PyObject *pDict = PyDict_New();
+        PyObject *pString;
+
+        // we assume that the values of these variables
+        // (part of the pointcloud class itself) always exist
+        // as they are probably part of the preamble so if any
+        // reading of the stream has been done, they should be there.
+        PyDict_SetItemString(pDict, "NUM_FACETS", PyLong_FromLong(num_facets));
+        PyDict_SetItemString(pDict, "GROUP_VELOCITY", PyFloat_FromDouble(group_velocity));
+        PyDict_SetItemString(pDict, "UNAMBIGUOUS_RANGE", PyFloat_FromDouble(unambiguous_range));
+#if PY_MAJOR_VERSION >= 3
+        pString = PyUnicode_FromString(serial.c_str());
+#else
+        pString = PyString_FromString(serial.c_str());
+#endif
+        PyDict_SetItemString(pDict, "SERIAL", pString);
+#if PY_MAJOR_VERSION >= 3
+        pString = PyUnicode_FromString(type_id.c_str());
+#else
+        pString = PyString_FromString(type_id.c_str());
+#endif
+        PyDict_SetItemString(pDict, "TYPE_ID", pString);
+#if PY_MAJOR_VERSION >= 3
+        pString = PyUnicode_FromString(build.c_str());
+#else
+        pString = PyString_FromString(build.c_str());
+#endif
+        PyDict_SetItemString(pDict, "BUILD", pString);
+        
+        // now the fields that are valid if we have gathered 
+        // from the 'pose' records
+        if( m_bHaveData )
+        {
+            PyDict_SetItemString(pDict, "LATITUDE", PyFloat_FromDouble(m_fLat));
+            PyDict_SetItemString(pDict, "LONGITUDE", PyFloat_FromDouble(m_fLong));
+            PyDict_SetItemString(pDict, "HEIGHT", PyFloat_FromDouble(m_fHeight));
+            PyDict_SetItemString(pDict, "HMSL", PyFloat_FromDouble(m_fHMSL));
+            if( !isnan(m_fRoll) )
+                PyDict_SetItemString(pDict, "ROLL", PyFloat_FromDouble(m_fRoll));
+            if( !isnan(m_fPitch) )
+            PyDict_SetItemString(pDict, "PITCH", PyFloat_FromDouble(m_fPitch));
+            if( !isnan(m_fYaw) )
+                PyDict_SetItemString(pDict, "YAW", PyFloat_FromDouble(m_fYaw));
+
+            if( !isnan(m_fRoll) && !isnan(m_fPitch) )
+            {
+                // now work out rotation matrix
+                // pitch matrix
+                pylidar::CMatrix<float> pitchMat(4, 4);
+                pitchMat.set(0, 0, std::cos(m_fPitch));
+                pitchMat.set(0, 1, 0.0);
+                pitchMat.set(0, 2, std::sin(m_fPitch));
+                pitchMat.set(0, 3, 0.0);
+                pitchMat.set(1, 0, 0.0);
+                pitchMat.set(1, 1, 1.0);
+                pitchMat.set(1, 2, 0.0);
+                pitchMat.set(1, 3, 0.0);
+                pitchMat.set(2, 0, -std::sin(m_fPitch));
+                pitchMat.set(2, 1, 0.0);
+                pitchMat.set(2, 2, std::cos(m_fPitch));
+                pitchMat.set(2, 3, 0.0);
+                pitchMat.set(3, 0, 0.0);
+                pitchMat.set(3, 1, 0.0);
+                pitchMat.set(3, 2, 0.0);
+                pitchMat.set(3, 3, 1.0);
+            
+                // roll matrix
+                pylidar::CMatrix<float> rollMat(4, 4);
+                rollMat.set(0, 0, 1.0);
+                rollMat.set(0, 1, 0.0);
+                rollMat.set(0, 2, 0.0);
+                rollMat.set(0, 3, 0.0);
+                rollMat.set(1, 0, 0.0);
+                rollMat.set(1, 1, std::cos(m_fRoll));
+                rollMat.set(1, 2, -std::sin(m_fRoll));
+                rollMat.set(1, 3, 0.0);
+                rollMat.set(2, 0, 0.0);
+                rollMat.set(2, 1, std::sin(m_fRoll));
+                rollMat.set(2, 2, std::cos(m_fRoll));
+                rollMat.set(2, 3, 0.0);
+                rollMat.set(3, 0, 0.0);
+                rollMat.set(3, 1, 0.0);
+                rollMat.set(3, 2, 0.0);
+                rollMat.set(3, 3, 1.0);
+            
+                // yaw matrix; compass reading has been set to zero if nan
+                pylidar::CMatrix<float> yawMat(4, 4);
+                yawMat.set(0, 0, std::cos(m_fYaw));
+                yawMat.set(0, 1, -std::sin(m_fYaw));
+                yawMat.set(0, 2, 0.0);
+                yawMat.set(0, 3, 0.0);
+                yawMat.set(1, 0, std::sin(m_fYaw));
+                yawMat.set(1, 1, std::cos(m_fYaw));
+                yawMat.set(1, 2, 0.0);
+                yawMat.set(1, 3, 0.0);
+                yawMat.set(2, 0, 0.0);
+                yawMat.set(2, 1, 0.0);
+                yawMat.set(2, 2, 1.0);
+                yawMat.set(2, 3, 0.0);
+                yawMat.set(3, 0, 0.0);
+                yawMat.set(3, 1, 0.0);
+                yawMat.set(3, 2, 0.0);
+                yawMat.set(3, 3, 1.0);
+
+                // construct rotation matrix
+                pylidar::CMatrix<float> tempMat = yawMat.multiply(pitchMat);
+                pylidar::CMatrix<float> rotMat = tempMat.multiply(rollMat);
+
+                PyDict_SetItemString(pDict, "ROTATION_MATRIX", 
+                        rotMat.getAsNumpyArray(NPY_FLOAT));
+            }
+        }
+        return pDict;
+    }
+protected:
+    // Not sure what the difference between the functions below
+    // is but they all have more or less the same data.
+    // Get scanner position and orientation packet
+    void on_scanner_pose_hr_1(const scanlib::scanner_pose_hr_1<iterator_type>& arg) 
+    {
+        scanlib::pointcloud::on_scanner_pose_hr_1(arg);
+        m_bHaveData = true;
+        m_fLat = arg.LAT;
+        m_fLong = arg.LON;
+        m_fHeight = arg.HEIGHT;
+        m_fHMSL = arg.HMSL;
+        if( !isnan(arg.roll))
+            m_fRoll = arg.roll * pi / 180.0;
+        if( !isnan(arg.pitch))
+            m_fPitch = arg.pitch * pi / 180.0;
+        if( !isnan(arg.yaw))
+            m_fYaw = arg.yaw * pi / 180.0;
+        else
+            m_fYaw = 0; // same as original code. Correct??
+    }
+
+    void on_scanner_pose_hr(const scanlib::scanner_pose_hr<iterator_type>& arg)
+    {
+        scanlib::pointcloud::on_scanner_pose_hr(arg);
+        m_bHaveData = true;
+        m_fLat = arg.LAT;
+        m_fLong = arg.LON;
+        m_fHeight = arg.HEIGHT;
+        m_fHMSL = arg.HMSL;
+        if( !isnan(arg.roll))
+            m_fRoll = arg.roll * pi / 180.0;
+        if( !isnan(arg.pitch))
+            m_fPitch = arg.pitch * pi / 180.0;
+        if( !isnan(arg.yaw))
+            m_fYaw = arg.yaw * pi / 180.0;
+        else
+            m_fYaw = 0; // same as original code. Correct??
+    }
+
+    void on_scanner_pose(const scanlib::scanner_pose<iterator_type>& arg)
+    {
+        scanlib::pointcloud::on_scanner_pose(arg);
+        m_bHaveData = true;
+        m_fLat = arg.LAT;
+        m_fLong = arg.LON;
+        m_fHeight = arg.HEIGHT;
+        m_fHMSL = arg.HMSL;
+        if( !isnan(arg.roll))
+            m_fRoll = arg.roll * pi / 180.0;
+        if( !isnan(arg.pitch))
+            m_fPitch = arg.pitch * pi / 180.0;
+        if( !isnan(arg.yaw))
+            m_fYaw = arg.yaw * pi / 180.0;
+        else
+            m_fYaw = 0; // same as original code. Correct??
+    }
+
+private:
+    float m_fLat;
+    float m_fLong;
+    float m_fHeight;
+    float m_fHMSL;
+    float m_fRoll;
+    float m_fPitch;
+    float m_fYaw;
+    bool m_bHaveData;
+};
+
+
 /* Python object wrapping a scanlib::basic_rconnection */
 typedef struct
 {
@@ -358,6 +570,47 @@ typedef struct
     fwifc_file waveHandle;
 
 } PyRieglScanFile;
+
+// return a dictionary with info about the file.
+// means reading through the whole file
+static PyObject *riegl_getFileInfo(PyObject *self, PyObject *args)
+{
+const char *pszFilename;
+
+    if( !PyArg_ParseTuple(args, "s", &pszFilename) )
+        return NULL;
+
+    RieglParamReader reader;
+    try
+    {
+        std::shared_ptr<scanlib::basic_rconnection> rc = scanlib::basic_rconnection::create(pszFilename);
+
+        scanlib::decoder_rxpmarker dec(rc);
+
+        scanlib::buffer buf;
+
+        for(dec.get(buf); !dec.eoi(); dec.get(buf))
+        {
+            reader.dispatch(buf.begin(), buf.end());
+        }
+    }
+    catch(scanlib::scanlib_exception e)
+    {
+        // raise Python exception
+        PyErr_Format(GETSTATE(self)->error, "Error from Riegl lib: %s", e.what());
+        return NULL;
+    }   
+
+    PyObject *pDict = reader.getInfoDictionary();
+    return pDict;
+}
+
+// module methods
+static PyMethodDef module_methods[] = {
+    {"getFileInfo", (PyCFunction)riegl_getFileInfo, METH_VARARGS,
+        "Get a dictionary with information about the file. Pass the filename"},
+    {NULL}  /* Sentinel */
+};
 
 #if PY_MAJOR_VERSION >= 3
 static int riegl_traverse(PyObject *m, visitproc visit, void *arg) 
@@ -377,7 +630,7 @@ static struct PyModuleDef moduledef = {
         "_riegl",
         NULL,
         sizeof(struct RieglState),
-        NULL,
+        module_methods,
         NULL,
         riegl_traverse,
         riegl_clear,
@@ -730,7 +983,7 @@ init_riegl(void)
 #if PY_MAJOR_VERSION >= 3
     pModule = PyModule_Create(&moduledef);
 #else
-    pModule = Py_InitModule("_riegl", NULL);
+    pModule = Py_InitModule("_riegl", module_methods);
 #endif
     if( pModule == NULL )
         INITERROR;

@@ -35,6 +35,25 @@ from . import generic
 from . import _riegl
 from . import gridindexutils
 
+def isRieglFile(fname):
+    """
+    Helper function that looks at the start of the file
+    to determine if it is a riegl file or not
+    """
+    # The riegl supplied functions only return an error when 
+    # we actually start reading but PyLidar needs to know straight
+    # away. Workaround is to read the start of the file and see
+    # if it contains 'Riegl'. Normally at byte position 9 but we check
+    # any of the first 32 bytes.
+    fh = open(fname, 'rb')
+    data = fh.read(32)
+    fh.close()
+        
+    if data.find(b'Riegl') == -1:
+        return False
+    else:
+        return True
+
 class RieglFile(generic.LiDARFile):
     """
     Driver for reading Riegl rxp files. Uses rivlib
@@ -43,16 +62,7 @@ class RieglFile(generic.LiDARFile):
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
 
-        # The riegl supplied functions only return an error when 
-        # we actually start reading but PyLidar needs to know straight
-        # away. Workaround is to read the start of the file and see
-        # if it contains 'Riegl'. Normally at byte position 9 but we check
-        # any of the first 32 bytes.
-        fh = open(fname, 'rb')
-        data = fh.read(32)
-        fh.close()
-        
-        if data.find(b'Riegl') == -1:
+        if not isRieglFile(fname):
             msg = 'not a riegl file'
             raise generic.LiDARFileException(msg)
         
@@ -214,4 +224,21 @@ class RieglFile(generic.LiDARFile):
         """
         return self.getHeader()[name]
     
-        
+
+class RieglFileInfo(generic.LiDARFileInfo):
+    """
+    Class that gets information about a Riegl file
+    and makes it available as fields.
+    The underlying C++ _riegl module does the hard work here
+    """
+    def __init__(self, fname):
+        generic.LiDARFileInfo.__init__(self, fname)
+                
+        if not isRieglFile(fname):
+            msg = 'not a riegl file'
+            raise generic.LiDARFileException(msg)
+
+        dict = _riegl.getFileInfo(fname)
+        # transfer the fields to this object
+        for key in dict.keys():
+            self.__dict__[key] = dict[key]
