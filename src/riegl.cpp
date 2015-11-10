@@ -22,7 +22,7 @@
 
 #include <Python.h>
 #include "numpy/arrayobject.h"
-#include "pylidar.h"
+#include "pylvector.h"
 #include "matrix.h"
 
 #include <riegl/scanlib.hpp>
@@ -190,7 +190,7 @@ public:
 
     PyObject *getPulses(Py_ssize_t n, Py_ssize_t *pPointIdx)
     {
-        PylidarVector<SRieglPulse> *lower = m_Pulses.splitLower(n);
+        pylidar::PylidarVector<SRieglPulse> *lower = m_Pulses.splitLower(n);
         // record the index of the last pulse + 1
         SRieglPulse *pLastPulse = lower->getLastElement();
         if( pLastPulse != NULL )
@@ -209,7 +209,7 @@ public:
 
     PyObject *getPoints(Py_ssize_t n)
     {
-        PylidarVector<SRieglPoint> *lower = m_Points.splitLower(n);
+        pylidar::PylidarVector<SRieglPoint> *lower = m_Points.splitLower(n);
         //fprintf(stderr, "points %ld %ld %ld\n", m_Points.getNumElems(), lower->getNumElems(), n);
         PyObject *p = lower->getNumpyArray(RieglPointFields);
         delete lower; // linked mem now owned by numpy
@@ -340,8 +340,8 @@ protected:
 private:
     Py_ssize_t m_nTotalPulsesReadFile;
     Py_ssize_t m_nPulsesToIgnore;
-    PylidarVector<SRieglPulse> m_Pulses;
-    PylidarVector<SRieglPoint> m_Points;
+    pylidar::PylidarVector<SRieglPulse> m_Pulses;
+    pylidar::PylidarVector<SRieglPoint> m_Points;
     npy_uint32 m_scanline;
     npy_uint16 m_scanlineIdx;
 };
