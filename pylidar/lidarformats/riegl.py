@@ -78,6 +78,9 @@ class RieglFile(generic.LiDARFile):
         self.lastRange = None
         self.lastPoints = None
         self.lastPulses = None
+        self.lastWaveRange = None
+        self.lastWaveInfo = None
+        self.lastReceived = None
         self.scanFile = _riegl.ScanFile(fname, waveName)
                           
     @staticmethod        
@@ -89,6 +92,9 @@ class RieglFile(generic.LiDARFile):
         self.lastRange = None
         self.lastPoints = None
         self.lastPulses = None
+        self.lastWaveRange = None
+        self.lastWaveInfo = None
+        self.lastReceived = None
         self.scanFile = None
         
     def readPointsByPulse(self, colNames=None):
@@ -122,23 +128,46 @@ class RieglFile(generic.LiDARFile):
         2d structured masked array containing information
         about the waveforms.
         """
-        self.scanFile.readWaveforms(self.range.startPulse, 
+        if self.lastWaveRange is None or self.range != self.lastWaveRange:
+            
+            info, received = self.scanFile.readWaveforms(self.range.startPulse, 
                                     self.range.endPulse)
-        raise NotImplementedError()
+            self.lastWaveRange = self.range        
+            self.lastWaveInfo = info
+            self.lastReceived = received
+
+        return self.lastWaveInfo
         
     def readTransmitted(self):
         """
-        Read the transmitted waveform for all pulses
-        returns a 3d masked array. 
+        Riegl (AFAIK) doesn't support transmitted
         """
-        raise NotImplementedError()
+        return None
         
     def readReceived(self):
         """
         Read the received waveform for all pulses
         returns a 2d masked array
         """
-        raise NotImplementedError()
+        if self.lastWaveRange is None or self.range != self.lastWaveRange:
+            
+            info, received = self.scanFile.readWaveforms(self.range.startPulse, 
+                                    self.range.endPulse)
+            self.lastWaveRange = self.range        
+            self.lastWaveInfo = info
+            self.lastReceived = received
+
+
+        nReturns = self.lastWaveInfo['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
+        startIdxs = self.lastWaveInfo['RECEIVED_START_IDX']
+
+        rec_idx, rec_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(        
+                startIdxs, nReturns)
+                
+        receivedByPulse = self.lastReceived[rec_idx]
+        receivedByPulse = numpy.ma.array(receivedByPulse, mask=rec_idx_mask)
+        
+        return receivedByPulse
 
     def hasSpatialIndex(self):
         """

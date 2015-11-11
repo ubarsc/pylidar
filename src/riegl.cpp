@@ -30,8 +30,8 @@
 #include <limits>
 #include "fwifc.h"
 
-static const int nGrowBy = 100;
-static const int nInitSize = 200;
+static const int nGrowBy = 1000;
+static const int nInitSize = 40000;
 
 /* An exception object for this module */
 /* created in the init function */
@@ -108,6 +108,27 @@ static SpylidarFieldDefn RieglPointFields[] = {
     CREATE_FIELD_DEFN(SRieglPoint, x, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, y, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, z, 'f'),
+    {NULL} // Sentinel
+};
+
+/* Structure for waveform Info */
+typedef struct {
+    npy_uint16 number_of_waveform_received_bins;
+    npy_uint16 range_to_waveform_start;
+    npy_uint64 received_start_idx;
+    npy_uint8  channel;
+    float      trans_wave_gain;
+    float      trans_wave_offset;
+} SRieglWaveformInfo;
+
+/* field info for pylidar_structArrayToNumpy */
+static SpylidarFieldDefn RieglWaveformInfoFields[] = {
+    CREATE_FIELD_DEFN(SRieglWaveformInfo, number_of_waveform_received_bins, 'u'),
+    CREATE_FIELD_DEFN(SRieglWaveformInfo, range_to_waveform_start, 'u'),
+    CREATE_FIELD_DEFN(SRieglWaveformInfo, received_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglWaveformInfo, channel, 'u'),
+    CREATE_FIELD_DEFN(SRieglWaveformInfo, trans_wave_gain, 'f'),
+    CREATE_FIELD_DEFN(SRieglWaveformInfo, trans_wave_offset, 'f'),
     {NULL} // Sentinel
 };
 
@@ -568,6 +589,7 @@ typedef struct
 
     // for waveforms, if present
     fwifc_file waveHandle;
+    fwifc_float64_t wave_v_group; // group velocity
 
 } PyRieglScanFile;
 
@@ -725,15 +747,46 @@ char *pszFname = NULL, *pszWaveFname;
             return -1;
         }
 
-        // TODO: set time to relative? linkwfm has absolute (the default)
+        // get the info. We are only really interested in the velocity
+        // so we save that to self
+        fwifc_csz instrument;           /* the instrument type */
+        fwifc_csz serial;               /* serial number of the instrument */
+        fwifc_csz epoch;                /* of time_external can be a datetime */
+                                        /* "2010-11-16T00:00:00" or */
+                                        /* "DAYSEC" or "WEEKSEC" or */
+                                        /* "UNKNOWN" if not known */
+        fwifc_float64_t sampling_time;  /* sampling interval in seconds */
+        fwifc_uint16_t flags;           /* GPS synchronized, ... */
+        fwifc_uint16_t num_facets;      /* number of mirror facets */
+        result = fwifc_get_info(self->waveHandle, 
+                    &instrument,
+                    &serial,
+                    &epoch,
+                    &self->wave_v_group,
+                    &sampling_time,
+                    &flags,
+                    &num_facets);
+        if(result != 0)
+        {
+            setWaveError(result);
+            return -1;
+        }
 
-        fwifc_uint32_t number_of_records, nn;
+        // set time to relative
+        result = fwifc_set_sosbl_relative(self->waveHandle, 1);
+        if(result != 0)
+        {
+            setWaveError(result);
+            return -1;
+        }
+
+        /*fwifc_uint32_t number_of_records, nn;
         fwifc_tell(self->waveHandle, &nn);
         fprintf(stderr, "cur wave %d\n", nn);
         fwifc_seek(self->waveHandle, 0xFFFFFFFF);
         fwifc_tell(self->waveHandle, &number_of_records);
         fwifc_seek(self->waveHandle, nn);
-        fprintf(stderr, "number of wave records %d\n", number_of_records);
+        fprintf(stderr, "number of wave records %d\n", number_of_records);*/
     }
     else
     {
@@ -841,6 +894,9 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
     if( !PyArg_ParseTuple(args, "nn:readWaveforms", &nPulseStart, &nPulseEnd ) )
         return NULL;
 
+    pylidar::CVector<SRieglWaveformInfo> waveInfo(nInitSize, nGrowBy);
+    pylidar::CVector<npy_uint32> received(nInitSize, nGrowBy);
+
     nPulses = nPulseEnd - nPulseStart;
 
     fwifc_float64_t time_sorg;      /* start of range gate in s */
@@ -851,15 +907,25 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
     fwifc_uint32_t  sbl_count;      /* number of sample blocks */
     fwifc_uint32_t  sbl_size;       /* size of sample block in bytes */
     fwifc_sbl_t*    psbl_first;     /* pointer to first sample block */
-    fwifc_float64_t time_ref;       /* emission time in s */
-    fwifc_float64_t time_start;     /* start of waveform recording time in s */
+    fwifc_float64_t time_ref = 0;       /* emission time in s */
     fwifc_uint16_t flags;           /* GPS synchronized, ... */
 
-    int nChannel1 = 0;
-    while(1)
+    npy_uint64 nRecStartIdx = 0;
+    SRieglWaveformInfo info;
+    npy_uint32 waveSample;
+
+    // seek to the first pulse
+    // conveninently you can seek with the wave lib
+    fwifc_int32_t result = fwifc_seek(self->waveHandle, nPulseStart+1); // starts at record 1
+    if( result != 0 )
     {
-        fwifc_int32_t result = fwifc_read(
-                            self->waveHandle,
+        setWaveError(result);
+        return NULL;
+    }
+
+    for( Py_ssize_t n = 0; n < nPulses; n++ )
+    {
+        result = fwifc_read(self->waveHandle,
                             &time_sorg,
                             &time_external,
                             &origin[0],
@@ -874,16 +940,52 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
             setWaveError(result);
             return NULL;
         }
+
+        // go through each of the samples
         fwifc_sbl_t* psbl = psbl_first;
         for (fwifc_uint32_t sbi = 0; sbi < sbl_count; ++sbi)
         {
-            if(psbl->channel == 1)
-                nChannel1++;
+            if( psbl->channel == 3 ) // Reference time
+            {
+                // TODO: don't understand this time stuff...
+                time_ref = psbl->time_sosbl;
+            }
+            else if( psbl->channel != 2) //  not the saturation channel (?)
+            {
+                // first the info
+                info.number_of_waveform_received_bins = psbl->sample_count;
+                info.range_to_waveform_start = (psbl->time_sosbl - time_ref) * 
+                                                (self->wave_v_group / 2.0);
+                info.received_start_idx = nRecStartIdx;
+                info.channel = psbl->channel;
+                // TODO: do we need these?
+                info.trans_wave_gain = 1.0;
+                info.trans_wave_offset = 0.0;
+                waveInfo.push(&info);
+
+                // now the actual waveform
+                for(fwifc_uint32_t nsample = 0; nsample < psbl->sample_count; nsample++)
+                {
+                    waveSample = psbl->sample[nsample];
+                    received.push(&waveSample);
+                }
+
+                nRecStartIdx += psbl->sample_count;
+            }
             psbl++;
         }
-        fprintf(stderr, "number of waves %d\n", nChannel1);
     }
-    Py_RETURN_NONE;
+
+    // extract values as numpy arrays
+    PyObject *pNumpyInfo = waveInfo.getNumpyArray(RieglWaveformInfoFields);
+    PyObject *pNumpyRec = received.getNumpyArray(NPY_UINT32);
+
+    // build tuple
+    PyObject *pTuple = PyTuple_New(2);
+    PyTuple_SetItem(pTuple, 0, pNumpyInfo);
+    PyTuple_SetItem(pTuple, 1, pNumpyRec);
+
+    return pTuple;
 }
 
 /* Table of methods */
