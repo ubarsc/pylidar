@@ -935,7 +935,9 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
                             &sbl_count,
                             &sbl_size,
                             &psbl_first);
-        if(result != 0)
+        if(result == FWIFC_END_OF_FILE)
+            break;
+        else if(result != 0)
         {
             setWaveError(result);
             return NULL;
