@@ -894,6 +894,19 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
     if( !PyArg_ParseTuple(args, "nn:readWaveforms", &nPulseStart, &nPulseEnd ) )
         return NULL;
 
+    if( self->waveHandle == NULL )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Waveform file not present (or passed to construtor)");
+        return NULL;
+    }
+
     pylidar::CVector<SRieglWaveformInfo> waveInfo(nInitSize, nGrowBy);
     pylidar::CVector<npy_uint32> received(nInitSize, nGrowBy);
 

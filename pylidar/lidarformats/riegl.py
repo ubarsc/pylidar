@@ -9,6 +9,15 @@ must be set before running setup.py.
 These variables must point into the directories that rivlib and riwavelib
 created when they were unzipped.
 
+If you wish the waveforms to be processed then they must be extracted from 
+the .rxp file into a .wfm file using the 'rxp2wfm' utility (supplied with 
+the riwavelib). Best results are when the -i option (to build an index) is 
+passed. Ensure that the output .wfm file has the same path as the input .rxp
+file but different extension so that pylidar can find it. Here is an example
+of running rxp2wfm:
+
+$ rxp2wfm -i --uri data.rxp --out data.wfm
+
 """
 # This file is part of PyLidar
 # Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
@@ -67,11 +76,13 @@ class RieglFile(generic.LiDARFile):
             raise generic.LiDARFileException(msg)
         
         # test if there is a .wfm file with the same base name
+        self.haveWave = True
         root, ext = os.path.splitext(fname)
         waveName = root + '.wfm'
         if not os.path.exists(waveName):
             waveName = None
-            msg = '.wfm file not found. Use rxp2wfm to extract first.'
+            self.haveWave = False
+            msg = '.wfm file not found. Use "rxp2wfm -i" to extract first.'
             controls.messageHandler(msg, generic.MESSAGE_WARNING)
         
         self.range = None
@@ -128,6 +139,9 @@ class RieglFile(generic.LiDARFile):
         2d structured masked array containing information
         about the waveforms.
         """
+        if not self.haveWave:
+            return None
+        
         if self.lastWaveRange is None or self.range != self.lastWaveRange:
             
             info, received = self.scanFile.readWaveforms(self.range.startPulse, 
@@ -149,6 +163,9 @@ class RieglFile(generic.LiDARFile):
         Read the received waveform for all pulses
         returns a 2d masked array
         """
+        if not self.haveWave:
+            return None
+            
         if self.lastWaveRange is None or self.range != self.lastWaveRange:
             
             info, received = self.scanFile.readWaveforms(self.range.startPulse, 
