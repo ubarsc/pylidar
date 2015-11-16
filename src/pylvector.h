@@ -1,0 +1,237 @@
+/*
+ * pylvector.h
+ *
+ *
+ * This file is part of PyLidar
+ * Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef PYLVECTOR_H
+#define PYLVECTOR_H
+
+#include "pylidar.h"
+#include <new>
+#include <algorithm>
+
+namespace pylidar
+{
+
+// A class for managing a dynamic number of elements
+// and creating a numpy array of them if needed.
+template <class T>
+class CVector
+{
+public:
+    CVector()
+    {
+        m_pData = NULL;
+        m_nElems = 0;
+        m_nTotalSize = 0;
+        m_nGrowBy = 0;
+        m_bOwned = false;
+    }
+    CVector(npy_intp nStartSize, npy_intp nGrowBy)
+    {
+        m_pData = (T*)malloc(nStartSize * sizeof(T));
+        m_nElems = 0;
+        m_nTotalSize = nStartSize;
+        m_nGrowBy = nGrowBy;
+        m_bOwned = true;
+    }
+    ~CVector()
+    {
+        reset();
+    }
+
+    void reset()
+    {
+        if( m_bOwned && ( m_pData != NULL) )
+            free(m_pData);
+        m_nElems = 0;
+        m_nTotalSize = 0;
+        m_nGrowBy = 0;
+        m_bOwned = false;
+        m_pData = NULL;
+    }   
+
+    npy_intp getNumElems()
+    {
+        return m_nElems;
+    }
+
+    void push(T *pNewElem)
+    {
+        if( !m_bOwned )
+        {
+            throw std::bad_alloc();
+        }
+        if( m_nElems == m_nTotalSize )
+        {
+            // realloc
+            m_nTotalSize += m_nGrowBy;
+            T *pNewData = (T*)realloc(m_pData, m_nTotalSize * sizeof(T));
+            if( pNewData == NULL )
+            {
+                throw std::bad_alloc();
+            }
+            m_pData = pNewData;
+        }
+        memcpy(&m_pData[m_nElems], pNewElem, sizeof(T));
+        m_nElems++;
+    }
+
+    T *getLastElement()
+    {
+        if(m_nElems == 0)
+            return NULL;
+        return &m_pData[m_nElems-1];
+    }
+
+    T *getFirstElement()
+    {
+        if(m_nElems == 0)
+            return NULL;
+        return &m_pData[0];
+    }
+
+    T *getElem(npy_intp n)
+    {
+        //if( n >= m_nElems )
+        //    return NULL;
+        return &m_pData[n];
+    }
+
+    void removeFront(npy_intp nRemove)
+    {
+        if( nRemove >= m_nElems )
+        {
+            // total removal
+            m_nElems = 0;
+        }
+        else
+        {
+            // partial - first shuffle down
+            npy_intp nRemain = m_nElems - nRemove;
+            memcpy(&m_pData[0], &m_pData[nRemove], nRemain * sizeof(T));
+            m_nElems = nRemain;
+        }
+    }
+
+    // for structured arrays
+    PyObject *getNumpyArray(SpylidarFieldDefn *pDefn)
+    {
+        // TODO: resize array down to nElems?
+        m_bOwned = false;
+        PyObject *p = pylidar_structArrayToNumpy(m_pData, m_nElems, pDefn);
+        return p;
+    }
+
+    // for non structured arrays
+    PyObject *getNumpyArray(int typenum)
+    {
+        m_bOwned = false;
+        npy_intp dims = m_nElems;
+        PyObject *p = PyArray_SimpleNewFromData(1, &dims, typenum, (void*)m_pData);
+        PyArray_ENABLEFLAGS((PyArrayObject *)p, NPY_ARRAY_OWNDATA);
+        return p;
+    }
+
+    // split the upper part of this array into another
+    // object. Takes elements from nUpper upwards into the 
+    // new object.
+    CVector<T> *splitUpper(npy_intp nUpper)
+    {
+        if( !m_bOwned )
+        {
+            throw std::bad_alloc();
+        }
+        // split from nUpper to the end out as a new
+        // CVector
+        npy_intp nNewSize = m_nElems - nUpper;
+        CVector<T> *splitted = new CVector<T>(nNewSize, m_nGrowBy);
+        memcpy(splitted->m_pData, &m_pData[nUpper], nNewSize * sizeof(T));
+        splitted->m_nElems = nNewSize;
+
+        // resize this one down
+        m_nElems = nUpper;
+        m_nTotalSize = nUpper;
+        T *pNewData = (T*)realloc(m_pData, m_nTotalSize * sizeof(T));
+        if( pNewData == NULL )
+        {
+            throw std::bad_alloc();
+        }
+        m_pData = pNewData;
+        return splitted;
+    }
+
+    // split the lower part of this array into another
+    // object. Takes elements from 0 up to (but not including) nUpper into the 
+    // new object.
+    CVector<T> *splitLower(npy_intp nUpper)
+    {
+        if( !m_bOwned )
+        {
+            throw std::bad_alloc();
+        }
+        // split from 0 to nUpper as a new
+        // CVector
+        npy_intp nNewSize = std::min(nUpper, m_nElems);
+        CVector<T> *splitted = new CVector<T>(nNewSize, m_nGrowBy);
+        memcpy(splitted->m_pData, &m_pData[0], nNewSize * sizeof(T));
+        splitted->m_nElems = nNewSize;
+
+        // resize this one down
+        removeFront(nNewSize);
+
+        return splitted;
+    }
+
+    void appendArray(CVector<T> *other)
+    {
+        npy_intp nNewElems = m_nElems + other->m_nElems;
+        npy_intp nNewTotalSize = m_nTotalSize;
+        while( nNewTotalSize < nNewElems )
+            nNewTotalSize += m_nGrowBy;
+
+        if( nNewTotalSize > m_nTotalSize )
+        {
+            m_nTotalSize = nNewTotalSize;
+            T *pNewData = (T*)realloc(m_pData, m_nTotalSize * sizeof(T));
+            if( pNewData == NULL )
+            {
+                throw std::bad_alloc();
+            }
+            m_pData = pNewData;
+        }
+
+        memcpy(&m_pData[m_nElems], other->m_pData, other->m_nElems * sizeof(T));
+
+        m_nElems = nNewElems;
+    }
+
+private:
+    T *m_pData;
+    bool m_bOwned;
+    npy_intp m_nElems;
+    npy_intp m_nTotalSize;
+    npy_intp m_nGrowBy;
+};
+
+} //namespace pylidar
+
+#endif //PYLVECTOR_H
+

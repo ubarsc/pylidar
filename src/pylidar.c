@@ -480,7 +480,7 @@ char *pszName;
                     NPY_ARRAY_CARRAY, NULL );
     /* Need to set this separately since PyArray_NewFromDescr always */
     /* has it unset, even if you pass it as the flags parameter */
-    PyArray_ENABLEFLAGS(pOut, NPY_ARRAY_OWNDATA);
+    PyArray_ENABLEFLAGS((PyArrayObject *)pOut, NPY_ARRAY_OWNDATA);
     if( pOut == NULL )
     {
         pylidar_error("Unable to create array");
