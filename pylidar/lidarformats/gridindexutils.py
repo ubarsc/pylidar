@@ -375,18 +375,21 @@ def convertSPDIdxToReadIdxAndMaskInfo(start_idx_array, count_array, outSize=None
       can be used as a mask in a masked array of the ragged array (above)
       of the actual data.
     """
-    # work out the index of the start of the bool array
-    boolStart = int(start_idx_array.min())
-    # work out the size 
-    end_idx_array = start_idx_array + count_array
-    boolSize = int(end_idx_array.max() - boolStart)
-    outBool = numpy.zeros((boolSize,), dtype=numpy.bool)
     
     # work out the size of the first dimension of the index
     if count_array.size > 0:
         maxCount = count_array.max()
+        # work out the index of the start of the bool array
+        boolStart = int(start_idx_array.min())
+        # work out the size 
+        end_idx_array = start_idx_array + count_array
+        boolSize = int(end_idx_array.max() - boolStart)        
     else:
         maxCount = 0
+        # no pulses
+        boolStart = 0
+        boolSize = 0
+    outBool = numpy.zeros((boolSize,), dtype=numpy.bool)
         
     if count_array.ndim == 2:
         # 2d input - 3d output index and mask
