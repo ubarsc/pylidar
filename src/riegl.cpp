@@ -609,6 +609,9 @@ typedef struct
     scanlib::buffer *pBuffer;
     RieglReader *pReader;
     bool bFinishedReading;
+    PyObject *pOptionDict;
+    pylidar::CMatrix<float> *pMagneticDeclination;
+    pylidar::CMatrix<float> *pRotationMatrix;
 
     // for waveforms, if present
     fwifc_file waveHandle;
@@ -655,10 +658,39 @@ const char *pszFilename;
     return pDict;
 }
 
+static const char *SupportedDriverOptions[] = {"ROTATION_MATRIX", "MAGNETIC_DECLINATION", NULL};
+static PyObject *riegl_getSupportedOptions(PyObject *self, PyObject *args)
+{
+    // how many do we have?
+    Py_ssize_t n;
+    for( n = 0; SupportedDriverOptions[n] != NULL; n++ )
+    {
+        // do nothing
+    }
+
+    // now do it for real
+    PyObject *pTuple = PyTuple_New(n);
+    for( n = 0; SupportedDriverOptions[n] != NULL; n++ )
+    {
+        PyObject *pStr;
+        const char *psz = SupportedDriverOptions[n];
+#if PY_MAJOR_VERSION >= 3
+        pStr = PyUnicode_FromString(psz);
+#else
+        pStr = PyString_FromString(psz);
+#endif
+        PyTuple_SetItem(pTuple, n, pStr);
+    }
+
+    return pTuple;
+}
+
 // module methods
 static PyMethodDef module_methods[] = {
     {"getFileInfo", (PyCFunction)riegl_getFileInfo, METH_VARARGS,
         "Get a dictionary with information about the file. Pass the filename"},
+    {"getSupportedOptions", (PyCFunction)riegl_getSupportedOptions, METH_NOARGS,
+        "Get a tuple of supported driver options"},
     {NULL}  /* Sentinel */
 };
 
@@ -704,6 +736,12 @@ PyRieglScanFile_dealloc(PyRieglScanFile *self)
     delete self->pBuffer;
     delete self->pReader;
     Py_XDECREF(self->pCachedWaveform);
+    Py_DECREF(self->pOptionDict);
+    if( self->pMagneticDeclination != NULL)
+        delete self->pMagneticDeclination;
+    if( self->pRotationMatrix != NULL )
+        delete self->pRotationMatrix;
+
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -723,13 +761,30 @@ void setWaveError(fwifc_int32_t result)
 }
 
 /* init method - open file */
+/* takes rxp filename, wfm filename (can be NULL) and dictionary of options */
+/* currently only the SupportedDriverOptions keys are used */
+
 static int 
 PyRieglScanFile_init(PyRieglScanFile *self, PyObject *args, PyObject *kwds)
 {
 char *pszFname = NULL, *pszWaveFname;
+PyObject *pOptionDict;
 
-    if( !PyArg_ParseTuple(args, "sz", &pszFname, &pszWaveFname ) )
+    if( !PyArg_ParseTuple(args, "szO", &pszFname, &pszWaveFname, &pOptionDict ) )
     {
+        return -1;
+    }
+
+    if( !PyDict_Check(pOptionDict) )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
         return -1;
     }
 
@@ -768,6 +823,12 @@ char *pszFname = NULL, *pszWaveFname;
     self->pCachedWaveform = NULL;
     self->nCacheWavePulseStart = 0;
     self->nCacheWavePulseEnd = 0;
+
+    Py_INCREF(pOptionDict);
+    self->pOptionDict = pOptionDict;
+
+    self->pMagneticDeclination = NULL;
+    self->pRotationMatrix = NULL;
 
     if( pszWaveFname != NULL )
     {
@@ -902,22 +963,25 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
         }
     }
 
-    // ok this is a bit hairy. We need to get the wfm_start_idx and number_of_waveform_samples fields
-    // but we can only get them by reading the waveforms. So we read the waveforms, then try to save
-    // a bit of time by caching them in case they are asked for/provided by _readWaveforms.
-    if( ( self->nCacheWavePulseStart != nPulseStart ) || ( self->nCacheWavePulseEnd != nPulseEnd) )
+    if( self->waveHandle != NULL )
     {
-        self->pCachedWaveform = readWaveforms(self->waveHandle, self->wave_v_group, nPulseStart, nPulseEnd);
-        self->nCacheWavePulseStart = nPulseStart;
-        self->nCacheWavePulseEnd = nPulseEnd;
-    }
-    PyObject *wfmStart = PyTuple_GetItem(self->pCachedWaveform, 2);
-    PyObject *wfmCount = PyTuple_GetItem(self->pCachedWaveform, 3);
-    for( npy_intp n = 0; n < PyArray_DIM(wfmStart, 0); n++)
-    {
-        npy_uint32 st = *(npy_uint32*)PyArray_GETPTR1(wfmStart, n);
-        npy_uint8 ct = *(npy_uint8*)PyArray_GETPTR1(wfmCount, n);
-        self->pReader->setWaveformInfo(n, st, ct);
+        // ok this is a bit hairy. We need to get the wfm_start_idx and number_of_waveform_samples fields
+        // but we can only get them by reading the waveforms. So we read the waveforms, then try to save
+        // a bit of time by caching them in case they are asked for/provided by _readWaveforms.
+        if( ( self->nCacheWavePulseStart != nPulseStart ) || ( self->nCacheWavePulseEnd != nPulseEnd) )
+        {
+            self->pCachedWaveform = readWaveforms(self->waveHandle, self->wave_v_group, nPulseStart, nPulseEnd);
+            self->nCacheWavePulseStart = nPulseStart;
+            self->nCacheWavePulseEnd = nPulseEnd;
+        }
+        PyObject *wfmStart = PyTuple_GetItem(self->pCachedWaveform, 2);
+        PyObject *wfmCount = PyTuple_GetItem(self->pCachedWaveform, 3);
+        for( npy_intp n = 0; n < PyArray_DIM(wfmStart, 0); n++)
+        {
+            npy_uint32 st = *(npy_uint32*)PyArray_GETPTR1(wfmStart, n);
+            npy_uint8 ct = *(npy_uint8*)PyArray_GETPTR1(wfmCount, n);
+            self->pReader->setWaveformInfo(n, st, ct);
+        }
     }
 
     // get pulse array as numpy array
@@ -931,9 +995,7 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
     //fprintf(stderr, "n = %ld\n", self->pReader->getNumPulsesReadFile());
 
     // build tuple
-    PyObject *pTuple = PyTuple_New(2);
-    PyTuple_SetItem(pTuple, 0, pPulses);
-    PyTuple_SetItem(pTuple, 1, pPoints);
+    PyObject *pTuple = PyTuple_Pack(2, pPulses, pPoints);
 
     return pTuple;
 }
@@ -1080,11 +1142,7 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
     PyObject *pNumpyWfmNumber = wfmNumber.getNumpyArray(NPY_UINT8);
 
     // build tuple
-    PyObject *pTuple = PyTuple_New(4);
-    PyTuple_SetItem(pTuple, 0, pNumpyInfo);
-    PyTuple_SetItem(pTuple, 1, pNumpyRec);
-    PyTuple_SetItem(pTuple, 2, pNumpyWfmStart);
-    PyTuple_SetItem(pTuple, 3, pNumpyWfmNumber);
+    PyObject *pTuple = PyTuple_Pack(4, pNumpyInfo, pNumpyRec, pNumpyWfmStart, pNumpyWfmNumber);
 
     return pTuple;
 }

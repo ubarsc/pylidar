@@ -9,6 +9,9 @@ must be set before running setup.py.
 These variables must point into the directories that rivlib and riwavelib
 created when they were unzipped.
 
+At runtime, $RIWAVELIB_ROOT/lib must be added to your LD_LIBRARY_PATH (Unix)
+or PATH (Windows) environment variable so the linked library can be found.
+
 If you wish the waveforms to be processed then they must be extracted from 
 the .rxp file into a .wfm file using the 'rxp2wfm' utility (supplied with 
 the riwavelib). Best results are when the -i option (to build an index) is 
@@ -17,6 +20,21 @@ file but different extension so that pylidar can find it. Here is an example
 of running rxp2wfm:
 
 $ rxp2wfm -i --uri data.rxp --out data.wfm
+
+Driver Options
+--------------
+
+These are contained in the SUPPORTEDOPTIONS module level variable.
+
++-----------------------+---------------------------------------+
+| Name                  | Use                                   |
++=======================+=======================================+
+| ROTATION_MATRIX       | a 4x4 float32 array containing the    |
+|                       | rotation to be applied to the data.   |
+|                       | Can be obtained from RieglFileInfo.   |
++-----------------------+---------------------------------------+
+| MAGNETIC_DECLINATION  | number of degrees                     |
++-----------------------+---------------------------------------+
 
 """
 # This file is part of PyLidar
@@ -43,6 +61,8 @@ import numpy
 from . import generic
 from . import _riegl
 from . import gridindexutils
+
+SUPPORTEDOPTIONS = _riegl.getSupportedOptions()
 
 def isRieglFile(fname):
     """
@@ -84,6 +104,13 @@ class RieglFile(generic.LiDARFile):
             self.haveWave = False
             msg = '.wfm file not found. Use "rxp2wfm -i" to extract first.'
             controls.messageHandler(msg, generic.MESSAGE_WARNING)
+            
+        # check if the options are all valid. Good to check in case of typo.
+        # hard to do this in C
+        for key in userClass.lidarDriverOptions:
+            if key not in SUPPORTEDOPTIONS:
+                msg = '%s not a supported Riegl option' % repr(key)
+                raise generic.LiDARInvalidSetting(msg)
         
         self.range = None
         self.lastRange = None
@@ -92,7 +119,8 @@ class RieglFile(generic.LiDARFile):
         self.lastWaveRange = None
         self.lastWaveInfo = None
         self.lastReceived = None
-        self.scanFile = _riegl.ScanFile(fname, waveName)
+        self.scanFile = _riegl.ScanFile(fname, waveName, 
+                        userClass.lidarDriverOptions)
                           
     @staticmethod        
     def getDriverName():
