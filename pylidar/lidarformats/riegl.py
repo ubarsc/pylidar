@@ -115,8 +115,10 @@ class RieglFile(generic.LiDARFile):
         """
         pulses = self.readPulsesForRange()
         points = self.readPointsForRange()
-        nReturns = pulses['POINTCOUNT']
-        startIdxs = pulses['POINTSTARTIDX']
+        if points.size == 0:
+            return None
+        nReturns = pulses['NUMBER_OF_RETURNS']
+        startIdxs = pulses['PTS_START_IDX']
 
         point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(        
                 startIdxs, nReturns)

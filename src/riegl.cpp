@@ -49,48 +49,54 @@ static struct RieglState _state;
 
 /* Structure for pulses */
 typedef struct {
-    npy_uint64 pulseID;
+    npy_uint64 pulse_ID;
     npy_uint64 gpsTime;
+    npy_uint8 prism_facet;
     float azimuth;
     float zenith;
     npy_uint32 scanline;
-    npy_uint16 scanlineIdx;
-    double xIdx;
-    double yIdx;
-    double xOrigin;
-    double yOrigin;
-    float zOrigin;
-    npy_uint32 pointStartIdx;
-    npy_uint16 pointCount;
+    npy_uint16 scanline_Idx;
+    double x_Idx;
+    double y_Idx;
+    double x_Origin;
+    double y_Origin;
+    float z_Origin;
+    npy_uint32 pts_start_idx;
+    npy_uint8 number_of_returns;
+    npy_uint32 wfm_start_idx;
+    npy_uint8 number_of_waveform_samples;
 } SRieglPulse;
 
 /* field info for pylidar_structArrayToNumpy */
 static SpylidarFieldDefn RieglPulseFields[] = {
-    CREATE_FIELD_DEFN(SRieglPulse, pulseID, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, pulse_ID, 'u'),
     CREATE_FIELD_DEFN(SRieglPulse, gpsTime, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, prism_facet, 'u'),
     CREATE_FIELD_DEFN(SRieglPulse, azimuth, 'f'),
     CREATE_FIELD_DEFN(SRieglPulse, zenith, 'f'),
     CREATE_FIELD_DEFN(SRieglPulse, scanline, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, scanlineIdx, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, yIdx, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, xIdx, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, xOrigin, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, yOrigin, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, zOrigin, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, pointStartIdx, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, pointCount, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, scanline_Idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, y_Idx, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, x_Idx, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, x_Origin, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, y_Origin, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, z_Origin, 'f'),
+    CREATE_FIELD_DEFN(SRieglPulse, pts_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, number_of_returns, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, wfm_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, number_of_waveform_samples, 'u'),
     {NULL} // Sentinel
 };
 
 /* Structure for points */
 typedef struct {
-    npy_uint64 returnId;
+    npy_uint64 return_Id;
     npy_uint64 gpsTime;
-    float amplitudeReturn;
-    float widthReturn;
+    float amplitude_Return;
+    float width_Return;
     npy_uint8 classification;
     double range;
-    double papp;
+    double rho_app;
     double x;
     double y;
     float z;
@@ -98,13 +104,13 @@ typedef struct {
 
 /* field info for pylidar_structArrayToNumpy */
 static SpylidarFieldDefn RieglPointFields[] = {
-    CREATE_FIELD_DEFN(SRieglPoint, returnId, 'u'),
+    CREATE_FIELD_DEFN(SRieglPoint, return_Id, 'u'),
     CREATE_FIELD_DEFN(SRieglPoint, gpsTime, 'u'),
-    CREATE_FIELD_DEFN(SRieglPoint, amplitudeReturn, 'f'),
-    CREATE_FIELD_DEFN(SRieglPoint, widthReturn, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, amplitude_Return, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, width_Return, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, classification, 'u'),
     CREATE_FIELD_DEFN(SRieglPoint, range, 'f'),
-    CREATE_FIELD_DEFN(SRieglPoint, papp, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, rho_app, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, x, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, y, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, z, 'f'),
@@ -175,7 +181,7 @@ public:
             SRieglPulse *pPulse = m_Pulses.getElem(n);
             if( pPulse != NULL )
             {
-                Py_ssize_t nPoints = pPulse->pointStartIdx;
+                Py_ssize_t nPoints = pPulse->pts_start_idx;
                 m_Points.removeFront(nPoints);
             }
             m_Pulses.removeFront(n);
@@ -189,7 +195,7 @@ public:
         SRieglPulse *p = m_Pulses.getFirstElement();
         if( p != NULL )
         {
-            idx = p->pointStartIdx;
+            idx = p->pts_start_idx;
         }
         return idx;
     }
@@ -204,19 +210,19 @@ public:
         for( npy_intp n = 0; n < m_Pulses.getNumElems(); n++ )
         {
             SRieglPulse *pPulse = m_Pulses.getElem(n);
-            if( pPulse->pointCount > 0 )
-                pPulse->pointStartIdx -= nPointIdx;
+            if( pPulse->number_of_returns > 0 )
+                pPulse->pts_start_idx -= nPointIdx;
         }
     }
 
     PyObject *getPulses(Py_ssize_t n, Py_ssize_t *pPointIdx)
     {
         pylidar::CVector<SRieglPulse> *lower = m_Pulses.splitLower(n);
-        // record the index of the last pulse + 1
+        // record the index of the next point
         SRieglPulse *pLastPulse = lower->getLastElement();
         if( pLastPulse != NULL )
         {
-            *pPointIdx = (pLastPulse->pointStartIdx + 1);
+            *pPointIdx = (pLastPulse->pts_start_idx + pLastPulse->number_of_returns);
         }
         else
         {
@@ -251,16 +257,17 @@ protected:
         }
 
         SRieglPulse pulse;
-        pulse.pulseID = m_nTotalPulsesReadFile;
+        pulse.pulse_ID = m_nTotalPulsesReadFile;
         // TODO: where does 1e9 come from??
         pulse.gpsTime = time_sorg * 1e9 + 0.5;
+        pulse.prism_facet = facet;
 
         // Get spherical coordinates. TODO: matrix transform
         double magnitude = std::sqrt(beam_direction[0] * beam_direction[0] + \
                            beam_direction[1] * beam_direction[1] + \
                            beam_direction[2] * beam_direction[2]);
         double shot_zenith = std::acos(beam_direction[2]/magnitude) * 180.0 / pi;
-        double shot_azimuth = shot_azimuth = std::atan2(beam_direction[0],beam_direction[1]) * 180.0 / pi;      
+        double shot_azimuth = std::atan2(beam_direction[0],beam_direction[1]) * 180.0 / pi;      
         if( beam_direction[0] < 0 )
         {
             shot_azimuth += 360.0;            
@@ -269,18 +276,23 @@ protected:
         pulse.azimuth = shot_azimuth;
         pulse.zenith = shot_zenith;
         pulse.scanline = m_scanline;
-        pulse.scanlineIdx = m_scanlineIdx;
+        pulse.scanline_Idx = m_scanlineIdx;
         // do we need these separate?
-        pulse.xIdx = m_scanline;
-        pulse.yIdx = m_scanlineIdx;
+        pulse.x_Idx = m_scanline;
+        pulse.y_Idx = m_scanlineIdx;
         // TODO: matrix transform
-        pulse.xOrigin = beam_origin[0];
-        pulse.yOrigin = beam_origin[1];
-        pulse.zOrigin = beam_origin[2];
+        pulse.x_Origin = beam_origin[0];
+        pulse.y_Origin = beam_origin[1];
+        pulse.z_Origin = beam_origin[2];
 
         // point idx - start with 0
-        pulse.pointStartIdx = 0;
-        pulse.pointCount = 0;
+        // updated when we get a point below.
+        pulse.pts_start_idx = 0;
+        pulse.number_of_returns = 0;
+
+        // TODO:
+        pulse.wfm_start_idx = 0;
+        pulse.number_of_waveform_samples = 0;
 
         m_Pulses.push(&pulse);
     }
@@ -304,22 +316,22 @@ protected:
             //throw scanlib::scanlib_exception("Point before Pulse.");
             return;
         }
-        if(pPulse->pointCount == 0)
+        if(pPulse->number_of_returns == 0)
         {
             // note: haven't pushed point yet
-            pPulse->pointStartIdx = m_Points.getNumElems();
+            pPulse->pts_start_idx = m_Points.getNumElems();
         }
-        pPulse->pointCount++;
+        pPulse->number_of_returns++;
 
         SRieglPoint point;
 
         // the current echo is always indexed by target_count-1.
         scanlib::target& current_target(targets[target_count-1]);
 
-        point.returnId = target_count;
+        point.return_Id = target_count;
         point.gpsTime = current_target.time * 1e9 + 0.5;
-        point.amplitudeReturn = current_target.amplitude;
-        point.widthReturn = current_target.deviation;
+        point.amplitude_Return = current_target.amplitude;
+        point.width_Return = current_target.deviation;
         point.classification = 1;
 
         // Get range from optical centre of scanner
@@ -333,7 +345,7 @@ protected:
         point.range = point_range;
 
         // Rescale reflectance from dB to papp
-        point.papp = std::pow(10.0, current_target.reflectance / 10.0);
+        point.rho_app = std::pow(10.0, current_target.reflectance / 10.0);
 
         point.x = current_target.vertex[0];
         point.y = current_target.vertex[1];
