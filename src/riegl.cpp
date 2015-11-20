@@ -243,6 +243,15 @@ public:
         return p;
     }
 
+    // updates the waveform info for a given pulse
+    // called from readWaveforms() when called in turn from riegl_readData
+    void setWaveformInfo(Py_ssize_t n, npy_uint32 wfm_start_idx, npy_uint8 number_of_waveform_samples)
+    {
+        SRieglPulse *pPulse = m_Pulses.getElem(n);
+        pPulse->wfm_start_idx = wfm_start_idx;
+        pPulse->number_of_waveform_samples = number_of_waveform_samples;
+    }
+
 protected:
     // This call is invoked for every pulse, even if there is no return
     void on_shot()
@@ -587,6 +596,8 @@ private:
     bool m_bHaveData;
 };
 
+PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group, 
+    Py_ssize_t nPulseStart, Py_ssize_t nPulseEnd);
 
 /* Python object wrapping a scanlib::basic_rconnection */
 typedef struct
@@ -602,6 +613,11 @@ typedef struct
     // for waveforms, if present
     fwifc_file waveHandle;
     fwifc_float64_t wave_v_group; // group velocity
+
+    // cached waveforms
+    PyObject *pCachedWaveform;
+    Py_ssize_t nCacheWavePulseStart;
+    Py_ssize_t nCacheWavePulseEnd;
 
 } PyRieglScanFile;
 
@@ -687,6 +703,7 @@ PyRieglScanFile_dealloc(PyRieglScanFile *self)
     delete self->pDecoder;
     delete self->pBuffer;
     delete self->pReader;
+    Py_XDECREF(self->pCachedWaveform);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -748,6 +765,9 @@ char *pszFname = NULL, *pszWaveFname;
         return -1;
     }   
 
+    self->pCachedWaveform = NULL;
+    self->nCacheWavePulseStart = 0;
+    self->nCacheWavePulseEnd = 0;
 
     if( pszWaveFname != NULL )
     {
@@ -882,6 +902,24 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
         }
     }
 
+    // ok this is a bit hairy. We need to get the wfm_start_idx and number_of_waveform_samples fields
+    // but we can only get them by reading the waveforms. So we read the waveforms, then try to save
+    // a bit of time by caching them in case they are asked for/provided by _readWaveforms.
+    if( ( self->nCacheWavePulseStart != nPulseStart ) || ( self->nCacheWavePulseEnd != nPulseEnd) )
+    {
+        self->pCachedWaveform = readWaveforms(self->waveHandle, self->wave_v_group, nPulseStart, nPulseEnd);
+        self->nCacheWavePulseStart = nPulseStart;
+        self->nCacheWavePulseEnd = nPulseEnd;
+    }
+    PyObject *wfmStart = PyTuple_GetItem(self->pCachedWaveform, 2);
+    PyObject *wfmCount = PyTuple_GetItem(self->pCachedWaveform, 3);
+    for( npy_intp n = 0; n < PyArray_DIM(wfmStart, 0); n++)
+    {
+        npy_uint32 st = *(npy_uint32*)PyArray_GETPTR1(wfmStart, n);
+        npy_uint8 ct = *(npy_uint8*)PyArray_GETPTR1(wfmCount, n);
+        self->pReader->setWaveformInfo(n, st, ct);
+    }
+
     // get pulse array as numpy array
     Py_ssize_t point_idx;
     PyObject *pPulses = self->pReader->getPulses(nPulses, &point_idx); 
@@ -900,9 +938,10 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
     return pTuple;
 }
 
+// returns a tuple with waveform info, received, wfmStart (for pulses) and wfmCount (for pulses)
 static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *args)
 {
-    Py_ssize_t nPulseStart, nPulseEnd, nPulses, nCount;
+    Py_ssize_t nPulseStart, nPulseEnd;
     if( !PyArg_ParseTuple(args, "nn:readWaveforms", &nPulseStart, &nPulseEnd ) )
         return NULL;
 
@@ -915,14 +954,37 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
         // from inside a class method. Not needed for Python < 3.
         m = PyState_FindModule(&moduledef);
 #endif
-        PyErr_SetString(GETSTATE(m)->error, "Waveform file not present (or passed to construtor)");
+        PyErr_SetString(GETSTATE(m)->error, "Waveform file not present (or passed to constructor)");
         return NULL;
     }
 
+    // PyRieglScanFile_readData also reads the waveforms to find the wfm_start_idx and number_of_waveform_samples
+    // and caches all the data so we can return it if the range is the same.
+    if( ( self->nCacheWavePulseStart != nPulseStart ) || ( self->nCacheWavePulseEnd != nPulseEnd) )
+    {
+        //fprintf(stderr, "new waveform\n");
+        self->pCachedWaveform = readWaveforms(self->waveHandle, self->wave_v_group, nPulseStart, nPulseEnd);
+        self->nCacheWavePulseStart = nPulseStart;
+        self->nCacheWavePulseEnd = nPulseEnd;
+    }
+    //else
+    //   fprintf(stderr, "returning cached wfm\n");
+
+    Py_INCREF(self->pCachedWaveform);
+    return self->pCachedWaveform;
+}
+
+// Does the actual reading of the waveforms. 
+// returns a tuple with waveform info, received, wfmStart (for pulses) and wfmCount (for pulses)
+PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group, 
+        Py_ssize_t nPulseStart, Py_ssize_t nPulseEnd)
+{
     pylidar::CVector<SRieglWaveformInfo> waveInfo(nInitSize, nGrowBy);
     pylidar::CVector<npy_uint32> received(nInitSize, nGrowBy);
+    pylidar::CVector<npy_uint32> wfmStart(nInitSize, nGrowBy);
+    pylidar::CVector<npy_uint8> wfmNumber(nInitSize, nGrowBy);
 
-    nPulses = nPulseEnd - nPulseStart;
+    Py_ssize_t nPulses = nPulseEnd - nPulseStart;
 
     fwifc_float64_t time_sorg;      /* start of range gate in s */
     fwifc_float64_t time_external;  /* external time in s relative to epoch */
@@ -938,10 +1000,12 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
     npy_uint64 nRecStartIdx = 0;
     SRieglWaveformInfo info;
     npy_uint32 waveSample;
+    npy_uint32 waveformStartIdx = 0;
+    npy_uint8 waveformCount;
 
     // seek to the first pulse
     // conveninently you can seek with the wave lib
-    fwifc_int32_t result = fwifc_seek(self->waveHandle, nPulseStart+1); // starts at record 1
+    fwifc_int32_t result = fwifc_seek(waveHandle, nPulseStart+1); // starts at record 1
     if( result != 0 )
     {
         setWaveError(result);
@@ -950,7 +1014,7 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
 
     for( Py_ssize_t n = 0; n < nPulses; n++ )
     {
-        result = fwifc_read(self->waveHandle,
+        result = fwifc_read(waveHandle,
                             &time_sorg,
                             &time_external,
                             &origin[0],
@@ -982,7 +1046,7 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
                 // first the info
                 info.number_of_waveform_received_bins = psbl->sample_count;
                 info.range_to_waveform_start = (psbl->time_sosbl - time_ref) * 
-                                                (self->wave_v_group / 2.0);
+                                                (wave_v_group / 2.0);
                 info.received_start_idx = nRecStartIdx;
                 info.channel = psbl->channel;
                 // TODO: do we need these?
@@ -1001,16 +1065,26 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
             }
             psbl++;
         }
+
+        // update the info for the pulses
+        waveformCount = sbl_count;
+        wfmStart.push(&waveformStartIdx);
+        wfmNumber.push(&waveformCount);
+        waveformStartIdx += waveformCount;
     }
 
     // extract values as numpy arrays
     PyObject *pNumpyInfo = waveInfo.getNumpyArray(RieglWaveformInfoFields);
     PyObject *pNumpyRec = received.getNumpyArray(NPY_UINT32);
+    PyObject *pNumpyWfmStart = wfmStart.getNumpyArray(NPY_UINT32);
+    PyObject *pNumpyWfmNumber = wfmNumber.getNumpyArray(NPY_UINT8);
 
     // build tuple
-    PyObject *pTuple = PyTuple_New(2);
+    PyObject *pTuple = PyTuple_New(4);
     PyTuple_SetItem(pTuple, 0, pNumpyInfo);
     PyTuple_SetItem(pTuple, 1, pNumpyRec);
+    PyTuple_SetItem(pTuple, 2, pNumpyWfmStart);
+    PyTuple_SetItem(pTuple, 3, pNumpyWfmNumber);
 
     return pTuple;
 }

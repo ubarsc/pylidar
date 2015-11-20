@@ -146,7 +146,7 @@ class RieglFile(generic.LiDARFile):
         
         if self.lastWaveRange is None or self.range != self.lastWaveRange:
             
-            info, received = self.scanFile.readWaveforms(self.range.startPulse, 
+            info, received, st, cnt = self.scanFile.readWaveforms(self.range.startPulse, 
                                     self.range.endPulse)
             self.lastWaveRange = self.range        
             self.lastWaveInfo = info
@@ -170,7 +170,7 @@ class RieglFile(generic.LiDARFile):
             
         if self.lastWaveRange is None or self.range != self.lastWaveRange:
             
-            info, received = self.scanFile.readWaveforms(self.range.startPulse, 
+            info, received, st, cnt = self.scanFile.readWaveforms(self.range.startPulse, 
                                     self.range.endPulse)
             self.lastWaveRange = self.range        
             self.lastWaveInfo = info
