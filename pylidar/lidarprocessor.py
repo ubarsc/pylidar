@@ -96,7 +96,7 @@ def setDefaultDrivers():
     If not otherwise supplied, the default is to use the SPDV3 driver.
     """
     global DEFAULT_RASTERDRIVERNAME, DEFAULT_RASTERCREATIONOPTIONS
-    global DEFAULT_LIDARDRIVERNAME, DEFAULT_LIDARCREATIONOPTIONS
+    global DEFAULT_LIDARDRIVERNAME
     DEFAULT_RASTERDRIVERNAME = os.getenv('PYLIDAR_DFLT_RASTERDRIVER', default='HFA')
     DEFAULT_RASTERCREATIONOPTIONS = ['COMPRESSED=TRUE','IGNOREUTM=TRUE']
     creationOptionsStr = os.getenv('PYLIDAR_DFLT_RASTERDRIVEROPTIONS')
@@ -109,14 +109,9 @@ def setDefaultDrivers():
         else:
             DEFAULT_RASTERCREATIONOPTIONS = creationOptionsStr.split()
             
-    DEFAULT_LIDARDRIVERNAME = os.getenv('PYLIDAR_DFLT_LIDARDRIVER', default='SPDV3')
-    DEFAULT_LIDARCREATIONOPTIONS = []
-    creationOptionsStr = os.getenv('PYLIDAR_DFLT_LIDARDRIVEROPTIONS')
-    if creationOptionsStr is not None:
-        if creationOptionsStr == 'None':
-            DEFAULT_LIDARCREATIONOPTIONS = []
-        else:
-            DEFAULT_LIDARCREATIONOPTIONS = creationOptionsStr.split()
+    DEFAULT_LIDARDRIVERNAME = os.getenv('PYLIDAR_DFLT_LIDARDRIVER', default='SPDV4')
+    # Leave driver options for now - info seems likely to be too complex to hold
+    # in an environment variable. 
 
 setDefaultDrivers()
 
@@ -259,7 +254,7 @@ class LidarFile(object):
         self.fname = fname
         self.mode = mode
         self.lidarDriver = DEFAULT_LIDARDRIVERNAME
-        self.lidarDriverOptions = DEFAULT_LIDARCREATIONOPTIONS
+        self.lidarDriverOptions = {}
         self.writeSpatialIndex = True
         
     def setLiDARDriver(self, driverName):
@@ -271,14 +266,11 @@ class LidarFile(object):
             raise generic.LiDARInvalidSetting(msg)
         self.lidarDriver = driverName
         
-    def setLiDARDriverOptions(self, options):
+    def setLiDARDriverOption(self, key, value):
         """
-        Set a list of strings in driver specific format
+        Set a key and value that the specific driver understands
         """
-        if self.mode != CREATE:
-            msg = 'Only valid for creation'
-            raise generic.LiDARInvalidSetting(msg)
-        self.lidarDriverOptions = options
+        self.lidarDriverOptions[key] = value
         
     def setWriteSpatialIndex(self, writeSpatialIndex):
         """
