@@ -616,6 +616,7 @@ typedef struct
     // for waveforms, if present
     fwifc_file waveHandle;
     fwifc_float64_t wave_v_group; // group velocity
+    fwifc_uint32_t wave_number_of_records; // assume the same as number of pulses
 
     // cached waveforms
     PyObject *pCachedWaveform;
@@ -873,13 +874,14 @@ PyObject *pOptionDict;
             return -1;
         }
 
-        /*fwifc_uint32_t number_of_records, nn;
-        fwifc_tell(self->waveHandle, &nn);
-        fprintf(stderr, "cur wave %d\n", nn);
+        // get the number of records - can assume this is the same
+        // as the number of pulses - I think.
+        fwifc_uint32_t currposs;
+        fwifc_tell(self->waveHandle, &currposs);
         fwifc_seek(self->waveHandle, 0xFFFFFFFF);
-        fwifc_tell(self->waveHandle, &number_of_records);
-        fwifc_seek(self->waveHandle, nn);
-        fprintf(stderr, "number of wave records %d\n", number_of_records);*/
+        fwifc_tell(self->waveHandle, &self->wave_number_of_records);
+        fwifc_seek(self->waveHandle, currposs);
+        //fprintf(stderr, "number of wave records %d\n", self->wave_number_of_records);*/
     }
     else
     {
@@ -1167,10 +1169,19 @@ static PyObject *PyRieglScanFile_getPulsesRead(PyRieglScanFile *self, void *clos
     return PyLong_FromSsize_t(self->pReader->getNumPulsesReadFile());
 }
 
+static PyObject *PyRieglScanFile_getNumWaveRecords(PyRieglScanFile *self, void *closure)
+{
+    if( self->waveHandle != NULL )
+        return PyLong_FromLong(self->wave_number_of_records);
+    else
+        Py_RETURN_NONE;
+}
+
 /* get/set */
 static PyGetSetDef PyRieglScanFile_getseters[] = {
     {"finished", (getter)PyRieglScanFile_getFinished, NULL, "Get Finished reading state", NULL}, 
     {"pulsesRead", (getter)PyRieglScanFile_getPulsesRead, NULL, "Get number of pulses read", NULL},
+    {"numWaveRecords", (getter)PyRieglScanFile_getNumWaveRecords, NULL, "Get number of waveform records in file", NULL},
     {NULL}  /* Sentinel */
 };
 

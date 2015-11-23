@@ -283,9 +283,14 @@ class RieglFile(generic.LiDARFile):
         
     def getTotalNumberPulses(self):
         """
-        No idea how to find out how many pulses so unsupported
+        We can assume that is there were waveforms present then
+        the number of waveforms is equal to the number of pulses.
+        Otherwise, no idea how to find out how many pulses so unsupported
         """
-        raise generic.LiDARFunctionUnsupported()
+        if self.haveWave:
+            return self.scanFile.numWaveRecords
+        else:
+            raise generic.LiDARFunctionUnsupported()
 
     def writeData(self, pulses=None, points=None, transmitted=None, 
                 received=None, waveformInfo=None):
