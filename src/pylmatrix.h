@@ -68,7 +68,7 @@ public:
         
         m_nRows = PyArray_DIM(pNumpyArray, 0);
         m_nCols = PyArray_DIM(pNumpyArray, 1);
-        m_pData = (T*)malloc(sizeof(T) * nRows * nCols);
+        m_pData = (T*)malloc(sizeof(T) * m_nRows * m_nCols);
         T *p;
         for(int r = 0; r < m_nRows; ++r)
         {

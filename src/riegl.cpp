@@ -22,6 +22,7 @@
 
 #include <Python.h>
 #include "numpy/arrayobject.h"
+#include "numpy/npy_math.h"
 #include "pylvector.h"
 #include "pylmatrix.h"
 
@@ -143,14 +144,16 @@ static SpylidarFieldDefn RieglWaveformInfoFields[] = {
 class RieglReader : public scanlib::pointcloud
 {
 public:
-    RieglReader() : 
+    RieglReader(pylidar::CMatrix<float> *pRotationMatrix, pylidar::CMatrix<float> *pMagneticMatrix) : 
         scanlib::pointcloud(false), 
         m_nTotalPulsesReadFile(0),
         m_nPulsesToIgnore(0),
         m_scanline(0),
         m_scanlineIdx(0),
         m_Pulses(nInitSize, nGrowBy),
-        m_Points(nInitSize, nGrowBy)
+        m_Points(nInitSize, nGrowBy),
+        m_pRotationMatrix(pRotationMatrix),
+        m_pMagneticMatrix(pMagneticMatrix)
     {
     }
 
@@ -289,10 +292,9 @@ protected:
         // do we need these separate?
         pulse.x_Idx = m_scanline;
         pulse.y_Idx = m_scanlineIdx;
-        // TODO: matrix transform
-        pulse.x_Origin = beam_origin[0];
-        pulse.y_Origin = beam_origin[1];
-        pulse.z_Origin = beam_origin[2];
+        // do matrix transform and store result
+        applyTransformation(beam_origin[0], beam_origin[1], beam_origin[2],
+                            &pulse.x_Origin, &pulse.y_Origin, &pulse.z_Origin);
 
         // point idx - start with 0
         // updated when we get a point below.
@@ -356,9 +358,9 @@ protected:
         // Rescale reflectance from dB to papp
         point.rho_app = std::pow(10.0, current_target.reflectance / 10.0);
 
-        point.x = current_target.vertex[0];
-        point.y = current_target.vertex[1];
-        point.z = current_target.vertex[2];
+        // apply transform and store result
+        applyTransformation(current_target.vertex[0], current_target.vertex[1], current_target.vertex[2],
+                            &point.x, &point.y, &point.z);
 
         m_Points.push(&point);
     }
@@ -379,6 +381,37 @@ protected:
         m_scanlineIdx = 0;
     }
 
+    void applyTransformation(double a, double b, double c, double *pX, double *pY, float *pZ)
+    {
+        if( m_pRotationMatrix != NULL )
+        {
+            pylidar::CMatrix<float> input(4, 1);
+            input.set(0, 0, a);
+            input.set(1, 0, b);
+            input.set(2, 0, c);
+            input.set(3, 0, 1.0); // apply transformation (?)
+            pylidar::CMatrix<float> transOut = input.multiply(*m_pRotationMatrix);
+            a = transOut.get(0, 0);
+            b = transOut.get(1, 0);
+            c = transOut.get(2, 0);
+        }
+        if( m_pMagneticMatrix != NULL )
+        {
+            pylidar::CMatrix<float> input(4, 1);
+            input.set(0, 0, a);
+            input.set(1, 0, b);
+            input.set(2, 0, c);
+            input.set(3, 0, 1.0); // apply transformation (?)
+            pylidar::CMatrix<float> transOut = input.multiply(*m_pMagneticMatrix);
+            a = transOut.get(0, 0);
+            b = transOut.get(1, 0);
+            c = transOut.get(2, 0);
+        }
+        *pX = a;
+        *pY = b;
+        *pZ = c;
+    }
+
 private:
     Py_ssize_t m_nTotalPulsesReadFile;
     Py_ssize_t m_nPulsesToIgnore;
@@ -386,6 +419,8 @@ private:
     pylidar::CVector<SRieglPoint> m_Points;
     npy_uint32 m_scanline;
     npy_uint16 m_scanlineIdx;
+    pylidar::CMatrix<float> *m_pRotationMatrix;
+    pylidar::CMatrix<float> *m_pMagneticMatrix;
 };
 
 // This class just reads the 'pose' parameters and is used by the
@@ -609,7 +644,6 @@ typedef struct
     scanlib::buffer *pBuffer;
     RieglReader *pReader;
     bool bFinishedReading;
-    PyObject *pOptionDict;
     pylidar::CMatrix<float> *pMagneticDeclination;
     pylidar::CMatrix<float> *pRotationMatrix;
 
@@ -737,7 +771,6 @@ PyRieglScanFile_dealloc(PyRieglScanFile *self)
     delete self->pBuffer;
     delete self->pReader;
     Py_XDECREF(self->pCachedWaveform);
-    Py_DECREF(self->pOptionDict);
     if( self->pMagneticDeclination != NULL)
         delete self->pMagneticDeclination;
     if( self->pRotationMatrix != NULL )
@@ -789,6 +822,82 @@ PyObject *pOptionDict;
         return -1;
     }
 
+    // Deal with reading options
+    // "ROTATION_MATRIX", "MAGNETIC_DECLINATION"
+    PyObject *pRotationMatrix = PyDict_GetItemString(pOptionDict, "ROTATION_MATRIX");
+    if( pRotationMatrix != NULL )
+    {
+        if( !PyArray_Check(pRotationMatrix) || (PyArray_NDIM(pRotationMatrix) != 2) ||
+            (PyArray_DIM(pRotationMatrix, 0) != 4 ) || (PyArray_DIM(pRotationMatrix, 1) != 4 ) )
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, "ROTATION_MATRIX must be a 4x4 numpy array");    
+            return -1;
+        }
+
+        // ensure Float32
+        PyArrayObject *pRotationMatrixF32 = (PyArrayObject*)PyArray_SimpleNew(PyArray_NDIM(pRotationMatrix),
+                                            PyArray_DIMS(pRotationMatrix), NPY_FLOAT32);
+
+        PyArray_CopyInto(pRotationMatrixF32, (PyArrayObject*)pRotationMatrix);
+        // make our matrix
+        self->pRotationMatrix = new pylidar::CMatrix<float>(pRotationMatrixF32);
+
+        Py_DECREF(pRotationMatrixF32);
+    }
+    else
+    {
+        self->pRotationMatrix = NULL;
+    }
+
+    PyObject *pMagneticDeclination = PyDict_GetItemString(pOptionDict, "MAGNETIC_DECLINATION");
+    if( pMagneticDeclination != NULL )
+    {
+        if( !PyFloat_Check(pMagneticDeclination) )
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, "MAGNETIC_DECLINATION must be a floating point number");
+            return -1;
+        }
+
+        double dMagneticDeclination = PyFloat_AsDouble(pMagneticDeclination);
+        float mdrad = dMagneticDeclination * NPY_PI / 180.0;
+
+        self->pMagneticDeclination = new pylidar::CMatrix<float>(4, 4);
+        self->pMagneticDeclination->set(0, 0, std::cos(mdrad));
+        self->pMagneticDeclination->set(0, 1, -std::sin(mdrad));
+        self->pMagneticDeclination->set(0, 2, 0.0);
+        self->pMagneticDeclination->set(0, 3, 0.0);
+        self->pMagneticDeclination->set(1, 0, std::sin(mdrad));
+        self->pMagneticDeclination->set(1, 1, std::cos(mdrad));
+        self->pMagneticDeclination->set(1, 2, 0.0);
+        self->pMagneticDeclination->set(1, 3, 0.0);
+        self->pMagneticDeclination->set(2, 0, 0.0);
+        self->pMagneticDeclination->set(2, 1, 0.0);
+        self->pMagneticDeclination->set(2, 2, 1.0);
+        self->pMagneticDeclination->set(2, 3, 0.0);
+        self->pMagneticDeclination->set(3, 0, 0.0);
+        self->pMagneticDeclination->set(3, 1, 0.0);
+        self->pMagneticDeclination->set(3, 2, 0.0);
+        self->pMagneticDeclination->set(3, 3, 1.0);
+    }
+    else
+    {    
+        self->pMagneticDeclination = NULL;
+    }
+
     try
     {
         // take a copy of the filename so we can re
@@ -806,7 +915,7 @@ PyObject *pOptionDict;
         self->pBuffer = new scanlib::buffer();
 
         // our reader class
-        self->pReader = new RieglReader();
+        self->pReader = new RieglReader(self->pRotationMatrix, self->pMagneticDeclination);
     }
     catch(scanlib::scanlib_exception e)
     {
@@ -825,11 +934,6 @@ PyObject *pOptionDict;
     self->nCacheWavePulseStart = 0;
     self->nCacheWavePulseEnd = 0;
 
-    Py_INCREF(pOptionDict);
-    self->pOptionDict = pOptionDict;
-
-    self->pMagneticDeclination = NULL;
-    self->pRotationMatrix = NULL;
 
     if( pszWaveFname != NULL )
     {
@@ -918,7 +1022,7 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
         delete self->pReader;
         self->pDecoder = new scanlib::decoder_rxpmarker(self->rc);
         self->pBuffer = new scanlib::buffer();
-        self->pReader = new RieglReader();
+        self->pReader = new RieglReader(self->pRotationMatrix, self->pMagneticDeclination);
         self->pReader->setPulsesToIgnore(nPulseStart);
     }
     else if( nPulseStart > nTotalRead )
