@@ -390,8 +390,9 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
     else:
         windowSizeSq = controls.windowSize * controls.windowSize
         try:
-            nTotalPulses = max([driver.getTotalNumberPulses() for 
-                        driver in driverList])
+            nTotalPulses = max([driver.getTotalNumberPulses() 
+                        if driver.mode != generic.CREATE else -1
+                        for driver in driverList])
         except generic.LiDARFunctionUnsupported:
             # handle the fact that some drivers might not know
             # how many pulses they have in total
@@ -422,7 +423,8 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
         else:
             bMoreToDo = False # assume we have finished
             for driver in driverList:
-                if driver.setPulseRange(currentRange):
+                if (driver.mode != generic.CREATE and 
+                        driver.setPulseRange(currentRange)):
                     # unless there is actually still more data
                     bMoreToDo = True
             # update info class
