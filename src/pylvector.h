@@ -46,7 +46,7 @@ public:
     }
     CVector(npy_intp nStartSize, npy_intp nGrowBy)
     {
-        m_pData = (T*)malloc(nStartSize * sizeof(T));
+        m_pData = (T*)PyArray_malloc(nStartSize * sizeof(T));
         m_nElems = 0;
         m_nTotalSize = nStartSize;
         m_nGrowBy = nGrowBy;
@@ -60,7 +60,7 @@ public:
     void reset()
     {
         if( m_bOwned && ( m_pData != NULL) )
-            free(m_pData);
+            PyArray_free(m_pData);
         m_nElems = 0;
         m_nTotalSize = 0;
         m_nGrowBy = 0;
@@ -83,7 +83,7 @@ public:
         {
             // realloc
             m_nTotalSize += m_nGrowBy;
-            T *pNewData = (T*)realloc(m_pData, m_nTotalSize * sizeof(T));
+            T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * sizeof(T));
             if( pNewData == NULL )
             {
                 throw std::bad_alloc();
@@ -169,7 +169,7 @@ public:
         // resize this one down
         m_nElems = nUpper;
         m_nTotalSize = nUpper;
-        T *pNewData = (T*)realloc(m_pData, m_nTotalSize * sizeof(T));
+        T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * sizeof(T));
         if( pNewData == NULL )
         {
             throw std::bad_alloc();
@@ -210,7 +210,7 @@ public:
         if( nNewTotalSize > m_nTotalSize )
         {
             m_nTotalSize = nNewTotalSize;
-            T *pNewData = (T*)realloc(m_pData, m_nTotalSize * sizeof(T));
+            T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * sizeof(T));
             if( pNewData == NULL )
             {
                 throw std::bad_alloc();

@@ -101,6 +101,7 @@ static SpylidarFieldDefn fields[] = {
 */
 /* Wrap an existing C array of structures and return as a numpy array */
 /* Python will free data when finished */
+/* Use PyArray_malloc to obtain the memory */
 PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn);
 
 #ifdef __cplusplus
