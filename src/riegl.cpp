@@ -124,8 +124,8 @@ typedef struct {
     npy_uint16 range_to_waveform_start;
     npy_uint64 received_start_idx;
     npy_uint8  channel;
-    float      trans_wave_gain;
-    float      trans_wave_offset;
+    float      receive_wave_gain;
+    float      receive_wave_offset;
 } SRieglWaveformInfo;
 
 /* field info for pylidar_structArrayToNumpy */
@@ -134,8 +134,8 @@ static SpylidarFieldDefn RieglWaveformInfoFields[] = {
     CREATE_FIELD_DEFN(SRieglWaveformInfo, range_to_waveform_start, 'u'),
     CREATE_FIELD_DEFN(SRieglWaveformInfo, received_start_idx, 'u'),
     CREATE_FIELD_DEFN(SRieglWaveformInfo, channel, 'u'),
-    CREATE_FIELD_DEFN(SRieglWaveformInfo, trans_wave_gain, 'f'),
-    CREATE_FIELD_DEFN(SRieglWaveformInfo, trans_wave_offset, 'f'),
+    CREATE_FIELD_DEFN(SRieglWaveformInfo, receive_wave_gain, 'f'),
+    CREATE_FIELD_DEFN(SRieglWaveformInfo, receive_wave_offset, 'f'),
     {NULL} // Sentinel
 };
 
@@ -1219,8 +1219,8 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
                 info.received_start_idx = nRecStartIdx;
                 info.channel = psbl->channel;
                 // TODO: do we need these?
-                info.trans_wave_gain = 1.0;
-                info.trans_wave_offset = 0.0;
+                info.receive_wave_gain = 1.0;
+                info.receive_wave_offset = 0.0;
                 waveInfo.push(&info);
                 waveformCount++;
 
