@@ -176,23 +176,55 @@ class RieglFile(generic.LiDARFile):
         
         return points
         
-    def readWaveformInfo(self):
+    def readWaveforms(self):
         """
-        2d structured masked array containing information
-        about the waveforms.
+        Internal method. Returns both the waveform info
+        and the received formatted in the appropriate way.
         """
         if not self.haveWave:
-            return None
+            return None, None
         
         if self.lastWaveRange is None or self.range != self.lastWaveRange:
             
             info, received, st, cnt = self.scanFile.readWaveforms(self.range.startPulse, 
                                     self.range.endPulse)
             self.lastWaveRange = self.range        
-            self.lastWaveInfo = info
-            self.lastReceived = received
+            
+            # ok format the waveform info into a 2d (by pulse) structure using
+            # the start and count fields (that connect with the pulse) 
+            # returned from scanFile.readWaveforms
+            wave_idx, wave_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                                        st, cnt)
+            
+            self.lastWaveInfo = info[wave_idx]
+            # workaround - seems a structured array returned from
+            # C doesn't work with masked arrays. The dtype looks different.
+            # TODO: check this with a later numpy
+            self.lastWaveInfo = self.subsetColumns(self.lastWaveInfo, 
+                                    self.lastWaveInfo.dtype.names)
+            
+            self.lastWaveInfo = numpy.ma.array(self.lastWaveInfo, mask=wave_idx_mask)
+            
+            # now the waveforms. Use the just created 2d array of waveform info's to
+            # create the 3d one. TODO: sort by channel?
+            idx = self.lastWaveInfo['RECEIVED_START_IDX']
+            cnt = self.lastWaveInfo['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
+            
+            recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                                        idx, cnt)
+            self.lastReceived = received[recv_idx]
+            self.lastReceived = numpy.ma.array(self.lastReceived, mask=recv_idx_mask)
+            
+        return self.lastWaveInfo, self.lastReceived
+        
+    def readWaveformInfo(self):
+        """
+        3d structured masked array containing information
+        about the waveforms.
+        """
+        waveInfo, recv = self.readWaveforms()
 
-        return self.lastWaveInfo
+        return waveInfo
         
     def readTransmitted(self):
         """
@@ -203,30 +235,13 @@ class RieglFile(generic.LiDARFile):
     def readReceived(self):
         """
         Read the received waveform for all pulses
-        returns a 2d masked array
+        returns a 3d masked array
+        First axis is the waveform bin.
+        Second axis is waveform number and last is pulse.
         """
-        if not self.haveWave:
-            return None
-            
-        if self.lastWaveRange is None or self.range != self.lastWaveRange:
-            
-            info, received, st, cnt = self.scanFile.readWaveforms(self.range.startPulse, 
-                                    self.range.endPulse)
-            self.lastWaveRange = self.range        
-            self.lastWaveInfo = info
-            self.lastReceived = received
-
-
-        nReturns = self.lastWaveInfo['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
-        startIdxs = self.lastWaveInfo['RECEIVED_START_IDX']
-
-        rec_idx, rec_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(        
-                startIdxs, nReturns)
-                
-        receivedByPulse = self.lastReceived[rec_idx]
-        receivedByPulse = numpy.ma.array(receivedByPulse, mask=rec_idx_mask)
+        waveInfo, recv = self.readWaveforms()
         
-        return receivedByPulse
+        return recv
 
     def hasSpatialIndex(self):
         """

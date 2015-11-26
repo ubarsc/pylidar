@@ -1202,6 +1202,7 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
 
         // go through each of the samples
         fwifc_sbl_t* psbl = psbl_first;
+        waveformCount = 0;
         for (fwifc_uint32_t sbi = 0; sbi < sbl_count; ++sbi)
         {
             if( psbl->channel == 3 ) // Reference time
@@ -1221,6 +1222,7 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
                 info.trans_wave_gain = 1.0;
                 info.trans_wave_offset = 0.0;
                 waveInfo.push(&info);
+                waveformCount++;
 
                 // now the actual waveform
                 for(fwifc_uint32_t nsample = 0; nsample < psbl->sample_count; nsample++)
@@ -1235,7 +1237,6 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
         }
 
         // update the info for the pulses
-        waveformCount = sbl_count;
         wfmStart.push(&waveformStartIdx);
         wfmNumber.push(&waveformCount);
         waveformStartIdx += waveformCount;
