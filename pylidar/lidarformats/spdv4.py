@@ -167,6 +167,34 @@ SPDV4_WAVEFORM_FLAGS_BASELINE_FIXED = 4
 SPDV4_VERSION_MAJOR = 3
 SPDV4_VERSION_MINOR = 0
 
+@jit
+def flatten3dWaveformData(wavedata, inmask, nrecv, flattened):
+    """
+    Helper routine that flattens transmitted or received (from another driver)
+    into something that can be written. 
+    wavedata is either the (3d) transmitted or received
+    inmask is the .mask for wavedata
+    nrecv is the output array for waveformInfo's NUMBER_OF_WAVEFORM_RECEIVED_BINS etc
+    flattened is the flattened version of wavedata
+    """
+    nbins = wavedata.shape[0]
+    nwaves = wavedata.shape[1]
+    npulses = wavedata.shape[2]
+    nrecv_idx = 0
+    flat_idx = 0
+    for p in range(npulses):
+        for w in range(nwaves):
+            c = 0
+            for b in range(nbins):
+                if not inmask[b, w, p]:
+                    c += 1
+                    flattened[flat_idx] = wavedata[b, w, p]
+                    flat_idx += 1
+            if c > 0:
+                nrecv[nrecv_idx] = c
+                nrecv_idx += 1
+    
+
 class SPDV4SpatialIndex(object):
     """
     Class that hides the details of different Spatial Indices
@@ -1384,25 +1412,21 @@ spatial index will be recomputed on the fly"""
                 self.lastTransSpace.updateBoolArray(flatMask)
                 
         else:
-            ntrans = transmitted.count(axis=1).flatten()
+
+            # create arrays for flatten3dWaveformData
+            firstField = waveformInfo.dtype.names[0]
+            ntrans = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
+            flattened =  numpy.empty(transmitted.count(), dtype=transmitted.dtype)
+            
+            flatten3dWaveformData(received.data, received.mask, nrecv, flattened)
             currTransCount = 0
             if 'TRANSMITTED' in self.fileHandle['DATA']:
                 transHandle = self.fileHandle['DATA']['TRANSMITTED']
                 currTransCount = transHandle.shape[0]
             
             trans_start = numpy.cumsum(ntrans) - ntrans[0] + currTransCount
-            # unfortunately points.compressed() doesn't work
-            # for structured arrays. Use our own version instead
-            transCount = transmitted.count()
-            outTrans = numpy.empty(transCount, dtype=transmitted.data.dtype)
-            # not needed, but have to provide
-            returnNumber = numpy.empty(transCount, 
-                                dtype=numpy.uint32)
-                                    
-            gridindexutils.flattenMaskedStructuredArray3d(transmitted.data, 
-                        transmitted.mask, outTrans, returnNumber)
-                
-            transmitted = outTrans
+
+            transmitted = flattened                
                 
         return transmitted, trans_start, ntrans
         
@@ -1468,25 +1492,21 @@ spatial index will be recomputed on the fly"""
                 self.lastRecvSpace.updateBoolArray(flatMask)
 
         else:
-            nrecv = received.count(axis=1).flatten()
+    
+            # create arrays for flatten3dWaveformData
+            firstField = waveformInfo.dtype.names[0]
+            nrecv = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
+            flattened =  numpy.empty(received.count(), dtype=received.dtype)
+            
+            flatten3dWaveformData(received.data, received.mask, nrecv, flattened)
             currRecvCount = 0
             if 'RECEIVED' in self.fileHandle['DATA']:
                 recvHandle = self.fileHandle['DATA']['RECEIVED']
                 currRecvCount = recvHandle.shape[0]
             
             recv_start = numpy.cumsum(nrecv) - nrecv[0] + currRecvCount
-            # unfortunately points.compressed() doesn't work
-            # for structured arrays. Use our own version instead
-            recvCount = received.count()
-            outRecv = numpy.empty(recvCount, dtype=received.data.dtype)
-            # not needed, but have to provide
-            returnNumber = numpy.empty(recvCount, 
-                                dtype=numpy.uint32)
-
-            gridindexutils.flattenMaskedStructuredArray3d(received.data, 
-                        received.mask, outRecv, returnNumber)
                 
-            received = outRecv
+            received = flattened
 
         return received, recv_start, nrecv
 
@@ -1496,7 +1516,7 @@ spatial index will be recomputed on the fly"""
         """
     
         firstField = waveformInfo.dtype.names[0]
-        # matches the pulses
+        
         nwaveforms = waveformInfo[firstField].count(axis=0)
         waveHandle = self.fileHandle['DATA']['WAVEFORMS']
         currWaveformsCount = 0
@@ -1652,7 +1672,7 @@ spatial index will be recomputed on the fly"""
             if pulses.ndim != 1:
                 msg = 'pulses must be 1d as returned from getPulses'
                 raise generic.LiDARInvalidData(msg)
-            if points.ndim != 2:
+            if points is not None and points.ndim != 2:
                 msg = 'points must be 2d as returned from getPointsByPulse'
                 raise generic.LiDARInvalidData(msg)
         
@@ -1685,6 +1705,9 @@ spatial index will be recomputed on the fly"""
                 
         # deal with situation where there is transmitted but not
         # received etc. Assume other wise they will be the same length.
+        if points is None and pulses is not None:
+            pts_start = numpy.zeros_like(pulses, dtype=numpy.uint64)
+            nreturns = numpy.zeros_like(pulses, dtype=numpy.uint8)
         if (recv_start is None and nrecv is None and trans_start is not None 
                     and ntrans is not None):
             recv_start = numpy.zeros_like(trans_start)

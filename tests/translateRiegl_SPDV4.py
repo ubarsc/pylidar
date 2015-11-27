@@ -128,11 +128,12 @@ def transFunc(data, rangeDict):
     points = data.input1.getPointsByPulse()
     waveformInfo = data.input1.getWaveformInfo()
     revc = data.input1.getReceived()
-    print(revc.shape)
     
-    data.output1.translateFieldNames(data.input1, points, 
+    if points is not None:
+        data.output1.translateFieldNames(data.input1, points, 
             lidarprocessor.ARRAY_TYPE_POINTS)
-    data.output1.translateFieldNames(data.input1, pulses, 
+    if pulses is not None:
+        data.output1.translateFieldNames(data.input1, pulses, 
             lidarprocessor.ARRAY_TYPE_PULSES)
             
     # set scaling
@@ -177,10 +178,17 @@ def doTranslation(internalrotation, magneticdeclination, riegl, spd):
     # now read through the file and get the range of values for fields 
     # that need scaling.
     print('Determining range of input data...')
-    
+
+    #import pickle    
     rangeDict = {}
+    #fh = open('range.dat', 'rb')
+    #rangeDict = pickle.load(fh)
+    #fh.close()
     lidarprocessor.doProcessing(rangeFunc, dataFiles, controls=controls, 
                     otherArgs=rangeDict)
+    #fh = open('range.dat', 'wb')
+    #pickle.dump(rangeDict, fh)
+    #fh.close()
 
     print('Coverting to SPD V4...')
     dataFiles.output1 = lidarprocessor.LidarFile(spd, lidarprocessor.CREATE)

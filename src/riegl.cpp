@@ -1239,7 +1239,7 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
         // update the info for the pulses
         wfmStart.push(&waveformStartIdx);
         wfmNumber.push(&waveformCount);
-        waveformStartIdx += waveformCount;
+        waveformStartIdx++;
     }
 
     // extract values as numpy arrays
