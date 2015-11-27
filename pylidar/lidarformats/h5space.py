@@ -155,8 +155,9 @@ class H5Space(object):
         # convert the bool array into it
         start = numpy.empty(1, dtype=numpy.uint64)
         count = numpy.empty(1, dtype=numpy.uint64)
-        convertBoolToHDF5Space(boolArray, boolStart, self.space.id, start, count,
-            H5Sselect_hyperslab, h5py.h5s.SELECT_SET, h5py.h5s.SELECT_OR)
+        if boolArray.size > 0:
+            convertBoolToHDF5Space(boolArray, boolStart, self.space.id, start, count,
+                H5Sselect_hyperslab, h5py.h5s.SELECT_SET, h5py.h5s.SELECT_OR)
         
         # grab these for updateBoolArray()    
         self.boolArray = boolArray
