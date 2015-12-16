@@ -436,9 +436,9 @@ public:
         m_fLong(0),
         m_fHeight(0),
         m_fHMSL(0),
-        m_fRoll(NAN),
-        m_fPitch(NAN),
-        m_fYaw(NAN),
+        m_fRoll(NPY_NAN),
+        m_fPitch(NPY_NAN),
+        m_fYaw(NPY_NAN),
         m_bHaveData(false)
     {
 
@@ -485,14 +485,14 @@ public:
             PyDict_SetItemString(pDict, "LONGITUDE", PyFloat_FromDouble(m_fLong));
             PyDict_SetItemString(pDict, "HEIGHT", PyFloat_FromDouble(m_fHeight));
             PyDict_SetItemString(pDict, "HMSL", PyFloat_FromDouble(m_fHMSL));
-            if( !isnan(m_fRoll) )
+            if( !npy_isnan(m_fRoll) )
                 PyDict_SetItemString(pDict, "ROLL", PyFloat_FromDouble(m_fRoll));
-            if( !isnan(m_fPitch) )
+            if( !npy_isnan(m_fPitch) )
             PyDict_SetItemString(pDict, "PITCH", PyFloat_FromDouble(m_fPitch));
-            if( !isnan(m_fYaw) )
+            if( !npy_isnan(m_fYaw) )
                 PyDict_SetItemString(pDict, "YAW", PyFloat_FromDouble(m_fYaw));
 
-            if( !isnan(m_fRoll) && !isnan(m_fPitch) )
+            if( !npy_isnan(m_fRoll) && !npy_isnan(m_fPitch) )
             {
                 // now work out rotation matrix
                 // pitch matrix
@@ -574,11 +574,11 @@ protected:
         m_fLong = arg.LON;
         m_fHeight = arg.HEIGHT;
         m_fHMSL = arg.HMSL;
-        if( !isnan(arg.roll))
+        if( !npy_isnan(arg.roll))
             m_fRoll = arg.roll * pi / 180.0;
-        if( !isnan(arg.pitch))
+        if( !npy_isnan(arg.pitch))
             m_fPitch = arg.pitch * pi / 180.0;
-        if( !isnan(arg.yaw))
+        if( !npy_isnan(arg.yaw))
             m_fYaw = arg.yaw * pi / 180.0;
         else
             m_fYaw = 0; // same as original code. Correct??
@@ -592,11 +592,11 @@ protected:
         m_fLong = arg.LON;
         m_fHeight = arg.HEIGHT;
         m_fHMSL = arg.HMSL;
-        if( !isnan(arg.roll))
+        if( !npy_isnan(arg.roll))
             m_fRoll = arg.roll * pi / 180.0;
-        if( !isnan(arg.pitch))
+        if( !npy_isnan(arg.pitch))
             m_fPitch = arg.pitch * pi / 180.0;
-        if( !isnan(arg.yaw))
+        if( !npy_isnan(arg.yaw))
             m_fYaw = arg.yaw * pi / 180.0;
         else
             m_fYaw = 0; // same as original code. Correct??
@@ -610,11 +610,11 @@ protected:
         m_fLong = arg.LON;
         m_fHeight = arg.HEIGHT;
         m_fHMSL = arg.HMSL;
-        if( !isnan(arg.roll))
+        if( !npy_isnan(arg.roll))
             m_fRoll = arg.roll * pi / 180.0;
-        if( !isnan(arg.pitch))
+        if( !npy_isnan(arg.pitch))
             m_fPitch = arg.pitch * pi / 180.0;
-        if( !isnan(arg.yaw))
+        if( !npy_isnan(arg.yaw))
             m_fYaw = arg.yaw * pi / 180.0;
         else
             m_fYaw = 0; // same as original code. Correct??

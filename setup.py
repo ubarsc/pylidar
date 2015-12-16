@@ -21,6 +21,7 @@ Install script for PyLidar
 from __future__ import print_function
 
 import os
+import sys
 from numpy.distutils.core import setup, Extension
 
 import pylidar
@@ -47,15 +48,26 @@ def addRieglDriver(extModules, cxxFlags):
         print('Building Riegl Extension...')
         rivlibRoot = os.environ['RIVLIB_ROOT']
         riwavelibRoot = os.environ['RIWAVELIB_ROOT']
+        rivlibs = ['scanlib-mt', 'riboost_chrono-mt', 
+                     'riboost_date_time-mt', 'riboost_filesystem-mt', 
+                     'riboost_regex-mt', 'riboost_system-mt', 
+                     'riboost_thread-mt']
+        riwavelibs = ['wfmifc-mt']
+        # on Windows the libs do not follow the normal naming convention
+        # and start with 'lib'. On Linux the compiler prepends this automatically
+        # but on Windows we need to do it manually
+        if sys.platform == 'win32':
+            rivlibs = ['lib' + name for name in rivlibs]
+            
+        # all the libs
+        libs = rivlibs + riwavelibs
+        
         rieglModule = Extension(name='pylidar.lidarformats._riegl', 
                 sources=['src/riegl.cpp', 'src/pylidar.c'],
                 include_dirs=[os.path.join(rivlibRoot, 'include'),
                                 os.path.join(riwavelibRoot, 'include')],
                 extra_compile_args=cxxFlags,
-                libraries=['scanlib-mt', 'riboost_chrono-mt', 
-                     'riboost_date_time-mt', 'riboost_filesystem-mt', 
-                     'riboost_regex-mt', 'riboost_system-mt', 
-                     'riboost_thread-mt', 'wfmifc-mt'],
+                libraries=libs,
                 library_dirs=[os.path.join(rivlibRoot, 'lib'),
                                 os.path.join(riwavelibRoot, 'lib')])
                  

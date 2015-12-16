@@ -64,6 +64,7 @@ PyObject *bytesKey;
 char *pszElementName;
 PyObject *pOffset;
 PyArray_Descr *pSubDescr;
+PyArray_Descr *pDescr;
 
     if( ! PyArray_Check(pArray) )
     {
@@ -71,7 +72,7 @@ PyArray_Descr *pSubDescr;
         return 0;
     }
 
-    PyArray_Descr *pDescr = PyArray_DESCR(pArray);
+    pDescr = PyArray_DESCR(pArray);
     if( pDescr == NULL )
     {
         pylidar_error("Cannot get array description");
