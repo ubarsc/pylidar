@@ -34,7 +34,7 @@ class CmdArgs(object):
             help="Use information within input file to find instrument rotation information")
         p.add_option("--magneticdeclination", dest="magneticdeclination",
             default=0.0, type="float")
-        p.add_option("--reigl", dest="riegl",
+        p.add_option("--riegl", dest="riegl",
             help="input Riegl .rxp file")
         p.add_option("--spd", dest="spd",
             help="output SPD V4 file name")
