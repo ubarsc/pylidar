@@ -77,7 +77,6 @@ def setDefaultDrivers():
     (And for LiDAR):
 
     * $PYLIDAR_DFLT_LIDARDRIVER
-    * $PYLIDAR_DFLT_LIDARDRIVEROPTIONS
     
     If PYLIDAR_DFLT_RASTERDRIVER is set, then it should be a gdal short driver name
     If PYLIDAR_DFLT_RASTERDRIVEROPTIONS is set, it should be a space-separated list
@@ -85,20 +84,21 @@ def setDefaultDrivers():
     be appropriate for the selected GDAL driver. This can also be 'None'
     in which case an empty list of creation options is passed to the driver.
     
-    If not otherwise supplied, the default is to use the HFA driver, with compression. 
+    If not otherwise supplied, the default is to use what RIOS is set to. 
+    This defaults to he HFA driver with compression. 
         
-    If PYLIDAR_DFLT_LIDARDRIVER is set, then is should be a LiDAR driver anme
-    If PYLIDAR_DFLT_LIDARDRIVEROPTIONS is set it should be a space-separated list
-    of driver creation options and should be appropriate for the selected LiDAR
-    driver. This can also be 'None' in which case an empty list of creation 
-    options is passed to the driver.
-        
-    If not otherwise supplied, the default is to use the SPDV3 driver.
+    If PYLIDAR_DFLT_LIDARDRIVER is set, then is should be a LiDAR driver name
+    If not otherwise supplied, the default is to use the SPDV4 driver.
+    
     """
     global DEFAULT_RASTERDRIVERNAME, DEFAULT_RASTERCREATIONOPTIONS
     global DEFAULT_LIDARDRIVERNAME
-    DEFAULT_RASTERDRIVERNAME = os.getenv('PYLIDAR_DFLT_RASTERDRIVER', default='HFA')
-    DEFAULT_RASTERCREATIONOPTIONS = ['COMPRESSED=TRUE','IGNOREUTM=TRUE']
+    DEFAULT_RASTERDRIVERNAME = os.getenv('PYLIDAR_DFLT_RASTERDRIVER')
+    if DEFAULT_RASTERDRIVERNAME is None:
+        # get from rios
+        from rios import applier
+        DEFAULT_RASTERDRIVERNAME = applier.DEFAULTDRIVERNAME
+        
     creationOptionsStr = os.getenv('PYLIDAR_DFLT_RASTERDRIVEROPTIONS')
     if creationOptionsStr is not None:
         if creationOptionsStr == 'None':
@@ -108,6 +108,10 @@ def setDefaultDrivers():
             DEFAULT_RASTERCREATIONOPTIONS = []
         else:
             DEFAULT_RASTERCREATIONOPTIONS = creationOptionsStr.split()
+    else:
+        # get from rios
+        from rios import applier
+        DEFAULT_RASTERCREATIONOPTIONS = applier.DEFAULTCREATIONOPTIONS
             
     DEFAULT_LIDARDRIVERNAME = os.getenv('PYLIDAR_DFLT_LIDARDRIVER', default='SPDV4')
     # Leave driver options for now - info seems likely to be too complex to hold
