@@ -64,6 +64,26 @@ def addRieglDriver(extModules, cxxFlags):
         print('Riegl Libraries not found.')
         print('If installed set $RIVLIB_ROOT to the install location of RiVLib')
         print('and $RIWAVELIB_ROOT to the install location of the waveform extraction library (riwavelib)')
+        
+def addLasDriver(extModules, cxxFlags):
+    """
+    Decides if the Las driver is to be built. If so
+    adds the Extension class to extModules.
+    """
+    if 'LASTOOLS_ROOT' in os.environ:
+        print('Building Las Extension...')
+        lastoolsRoot = os.environ['LASTOOLS_ROOT']
+        lasModule = Extension(name='pylidar.lidarformats._las',
+                sources=['src/las.cpp', 'src/pylidar.c'],
+                include_dirs=[os.path.join(lastoolsRoot, 'include')],
+                extra_compile_args=cxxFlags,
+                libraries=['las'],
+                library_dirs=[os.path.join(lastoolsRoot, 'lib')])
+                
+        extModules.append(lasModule)
+    else:
+        print('Las library not found.')
+        print('If installed set $LASTOOLS_ROOT to the install location of lastools https://github.com/LAStools/LAStools')
 
 # get any C++ flags
 cxxFlags = getExtraCXXFlags()
@@ -71,6 +91,7 @@ cxxFlags = getExtraCXXFlags()
 # modules
 externalModules = []
 addRieglDriver(externalModules, cxxFlags)
+addLasDriver(externalModules, cxxFlags)
 
 setup(name='pylidar',
       version=pylidar.PYLIDAR_VERSION,
