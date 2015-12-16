@@ -446,13 +446,14 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
         userContainer.info.firstBlock = False
         
         # write anything out that has been queued for output
-        for name in dataFiles.__dict__.keys():
-            userClass = getattr(userContainer, name)
-            if isinstance(userClass, list):
-                for userClassItem in userClass:
-                    userClassItem.flush()
-            else:
-                userClass.flush()
+        if bMoreToDo:
+            for name in dataFiles.__dict__.keys():
+                userClass = getattr(userContainer, name)
+                if isinstance(userClass, list):
+                    for userClassItem in userClass:
+                        userClassItem.flush()
+                else:
+                    userClass.flush()
         
         if controls.spatialProcessing:
             # update to read in next block
