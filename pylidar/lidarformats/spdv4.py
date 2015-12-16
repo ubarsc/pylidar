@@ -214,16 +214,18 @@ class SPDV4SpatialIndex(object):
         xMax = xMin + (shape[1] * binSize)
         yMin = yMax - (shape[0] * binSize)
         wkt = fileAttrs['SPATIAL_REFERENCE']
-            
-        self.pixelGrid = pixelgrid.PixelGridDefn(projection=wkt, xMin=xMin,
+        if shape[0] != 0 or shape[1] != 0:        
+            self.pixelGrid = pixelgrid.PixelGridDefn(projection=wkt, xMin=xMin,
                 xMax=xMax, yMin=yMin, yMax=yMax, xRes=binSize, yRes=binSize)
+        else:
+            self.pixelGrid = None
                 
     def close(self):
         """
         Call to write data, close files etc
         """
         # update the header
-        if self.mode == generic.CREATE:
+        if self.mode == generic.CREATE and self.pixelGrid is not None:
             fileAttrs = self.fileHandle.attrs
             fileAttrs['BIN_SIZE'] = self.pixelGrid.xRes
             nrows, ncols = self.pixelGrid.getDimensions()
@@ -307,7 +309,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
                 self.si_idx = group['BIN_OFFSETS'][...]
                 
     def close(self):
-        if self.mode == generic.CREATE:
+        if self.mode == generic.CREATE and self.si_cnt is not None:
             # create it if it does not exist
             if SPATIALINDEX_GROUP not in self.fileHandle:
                 group = self.fileHandle.create_group(SPATIALINDEX_GROUP)
