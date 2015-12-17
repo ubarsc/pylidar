@@ -92,8 +92,69 @@ static SpylidarFieldDefn LasPointFields[] = {
 /* Python object wrapping a LASreader */
 typedef struct {
     LASreader *pReader;
+    bool bBuildPulses;
 
 } PyLasFile;
+
+static const char *SupportedDriverOptions[] = {"BUILD_PULSES", NULL};
+static PyObject *las_getSupportedOptions(PyObject *self, PyObject *args)
+{
+    // how many do we have?
+    Py_ssize_t n;
+    for( n = 0; SupportedDriverOptions[n] != NULL; n++ )
+    {
+        // do nothing
+    }
+
+    // now do it for real
+    PyObject *pTuple = PyTuple_New(n);
+    for( n = 0; SupportedDriverOptions[n] != NULL; n++ )
+    {
+        PyObject *pStr;
+        const char *psz = SupportedDriverOptions[n];
+#if PY_MAJOR_VERSION >= 3
+        pStr = PyUnicode_FromString(psz);
+#else
+        pStr = PyString_FromString(psz);
+#endif
+        PyTuple_SetItem(pTuple, n, pStr);
+    }
+
+    return pTuple;
+}
+
+// module methods
+static PyMethodDef module_methods[] = {
+    {"getSupportedOptions", (PyCFunction)las_getSupportedOptions, METH_NOARGS,
+        "Get a tuple of supported driver options"},
+    {NULL}  /* Sentinel */
+};
+
+#if PY_MAJOR_VERSION >= 3
+static int las_traverse(PyObject *m, visitproc visit, void *arg) 
+{
+    Py_VISIT(GETSTATE(m)->error);
+    return 0;
+}
+
+static int las_clear(PyObject *m) 
+{
+    Py_CLEAR(GETSTATE(m)->error);
+    return 0;
+}
+
+static struct PyModuleDef moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "_las",
+        NULL,
+        sizeof(struct LasState),
+        module_methods,
+        NULL,
+        las_traverse,
+        las_clear,
+        NULL
+};
+#endif
 
 /* destructor - close and delete tc */
 static void 
@@ -111,17 +172,111 @@ static int
 PyLasFile_init(PyLasFile *self, PyObject *args, PyObject *kwds)
 {
 char *pszFname = NULL;
+PyObject *pOptionDict;
 
-    if( !PyArg_ParseTuple(args, "s", &pszFname ) )
+    if( !PyArg_ParseTuple(args, "sO", &pszFname, &pOptionDict ) )
     {
         return -1;
     }
 
+    if( !PyDict_Check(pOptionDict) )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
+        return -1;
+    }
+
+    self->bBuildPulses = true;
+
+    /* Check creation options */
+    PyObject *pBuildPulses = PyDict_GetItemString(pOptionDict, "BUILD_PULSES");
+    if( pBuildPulses != NULL )
+    {
+        if( PyBool_Check(pBuildPulses) )
+        {
+            self->bBuildPulses = (pBuildPulses == Py_True);
+        }
+        else
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, "BUILD_PULSES must be true or false");    
+            return -1;
+        }
+    }
+
+    LASreadOpener lasreadopener;
+    lasreadopener.set_file_name(pszFname);
+    self->pReader = lasreadopener.open();
+
+    if( self->pReader  == NULL )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Unable to open las file");
+        return -1;
+    }
+
+
     return 0;
+}
+
+/* calculate the length in case they change in future */
+#define GET_LENGTH(x) (sizeof(x) / sizeof(x[0]))
+
+static PyObject *PyLasFile_readHeader(PyLasFile *self, PyObject *args)
+{
+    PyObject *pHeaderDict = PyDict_New();
+    LASheader *pHeader = &self->pReader->header;
+
+#if PY_MAJOR_VERSION >= 3
+    PyObject *pVal = PyUnicode_FromStringAndSize(pHeader->file_signature, 
+                GET_LENGTH(pHeader->file_signature));
+#else
+    PyObject *pVal = PyString_FromStringAndSize(pHeader->file_signature, 
+                GET_LENGTH(pHeader->file_signature));
+#endif
+    PyDict_SetItemString(pHeaderDict, "file_signature", pVal);
+
+    pVal = PyLong_FromLong(pHeader->file_source_ID);
+    PyDict_SetItemString(pHeaderDict, "file_source_ID", pVal);
+
+    pVal = PyLong_FromLong(pHeader->global_encoding);
+    PyDict_SetItemString(pHeaderDict, "global_encoding", pVal);
+
+    pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_1);
+    PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_1", pVal);
+
+    pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_2);
+    PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_2", pVal);
+
+    pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_3);
+    PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_3", pVal);
+    
+    //pVal = 
+    //PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_4", pVal);
+    return pHeaderDict;
 }
 
 /* Table of methods */
 static PyMethodDef PyLasFile_methods[] = {
+    {"readHeader", (PyCFunction)PyLasFile_readHeader, METH_NOARGS, NULL},
     {NULL}  /* Sentinel */
 };
 
@@ -175,37 +330,6 @@ static PyTypeObject PyLasFileType = {
     0,                         /* tp_alloc */
     0,                 /* tp_new */
 };
-
-// module methods
-static PyMethodDef module_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
-#if PY_MAJOR_VERSION >= 3
-static int las_traverse(PyObject *m, visitproc visit, void *arg) 
-{
-    Py_VISIT(GETSTATE(m)->error);
-    return 0;
-}
-
-static int las_clear(PyObject *m) 
-{
-    Py_CLEAR(GETSTATE(m)->error);
-    return 0;
-}
-
-static struct PyModuleDef moduledef = {
-        PyModuleDef_HEAD_INIT,
-        "_las",
-        NULL,
-        sizeof(struct LasState),
-        module_methods,
-        NULL,
-        las_traverse,
-        las_clear,
-        NULL
-};
-#endif
 
 #if PY_MAJOR_VERSION >= 3
 

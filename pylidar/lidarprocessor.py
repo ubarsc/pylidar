@@ -38,6 +38,12 @@ try:
 except ImportError:
     # libraries not available
     pass
+try:
+    from .lidarformats import las
+except ImportError:
+    # library not available
+    pass
+    
 from . import userclasses
 
 # to be passed to ImageData and LidarData class constructors
