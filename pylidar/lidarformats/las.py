@@ -78,8 +78,9 @@ class LasFile(generic.LiDARFile):
         except:
             msg = 'cannot open as las file'
             raise generic.LiDARFileException(msg)
-            
-        print('opened las ok')
+
+        self.header = None
+        self.range = None
 
     @staticmethod        
     def getDriverName():
@@ -87,21 +88,27 @@ class LasFile(generic.LiDARFile):
         
     def close(self):
         self.lasFile = None
+        self.range = None
         
     def hasSpatialIndex(self):
         """
-        TODO: check
+        Returns True if the las file has an associated spatial
+        index.
+        
         """
-        return False
+        return self.lasFile.hasSpatialIndex
     
     def setPulseRange(self, pulseRange):
         """
         Sets the PulseRange object to use for non spatial
         reads/writes.
         """
-        # TODO:
-        pass
-
+        self.range = copy.copy(pulseRange)
+        # return True if we can still read data
+        # we just assume we can until we find out
+        # after a read that we can't
+        return not self.lasFile.finished
+                                        
     def readPointsForRange(self, colNames=None):
         # TODO:
         pass
@@ -129,8 +136,17 @@ class LasFile(generic.LiDARFile):
         pass        
         
     def getTotalNumberPulses(self):
-        # TODO:
-        pass
+        """
+        If BUILD_PULSES == False then the number of pulses
+        will equal the number of points and we can return that.
+        Otherwise we have no idea how many so we raise an exception
+        to flag that.
+        
+        """
+        if not self.lasFile.build_pulses:
+            return self.getHeaderValue('number_of_point_records')
+        else:
+            raise generic.LiDARFunctionUnsupported()
         
     def writeData(self, pulses=None, points=None, transmitted=None, 
                 received=None, waveformInfo=None):
@@ -146,8 +162,14 @@ class LasFile(generic.LiDARFile):
         raise generic.LiDARWritingNotSupported(msg)
                 
     def getHeader(self):
-        # TODO:
-        return {}
+        """
+        Return the Las header as a dictionary.
+        
+        """
+        if self.header is None:
+            self.header = self.lasFile.readHeader()
+            
+        return self.header
         
     def getHeaderValue(self, name):
         """

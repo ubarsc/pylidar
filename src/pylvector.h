@@ -52,6 +52,16 @@ public:
         m_nGrowBy = nGrowBy;
         m_bOwned = true;
     }
+    // takes copy
+    CVector(T *pData, npy_intp nSize, npy_intp nGrowBy=1)
+    {
+        m_pData = (T*)PyArray_malloc(nSize);
+        memcpy(m_pData, pData, nSize);
+        m_nElems = nSize / sizeof(T);
+        m_nTotalSize = m_nElems;
+        m_nGrowBy = nGrowBy;
+        m_bOwned = true;
+    }
     ~CVector()
     {
         reset();

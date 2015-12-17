@@ -91,9 +91,10 @@ static SpylidarFieldDefn LasPointFields[] = {
 
 /* Python object wrapping a LASreader */
 typedef struct {
+    PyObject_HEAD
     LASreader *pReader;
     bool bBuildPulses;
-
+    bool bFinished;
 } PyLasFile;
 
 static const char *SupportedDriverOptions[] = {"BUILD_PULSES", NULL};
@@ -156,7 +157,7 @@ static struct PyModuleDef moduledef = {
 };
 #endif
 
-/* destructor - close and delete tc */
+/* destructor - close and delete */
 static void 
 PyLasFile_dealloc(PyLasFile *self)
 {
@@ -165,6 +166,7 @@ PyLasFile_dealloc(PyLasFile *self)
         self->pReader->close();
         delete self->pReader;
     }
+    Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 /* init method - open file */
@@ -192,6 +194,7 @@ PyObject *pOptionDict;
         return -1;
     }
 
+    self->bFinished = false;
     self->bBuildPulses = true;
 
     /* Check creation options */
@@ -220,7 +223,7 @@ PyObject *pOptionDict;
     lasreadopener.set_file_name(pszFname);
     self->pReader = lasreadopener.open();
 
-    if( self->pReader  == NULL )
+    if( self->pReader == NULL )
     {
         // raise Python exception
         PyObject *m;
@@ -232,7 +235,6 @@ PyObject *pOptionDict;
         PyErr_SetString(GETSTATE(m)->error, "Unable to open las file");
         return -1;
     }
-
 
     return 0;
 }
@@ -268,20 +270,145 @@ static PyObject *PyLasFile_readHeader(PyLasFile *self, PyObject *args)
 
     pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_3);
     PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_3", pVal);
-    
-    //pVal = 
-    //PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_4", pVal);
+
+    pylidar::CVector<U8> project_ID_GUID_data_4Vector(pHeader->project_ID_GUID_data_4, 
+                            sizeof(pHeader->project_ID_GUID_data_4));    
+    pVal = project_ID_GUID_data_4Vector.getNumpyArray(NPY_UINT8);
+    PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_4", pVal);
+
+    pVal = PyLong_FromLong(pHeader->version_major);
+    PyDict_SetItemString(pHeaderDict, "version_major", pVal);
+
+    pVal = PyLong_FromLong(pHeader->version_minor);
+    PyDict_SetItemString(pHeaderDict, "version_minor", pVal);
+
+#if PY_MAJOR_VERSION >= 3
+    pVal = PyUnicode_FromStringAndSize(pHeader->system_identifier, 
+                GET_LENGTH(pHeader->system_identifier));
+#else
+    pVal = PyString_FromStringAndSize(pHeader->system_identifier, 
+                GET_LENGTH(pHeader->system_identifier));
+#endif
+    PyDict_SetItemString(pHeaderDict, "system_identifier", pVal);
+
+#if PY_MAJOR_VERSION >= 3
+    pVal = PyUnicode_FromStringAndSize(pHeader->generating_software, 
+                GET_LENGTH(pHeader->generating_software));
+#else
+    pVal = PyString_FromStringAndSize(pHeader->generating_software, 
+                GET_LENGTH(pHeader->generating_software));
+#endif
+    PyDict_SetItemString(pHeaderDict, "generating_software", pVal);
+
+    pVal = PyLong_FromLong(pHeader->file_creation_day);
+    PyDict_SetItemString(pHeaderDict, "file_creation_day", pVal);
+
+    pVal = PyLong_FromLong(pHeader->file_creation_year);
+    PyDict_SetItemString(pHeaderDict, "file_creation_year", pVal);
+
+    pVal = PyLong_FromLong(pHeader->header_size);
+    PyDict_SetItemString(pHeaderDict, "header_size", pVal);
+
+    pVal = PyLong_FromLong(pHeader->offset_to_point_data);
+    PyDict_SetItemString(pHeaderDict, "offset_to_point_data", pVal);
+
+    pVal = PyLong_FromLong(pHeader->number_of_variable_length_records);
+    PyDict_SetItemString(pHeaderDict, "number_of_variable_length_records", pVal);
+
+    pVal = PyLong_FromLong(pHeader->point_data_format);
+    PyDict_SetItemString(pHeaderDict, "point_data_format", pVal);
+
+    pVal = PyLong_FromLong(pHeader->point_data_record_length);
+    PyDict_SetItemString(pHeaderDict, "point_data_record_length", pVal);
+
+    pVal = PyLong_FromLong(pHeader->number_of_point_records);
+    PyDict_SetItemString(pHeaderDict, "number_of_point_records", pVal);
+
+    pylidar::CVector<U32> number_of_points_by_returnVector(pHeader->number_of_points_by_return, 
+                            sizeof(pHeader->number_of_points_by_return));    
+    pVal = number_of_points_by_returnVector.getNumpyArray(NPY_UINT32);
+    PyDict_SetItemString(pHeaderDict, "number_of_points_by_return", pVal);
+
+    pVal = PyFloat_FromDouble(pHeader->max_x);
+    PyDict_SetItemString(pHeaderDict, "max_x", pVal);
+
+    pVal = PyFloat_FromDouble(pHeader->min_x);
+    PyDict_SetItemString(pHeaderDict, "min_x", pVal);
+
+    pVal = PyFloat_FromDouble(pHeader->max_y);
+    PyDict_SetItemString(pHeaderDict, "max_y", pVal);
+
+    pVal = PyFloat_FromDouble(pHeader->min_y);
+    PyDict_SetItemString(pHeaderDict, "min_y", pVal);
+
+    pVal = PyFloat_FromDouble(pHeader->max_z);
+    PyDict_SetItemString(pHeaderDict, "max_z", pVal);
+
+    pVal = PyFloat_FromDouble(pHeader->min_z);
+    PyDict_SetItemString(pHeaderDict, "min_z", pVal);
+
     return pHeaderDict;
+}
+
+static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
+{
+    Py_ssize_t nPulseStart, nPulseEnd, nPulses, nCount;
+    if( !PyArg_ParseTuple(args, "nn:readData", &nPulseStart, &nPulseEnd ) )
+        return NULL;
+
+    nPulses = nPulseEnd - nPulseStart;
+
+    for( nCount = 0; nCount < nPulses; nCount++ )
+    {
+        if( !self->pReader->read_point() )
+        {
+            self->bFinished = true;
+            break;
+        }
+    }
+
+    Py_RETURN_NONE;
 }
 
 /* Table of methods */
 static PyMethodDef PyLasFile_methods[] = {
     {"readHeader", (PyCFunction)PyLasFile_readHeader, METH_NOARGS, NULL},
+    {"readData", (PyCFunction)PyLasFile_readData, METH_VARARGS, NULL}, 
     {NULL}  /* Sentinel */
 };
 
+static PyObject *PyLasFile_getBuildPulses(PyLasFile *self, void *closure)
+{
+    if( self->bBuildPulses )
+        Py_RETURN_TRUE;
+    else
+        Py_RETURN_FALSE;
+}
+
+static PyObject *PyLasFile_getHasSpatialIndex(PyLasFile *self, void *closure)
+{
+    if( self->pReader->get_index() != NULL )
+        Py_RETURN_TRUE;
+    else
+        Py_RETURN_FALSE;
+}
+
+static PyObject *PyLasFile_getFinished(PyLasFile *self, void *closure)
+{
+    if( self->bFinished )
+        Py_RETURN_TRUE;
+    else
+        Py_RETURN_FALSE;
+}
+
 /* get/set */
 static PyGetSetDef PyLasFile_getseters[] = {
+    {"build_pulses", (getter)PyLasFile_getBuildPulses, NULL, 
+        "Whether we are building pulses of multiple points when reading", NULL},
+    {"hasSpatialIndex", (getter)PyLasFile_getHasSpatialIndex, NULL,
+        "Whether a spatial index exists for this file", NULL},
+    {"finished", (getter)PyLasFile_getFinished, NULL, 
+        "Whether we have finished reading the file or not", NULL},
     {NULL}  /* Sentinel */
 };
 
