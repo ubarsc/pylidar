@@ -18,6 +18,9 @@ See :doc:`spdv4format` for description of the SPD V4 file format.
 See the `Array Visualisation <https://bitbucket.org/chchrsc/pylidar/wiki/arrays>`_ page to understand how numpy 
 arrays are used in PyLidar.
 
+Work funded by `DSITI <https://www.qld.gov.au/dsiti/>`_ through the 
+`Joint Remote Sensing Research Program <https://www.gpem.uq.edu.au/jrsrp>`_.
+
 Example
 -------
 
