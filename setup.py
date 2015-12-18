@@ -62,7 +62,10 @@ def addRieglDriver(extModules, cxxFlags):
         # all the libs
         libs = rivlibs + riwavelibs
         
+        defines = getRieglWaveLibVersion(riwavelibs[0])
+        
         rieglModule = Extension(name='pylidar.lidarformats._riegl', 
+                define_macros=defines,
                 sources=['src/riegl.cpp', 'src/pylidar.c'],
                 include_dirs=[os.path.join(rivlibRoot, 'include'),
                                 os.path.join(riwavelibRoot, 'include')],
@@ -76,6 +79,30 @@ def addRieglDriver(extModules, cxxFlags):
         print('Riegl Libraries not found.')
         print('If installed set $RIVLIB_ROOT to the install location of RiVLib')
         print('and $RIWAVELIB_ROOT to the install location of the waveform extraction library (riwavelib)')
+        
+def getRieglWaveLibVersion(libname):
+    """
+    Because we cannot distribute the wfmifc-mt library, we need
+    to check that the major version at compile time matches the 
+    version the user has at runtime. We do this by getting the
+    version now and setting it as a #define. The library can then
+    use the #define to check at runtime.
+    """
+    import ctypes
+    if sys.platform != 'win32':
+        libname = 'lib' + libname + '.so'
+    wfm = ctypes.cdll.LoadLibrary(libname)
+    
+    major = ctypes.c_ushort()
+    minor = ctypes.c_ushort()
+    version = ctypes.c_char_p()
+    tag = ctypes.c_char_p()
+    wfm.fwifc_get_library_version(ctypes.byref(major), ctypes.byref(minor),
+                ctypes.byref(version), ctypes.byref(tag))
+                
+    return [("RIEGL_WFM_MAJOR", str(major.value)), 
+            ("RIEGL_WFM_MINOR", str(minor.value))]
+                
         
 def addLasDriver(extModules, cxxFlags):
     """

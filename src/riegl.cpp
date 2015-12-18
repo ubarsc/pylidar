@@ -937,6 +937,25 @@ PyObject *pOptionDict;
 
     if( pszWaveFname != NULL )
     {
+        // first check that the version of the lib matches the compile time version
+        fwifc_uint16_t api_major, api_minor;
+        fwifc_csz build_version, build_tag;
+        fwifc_get_library_version(&api_major, &api_minor, &build_version, &build_tag);
+        if( api_major != RIEGL_WFM_MAJOR )
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_Format(GETSTATE(m)->error, "Mismatched libraries - Riegl waveform lib differs in major version number. "
+                "Was compiled against version %d.%d. Now running with %d.%d\n", 
+                RIEGL_WFM_MAJOR, RIEGL_WFM_MINOR, (int)api_major, (int)api_minor);
+            return -1;
+        }
+
         // waveforms are present. Open the file
         fwifc_int32_t result = fwifc_open(pszWaveFname, &self->waveHandle);
         if(result != 0)
