@@ -69,6 +69,10 @@ class LasFile(generic.LiDARFile):
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
 
+        if mode != generic.READ:
+            msg = 'Las driver is read only'
+            raise generic.LiDARInvalidSetting(msg)
+
         if not isLasFile(fname):
             msg = 'not a las file'
             raise generic.LiDARFileException(msg)
@@ -81,6 +85,11 @@ class LasFile(generic.LiDARFile):
 
         self.header = None
         self.range = None
+        self.lastRange = None
+        self.lastPoints = None
+        self.lastPulses = None
+        self.lastWaveformInfo = None
+        self.lastReceived = None
 
     @staticmethod        
     def getDriverName():
@@ -89,6 +98,39 @@ class LasFile(generic.LiDARFile):
     def close(self):
         self.lasFile = None
         self.range = None
+        self.lastRange = None
+        self.lastPoints = None
+        self.lastPulses = None
+        self.lastWaveformInfo = None
+        self.lastReceived = None
+
+    def readPointsByPulse(self, colNames=None):
+        """
+        Read a 3d structured masked array containing the points
+        for each pulse.
+        """
+        pulses = self.readPulsesForRange()
+        points = self.readPointsForRange()
+        if points.size == 0:
+            return None
+        nReturns = pulses['NUMBER_OF_RETURNS']
+        startIdxs = pulses['PTS_START_IDX']
+
+        point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(        
+                startIdxs, nReturns)
+                
+        pointsByPulse = points[point_idx]
+        
+        if colNames is None:
+            # workaround - seems a structured array returned from
+            # C doesn't work with masked arrays. The dtype looks different.
+            # TODO: check this with a later numpy
+            colNames = pointsByPulse.dtype.names
+            
+        pointsByPulse = self.subsetColumns(pointsByPulse, colNames)
+        points = numpy.ma.array(pointsByPulse, mask=point_idx_mask)
+        
+        return points
         
     def hasSpatialIndex(self):
         """
@@ -108,32 +150,61 @@ class LasFile(generic.LiDARFile):
         # we just assume we can until we find out
         # after a read that we can't
         return not self.lasFile.finished
+        
+    def readData(self):
+        """
+        Internal method. Just reads into the self.last* fields
+        """
+        if self.lastRange is None or self.range != self.lastRange:
+            pulses, points, info, recv = self.lasFile.readData(self.range.startPulse, 
+                            self.range.endPulse)
+            self.lastRange = self.range        
+            self.lastPoints = points
+            self.lastPulses = pulses
+            self.lastWaveformInfo = info
+            self.lastReceived = recv
                                         
     def readPointsForRange(self, colNames=None):
-        # TODO:
-        pass
+        """
+        Reads the points for the current range. Returns a 1d array.
+        
+        Returns an empty array if range is outside of the current file.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
+        """
+        self.readData()                            
+        return self.subsetColumns(self.lastPoints, colNames)
         
     def readPulsesForRange(self, colNames=None):
-        # TODO:
-        pass        
+        """
+        Reads the pulses for the current range. Returns a 1d array.
+
+        Returns an empty array if range is outside of the current file.
+
+        colNames can be a list of column names to return. By default
+        all columns are returned.
+        """
+        self.readData()                            
+        return self.subsetColumns(self.lastPulses, colNames)
         
     def readWaveformInfo(self):
         """
         3d structured masked array containing information
         about the waveforms.
         """
-        # TODO:
-        pass        
+        self.readData()                            
+        return self.lastWaveformInfo
         
     def readTransmitted(self):
         """
-        Riegl (AFAIK) doesn't support transmitted
+        las (AFAIK) doesn't support transmitted
         """
         return None
         
     def readReceived(self):
-        # TODO:
-        pass        
+        self.readData()
+        return self.lastReceived
         
     def getTotalNumberPulses(self):
         """

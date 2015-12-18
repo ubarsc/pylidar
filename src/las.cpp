@@ -26,6 +26,9 @@
 
 #include "lasreader.hpp"
 
+static const int nGrowBy = 1000;
+static const int nInitSize = 40000;
+
 /* An exception object for this module */
 /* created in the init function */
 struct LasState
@@ -40,6 +43,39 @@ struct LasState
 static struct LasState _state;
 #endif
 
+/* Structure for LAS pulses */
+typedef struct {
+    npy_int8 scan_angle_rank;
+    npy_uint32 pts_start_idx;
+    npy_uint8 number_of_returns;
+    npy_uint8 orig_number_of_returns; // original in file. != number_of_returns when BUILD_PULSES=False
+    double gps_time;
+    npy_uint8 scan_direction_flag;
+    npy_uint8 edge_of_flight_line;
+    double x_origin; // the following only set when we have waveforms, or multiple returns
+    double y_origin;
+    double z_origin;
+    double azimuth;
+    double zenith;
+} SLasPulse;
+
+/* field info for pylidar_structArrayToNumpy */
+static SpylidarFieldDefn LasPulseFields[] = {
+    CREATE_FIELD_DEFN(SLasPulse, scan_angle_rank, 'i'),
+    CREATE_FIELD_DEFN(SLasPulse, number_of_returns, 'u'),
+    CREATE_FIELD_DEFN(SLasPulse, pts_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SLasPulse, orig_number_of_returns, 'u'),
+    CREATE_FIELD_DEFN(SLasPulse, gps_time, 'f'),
+    CREATE_FIELD_DEFN(SLasPulse, scan_direction_flag, 'u'),
+    CREATE_FIELD_DEFN(SLasPulse, edge_of_flight_line, 'u'),
+    CREATE_FIELD_DEFN(SLasPulse, x_origin, 'f'),
+    CREATE_FIELD_DEFN(SLasPulse, y_origin, 'f'),
+    CREATE_FIELD_DEFN(SLasPulse, z_origin, 'f'),
+    CREATE_FIELD_DEFN(SLasPulse, azimuth, 'f'),
+    CREATE_FIELD_DEFN(SLasPulse, zenith, 'f'),
+    {NULL} // Sentinel
+};
+
 /* Structure for LAS points */
 typedef struct {
     double x;
@@ -47,21 +83,16 @@ typedef struct {
     double z;
     npy_uint16 intensity;
     npy_uint8 return_number;
-    npy_uint8 number_of_returns;
-    npy_uint8 scan_direction_flag;
-    npy_uint8 edge_of_flight_line;
     npy_uint8 classification;
     npy_uint8 synthetic_flag;
     npy_uint8 keypoint_flag;
     npy_uint8 withheld_flag;
-    npy_int8 scan_angle_rank;
     npy_uint8 user_data;
     npy_uint16 point_source_ID;
-    double gps_time;
     npy_uint16 red;
     npy_uint16 green;
     npy_uint16 blue;
-    npy_uint16 alpha;
+    npy_uint16 nir;
 } SLasPoint;
 
 /* field info for pylidar_structArrayToNumpy */
@@ -71,21 +102,33 @@ static SpylidarFieldDefn LasPointFields[] = {
     CREATE_FIELD_DEFN(SLasPoint, z, 'f'),
     CREATE_FIELD_DEFN(SLasPoint, intensity, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, return_number, 'u'),
-    CREATE_FIELD_DEFN(SLasPoint, number_of_returns, 'u'),
-    CREATE_FIELD_DEFN(SLasPoint, scan_direction_flag, 'u'),
-    CREATE_FIELD_DEFN(SLasPoint, edge_of_flight_line, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, classification, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, synthetic_flag, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, keypoint_flag, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, withheld_flag, 'u'),
-    CREATE_FIELD_DEFN(SLasPoint, scan_angle_rank, 'i'),
     CREATE_FIELD_DEFN(SLasPoint, user_data, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, point_source_ID, 'u'),
-    CREATE_FIELD_DEFN(SLasPoint, gps_time, 'f'),
     CREATE_FIELD_DEFN(SLasPoint, red, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, green, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, blue, 'u'),
-    CREATE_FIELD_DEFN(SLasPoint, alpha, 'u'),
+    CREATE_FIELD_DEFN(SLasPoint, nir, 'u'),
+    {NULL} // Sentinel
+};
+
+/* Structure for waveform Info */
+typedef struct {
+    npy_uint32 number_of_waveform_received_bins;
+    npy_uint64 received_start_idx;
+    double      receive_wave_gain;
+    double      receive_wave_offset;
+} SLasWaveformInfo;
+
+/* field info for pylidar_structArrayToNumpy */
+static SpylidarFieldDefn LasWaveformInfoFields[] = {
+    CREATE_FIELD_DEFN(SLasWaveformInfo, number_of_waveform_received_bins, 'u'),
+    CREATE_FIELD_DEFN(SLasWaveformInfo, received_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SLasWaveformInfo, receive_wave_gain, 'f'),
+    CREATE_FIELD_DEFN(SLasWaveformInfo, receive_wave_offset, 'f'),
     {NULL} // Sentinel
 };
 
@@ -93,8 +136,10 @@ static SpylidarFieldDefn LasPointFields[] = {
 typedef struct {
     PyObject_HEAD
     LASreader *pReader;
+    LASwaveform13reader *pWaveformReader;
     bool bBuildPulses;
     bool bFinished;
+    Py_ssize_t nPulsesRead;
 } PyLasFile;
 
 static const char *SupportedDriverOptions[] = {"BUILD_PULSES", NULL};
@@ -166,6 +211,10 @@ PyLasFile_dealloc(PyLasFile *self)
         self->pReader->close();
         delete self->pReader;
     }
+    if(self->pWaveformReader != NULL)
+    {
+        delete self->pWaveformReader;
+    }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -196,6 +245,7 @@ PyObject *pOptionDict;
 
     self->bFinished = false;
     self->bBuildPulses = true;
+    self->nPulsesRead = 0;
 
     /* Check creation options */
     PyObject *pBuildPulses = PyDict_GetItemString(pOptionDict, "BUILD_PULSES");
@@ -236,6 +286,9 @@ PyObject *pOptionDict;
         return -1;
     }
 
+    // sets to NULL if no waveforms
+    self->pWaveformReader = lasreadopener.open_waveform13(&self->pReader->header);
+
     return 0;
 }
 
@@ -254,33 +307,33 @@ static PyObject *PyLasFile_readHeader(PyLasFile *self, PyObject *args)
     PyObject *pVal = PyString_FromStringAndSize(pHeader->file_signature, 
                 GET_LENGTH(pHeader->file_signature));
 #endif
-    PyDict_SetItemString(pHeaderDict, "file_signature", pVal);
+    PyDict_SetItemString(pHeaderDict, "FILE_SIGNATURE", pVal);
 
     pVal = PyLong_FromLong(pHeader->file_source_ID);
-    PyDict_SetItemString(pHeaderDict, "file_source_ID", pVal);
+    PyDict_SetItemString(pHeaderDict, "FILE_SOURCE_ID", pVal);
 
     pVal = PyLong_FromLong(pHeader->global_encoding);
-    PyDict_SetItemString(pHeaderDict, "global_encoding", pVal);
+    PyDict_SetItemString(pHeaderDict, "GLOBAL_ENCODING", pVal);
 
     pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_1);
-    PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_1", pVal);
+    PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_1", pVal);
 
     pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_2);
-    PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_2", pVal);
+    PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_2", pVal);
 
     pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_3);
-    PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_3", pVal);
+    PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_3", pVal);
 
     pylidar::CVector<U8> project_ID_GUID_data_4Vector(pHeader->project_ID_GUID_data_4, 
                             sizeof(pHeader->project_ID_GUID_data_4));    
     pVal = project_ID_GUID_data_4Vector.getNumpyArray(NPY_UINT8);
-    PyDict_SetItemString(pHeaderDict, "project_ID_GUID_data_4", pVal);
+    PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_4", pVal);
 
     pVal = PyLong_FromLong(pHeader->version_major);
-    PyDict_SetItemString(pHeaderDict, "version_major", pVal);
+    PyDict_SetItemString(pHeaderDict, "VERSION_MAJOR", pVal);
 
     pVal = PyLong_FromLong(pHeader->version_minor);
-    PyDict_SetItemString(pHeaderDict, "version_minor", pVal);
+    PyDict_SetItemString(pHeaderDict, "VERSION_MINOR", pVal);
 
 #if PY_MAJOR_VERSION >= 3
     pVal = PyUnicode_FromStringAndSize(pHeader->system_identifier, 
@@ -289,7 +342,7 @@ static PyObject *PyLasFile_readHeader(PyLasFile *self, PyObject *args)
     pVal = PyString_FromStringAndSize(pHeader->system_identifier, 
                 GET_LENGTH(pHeader->system_identifier));
 #endif
-    PyDict_SetItemString(pHeaderDict, "system_identifier", pVal);
+    PyDict_SetItemString(pHeaderDict, "SYSTEM_IDENTIFIER", pVal);
 
 #if PY_MAJOR_VERSION >= 3
     pVal = PyUnicode_FromStringAndSize(pHeader->generating_software, 
@@ -298,76 +351,185 @@ static PyObject *PyLasFile_readHeader(PyLasFile *self, PyObject *args)
     pVal = PyString_FromStringAndSize(pHeader->generating_software, 
                 GET_LENGTH(pHeader->generating_software));
 #endif
-    PyDict_SetItemString(pHeaderDict, "generating_software", pVal);
+    PyDict_SetItemString(pHeaderDict, "GENERATING_SOFTWARE", pVal);
 
     pVal = PyLong_FromLong(pHeader->file_creation_day);
-    PyDict_SetItemString(pHeaderDict, "file_creation_day", pVal);
+    PyDict_SetItemString(pHeaderDict, "FILE_CREATION_DAY", pVal);
 
     pVal = PyLong_FromLong(pHeader->file_creation_year);
-    PyDict_SetItemString(pHeaderDict, "file_creation_year", pVal);
+    PyDict_SetItemString(pHeaderDict, "FILE_CREATION_YEAR", pVal);
 
     pVal = PyLong_FromLong(pHeader->header_size);
-    PyDict_SetItemString(pHeaderDict, "header_size", pVal);
+    PyDict_SetItemString(pHeaderDict, "HEADER_SIZE", pVal);
 
     pVal = PyLong_FromLong(pHeader->offset_to_point_data);
-    PyDict_SetItemString(pHeaderDict, "offset_to_point_data", pVal);
+    PyDict_SetItemString(pHeaderDict, "OFFSET_TO_POINT_DATA", pVal);
 
     pVal = PyLong_FromLong(pHeader->number_of_variable_length_records);
-    PyDict_SetItemString(pHeaderDict, "number_of_variable_length_records", pVal);
+    PyDict_SetItemString(pHeaderDict, "NUMBER_OF_VARIABLE_LENGTH_RECORDS", pVal);
 
     pVal = PyLong_FromLong(pHeader->point_data_format);
-    PyDict_SetItemString(pHeaderDict, "point_data_format", pVal);
+    PyDict_SetItemString(pHeaderDict, "POINT_DATA_FORMAT", pVal);
 
     pVal = PyLong_FromLong(pHeader->point_data_record_length);
-    PyDict_SetItemString(pHeaderDict, "point_data_record_length", pVal);
+    PyDict_SetItemString(pHeaderDict, "POINT_DATA_RECORD_LENGTH", pVal);
 
     pVal = PyLong_FromLong(pHeader->number_of_point_records);
-    PyDict_SetItemString(pHeaderDict, "number_of_point_records", pVal);
+    PyDict_SetItemString(pHeaderDict, "NUMBER_OF_POINT_RECORDS", pVal);
 
     pylidar::CVector<U32> number_of_points_by_returnVector(pHeader->number_of_points_by_return, 
                             sizeof(pHeader->number_of_points_by_return));    
     pVal = number_of_points_by_returnVector.getNumpyArray(NPY_UINT32);
-    PyDict_SetItemString(pHeaderDict, "number_of_points_by_return", pVal);
+    PyDict_SetItemString(pHeaderDict, "NUMBER_OF_POINTS_BY_RETURN", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_x);
-    PyDict_SetItemString(pHeaderDict, "max_x", pVal);
+    PyDict_SetItemString(pHeaderDict, "MAX_X", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->min_x);
-    PyDict_SetItemString(pHeaderDict, "min_x", pVal);
+    PyDict_SetItemString(pHeaderDict, "MIN_X", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_y);
-    PyDict_SetItemString(pHeaderDict, "max_y", pVal);
+    PyDict_SetItemString(pHeaderDict, "MAX_Y", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->min_y);
-    PyDict_SetItemString(pHeaderDict, "min_y", pVal);
+    PyDict_SetItemString(pHeaderDict, "MIN_Y", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_z);
-    PyDict_SetItemString(pHeaderDict, "max_z", pVal);
+    PyDict_SetItemString(pHeaderDict, "MAX_Z", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->min_z);
-    PyDict_SetItemString(pHeaderDict, "min_z", pVal);
+    PyDict_SetItemString(pHeaderDict, "MIN_Z", pVal);
 
     return pHeaderDict;
 }
 
+// read pulses, points, waveforminfo and received for the range.
+// it seems only possible to read all these at once with las.
 static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
 {
-    Py_ssize_t nPulseStart, nPulseEnd, nPulses, nCount;
+    Py_ssize_t nPulseStart, nPulseEnd, nPulses;
     if( !PyArg_ParseTuple(args, "nn:readData", &nPulseStart, &nPulseEnd ) )
         return NULL;
 
     nPulses = nPulseEnd - nPulseStart;
+    self->bFinished = false;
+    LASpoint *pPoint = &self->pReader->point;
 
-    for( nCount = 0; nCount < nPulses; nCount++ )
+    // Can't use self->pReader->seek() to go to arbitary
+    // pulse since it works on points
+    if( nPulseStart < self->nPulsesRead )
+    {
+        // go back to zero and start again
+        self->pReader->seek(0);
+        self->nPulsesRead = 0;
+        // next if will ignore the needed number of pulses
+    }
+
+    if( nPulseStart > self->nPulsesRead )
+    {
+        // ok now we need to ignore some pulses to get to the right point
+        while( self->nPulsesRead < nPulseStart )
+        {
+            if( !self->pReader->read_point() )
+            {
+                // bFinished set below where we can create
+                // empty arrays
+                break;
+            }
+            // 1-based
+            if( !self->bBuildPulses || ( pPoint->return_number == 1 ) )
+                self->nPulsesRead++;
+        }
+    }
+
+    pylidar::CVector<SLasPulse> pulses(nInitSize, nGrowBy);
+    pylidar::CVector<SLasPoint> points(nInitSize, nGrowBy);
+    pylidar::CVector<SLasWaveformInfo> waveformInfos(nInitSize, nGrowBy);
+    pylidar::CVector<U8> received(nInitSize, nGrowBy);
+    SLasPulse lasPulse;
+    SLasPoint lasPoint;
+    SLasWaveformInfo lasWaveformInfo;
+
+    while( pulses.getNumElems() < nPulses )
     {
         if( !self->pReader->read_point() )
         {
             self->bFinished = true;
             break;
         }
+
+        // always add a new point
+        lasPoint.x = self->pReader->get_x();
+        lasPoint.y = self->pReader->get_y();
+        lasPoint.z = self->pReader->get_z();
+        lasPoint.intensity = pPoint->intensity;
+        lasPoint.return_number = pPoint->return_number - 1; // 1-based for some reason
+        lasPoint.classification = pPoint->classification;
+        lasPoint.synthetic_flag = pPoint->synthetic_flag;
+        lasPoint.keypoint_flag = pPoint->keypoint_flag;
+        lasPoint.withheld_flag = pPoint->withheld_flag;
+        lasPoint.user_data = pPoint->user_data;
+        lasPoint.point_source_ID = pPoint->point_source_ID;
+        lasPoint.red = pPoint->rgb[0];        
+        lasPoint.green = pPoint->rgb[1];        
+        lasPoint.blue = pPoint->rgb[2];        
+        lasPoint.nir = pPoint->rgb[3];        
+        points.push(&lasPoint);
+
+        // only add a pulse if we are building a pulse per point (self->bBuildPulses == false)
+        // or this is the first return of a number of points
+        if( !self->bBuildPulses || ( lasPoint.return_number == 0 ) )
+        {
+            lasPulse.scan_angle_rank = pPoint->scan_angle_rank;
+            lasPulse.pts_start_idx = points.getNumElems();
+            if( self->bBuildPulses )
+                lasPulse.number_of_returns = pPoint->number_of_returns;
+            else
+                lasPulse.number_of_returns = 1;
+
+            lasPulse.orig_number_of_returns = pPoint->number_of_returns;
+            lasPulse.gps_time = pPoint->gps_time;
+            lasPulse.scan_direction_flag = pPoint->scan_direction_flag;
+            lasPulse.edge_of_flight_line = pPoint->edge_of_flight_line;
+
+            if( self->pWaveformReader != NULL )
+            {
+                // we have waveforms
+                self->pWaveformReader->read_waveform(pPoint);
+
+                // fill in the info                
+                lasWaveformInfo.number_of_waveform_received_bins = self->pWaveformReader->nsamples;
+                lasWaveformInfo.received_start_idx = received.getNumElems();
+                U8 lasindex = pPoint->wavepacket.getIndex();
+                lasWaveformInfo.receive_wave_gain = self->pReader->header.vlr_wave_packet_descr[lasindex]->getDigitizerGain();
+                lasWaveformInfo.receive_wave_offset = self->pReader->header.vlr_wave_packet_descr[lasindex]->getDigitizerOffset();
+                waveformInfos.push(&lasWaveformInfo);
+                
+                // the actual received data
+                U8 data;
+                for( U32 nCount = 0; nCount < lasWaveformInfo.number_of_waveform_received_bins; nCount++ )
+                {
+                    data = self->pWaveformReader->samples[nCount];
+                    received.push(&data);
+                }
+
+            }
+
+            pulses.push(&lasPulse);
+        }
+
     }
 
-    Py_RETURN_NONE;
+    self->nPulsesRead += pulses.getNumElems();
+
+    PyObject *pPulses = pulses.getNumpyArray(LasPulseFields);
+    PyObject *pPoints = points.getNumpyArray(LasPointFields);
+    PyObject *pInfos = waveformInfos.getNumpyArray(LasWaveformInfoFields);
+    PyObject *pReceived = received.getNumpyArray(NPY_UINT8);
+
+    // build tuple
+    PyObject *pTuple = PyTuple_Pack(4, pPulses, pPoints, pInfos, pReceived);
+    return pTuple;
 }
 
 /* Table of methods */
@@ -401,6 +563,11 @@ static PyObject *PyLasFile_getFinished(PyLasFile *self, void *closure)
         Py_RETURN_FALSE;
 }
 
+static PyObject *PyLasFile_getPulsesRead(PyLasFile *self, void *closure)
+{
+    return PyLong_FromSsize_t(self->nPulsesRead);
+}
+
 /* get/set */
 static PyGetSetDef PyLasFile_getseters[] = {
     {"build_pulses", (getter)PyLasFile_getBuildPulses, NULL, 
@@ -409,6 +576,8 @@ static PyGetSetDef PyLasFile_getseters[] = {
         "Whether a spatial index exists for this file", NULL},
     {"finished", (getter)PyLasFile_getFinished, NULL, 
         "Whether we have finished reading the file or not", NULL},
+    {"pulsesRead", (getter)PyLasFile_getPulsesRead, NULL,
+        "Number of pulses read", NULL},
     {NULL}  /* Sentinel */
 };
 
