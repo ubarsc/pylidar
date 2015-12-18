@@ -20,6 +20,7 @@
  *
  */
 
+#include <cmath>
 #include <Python.h>
 #include "numpy/arrayobject.h"
 #include "pylvector.h"
@@ -119,6 +120,7 @@ static SpylidarFieldDefn LasPointFields[] = {
 typedef struct {
     npy_uint32 number_of_waveform_received_bins;
     npy_uint64 received_start_idx;
+    double      range_to_waveform_start;
     double      receive_wave_gain;
     double      receive_wave_offset;
 } SLasWaveformInfo;
@@ -127,6 +129,7 @@ typedef struct {
 static SpylidarFieldDefn LasWaveformInfoFields[] = {
     CREATE_FIELD_DEFN(SLasWaveformInfo, number_of_waveform_received_bins, 'u'),
     CREATE_FIELD_DEFN(SLasWaveformInfo, received_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SLasWaveformInfo, range_to_waveform_start, 'f'),
     CREATE_FIELD_DEFN(SLasWaveformInfo, receive_wave_gain, 'f'),
     CREATE_FIELD_DEFN(SLasWaveformInfo, receive_wave_offset, 'f'),
     {NULL} // Sentinel
@@ -503,6 +506,18 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
                 U8 lasindex = pPoint->wavepacket.getIndex();
                 lasWaveformInfo.receive_wave_gain = self->pReader->header.vlr_wave_packet_descr[lasindex]->getDigitizerGain();
                 lasWaveformInfo.receive_wave_offset = self->pReader->header.vlr_wave_packet_descr[lasindex]->getDigitizerOffset();
+
+                /* Get the offset (in ps) from the first digitized value
+                    to the location within the waveform packet that the associated 
+                    return pulse was detected.*/
+                double location = pPoint->wavepacket.getLocation();
+
+                // convert to ns
+                lasWaveformInfo.range_to_waveform_start = location*1E3;
+
+                double pulse_duration = lasWaveformInfo.number_of_waveform_received_bins * 
+                    (self->pReader->header.vlr_wave_packet_descr[lasindex]->getTemporalSpacing());
+
                 waveformInfos.push(&lasWaveformInfo);
                 
                 // the actual received data
@@ -513,6 +528,46 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
                     received.push(&data);
                 }
 
+                // Set pulse GPS time (ns)
+                lasPulse.gps_time = lasPulse.gps_time - lasWaveformInfo.range_to_waveform_start;
+
+                // fill in origin, azimuth etc
+
+                /* Set the start location of the return pulse
+                   This is calculated as the location of the first return 
+                   minus the time offset multiplied by XYZ(t) which is a vector
+                   away from the laser origin */
+                lasPulse.x_origin = lasPoint.x - location * self->pWaveformReader->XYZt[0];
+                lasPulse.y_origin = lasPoint.y - location * self->pWaveformReader->XYZt[1];
+                lasPulse.z_origin = lasPoint.z - location * self->pWaveformReader->XYZt[2];
+
+                /* Get the end location of the return pulse
+                  This is calculated as start location of the pulse
+                  plus the pulse duration multipled by XYZ(t)
+                  It is only used to get the azimuth and zenith angle 
+                  of the pulse */
+                double x1 = lasPulse.x_origin + pulse_duration * self->pWaveformReader->XYZt[0];
+                double y1 = lasPulse.y_origin + pulse_duration * self->pWaveformReader->XYZt[1];
+                double z1 = lasPulse.z_origin + pulse_duration * self->pWaveformReader->XYZt[2];
+
+                double range = std::sqrt(std::pow(x1-lasPulse.x_origin,2) + 
+                        std::pow(y1-lasPulse.y_origin,2) + std::pow(z1-lasPulse.z_origin,2));
+                lasPulse.zenith = std::acos((z1-lasPulse.z_origin) / range);
+                lasPulse.azimuth = std::atan((x1-lasPulse.x_origin)/(y1-lasPulse.y_origin));
+                if(lasPulse.azimuth < 0)
+                {
+                   lasPulse.azimuth = lasPulse.azimuth + M_PI * 2;
+                }                            
+            }
+            else
+            {
+                // can't determine origin
+                // might be able to do zenith/azimuth below depending on how many returns
+                lasPulse.x_origin = 0;
+                lasPulse.y_origin = 0;
+                lasPulse.z_origin = 0;
+                lasPulse.zenith = 0;
+                lasPulse.azimuth = 0;
             }
 
             pulses.push(&lasPulse);
@@ -521,6 +576,30 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
     }
 
     self->nPulsesRead += pulses.getNumElems();
+
+    // go through all pulses and find those with 
+    // number_of_returns > 1 and use point locations to fill in 
+    // zenith, azimuth etc
+    if( self->bBuildPulses )
+    {
+        for( npy_intp nPulseCount = 0; nPulseCount < pulses.getNumElems(); nPulseCount++)
+        {
+            SLasPulse *pPulse = pulses.getElem(nPulseCount);
+            if( ( pPulse->number_of_returns > 1 ) && ( pPulse->zenith == 0 ) && ( pPulse->azimuth == 0) )
+            {
+                SLasPoint *p1 = points.getElem(pPulse->pts_start_idx);
+                SLasPoint *p2 = points.getElem(pPulse->pts_start_idx + pPulse->number_of_returns);
+                double range = std::sqrt(std::pow(p2->x-p1->x,2) +
+                    std::pow(p2->y-p1->y,2) + std::pow(p2->z-p1->z,2));
+                pPulse->zenith = std::acos((p2->z-p1->z) / range);
+                pPulse->azimuth = std::atan((p2->x-p1->x)/(p2->y-p1->y));
+                if(pPulse->azimuth < 0)
+                {
+                    pPulse->azimuth = pPulse->azimuth + M_PI * 2;
+                }
+            }
+        }
+    }
 
     PyObject *pPulses = pulses.getNumpyArray(LasPulseFields);
     PyObject *pPoints = points.getNumpyArray(LasPointFields);
