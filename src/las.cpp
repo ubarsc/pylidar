@@ -27,8 +27,12 @@
 
 #include "lasreader.hpp"
 
+// for CVector
 static const int nGrowBy = 1000;
 static const int nInitSize = 40000;
+// for creating pulses
+static const long FIRST_RETURN = 0;
+static const long LAST_RETURN = 1;
 
 /* An exception object for this module */
 /* created in the init function */
@@ -58,6 +62,8 @@ typedef struct {
     double z_origin;
     double azimuth;
     double zenith;
+    double x_idx;
+    double y_idx;
 } SLasPulse;
 
 /* field info for pylidar_structArrayToNumpy */
@@ -74,6 +80,8 @@ static SpylidarFieldDefn LasPulseFields[] = {
     CREATE_FIELD_DEFN(SLasPulse, z_origin, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, azimuth, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, zenith, 'f'),
+    CREATE_FIELD_DEFN(SLasPulse, x_idx, 'f'),
+    CREATE_FIELD_DEFN(SLasPulse, y_idx, 'f'),
     {NULL} // Sentinel
 };
 
@@ -143,9 +151,10 @@ typedef struct {
     bool bBuildPulses;
     bool bFinished;
     Py_ssize_t nPulsesRead;
+    double fBinSize;
 } PyLasFile;
 
-static const char *SupportedDriverOptions[] = {"BUILD_PULSES", NULL};
+static const char *SupportedDriverOptions[] = {"BUILD_PULSES", "BIN_SIZE", "PULSE_INDEX", NULL};
 static PyObject *las_getSupportedOptions(PyObject *self, PyObject *args)
 {
     // how many do we have?
@@ -249,6 +258,7 @@ PyObject *pOptionDict;
     self->bFinished = false;
     self->bBuildPulses = true;
     self->nPulsesRead = 0;
+    self->fBinSize = 0;
 
     /* Check creation options */
     PyObject *pBuildPulses = PyDict_GetItemString(pOptionDict, "BUILD_PULSES");
@@ -271,6 +281,23 @@ PyObject *pOptionDict;
             return -1;
         }
     }
+    
+    // only used by las.py but thought it best to store all the options in 
+    // this object.
+    PyObject *pBinSize = PyDict_GetItemString(pOptionDict, "BIN_SIZE");
+    if( pBinSize != NULL )
+    {
+        PyObject *pBinSizeFloat = PyNumber_Float(pBinSize);
+        if( pBinSizeFloat == NULL )
+        {
+            // exception already set
+            return -1;
+        }
+
+        self->fBinSize = PyFloat_AsDouble(pBinSizeFloat);
+        Py_DECREF(pBinSizeFloat);
+    }
+    
 
     LASreadOpener lasreadopener;
     lasreadopener.set_file_name(pszFname);
@@ -406,43 +433,75 @@ static PyObject *PyLasFile_readHeader(PyLasFile *self, PyObject *args)
     return pHeaderDict;
 }
 
+// helper function
+void ConvertCoordsToAngles(double x0, double x1, double y0, double y1, double z0, double z1,
+                double *zenith, double *azimuth)
+{
+    double range = std::sqrt(std::pow(x1 - x0, 2) + 
+            std::pow(y1 - y0, 2) + std::pow(z1 - z0, 2));
+    *zenith = std::acos((z1 - z0) / range);
+    *azimuth = std::atan((x1 - x0) / (y1 - y0));
+    if(*azimuth < 0)
+    {
+       *azimuth = *azimuth + M_PI * 2;
+    }                            
+}
+
 // read pulses, points, waveforminfo and received for the range.
 // it seems only possible to read all these at once with las.
 static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
 {
     Py_ssize_t nPulseStart, nPulseEnd, nPulses;
-    if( !PyArg_ParseTuple(args, "nn:readData", &nPulseStart, &nPulseEnd ) )
+    if( !PyArg_ParseTuple(args, "|nn:readData", &nPulseStart, &nPulseEnd ) )
         return NULL;
 
-    nPulses = nPulseEnd - nPulseStart;
-    self->bFinished = false;
     LASpoint *pPoint = &self->pReader->point;
 
-    // Can't use self->pReader->seek() to go to arbitary
-    // pulse since it works on points
-    if( nPulseStart < self->nPulsesRead )
+    // start and end pulses optional - only set for non-spatial read
+    if( PyTuple_Size(args) == 2 )
     {
-        // go back to zero and start again
-        self->pReader->seek(0);
-        self->nPulsesRead = 0;
-        // next if will ignore the needed number of pulses
-    }
+        nPulses = nPulseEnd - nPulseStart;
+        self->bFinished = false;
 
-    if( nPulseStart > self->nPulsesRead )
-    {
-        // ok now we need to ignore some pulses to get to the right point
-        while( self->nPulsesRead < nPulseStart )
+        // Can't use self->pReader->seek() to go to an arbitary
+        // pulse since this function works on points
+        if( nPulseStart < self->nPulsesRead )
         {
-            if( !self->pReader->read_point() )
-            {
-                // bFinished set below where we can create
-                // empty arrays
-                break;
-            }
-            // 1-based
-            if( !self->bBuildPulses || ( pPoint->return_number == 1 ) )
-                self->nPulsesRead++;
+            // go back to zero and start again
+            self->pReader->seek(0);
+            self->nPulsesRead = 0;
+            // next if will ignore the needed number of pulses
         }
+
+        if( nPulseStart > self->nPulsesRead )
+        {
+            // ok now we need to ignore some pulses to get to the right point
+            while( self->nPulsesRead < nPulseStart )
+            {
+                if( !self->pReader->read_point() )
+                {
+                    // bFinished set below where we can create
+                    // empty arrays
+                    break;
+                }
+                // 1-based
+                if( !self->bBuildPulses || ( pPoint->return_number == 1 ) )
+                    self->nPulsesRead++;
+            }
+        }
+    }
+    else if( PyTuple_Size(args) != 0 )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "readData either takes 2 params for non-spatial reads, or 0 params for spatial reads");
+        return NULL;
+
     }
 
     pylidar::CVector<SLasPulse> pulses(nInitSize, nGrowBy);
@@ -452,8 +511,11 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
     SLasPulse lasPulse;
     SLasPoint lasPoint;
     SLasWaveformInfo lasWaveformInfo;
+    bool bFinished = false;
 
-    while( pulses.getNumElems() < nPulses )
+    // spatial reads go until there is no more data (see setExtent)
+    // non-spatial reads get bFinished updated.
+    while( !bFinished )
     {
         if( !self->pReader->read_point() )
         {
@@ -549,15 +611,8 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
                 double x1 = lasPulse.x_origin + pulse_duration * self->pWaveformReader->XYZt[0];
                 double y1 = lasPulse.y_origin + pulse_duration * self->pWaveformReader->XYZt[1];
                 double z1 = lasPulse.z_origin + pulse_duration * self->pWaveformReader->XYZt[2];
-
-                double range = std::sqrt(std::pow(x1-lasPulse.x_origin,2) + 
-                        std::pow(y1-lasPulse.y_origin,2) + std::pow(z1-lasPulse.z_origin,2));
-                lasPulse.zenith = std::acos((z1-lasPulse.z_origin) / range);
-                lasPulse.azimuth = std::atan((x1-lasPulse.x_origin)/(y1-lasPulse.y_origin));
-                if(lasPulse.azimuth < 0)
-                {
-                   lasPulse.azimuth = lasPulse.azimuth + M_PI * 2;
-                }                            
+                ConvertCoordsToAngles(x1, lasPulse.x_origin, y1, lasPulse.y_origin, 
+                        z1, lasPulse.z_origin, &lasPulse.zenith, &lasPulse.azimuth);
             }
             else
             {
@@ -573,6 +628,12 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
             pulses.push(&lasPulse);
         }
 
+        // update loop exit for non-spatial reads
+        // spatial reads keep going until all the way through the file
+        if( PyTuple_Size(args) == 2 )
+        {
+            bFinished = (pulses.getNumElems() >= nPulses);
+        }
     }
 
     self->nPulsesRead += pulses.getNumElems();
@@ -589,14 +650,8 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
             {
                 SLasPoint *p1 = points.getElem(pPulse->pts_start_idx);
                 SLasPoint *p2 = points.getElem(pPulse->pts_start_idx + pPulse->number_of_returns);
-                double range = std::sqrt(std::pow(p2->x-p1->x,2) +
-                    std::pow(p2->y-p1->y,2) + std::pow(p2->z-p1->z,2));
-                pPulse->zenith = std::acos((p2->z-p1->z) / range);
-                pPulse->azimuth = std::atan((p2->x-p1->x)/(p2->y-p1->y));
-                if(pPulse->azimuth < 0)
-                {
-                    pPulse->azimuth = pPulse->azimuth + M_PI * 2;
-                }
+                ConvertCoordsToAngles(p2->x, p1->x, p2->y, p1->y, p2->z, p1->z,
+                            &pPulse->zenith, &pPulse->azimuth);
             }
         }
     }
@@ -611,10 +666,66 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
     return pTuple;
 }
 
+static PyObject *PyLasFile_getEPSG(PyLasFile *self, PyObject *args)
+{
+    /** Taken from SPDlib
+    Get EPSG projection code from LAS file header
+         
+    TODO: Needs testing with a range of coordinate systems. Within lasinfo a number of 
+    checks for differnent keys are used. Need to confirm only checking for key id 3072 is
+    sufficient.
+         
+    */
+    bool foundProjection = false;
+    long nEPSG = 0;
+
+    LASheader *pHeader = &self->pReader->header;
+    for (int j = 0; j < pHeader->vlr_geo_keys->number_of_keys; j++)
+    {
+        if(pHeader->vlr_geo_key_entries[j].key_id == 3072)
+        {
+            nEPSG = pHeader->vlr_geo_key_entries[j].value_offset;
+            foundProjection = true;
+        }
+    }
+
+    if( !foundProjection )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Cannot find EPSG code for Coordinate System");
+        return NULL;
+    }
+    
+    return PyLong_FromLong(nEPSG);
+}
+
+static PyObject *PyLasFile_setExtent(PyLasFile *self, PyObject *args)
+{
+    double xMin, xMax, yMin, yMax;
+    if( !PyArg_ParseTuple(args, "dddd:setExtent", &xMin, &xMax, &yMin, &yMax ) )
+        return NULL;
+
+    // set the new extent - point should now only be within these coords
+    self->pReader->inside_rectangle(xMin, yMin, xMax, yMax);
+    // seek back to the start - laslib doesn't seem to do this
+    // we want to read all points in the file within these coords
+    self->pReader->seek(0);
+
+    Py_RETURN_NONE;
+}
+
 /* Table of methods */
 static PyMethodDef PyLasFile_methods[] = {
     {"readHeader", (PyCFunction)PyLasFile_readHeader, METH_NOARGS, NULL},
     {"readData", (PyCFunction)PyLasFile_readData, METH_VARARGS, NULL}, 
+    {"getEPSG", (PyCFunction)PyLasFile_getEPSG, METH_NOARGS, NULL},
+    {"setExtent", (PyCFunction)PyLasFile_setExtent, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 
@@ -647,6 +758,26 @@ static PyObject *PyLasFile_getPulsesRead(PyLasFile *self, void *closure)
     return PyLong_FromSsize_t(self->nPulsesRead);
 }
 
+static PyObject *PyLasFile_getBinSize(PyLasFile *self, void *closure)
+{
+    return PyFloat_FromDouble(self->fBinSize);
+}
+
+static int PyLasFile_setBinSize(PyLasFile *self, PyObject *value, void *closure)
+{
+    PyObject *pBinSizeFloat = PyNumber_Float(value);
+    if( pBinSizeFloat == NULL )
+    {
+        // exception already set
+        return -1;
+    }
+
+    self->fBinSize = PyFloat_AsDouble(pBinSizeFloat);
+    Py_DECREF(pBinSizeFloat);
+    return 0;
+}
+
+
 /* get/set */
 static PyGetSetDef PyLasFile_getseters[] = {
     {"build_pulses", (getter)PyLasFile_getBuildPulses, NULL, 
@@ -657,6 +788,8 @@ static PyGetSetDef PyLasFile_getseters[] = {
         "Whether we have finished reading the file or not", NULL},
     {"pulsesRead", (getter)PyLasFile_getPulsesRead, NULL,
         "Number of pulses read", NULL},
+    {"binSize", (getter)PyLasFile_getBinSize, (setter)PyLasFile_setBinSize,
+        "Bin size to use for spatial data", NULL},
     {NULL}  /* Sentinel */
 };
 
@@ -757,6 +890,10 @@ init_las(void)
 
     Py_INCREF(&PyLasFileType);
     PyModule_AddObject(pModule, "LasFile", (PyObject *)&PyLasFileType);
+
+    // module constants
+    PyModule_AddIntConstant(pModule, "FIRST_RETURN", FIRST_RETURN);
+    PyModule_AddIntConstant(pModule, "LAST_RETURN", LAST_RETURN);
 
 #if PY_MAJOR_VERSION >= 3
     return pModule;
