@@ -57,13 +57,13 @@ typedef struct {
     double gps_time;
     npy_uint8 scan_direction_flag;
     npy_uint8 edge_of_flight_line;
+    double x_idx;
+    double y_idx;
     double x_origin; // the following only set when we have waveforms, or multiple returns
     double y_origin;
     double z_origin;
     double azimuth;
     double zenith;
-    double x_idx;
-    double y_idx;
 } SLasPulse;
 
 /* field info for pylidar_structArrayToNumpy */
@@ -75,13 +75,13 @@ static SpylidarFieldDefn LasPulseFields[] = {
     CREATE_FIELD_DEFN(SLasPulse, gps_time, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, scan_direction_flag, 'u'),
     CREATE_FIELD_DEFN(SLasPulse, edge_of_flight_line, 'u'),
+    CREATE_FIELD_DEFN(SLasPulse, x_idx, 'f'),
+    CREATE_FIELD_DEFN(SLasPulse, y_idx, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, x_origin, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, y_origin, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, z_origin, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, azimuth, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, zenith, 'f'),
-    CREATE_FIELD_DEFN(SLasPulse, x_idx, 'f'),
-    CREATE_FIELD_DEFN(SLasPulse, y_idx, 'f'),
     {NULL} // Sentinel
 };
 
@@ -152,6 +152,7 @@ typedef struct {
     bool bFinished;
     Py_ssize_t nPulsesRead;
     double fBinSize;
+    long nPulseIndex; // FIRST_RETURN or LAST_RETURNs
 } PyLasFile;
 
 static const char *SupportedDriverOptions[] = {"BUILD_PULSES", "BIN_SIZE", "PULSE_INDEX", NULL};
@@ -259,6 +260,7 @@ PyObject *pOptionDict;
     self->bBuildPulses = true;
     self->nPulsesRead = 0;
     self->fBinSize = 0;
+    self->nPulseIndex = FIRST_RETURN;
 
     /* Check creation options */
     PyObject *pBuildPulses = PyDict_GetItemString(pOptionDict, "BUILD_PULSES");
@@ -297,7 +299,27 @@ PyObject *pOptionDict;
         self->fBinSize = PyFloat_AsDouble(pBinSizeFloat);
         Py_DECREF(pBinSizeFloat);
     }
-    
+
+    PyObject *pPulseIndex = PyDict_GetItemString(pOptionDict, "PULSE_INDEX");
+    if( pPulseIndex != NULL )
+    {
+        if( PyLong_Check(pPulseIndex) )
+        {
+            self->nPulseIndex = PyLong_AsLong(pPulseIndex);
+        }
+        else
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, "PULSE_INDEX must be an int");    
+            return -1;
+        }
+    }
 
     LASreadOpener lasreadopener;
     lasreadopener.set_file_name(pszFname);
@@ -638,21 +660,35 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
 
     self->nPulsesRead += pulses.getNumElems();
 
-    // go through all pulses and find those with 
-    // number_of_returns > 1 and use point locations to fill in 
-    // zenith, azimuth etc
-    if( self->bBuildPulses )
+    // go through all the pulses and do some tidying up
+    for( npy_intp nPulseCount = 0; nPulseCount < pulses.getNumElems(); nPulseCount++)
     {
-        for( npy_intp nPulseCount = 0; nPulseCount < pulses.getNumElems(); nPulseCount++)
+        SLasPulse *pPulse = pulses.getElem(nPulseCount);
+        SLasPoint *p1 = points.getElem(pPulse->pts_start_idx);
+        SLasPoint *p2 = points.getElem(pPulse->pts_start_idx + pPulse->number_of_returns);
+
+        // set x_idx and y_idx for the pulses
+        if( pPulse->number_of_returns > 0 )
         {
-            SLasPulse *pPulse = pulses.getElem(nPulseCount);
-            if( ( pPulse->number_of_returns > 1 ) && ( pPulse->zenith == 0 ) && ( pPulse->azimuth == 0) )
+            if( self->nPulseIndex == FIRST_RETURN )
             {
-                SLasPoint *p1 = points.getElem(pPulse->pts_start_idx);
-                SLasPoint *p2 = points.getElem(pPulse->pts_start_idx + pPulse->number_of_returns);
-                ConvertCoordsToAngles(p2->x, p1->x, p2->y, p1->y, p2->z, p1->z,
-                            &pPulse->zenith, &pPulse->azimuth);
+                pPulse->x_idx = p1->x;
+                pPulse->y_idx = p1->y;
             }
+            else
+            {
+                pPulse->x_idx = p2->x;
+                pPulse->y_idx = p2->y;
+            }
+        }
+
+        // find those with 
+        // number_of_returns > 1 and use point locations to fill in 
+        // zenith, azimuth etc if self->bBuildPulses
+        if( self->bBuildPulses && ( pPulse->number_of_returns > 1 ) && ( pPulse->zenith == 0 ) && ( pPulse->azimuth == 0) )
+        {
+            ConvertCoordsToAngles(p2->x, p1->x, p2->y, p1->y, p2->z, p1->z,
+                        &pPulse->zenith, &pPulse->azimuth);
         }
     }
 

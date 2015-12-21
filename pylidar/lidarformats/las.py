@@ -60,6 +60,13 @@ from . import _las
 from . import gridindexutils
 
 SUPPORTEDOPTIONS = _las.getSupportedOptions()
+# bring constants over
+FIRST_RETURN = _las.FIRST_RETURN
+LAST_RETURN = _las.LAST_RETURN
+
+# types for the spatial index
+LAS_SIMPLEGRID_COUNT_DTYPE = numpy.uint32
+LAS_SIMPLEGRID_INDEX_DTYPE = numpy.uint64
 
 def isLasFile(fname):
     """
@@ -171,7 +178,7 @@ class LasFile(generic.LiDARFile):
         # after a read that we can't
         return not self.lasFile.finished
         
-    def readData(self):
+    def readData(self, extent=None):
         """
         Internal method. Just reads into the self.last* fields
         """
@@ -186,35 +193,28 @@ class LasFile(generic.LiDARFile):
                 self.lastWaveformInfo = info
                 self.lastReceived = recv
                 
-        elif self.extent is not None:
-            if self.lastExtent is None or self.extent != self.lastExtent:
-                # tell liblas to only read data in from the current extent
-                # this may be on a different grid to the pixelgrid - it doesn't matter
-                # since the spatial index isn't grid based.
-                self.lasFile.setExtent(self.extent.xMin, self.extent.xMax,
-                        self.extent.yMin, self.extent.yMax)                
-            
-                pulses, points, info, recv = self.lasFile.readData()
-                
-                nrows = int(numpy.ceil((self.extent.yMax - self.extent.yMin) / 
-                        self.extent.binSize))
-                ncols = int(numpy.ceil((self.extent.xMax - self.extent.xMin) / 
-                        self.extent.binSize))
-                nrows += (self.controls.overlap * 2)
-                ncols += (self.controls.overlap * 2)
-                
-                # grid the data
-                #mask, sortedbins, idx, cnt = gridindexutils.CreateSpatialIndex(
-                #                pulses['X'
-                
-                self.lastExtent = self.extent
-                self.lastPoints = points
-                self.lastPulses = pulses
-                self.lastWaveformInfo = info
-                self.lastReceived = recv
         else:
-            msg = 'must set extent or range before reading data'
-            raise ValueError(msg)
+            if extent is None:
+                extent = self.extent
+                
+            if extent is not None:
+                if self.lastExtent is None or extent != self.lastExtent:
+                    # tell liblas to only read data in from the current extent
+                    # this may be on a different grid to the pixelgrid - it doesn't matter
+                    # since the spatial index isn't grid based.
+                    self.lasFile.setExtent(extent.xMin, extent.xMax,
+                        extent.yMin, extent.yMax)                
+            
+                    pulses, points, info, recv = self.lasFile.readData()
+                
+                    self.lastExtent = extent
+                    self.lastPoints = points
+                    self.lastPulses = pulses
+                    self.lastWaveformInfo = info
+                    self.lastReceived = recv
+            else:
+                msg = 'must set extent or range before reading data'
+                raise ValueError(msg)
                                         
     def readPointsForRange(self, colNames=None):
         """
@@ -300,15 +300,15 @@ class LasFile(generic.LiDARFile):
         epsg = self.lasFile.getEPSG()
         sr = osr.SpatialReference()
         sr.ImportFromEPSG(epsg)
-        wkt = sr.exportToWkt()
+        wkt = sr.ExportToWkt()
         binSize = self.lasFile.binSize
         if binSize == 0:
             msg = 'Must set BIN_SIZE option to read Las files spatially'
             raise generic.LiDARFunctionUnsupported(msg)
-        
-        pixgrid = pixelgrid.PixelGridDefn(projection=wkt, xMin=header['X_MIN'],
-                        xMax=header['X_MAX'], yMin=header['Y_MIN'], 
-                        yMax=header['Y_MAX'], xRes=binSize, yRes=binSize)
+
+        pixgrid = pixelgrid.PixelGridDefn(projection=wkt, xMin=header['MIN_X'],
+                        xMax=header['MAX_X'], yMin=header['MIN_Y'], 
+                        yMax=header['MAX_Y'], xRes=binSize, yRes=binSize)
         return pixgrid
 
     def readPointsForExtent(self, colNames=None):
@@ -320,7 +320,8 @@ class LasFile(generic.LiDARFile):
         colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
-        raise NotImplementedError()
+        self.readData()
+        return self.subsetColumns(self.lastPoints, colNames)
 
     def readPulsesForExtent(self, colNames=None):
         """
@@ -331,7 +332,146 @@ class LasFile(generic.LiDARFile):
         colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
-        raise NotImplementedError()
+        self.readData()
+        return self.subsetColumns(self.lastPulses, colNames)
+        
+    def readPulsesForExtentByBins(extent=None, colNames=None):
+        """
+        Read all the pulses within the given extent as a 3d structured 
+        masked array to match the block/bins being used.
+        
+        The extent/binning for the read data can be overriden by passing in a
+        Extent instance.
+
+        colNames can be a name or list of column names to return. By default
+        all columns are returned.
+        """
+        # now spatially index the pulses
+        if extent is None:
+            extent = self.extent
+            
+        self.readData(extent)
+        
+        # TODO: cache somehow with colNames
+        nrows = int(numpy.ceil((extent.yMax - extent.yMin) / 
+            extent.binSize))
+        ncols = int(numpy.ceil((extent.xMax - extent.xMin) / 
+            extent.binSize))
+        nrows += (self.controls.overlap * 2)
+        ncols += (self.controls.overlap * 2)
+                
+        xidx = self.lastPulses['X_IDX']
+        yidx = self.lastPulses['Y_IDX']
+        
+        mask, sortedbins, idx, cnt = gridindexutils.CreateSpatialIndex(xidx,
+                yidx, extent.binSize, extent.yMax, extent.xMin, 
+                nrows, ncols, LAS_SIMPLEGRID_INDEX_DTYPE, 
+                LAS_SIMPLEGRID_COUNT_DTYPE)
+
+        pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(        
+                idx, cnt)
+                
+        pulses = self.lastPulses[mask]
+        pulses = pulses[sortedbins]
+        
+        pulsesByBins = pulses[pulse_idx]
+        if colNames is None:
+            # workaround - seems a structured array returned from
+            # C doesn't work with masked arrays. The dtype looks different.
+            # TODO: check this with a later numpy
+            colNames = pulsesByBins.dtype.names
+            
+        pointsByBins = self.subsetColumns(pointsByBins, colNames)
+        pulsesByBins = numpy.ma.array(pulsesByBins, mask=pulse_idx_mask)              
+        return pulsesByBins
+        
+    def readPointsForExtentByBins(extent=None, colNames=None, indexByPulse=False, 
+                returnPulseIndex=False):
+        """
+        Read all the points within the given extent as a 3d structured 
+        masked array to match the block/bins being used.
+        
+        The extent/binning for the read data can be overriden by passing in a
+        Extent instance.
+
+        colNames can be a name or list of column names to return. By default
+        all columns are returned.
+        
+        Pass indexByPulse=True to bin the points by the locations of the pulses
+            instead of the points.
+        
+        Pass returnPulseIndex=True to also return a masked 3d array of 
+            the indices into the 1d pulse array (as returned by 
+            readPulsesForExtent())
+        
+        """
+        # now spatially index the points
+        if extent is None:
+            extent = self.extent
+            
+        self.readData(extent)
+        
+        # TODO: cache somehow with colNames
+        nrows = int(numpy.ceil((extent.yMax - extent.yMin) / 
+            extent.binSize))
+        ncols = int(numpy.ceil((extent.xMax - extent.xMin) / 
+            extent.binSize))
+        nrows += (self.controls.overlap * 2)
+        ncols += (self.controls.overlap * 2)
+                
+        if indexByPulse:
+            xidx = self.lastPulses['X_IDX']
+            yidx = self.lastPulses['Y_IDX']
+            nreturns = self.lastPulses['NUMBER_OF_RETURNS']
+            xidx = numpy.repeat(xidx, nreturns)
+            yidx = numpy.repeat(yidx, nreturns)
+        else:
+            xidx = self.lastPoints['X']
+            yidx = self.lastPoints['Y']
+        
+        mask, sortedbins, idx, cnt = gridindexutils.CreateSpatialIndex(xidx,
+                yidx, extent.binSize, extent.yMax, extent.xMin, 
+                nrows, ncols, LAS_SIMPLEGRID_INDEX_DTYPE, 
+                LAS_SIMPLEGRID_COUNT_DTYPE)
+
+        point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(        
+                idx, cnt)
+                
+        points = self.lastPoints[mask]
+        points = points[sortedbins]
+        
+        pointsByBins = point[point_idx]
+        if colNames is None:
+            # workaround - seems a structured array returned from
+            # C doesn't work with masked arrays. The dtype looks different.
+            # TODO: check this with a later numpy
+            colNames = pointsByBins.dtype.names
+            
+        pointsByBins = self.subsetColumns(pointsByBins, colNames)
+        pointsByBins = numpy.ma.array(pointsByBins, mask=point_idx_mask)
+        
+        if returnPulseIndex:
+            # have to generate array the same lengths as the 1d points
+            # but containing the indexes of the pulses
+            pulse_count = numpy.arange(0, self.lastPulses.size)
+            # convert this into an array with an element for each point
+            pulse_idx_1d = numpy.repeat(pulse_count, 
+                            self.lastPulses['NUMBER_OF_RETURNS'])
+            # mask the ones that are within the spatial index
+            pulse_idx_1d = pulse_idx_1d[mask]
+            # sort the right way
+            sortedpulse_idx_1d = pulse_idx_1d[sortedbins]
+            # turn into a 3d in the same way as the points themselves
+            pulse_idx_3d = sortedpulse_idx_1d[pts_idx]
+            
+            # create a masked array 
+            pulse_idx_3dmask = numpy.ma.array(pulse_idx_3d, mask=point_idx_mask)
+            
+            # return 2 things
+            return pointsByBins, pulse_idx_3dmask
+        else:
+            # just return the points
+            return pointsByBins
 
     def writeData(self, pulses=None, points=None, transmitted=None, 
                 received=None, waveformInfo=None):
