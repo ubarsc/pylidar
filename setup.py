@@ -116,6 +116,9 @@ def addLasDriver(extModules, cxxFlags):
     Decides if the Las driver is to be built. If so
     adds the Extension class to extModules.
     """
+    libname = 'las'
+    if sys.platform == 'win32':
+        libname = 'laslib.lib'
     if 'LASTOOLS_ROOT' in os.environ:
         print('Building Las Extension...')
         lastoolsRoot = os.environ['LASTOOLS_ROOT']
@@ -123,7 +126,7 @@ def addLasDriver(extModules, cxxFlags):
                 sources=['src/las.cpp', 'src/pylidar.c'],
                 include_dirs=[os.path.join(lastoolsRoot, 'include')],
                 extra_compile_args=cxxFlags,
-                libraries=['las'],
+                libraries=[libname],
                 library_dirs=[os.path.join(lastoolsRoot, 'lib')])
                 
         extModules.append(lasModule)
