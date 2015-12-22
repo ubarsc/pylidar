@@ -118,7 +118,7 @@ def addLasDriver(extModules, cxxFlags):
     """
     libname = 'las'
     if sys.platform == 'win32':
-        libname = 'laslib.lib'
+        libname = 'laslib'
     if 'LASTOOLS_ROOT' in os.environ:
         print('Building Las Extension...')
         lastoolsRoot = os.environ['LASTOOLS_ROOT']
