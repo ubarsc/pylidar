@@ -102,7 +102,7 @@ class LasFile(generic.LiDARFile):
         
         try:
             self.lasFile = _las.LasFile(fname, userClass.lidarDriverOptions)
-        except:
+        except _las.error:
             msg = 'cannot open as las file'
             raise generic.LiDARFileException(msg)
 
@@ -246,7 +246,17 @@ class LasFile(generic.LiDARFile):
         about the waveforms.
         """
         self.readData()                            
-        return self.lastWaveformInfo
+        # workaround - seems a structured array returned from
+        # C doesn't work with masked arrays. The dtype looks different.
+        # TODO: check this with a later numpy
+        colNames = self.lastWaveformInfo.dtype.names
+        info = self.subsetColumns(self.lastWaveformInfo, colNames)
+        if info is not None:
+            info = numpy.expand_dims(info, axis=0)
+            info = numpy.expand_dims(info, axis=0)
+            mask = numpy.zeros_like(info, dtype=numpy.bool)
+            info = numpy.ma.array(info, mask=mask)
+        return info
         
     def readTransmitted(self):
         """
@@ -287,6 +297,17 @@ class LasFile(generic.LiDARFile):
         # very tied down concept of it. We will just read whatever
         # the extent is        
         
+    @staticmethod
+    def getWktFromEPSG(epsg):
+        """
+        Gets the WKT from a given EPSG
+        via GDAL.
+        """
+        sr = osr.SpatialReference()
+        sr.ImportFromEPSG(epsg)
+        wkt = sr.ExportToWkt()
+        return wkt
+        
     def getPixelGrid(self):
         """
         Return the PixelGridDefn for this file
@@ -298,9 +319,7 @@ class LasFile(generic.LiDARFile):
             
         header = self.getHeader()
         epsg = self.lasFile.getEPSG()
-        sr = osr.SpatialReference()
-        sr.ImportFromEPSG(epsg)
-        wkt = sr.ExportToWkt()
+        wkt = self.getWktFromEPSG(epsg)
         binSize = self.lasFile.binSize
         if binSize == 0:
             msg = 'Must set BIN_SIZE option to read Las files spatially'
@@ -501,4 +520,38 @@ class LasFile(generic.LiDARFile):
         Just extract the one value and return it
         """
         return self.getHeader()[name]
+
+class LasFileInfo(generic.LiDARFileInfo):
+    """
+    Class that gets information about a .las file
+    and makes it available as fields.
+    """
+    def __init__(self, fname):
+        generic.LiDARFileInfo.__init__(self, fname)
+        
+        if not isLasFile(fname):
+            msg = 'not a Las file'
+            raise generic.LiDARFormatNotUnderstood(msg)
             
+        # open the file object
+        try:
+            lasFile = _las.LasFile(fname, {})
+        except _las.error:
+            msg = 'error opening las file'
+            raise generic.LiDARFormatNotUnderstood(msg)
+            
+        # get header
+        self.header = lasFile.readHeader()
+        
+        # projection
+        try:
+            epsg = lasFile.getEPSG()
+            self.wkt = LasFile.getWktFromEPSG(epsg)
+        except _las.error:
+            # no projection info
+            self.wkt = None
+            
+        self.hasSpatialIndex = lasFile.hasSpatialIndex
+        
+    
+    

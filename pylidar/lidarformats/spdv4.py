@@ -1030,7 +1030,7 @@ spatial index will be recomputed on the fly"""
 
     def readWaveformInfo(self):
         """
-        Return 2d masked array of information about
+        Return 3d masked array of information about
         the waveforms.
         """
         if self.controls.spatialProcessing:
@@ -1683,7 +1683,7 @@ spatial index will be recomputed on the fly"""
                 raise generic.LiDARInvalidData(msg)
 
         writeWavefromInfo = waveformInfo is not None
-        if waveformInfo is None:
+        if waveformInfo is None and self.mode == generic.UPDATE:
             waveformInfo = self.readWaveformInfo()
         
         if pulses is not None:
@@ -1895,7 +1895,8 @@ spatial index will be recomputed on the fly"""
                 self.lastPulsesColumns == colNames):
             return self.lastPulses
         
-        size = pulsesHandle.shape[0]
+        firstCol = list(pulsesHandle.keys())[0]
+        size = pulsesHandle[firstCol].shape[0]
         space = h5space.createSpaceFromRange(self.pulseRange.startPulse, 
                         self.pulseRange.endPulse, size)
         pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, space)

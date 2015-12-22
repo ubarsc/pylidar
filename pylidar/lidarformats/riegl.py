@@ -348,7 +348,7 @@ class RieglFileInfo(generic.LiDARFileInfo):
                 
         if not isRieglFile(fname):
             msg = 'not a riegl file'
-            raise generic.LiDARFileException(msg)
+            raise generic.LiDARFormatNotUnderstood(msg)
 
         dict = _riegl.getFileInfo(fname)
         # transfer the fields to this object
