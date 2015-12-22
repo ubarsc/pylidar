@@ -20,6 +20,7 @@
  *
  */
 
+#define _USE_MATH_DEFINES // for Windows
 #include <cmath>
 #include <Python.h>
 #include "numpy/arrayobject.h"
