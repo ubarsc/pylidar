@@ -67,8 +67,15 @@ typedef struct
     int nStructTotalSize;
 } SpylidarFieldDefn;
 
+/* workaround for gcc 4.7.4 (maybe other versions?) where offsetof isn't recognised from 
+las.cpp (but is from riegl.cpp). */
+#ifdef __GNUC__
+#define CREATE_FIELD_DEFN(STRUCT, FIELD, KIND) \
+    {#FIELD, KIND, sizeof(((STRUCT*)0)->FIELD), __builtin_offsetof(STRUCT, FIELD), sizeof(STRUCT)}
+#else
 #define CREATE_FIELD_DEFN(STRUCT, FIELD, KIND) \
     {#FIELD, KIND, sizeof(((STRUCT*)0)->FIELD), offsetof(STRUCT, FIELD), sizeof(STRUCT)}
+#endif
 
 /* 
 Here is an example of use:
