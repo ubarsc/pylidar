@@ -43,14 +43,16 @@ public:
         m_nTotalSize = 0;
         m_nGrowBy = 0;
         m_bOwned = false;
+        m_nElemSize = 0;
     }
-    CVector(npy_intp nStartSize, npy_intp nGrowBy)
+    CVector(npy_intp nStartSize, npy_intp nGrowBy, npy_intp nElemSize=sizeof(T))
     {
-        m_pData = (T*)PyArray_malloc(nStartSize * sizeof(T));
+        m_pData = (T*)PyArray_malloc(nStartSize * nElemSize);
         m_nElems = 0;
         m_nTotalSize = nStartSize;
         m_nGrowBy = nGrowBy;
         m_bOwned = true;
+        m_nElemSize = nElemSize;
     }
     // takes copy
     CVector(T *pData, npy_intp nSize, npy_intp nGrowBy=1)
@@ -61,6 +63,7 @@ public:
         m_nTotalSize = m_nElems;
         m_nGrowBy = nGrowBy;
         m_bOwned = true;
+        m_nElemSize = sizeof(T);
     }
     ~CVector()
     {
@@ -93,14 +96,14 @@ public:
         {
             // realloc
             m_nTotalSize += m_nGrowBy;
-            T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * sizeof(T));
+            T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * m_nElemSize);
             if( pNewData == NULL )
             {
                 throw std::bad_alloc();
             }
             m_pData = pNewData;
         }
-        memcpy(&m_pData[m_nElems], pNewElem, sizeof(T));
+        memcpy(&m_pData[m_nElems], pNewElem, m_nElemSize);
         m_nElems++;
     }
 
@@ -136,7 +139,7 @@ public:
         {
             // partial - first shuffle down
             npy_intp nRemain = m_nElems - nRemove;
-            memcpy(&m_pData[0], &m_pData[nRemove], nRemain * sizeof(T));
+            memcpy(&m_pData[0], &m_pData[nRemove], nRemain * m_nElemSize);
             m_nElems = nRemain;
         }
     }
@@ -173,13 +176,13 @@ public:
         // CVector
         npy_intp nNewSize = m_nElems - nUpper;
         CVector<T> *splitted = new CVector<T>(nNewSize, m_nGrowBy);
-        memcpy(splitted->m_pData, &m_pData[nUpper], nNewSize * sizeof(T));
+        memcpy(splitted->m_pData, &m_pData[nUpper], nNewSize * m_nElemSize);
         splitted->m_nElems = nNewSize;
 
         // resize this one down
         m_nElems = nUpper;
         m_nTotalSize = nUpper;
-        T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * sizeof(T));
+        T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * m_nElemSize);
         if( pNewData == NULL )
         {
             throw std::bad_alloc();
@@ -201,7 +204,7 @@ public:
         // CVector
         npy_intp nNewSize = std::min(nUpper, m_nElems);
         CVector<T> *splitted = new CVector<T>(nNewSize, m_nGrowBy);
-        memcpy(splitted->m_pData, &m_pData[0], nNewSize * sizeof(T));
+        memcpy(splitted->m_pData, &m_pData[0], nNewSize * m_nElemSize);
         splitted->m_nElems = nNewSize;
 
         // resize this one down
@@ -220,7 +223,7 @@ public:
         if( nNewTotalSize > m_nTotalSize )
         {
             m_nTotalSize = nNewTotalSize;
-            T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * sizeof(T));
+            T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * m_nElemSize);
             if( pNewData == NULL )
             {
                 throw std::bad_alloc();
@@ -228,7 +231,7 @@ public:
             m_pData = pNewData;
         }
 
-        memcpy(&m_pData[m_nElems], other->m_pData, other->m_nElems * sizeof(T));
+        memcpy(&m_pData[m_nElems], other->m_pData, other->m_nElems * m_nElemSize);
 
         m_nElems = nNewElems;
     }
@@ -239,6 +242,7 @@ private:
     npy_intp m_nElems;
     npy_intp m_nTotalSize;
     npy_intp m_nGrowBy;
+    npy_intp m_nElemSize; // normall sizeof(T) but can be overidden
 };
 
 } //namespace pylidar

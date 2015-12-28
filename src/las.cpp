@@ -162,6 +162,7 @@ typedef struct {
     Py_ssize_t nPulsesRead;
     double fBinSize;
     long nPulseIndex; // FIRST_RETURN or LAST_RETURNs
+    SpylidarFieldDefn *pLasPointFieldsWithExt; // != NULL and use instead of LasPointFields when extended fields defined
 } PyLasFile;
 
 static const char *SupportedDriverOptions[] = {"BUILD_PULSES", "BIN_SIZE", "PULSE_INDEX", NULL};
@@ -237,6 +238,10 @@ PyLasFile_dealloc(PyLasFile *self)
     {
         delete self->pWaveformReader;
     }
+    if(self->pLasPointFieldsWithExt != NULL)
+    {
+        free(self->pLasPointFieldsWithExt);
+    }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -270,6 +275,7 @@ PyObject *pOptionDict;
     self->nPulsesRead = 0;
     self->fBinSize = 0;
     self->nPulseIndex = FIRST_RETURN;
+    self->pLasPointFieldsWithExt = NULL;
 
     /* Check creation options */
     PyObject *pBuildPulses = PyDict_GetItemString(pOptionDict, "BUILD_PULSES");
@@ -536,11 +542,11 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
     }
 
     pylidar::CVector<SLasPulse> pulses(nInitSize, nGrowBy);
-    pylidar::CVector<SLasPoint> points(nInitSize, nGrowBy);
+    pylidar::CVector<SLasPoint> *pPoints = NULL; // we don't know size - may be extra fields
     pylidar::CVector<SLasWaveformInfo> waveformInfos(nInitSize, nGrowBy);
     pylidar::CVector<U8> received(nInitSize, nGrowBy);
     SLasPulse lasPulse;
-    SLasPoint lasPoint;
+    SLasPoint *pLasPoint = NULL; // we don't know size - may be extra fields
     SLasWaveformInfo lasWaveformInfo;
     bool bFinished = false;
 
@@ -554,43 +560,129 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
             break;
         }
 
+        // check if there are optional extra fields. 
+        // it seems best to do this when the reader is all set up.
+        // so this should happen once
+        if( (pPoint->attributer != NULL) && (self->pLasPointFieldsWithExt == NULL ) )
+        {
+            // alloc enough mem for standard fields and the extra fields
+            int nOldFields = (sizeof(LasPointFields) / sizeof(SpylidarFieldDefn)) - 1; // without sentinel
+            int nNewFields = nOldFields + pPoint->attributer->number_attributes + 1; // with sentinel
+            self->pLasPointFieldsWithExt = (SpylidarFieldDefn*)malloc(sizeof(SpylidarFieldDefn) * nNewFields);
+
+            // copy the data over
+            memcpy(self->pLasPointFieldsWithExt, LasPointFields, sizeof(SpylidarFieldDefn) * nOldFields);
+
+            // assume extra fields are all floats which seems to make sense as even
+            // if they are stored as short etc, there is scaling often applied.
+            int nNewTotalSize = sizeof(SLasPoint) + 
+                    (sizeof(double) * pPoint->attributer->number_attributes);
+
+            // reset the nStructTotalSize field
+            for( int i = 0; i < (nNewFields-1); i++ )
+            {
+                self->pLasPointFieldsWithExt[i].nStructTotalSize = nNewTotalSize;
+            }
+
+            // fill in the extra fields
+            for( int i = 0; i < pPoint->attributer->number_attributes; i++ )
+            {
+                SpylidarFieldDefn *pDest = &self->pLasPointFieldsWithExt[nOldFields+i];
+                pDest->pszName = pPoint->attributer->attributes[i].name;
+                pDest->cKind = 'f';
+                pDest->nSize = sizeof(double);
+                pDest->nOffset = sizeof(SLasPoint) + (i * sizeof(double));
+                // nStructTotalSize done above
+            }
+
+            // ensure sentinel set
+            SpylidarFieldDefn *pDest = &self->pLasPointFieldsWithExt[nNewFields-1];
+            memset(pDest, 0, sizeof(SpylidarFieldDefn));
+
+            //for( int i = 0; i < nNewFields; i++)
+            //{
+            //    SpylidarFieldDefn *p = &self->pLasPointFieldsWithExt[i];
+            //    fprintf(stderr, "%d %s %c %d %d %d\n", i, p->pszName, p->cKind, p->nSize, p->nOffset, p->nStructTotalSize);
+            //}
+        }
+
+        // allocate space if needed
+        if( pLasPoint == NULL )
+        {
+            int nSizeStruct = LasPointFields[0].nStructTotalSize;
+            if( self->pLasPointFieldsWithExt != NULL )
+            {
+                // there are extra fields. Use this size instead
+                nSizeStruct = self->pLasPointFieldsWithExt[0].nStructTotalSize;
+            }
+            pLasPoint = (SLasPoint*)malloc(nSizeStruct);
+
+            // now know size of items
+            pPoints = new pylidar::CVector<SLasPoint>(nInitSize, nGrowBy, nSizeStruct);
+        }
+
         // always add a new point
-        lasPoint.x = self->pReader->get_x();
-        lasPoint.y = self->pReader->get_y();
-        lasPoint.z = self->pReader->get_z();
-        lasPoint.intensity = pPoint->get_intensity();
+        pLasPoint->x = self->pReader->get_x();
+        pLasPoint->y = self->pReader->get_y();
+        pLasPoint->z = self->pReader->get_z();
+        pLasPoint->intensity = pPoint->get_intensity();
         if( pPoint->extended_point_type )
         {
             // use the 'extended' fields since they are bigger
             // I *think* there is no need for the un-extended fields in this case
-            lasPoint.return_number = pPoint->get_extended_return_number() - 1; // 1-based for some reason
-            lasPoint.classification = pPoint->get_extended_classification();
+            pLasPoint->return_number = pPoint->get_extended_return_number() - 1; // 1-based for some reason
+            pLasPoint->classification = pPoint->get_extended_classification();
         }
         else
         {
-            lasPoint.return_number = pPoint->get_return_number() - 1; // 1-based for some reason
-            lasPoint.classification = pPoint->get_classification();
+            pLasPoint->return_number = pPoint->get_return_number() - 1; // 1-based for some reason
+            pLasPoint->classification = pPoint->get_classification();
         }
-        lasPoint.synthetic_flag = pPoint->get_synthetic_flag();
-        lasPoint.keypoint_flag = pPoint->get_keypoint_flag();
-        lasPoint.withheld_flag = pPoint->get_withheld_flag();
-        lasPoint.user_data = pPoint->get_user_data();
-        lasPoint.point_source_ID = pPoint->get_point_source_ID();
-        lasPoint.deleted_flag = pPoint->get_deleted_flag();
-        lasPoint.extended_point_type = pPoint->extended_point_type; // no function?
-        lasPoint.red = pPoint->rgb[0];        
-        lasPoint.green = pPoint->rgb[1];        
-        lasPoint.blue = pPoint->rgb[2];        
-        lasPoint.nir = pPoint->rgb[3];        
-        points.push(&lasPoint);
+        pLasPoint->synthetic_flag = pPoint->get_synthetic_flag();
+        pLasPoint->keypoint_flag = pPoint->get_keypoint_flag();
+        pLasPoint->withheld_flag = pPoint->get_withheld_flag();
+        pLasPoint->user_data = pPoint->get_user_data();
+        pLasPoint->point_source_ID = pPoint->get_point_source_ID();
+        pLasPoint->deleted_flag = pPoint->get_deleted_flag();
+        pLasPoint->extended_point_type = pPoint->extended_point_type; // no function?
+        pLasPoint->red = pPoint->rgb[0];        
+        pLasPoint->green = pPoint->rgb[1];        
+        pLasPoint->blue = pPoint->rgb[2];        
+        pLasPoint->nir = pPoint->rgb[3];        
+
+        // now extra fields
+        if( self->pLasPointFieldsWithExt != NULL )
+        {
+            for( int i = 0; i < pPoint->attributer->number_attributes; i++ )
+            {
+                LASattribute *pAttr = &pPoint->attributer->attributes[i];
+                double dVal = pAttr->get_value_as_float(pPoint->extra_bytes + 
+                                        pPoint->attributer->attribute_starts[i]);
+
+                // find offset
+                SpylidarFieldDefn *pDefn = &self->pLasPointFieldsWithExt[0];
+                while( pDefn->pszName != NULL )
+                {
+                    if( strcmp(pAttr->name, pDefn->pszName) == 0 )
+                    {
+                        // use memcpy so works on SPARC etc without unaligned mem access
+                        memcpy((char*)pLasPoint + pDefn->nOffset, &dVal, sizeof(double));
+                        break;
+                    }
+                    pDefn++;
+                }
+            }
+        }
+
+        pPoints->push(pLasPoint);
 
         // only add a pulse if we are building a pulse per point (self->bBuildPulses == false)
         // or this is the first return of a number of points
-        if( !self->bBuildPulses || ( lasPoint.return_number == 0 ) )
+        if( !self->bBuildPulses || ( pLasPoint->return_number == 0 ) )
         {
             lasPulse.scan_angle_rank = pPoint->get_scan_angle_rank();
             lasPulse.scan_angle = pPoint->get_scan_angle();
-            lasPulse.pts_start_idx = points.getNumElems();
+            lasPulse.pts_start_idx = pPoints->getNumElems();
             if( self->bBuildPulses )
                 lasPulse.number_of_returns = pPoint->get_number_of_returns();
             else
@@ -644,9 +736,9 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
                    This is calculated as the location of the first return 
                    minus the time offset multiplied by XYZ(t) which is a vector
                    away from the laser origin */
-                lasPulse.x_origin = lasPoint.x - location * self->pWaveformReader->XYZt[0];
-                lasPulse.y_origin = lasPoint.y - location * self->pWaveformReader->XYZt[1];
-                lasPulse.z_origin = lasPoint.z - location * self->pWaveformReader->XYZt[2];
+                lasPulse.x_origin = pLasPoint->x - location * self->pWaveformReader->XYZt[0];
+                lasPulse.y_origin = pLasPoint->y - location * self->pWaveformReader->XYZt[1];
+                lasPulse.z_origin = pLasPoint->z - location * self->pWaveformReader->XYZt[2];
 
                 /* Get the end location of the return pulse
                   This is calculated as start location of the pulse
@@ -687,8 +779,8 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
     for( npy_intp nPulseCount = 0; nPulseCount < pulses.getNumElems(); nPulseCount++)
     {
         SLasPulse *pPulse = pulses.getElem(nPulseCount);
-        SLasPoint *p1 = points.getElem(pPulse->pts_start_idx);
-        SLasPoint *p2 = points.getElem(pPulse->pts_start_idx + pPulse->number_of_returns);
+        SLasPoint *p1 = pPoints->getElem(pPulse->pts_start_idx);
+        SLasPoint *p2 = pPoints->getElem(pPulse->pts_start_idx + pPulse->number_of_returns);
 
         // set x_idx and y_idx for the pulses
         if( pPulse->number_of_returns > 0 )
@@ -715,13 +807,24 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
         }
     }
 
-    PyObject *pPulses = pulses.getNumpyArray(LasPulseFields);
-    PyObject *pPoints = points.getNumpyArray(LasPointFields);
-    PyObject *pInfos = waveformInfos.getNumpyArray(LasWaveformInfoFields);
-    PyObject *pReceived = received.getNumpyArray(NPY_UINT8);
+    // as we only allocated when we knew the size with extra fields
+    free(pLasPoint);
+
+    PyObject *pNumpyPulses = pulses.getNumpyArray(LasPulseFields);
+    SpylidarFieldDefn *pPointDefn = LasPointFields;
+    if( self->pLasPointFieldsWithExt != NULL )
+    {
+        // extra fields - use other definition instead
+        pPointDefn = self->pLasPointFieldsWithExt;
+    }
+
+    PyObject *pNumpyPoints = pPoints->getNumpyArray(pPointDefn);
+    delete pPoints;
+    PyObject *pNumpyInfos = waveformInfos.getNumpyArray(LasWaveformInfoFields);
+    PyObject *pNumpyReceived = received.getNumpyArray(NPY_UINT8);
 
     // build tuple
-    PyObject *pTuple = PyTuple_Pack(4, pPulses, pPoints, pInfos, pReceived);
+    PyObject *pTuple = PyTuple_Pack(4, pNumpyPulses, pNumpyPoints, pNumpyInfos, pNumpyReceived);
     return pTuple;
 }
 
@@ -739,12 +842,15 @@ static PyObject *PyLasFile_getEPSG(PyLasFile *self, PyObject *args)
     long nEPSG = 0;
 
     LASheader *pHeader = &self->pReader->header;
-    for (int j = 0; j < pHeader->vlr_geo_keys->number_of_keys; j++)
+    if( pHeader->vlr_geo_keys != NULL )
     {
-        if(pHeader->vlr_geo_key_entries[j].key_id == 3072)
+        for (int j = 0; j < pHeader->vlr_geo_keys->number_of_keys; j++)
         {
-            nEPSG = pHeader->vlr_geo_key_entries[j].value_offset;
-            foundProjection = true;
+            if(pHeader->vlr_geo_key_entries[j].key_id == 3072)
+            {
+                nEPSG = pHeader->vlr_geo_key_entries[j].value_offset;
+                foundProjection = true;
+            }
         }
     }
 
@@ -937,6 +1043,7 @@ init_las(void)
         Py_DECREF(pModule);
         INITERROR;
     }
+    PyModule_AddObject(pModule, "error", state->error);
 
     /* Scan file type */
     PyLasFileType.tp_new = PyType_GenericNew;

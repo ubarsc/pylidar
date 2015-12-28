@@ -1393,6 +1393,7 @@ init_riegl(void)
         Py_DECREF(pModule);
         INITERROR;
     }
+    PyModule_AddObject(pModule, "error", state->error);
 
     /* Scan file type */
     PyRieglScanFileType.tp_new = PyType_GenericNew;
