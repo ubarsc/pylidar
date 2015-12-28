@@ -52,12 +52,14 @@ static struct LasState _state;
 /* Structure for LAS pulses */
 typedef struct {
     npy_int8 scan_angle_rank;
+    npy_int16 scan_angle; // different to scan_angle_rank for extended (las 1.4)
     npy_uint32 pts_start_idx;
     npy_uint8 number_of_returns;
     npy_uint8 orig_number_of_returns; // original in file. != number_of_returns when BUILD_PULSES=False
     double gps_time;
     npy_uint8 scan_direction_flag;
     npy_uint8 edge_of_flight_line;
+    npy_uint8 scanner_channel;
     double x_idx;
     double y_idx;
     double x_origin; // the following only set when we have waveforms, or multiple returns
@@ -70,12 +72,14 @@ typedef struct {
 /* field info for pylidar_structArrayToNumpy */
 static SpylidarFieldDefn LasPulseFields[] = {
     CREATE_FIELD_DEFN(SLasPulse, scan_angle_rank, 'i'),
+    CREATE_FIELD_DEFN(SLasPulse, scan_angle, 'i'),
     CREATE_FIELD_DEFN(SLasPulse, number_of_returns, 'u'),
     CREATE_FIELD_DEFN(SLasPulse, pts_start_idx, 'u'),
     CREATE_FIELD_DEFN(SLasPulse, orig_number_of_returns, 'u'),
     CREATE_FIELD_DEFN(SLasPulse, gps_time, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, scan_direction_flag, 'u'),
     CREATE_FIELD_DEFN(SLasPulse, edge_of_flight_line, 'u'),
+    CREATE_FIELD_DEFN(SLasPulse, scanner_channel, 'u'),
     CREATE_FIELD_DEFN(SLasPulse, x_idx, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, y_idx, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, x_origin, 'f'),
@@ -99,6 +103,8 @@ typedef struct {
     npy_uint8 withheld_flag;
     npy_uint8 user_data;
     npy_uint16 point_source_ID;
+    npy_uint32 deleted_flag;
+    npy_uint8 extended_point_type; // appropriate extended field copied in if set for above fields
     npy_uint16 red;
     npy_uint16 green;
     npy_uint16 blue;
@@ -118,6 +124,8 @@ static SpylidarFieldDefn LasPointFields[] = {
     CREATE_FIELD_DEFN(SLasPoint, withheld_flag, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, user_data, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, point_source_ID, 'u'),
+    CREATE_FIELD_DEFN(SLasPoint, deleted_flag, 'u'),
+    CREATE_FIELD_DEFN(SLasPoint, extended_point_type, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, red, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, green, 'u'),
     CREATE_FIELD_DEFN(SLasPoint, blue, 'u'),
@@ -550,14 +558,26 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
         lasPoint.x = self->pReader->get_x();
         lasPoint.y = self->pReader->get_y();
         lasPoint.z = self->pReader->get_z();
-        lasPoint.intensity = pPoint->intensity;
-        lasPoint.return_number = pPoint->return_number - 1; // 1-based for some reason
-        lasPoint.classification = pPoint->classification;
-        lasPoint.synthetic_flag = pPoint->synthetic_flag;
-        lasPoint.keypoint_flag = pPoint->keypoint_flag;
-        lasPoint.withheld_flag = pPoint->withheld_flag;
-        lasPoint.user_data = pPoint->user_data;
-        lasPoint.point_source_ID = pPoint->point_source_ID;
+        lasPoint.intensity = pPoint->get_intensity();
+        if( pPoint->extended_point_type )
+        {
+            // use the 'extended' fields since they are bigger
+            // I *think* there is no need for the un-extended fields in this case
+            lasPoint.return_number = pPoint->get_extended_return_number() - 1; // 1-based for some reason
+            lasPoint.classification = pPoint->get_extended_classification();
+        }
+        else
+        {
+            lasPoint.return_number = pPoint->get_return_number() - 1; // 1-based for some reason
+            lasPoint.classification = pPoint->get_classification();
+        }
+        lasPoint.synthetic_flag = pPoint->get_synthetic_flag();
+        lasPoint.keypoint_flag = pPoint->get_keypoint_flag();
+        lasPoint.withheld_flag = pPoint->get_withheld_flag();
+        lasPoint.user_data = pPoint->get_user_data();
+        lasPoint.point_source_ID = pPoint->get_point_source_ID();
+        lasPoint.deleted_flag = pPoint->get_deleted_flag();
+        lasPoint.extended_point_type = pPoint->extended_point_type; // no function?
         lasPoint.red = pPoint->rgb[0];        
         lasPoint.green = pPoint->rgb[1];        
         lasPoint.blue = pPoint->rgb[2];        
@@ -568,17 +588,19 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
         // or this is the first return of a number of points
         if( !self->bBuildPulses || ( lasPoint.return_number == 0 ) )
         {
-            lasPulse.scan_angle_rank = pPoint->scan_angle_rank;
+            lasPulse.scan_angle_rank = pPoint->get_scan_angle_rank();
+            lasPulse.scan_angle = pPoint->get_scan_angle();
             lasPulse.pts_start_idx = points.getNumElems();
             if( self->bBuildPulses )
-                lasPulse.number_of_returns = pPoint->number_of_returns;
+                lasPulse.number_of_returns = pPoint->get_number_of_returns();
             else
                 lasPulse.number_of_returns = 1;
 
-            lasPulse.orig_number_of_returns = pPoint->number_of_returns;
-            lasPulse.gps_time = pPoint->gps_time;
-            lasPulse.scan_direction_flag = pPoint->scan_direction_flag;
-            lasPulse.edge_of_flight_line = pPoint->edge_of_flight_line;
+            lasPulse.orig_number_of_returns = pPoint->get_number_of_returns();
+            lasPulse.gps_time = pPoint->get_gps_time();
+            lasPulse.scan_direction_flag = pPoint->get_scan_direction_flag();
+            lasPulse.edge_of_flight_line = pPoint->get_edge_of_flight_line();
+            lasPulse.scanner_channel = pPoint->get_extended_scanner_channel(); // 0 if not 'extended'
 
             if( self->pWaveformReader != NULL )
             {
