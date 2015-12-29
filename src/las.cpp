@@ -168,28 +168,7 @@ typedef struct {
 static const char *SupportedDriverOptions[] = {"BUILD_PULSES", "BIN_SIZE", "PULSE_INDEX", NULL};
 static PyObject *las_getSupportedOptions(PyObject *self, PyObject *args)
 {
-    // how many do we have?
-    Py_ssize_t n;
-    for( n = 0; SupportedDriverOptions[n] != NULL; n++ )
-    {
-        // do nothing
-    }
-
-    // now do it for real
-    PyObject *pTuple = PyTuple_New(n);
-    for( n = 0; SupportedDriverOptions[n] != NULL; n++ )
-    {
-        PyObject *pStr;
-        const char *psz = SupportedDriverOptions[n];
-#if PY_MAJOR_VERSION >= 3
-        pStr = PyUnicode_FromString(psz);
-#else
-        pStr = PyString_FromString(psz);
-#endif
-        PyTuple_SetItem(pTuple, n, pStr);
-    }
-
-    return pTuple;
+    return pylidar_stringArrayToTuple(SupportedDriverOptions);
 }
 
 // module methods

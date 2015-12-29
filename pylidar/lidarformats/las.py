@@ -17,7 +17,7 @@ These are contained in the SUPPORTEDOPTIONS module level variable.
 +-----------------------+-------------------------------------------+
 | BIN_SIZE              | A number. For files with a spatial index  |
 |                       | present this is the bin size that the     |
-|                       | Will be presented at. Las indexes can use |
+|                       | File be presented at. Las indexes can use |
 |                       | any arbitary bin size it seems, but       |
 |                       | works to specific ones which can be set   |
 |                       | with this option for this file. An error  |
@@ -318,8 +318,13 @@ class LasFile(generic.LiDARFile):
             raise generic.LiDARFunctionUnsupported(msg)
             
         header = self.getHeader()
-        epsg = self.lasFile.getEPSG()
-        wkt = self.getWktFromEPSG(epsg)
+        try:
+            epsg = self.lasFile.getEPSG()
+            wkt = self.getWktFromEPSG(epsg)
+        except _las.error:
+            # no projection info
+            wkt = None
+            
         binSize = self.lasFile.binSize
         if binSize == 0:
             msg = 'Must set BIN_SIZE option to read Las files spatially'

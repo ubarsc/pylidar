@@ -55,6 +55,9 @@ npy_int64 *pylidar_getFieldAsInt64(PyObject *pArray, const char *pszName);
 /* return a field as a double array. Caller to delete */
 double *pylidar_getFieldAsFloat64(PyObject *pArray, const char *pszName);
 
+/* return a tuple containing the strings in data. data should be NULL terminated */
+PyObject *pylidar_stringArrayToTuple(const char *data[]);
+
 
 /* structure for defining a numpy structured array from a C one
  create using CREATE_FIELD_DEFN below */

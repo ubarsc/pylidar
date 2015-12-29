@@ -395,6 +395,36 @@ npy_double fDoubleVal;
     return pOut;
 }
 
+PyObject *pylidar_stringArrayToTuple(const char *data[])
+{
+    Py_ssize_t n;
+    PyObject *pTuple;
+    PyObject *pStr;
+    const char *psz;
+
+     // how many do we have?
+    for( n = 0; data[n] != NULL; n++ )
+    {
+        // do nothing
+    }
+
+    // now do it for real
+    pTuple = PyTuple_New(n);
+    for( n = 0; data[n] != NULL; n++ )
+    {
+        psz = data[n];
+#if PY_MAJOR_VERSION >= 3
+        pStr = PyUnicode_FromString(psz);
+#else
+        pStr = PyString_FromString(psz);
+#endif
+        PyTuple_SetItem(pTuple, n, pStr);
+    }
+
+    return pTuple;
+}
+
+
 /* Wrap an existing C array of structures and return as a numpy array */
 /* Python will free data when finished */
 PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn)
