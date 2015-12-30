@@ -1,10 +1,10 @@
 """
 Driver for .las files. Uses lastools (https://github.com/LAStools/LAStools).
 
-Driver Options
---------------
+Read Driver Options
+-------------------
 
-These are contained in the SUPPORTEDOPTIONS module level variable.
+These are contained in the READSUPPORTEDOPTIONS module level variable.
 
 +-----------------------+-------------------------------------------+
 | Name                  | Use                                       |
@@ -28,6 +28,11 @@ These are contained in the SUPPORTEDOPTIONS module level variable.
 |                       | Dictates which point will be used to set  |
 |                       | the X_IDX and Y_IDX pulse fields          |
 +-----------------------+-------------------------------------------+
+
+Write Driver Options
+--------------------
+
+No driver options for writing are supported yet.
 
 """
 
@@ -59,7 +64,9 @@ from . import generic
 from . import _las
 from . import gridindexutils
 
-SUPPORTEDOPTIONS = _las.getSupportedOptions()
+READSUPPORTEDOPTIONS = _las.getReadSupportedOptions()
+WRITESUPPORTEDOPTIONS = _las.getWriteSupportedOptions()
+
 # bring constants over
 FIRST_RETURN = _las.FIRST_RETURN
 LAST_RETURN = _las.LAST_RETURN
@@ -91,19 +98,30 @@ class LasFile(generic.LiDARFile):
     """
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
-
-        if mode != generic.READ:
-            msg = 'Las driver is read only'
+        if mode != generic.READ and mode != generic.CREATE:
+            msg = 'Las driver is read or create only'
             raise generic.LiDARInvalidSetting(msg)
 
-        if not isLasFile(fname):
+        if mode == generic.READ and not isLasFile(fname):
             msg = 'not a las file'
             raise generic.LiDARFileException(msg)
+
+        # check if the options are all valid. Good to check in case of typo.
+        # hard to do this in C
+        if mode == generic.READ:
+            options = READSUPPORTEDOPTIONS
+        else:
+            options == WRITESUPPORTEDOPTIONS
+            
+        for key in userClass.lidarDriverOptions:
+            if key not in options:
+                msg = '%s not a supported las option' % repr(key)
+                raise generic.LiDARInvalidSetting(msg)
         
         try:
-            self.lasFile = _las.LasFile(fname, userClass.lidarDriverOptions)
-        except _las.error:
-            msg = 'cannot open as las file'
+            self.lasFile = _las.LasFileRead(fname, userClass.lidarDriverOptions)
+        except _las.error as e:
+            msg = 'cannot open as las file' + str(e)
             raise generic.LiDARFileException(msg)
 
         self.header = None
@@ -540,7 +558,7 @@ class LasFileInfo(generic.LiDARFileInfo):
             
         # open the file object
         try:
-            lasFile = _las.LasFile(fname, {})
+            lasFile = _las.LasFileRead(fname, {})
         except _las.error:
             msg = 'error opening las file'
             raise generic.LiDARFormatNotUnderstood(msg)

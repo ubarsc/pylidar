@@ -27,6 +27,7 @@
 #include "pylvector.h"
 
 #include "lasreader.hpp"
+#include "laswriter.hpp"
 
 // for CVector
 static const int nGrowBy = 1000;
@@ -163,18 +164,26 @@ typedef struct {
     double fBinSize;
     long nPulseIndex; // FIRST_RETURN or LAST_RETURNs
     SpylidarFieldDefn *pLasPointFieldsWithExt; // != NULL and use instead of LasPointFields when extended fields defined
-} PyLasFile;
+} PyLasFileRead;
 
-static const char *SupportedDriverOptions[] = {"BUILD_PULSES", "BIN_SIZE", "PULSE_INDEX", NULL};
-static PyObject *las_getSupportedOptions(PyObject *self, PyObject *args)
+static const char *SupportedDriverOptionsRead[] = {"BUILD_PULSES", "BIN_SIZE", "PULSE_INDEX", NULL};
+static PyObject *las_getReadSupportedOptions(PyObject *self, PyObject *args)
 {
-    return pylidar_stringArrayToTuple(SupportedDriverOptions);
+    return pylidar_stringArrayToTuple(SupportedDriverOptionsRead);
+}
+
+static const char *SupportedDriverOptionsWrite[] = {NULL};
+static PyObject *las_getWriteSupportedOptions(PyObject *self, PyObject *args)
+{
+    return pylidar_stringArrayToTuple(SupportedDriverOptionsWrite);
 }
 
 // module methods
 static PyMethodDef module_methods[] = {
-    {"getSupportedOptions", (PyCFunction)las_getSupportedOptions, METH_NOARGS,
-        "Get a tuple of supported driver options"},
+    {"getReadSupportedOptions", (PyCFunction)las_getReadSupportedOptions, METH_NOARGS,
+        "Get a tuple of supported driver options for reading"},
+    {"getWriteSupportedOptions", (PyCFunction)las_getWriteSupportedOptions, METH_NOARGS,
+        "Get a tuple of supported driver options for writing"},
     {NULL}  /* Sentinel */
 };
 
@@ -206,7 +215,7 @@ static struct PyModuleDef moduledef = {
 
 /* destructor - close and delete */
 static void 
-PyLasFile_dealloc(PyLasFile *self)
+PyLasFileRead_dealloc(PyLasFileRead *self)
 {
     if(self->pReader != NULL)
     {
@@ -226,7 +235,7 @@ PyLasFile_dealloc(PyLasFile *self)
 
 /* init method - open file */
 static int 
-PyLasFile_init(PyLasFile *self, PyObject *args, PyObject *kwds)
+PyLasFileRead_init(PyLasFileRead *self, PyObject *args, PyObject *kwds)
 {
 char *pszFname = NULL;
 PyObject *pOptionDict;
@@ -341,7 +350,7 @@ PyObject *pOptionDict;
 /* calculate the length in case they change in future */
 #define GET_LENGTH(x) (sizeof(x) / sizeof(x[0]))
 
-static PyObject *PyLasFile_readHeader(PyLasFile *self, PyObject *args)
+static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
 {
     PyObject *pHeaderDict = PyDict_New();
     LASheader *pHeader = &self->pReader->header;
@@ -465,7 +474,7 @@ void ConvertCoordsToAngles(double x0, double x1, double y0, double y1, double z0
 
 // read pulses, points, waveforminfo and received for the range.
 // it seems only possible to read all these at once with las.
-static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
+static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
 {
     Py_ssize_t nPulseStart, nPulseEnd, nPulses;
     if( !PyArg_ParseTuple(args, "|nn:readData", &nPulseStart, &nPulseEnd ) )
@@ -807,7 +816,7 @@ static PyObject *PyLasFile_readData(PyLasFile *self, PyObject *args)
     return pTuple;
 }
 
-static PyObject *PyLasFile_getEPSG(PyLasFile *self, PyObject *args)
+static PyObject *PyLasFileRead_getEPSG(PyLasFileRead *self, PyObject *args)
 {
     /** Taken from SPDlib
     Get EPSG projection code from LAS file header
@@ -849,7 +858,7 @@ static PyObject *PyLasFile_getEPSG(PyLasFile *self, PyObject *args)
     return PyLong_FromLong(nEPSG);
 }
 
-static PyObject *PyLasFile_setExtent(PyLasFile *self, PyObject *args)
+static PyObject *PyLasFileRead_setExtent(PyLasFileRead *self, PyObject *args)
 {
     double xMin, xMax, yMin, yMax;
     if( !PyArg_ParseTuple(args, "dddd:setExtent", &xMin, &xMax, &yMin, &yMax ) )
@@ -865,15 +874,15 @@ static PyObject *PyLasFile_setExtent(PyLasFile *self, PyObject *args)
 }
 
 /* Table of methods */
-static PyMethodDef PyLasFile_methods[] = {
-    {"readHeader", (PyCFunction)PyLasFile_readHeader, METH_NOARGS, NULL},
-    {"readData", (PyCFunction)PyLasFile_readData, METH_VARARGS, NULL}, 
-    {"getEPSG", (PyCFunction)PyLasFile_getEPSG, METH_NOARGS, NULL},
-    {"setExtent", (PyCFunction)PyLasFile_setExtent, METH_VARARGS, NULL},
+static PyMethodDef PyLasFileRead_methods[] = {
+    {"readHeader", (PyCFunction)PyLasFileRead_readHeader, METH_NOARGS, NULL},
+    {"readData", (PyCFunction)PyLasFileRead_readData, METH_VARARGS, NULL}, 
+    {"getEPSG", (PyCFunction)PyLasFileRead_getEPSG, METH_NOARGS, NULL},
+    {"setExtent", (PyCFunction)PyLasFileRead_setExtent, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 
-static PyObject *PyLasFile_getBuildPulses(PyLasFile *self, void *closure)
+static PyObject *PyLasFileRead_getBuildPulses(PyLasFileRead *self, void *closure)
 {
     if( self->bBuildPulses )
         Py_RETURN_TRUE;
@@ -881,7 +890,7 @@ static PyObject *PyLasFile_getBuildPulses(PyLasFile *self, void *closure)
         Py_RETURN_FALSE;
 }
 
-static PyObject *PyLasFile_getHasSpatialIndex(PyLasFile *self, void *closure)
+static PyObject *PyLasFileRead_getHasSpatialIndex(PyLasFileRead *self, void *closure)
 {
     if( self->pReader->get_index() != NULL )
         Py_RETURN_TRUE;
@@ -889,7 +898,7 @@ static PyObject *PyLasFile_getHasSpatialIndex(PyLasFile *self, void *closure)
         Py_RETURN_FALSE;
 }
 
-static PyObject *PyLasFile_getFinished(PyLasFile *self, void *closure)
+static PyObject *PyLasFileRead_getFinished(PyLasFileRead *self, void *closure)
 {
     if( self->bFinished )
         Py_RETURN_TRUE;
@@ -897,17 +906,17 @@ static PyObject *PyLasFile_getFinished(PyLasFile *self, void *closure)
         Py_RETURN_FALSE;
 }
 
-static PyObject *PyLasFile_getPulsesRead(PyLasFile *self, void *closure)
+static PyObject *PyLasFileRead_getPulsesRead(PyLasFileRead *self, void *closure)
 {
     return PyLong_FromSsize_t(self->nPulsesRead);
 }
 
-static PyObject *PyLasFile_getBinSize(PyLasFile *self, void *closure)
+static PyObject *PyLasFileRead_getBinSize(PyLasFileRead *self, void *closure)
 {
     return PyFloat_FromDouble(self->fBinSize);
 }
 
-static int PyLasFile_setBinSize(PyLasFile *self, PyObject *value, void *closure)
+static int PyLasFileRead_setBinSize(PyLasFileRead *self, PyObject *value, void *closure)
 {
     PyObject *pBinSizeFloat = PyNumber_Float(value);
     if( pBinSizeFloat == NULL )
@@ -923,31 +932,31 @@ static int PyLasFile_setBinSize(PyLasFile *self, PyObject *value, void *closure)
 
 
 /* get/set */
-static PyGetSetDef PyLasFile_getseters[] = {
-    {"build_pulses", (getter)PyLasFile_getBuildPulses, NULL, 
+static PyGetSetDef PyLasFileRead_getseters[] = {
+    {"build_pulses", (getter)PyLasFileRead_getBuildPulses, NULL, 
         "Whether we are building pulses of multiple points when reading", NULL},
-    {"hasSpatialIndex", (getter)PyLasFile_getHasSpatialIndex, NULL,
+    {"hasSpatialIndex", (getter)PyLasFileRead_getHasSpatialIndex, NULL,
         "Whether a spatial index exists for this file", NULL},
-    {"finished", (getter)PyLasFile_getFinished, NULL, 
+    {"finished", (getter)PyLasFileRead_getFinished, NULL, 
         "Whether we have finished reading the file or not", NULL},
-    {"pulsesRead", (getter)PyLasFile_getPulsesRead, NULL,
+    {"pulsesRead", (getter)PyLasFileRead_getPulsesRead, NULL,
         "Number of pulses read", NULL},
-    {"binSize", (getter)PyLasFile_getBinSize, (setter)PyLasFile_setBinSize,
+    {"binSize", (getter)PyLasFileRead_getBinSize, (setter)PyLasFileRead_setBinSize,
         "Bin size to use for spatial data", NULL},
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject PyLasFileType = {
+static PyTypeObject PyLasFileReadType = {
 #if PY_MAJOR_VERSION >= 3
     PyVarObject_HEAD_INIT(NULL, 0)
 #else
     PyObject_HEAD_INIT(NULL)
     0,                         /*ob_size*/
 #endif
-    "_las.File",         /*tp_name*/
-    sizeof(PyLasFile),   /*tp_basicsize*/
+    "_las.FileRead",         /*tp_name*/
+    sizeof(PyLasFileRead),   /*tp_basicsize*/
     0,                         /*tp_itemsize*/
-    (destructor)PyLasFile_dealloc, /*tp_dealloc*/
+    (destructor)PyLasFileRead_dealloc, /*tp_dealloc*/
     0,                         /*tp_print*/
     0,                         /*tp_getattr*/
     0,                         /*tp_setattr*/
@@ -963,25 +972,217 @@ static PyTypeObject PyLasFileType = {
     0,                         /*tp_setattro*/
     0,                         /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
-    "Las File object",           /* tp_doc */
+    "Las File Reader object",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     0,                     /* tp_iter */
     0,                     /* tp_iternext */
-    PyLasFile_methods,             /* tp_methods */
+    PyLasFileRead_methods,             /* tp_methods */
     0,             /* tp_members */
-    PyLasFile_getseters,           /* tp_getset */
+    PyLasFileRead_getseters,           /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    (initproc)PyLasFile_init,      /* tp_init */
+    (initproc)PyLasFileRead_init,      /* tp_init */
     0,                         /* tp_alloc */
     0,                 /* tp_new */
 };
+
+/* Python object wrapping a LASwriter */
+typedef struct {
+    PyObject_HEAD
+    char *pszFilename;
+    LASwriter *pWriter;
+    LASheader *pHeader;
+    LASpoint *pPoint;
+} PyLasFileWrite;
+
+
+/* destructor - close and delete */
+static void 
+PyLasFileWrite_dealloc(PyLasFileWrite *self)
+{
+    if(self->pszFilename != NULL)
+    {
+        free(self->pszFilename);
+    }   
+    if(self->pWriter != NULL)
+    {
+        self->pWriter->close();
+        delete self->pWriter;
+    }
+    if(self->pHeader != NULL)
+    {
+        delete self->pHeader;
+    }
+    if(self->pPoint != NULL)
+    {
+        delete self->pPoint;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+/* init method - open file */
+static int 
+PyLasFileWrite_init(PyLasFileWrite *self, PyObject *args, PyObject *kwds)
+{
+char *pszFname = NULL;
+PyObject *pOptionDict;
+
+    if( !PyArg_ParseTuple(args, "sO", &pszFname, &pOptionDict ) )
+    {
+        return -1;
+    }
+
+    if( !PyDict_Check(pOptionDict) )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
+        return -1;
+    }
+
+    // set up when first block written
+    // so user can update the header
+    self->pWriter = NULL;
+    self->pHeader = NULL;
+    self->pPoint = NULL;
+
+    // copy filename so we can open later
+    self->pszFilename = strdup(pszFname);
+
+    return 0;
+}
+
+static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
+{
+    PyObject *pHeader, *pPulses, *pPoints, *pWaveformInfos, *pReceived;
+    if( !PyArg_ParseTuple(args, "OOOOO:writeData", &pHeader, &pPulses, &pPoints, &pWaveformInfos, &pReceived ) )
+        return NULL;
+
+    if( !PyDict_Check(pHeader) )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "First parameter to writeData must be header dictionary");
+        return NULL;
+    }
+
+    if( !PyArray_Check(pPulses) || !PyArray_Check(pPoints) || !PyArray_Check(pWaveformInfos) || !PyArray_Check(pReceived) )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Last 4 parameters to writeData must be numpy arrays");
+        return NULL;
+    }
+
+    if( self->pWriter == NULL )
+    {
+        // create writer
+        self->pHeader = new LASheader;
+        self->pPoint = new LASpoint;
+        // TODO: populate header from pHeader dictionary
+        self->pPoint->init(self->pHeader, self->pHeader->point_data_format, 
+                self->pHeader->point_data_record_length, 0);
+
+        LASwriteOpener laswriteopener;
+        laswriteopener.set_file_name(self->pszFilename);
+        
+        self->pWriter = laswriteopener.open(self->pHeader);
+        if( self->pWriter == NULL )
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, "Unable to open las file");
+            return NULL;
+        }
+    }
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *PyLasFileWrite_setEPSG(PyLasFileWrite *self, PyObject *args)
+{
+    Py_RETURN_NONE;
+}
+
+/* Table of methods */
+static PyMethodDef PyLasFileWrite_methods[] = {
+    {"writeData", (PyCFunction)PyLasFileWrite_writeData, METH_VARARGS, NULL}, 
+    {"setEPSG", (PyCFunction)PyLasFileWrite_setEPSG, METH_VARARGS, NULL},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject PyLasFileWriteType = {
+#if PY_MAJOR_VERSION >= 3
+    PyVarObject_HEAD_INIT(NULL, 0)
+#else
+    PyObject_HEAD_INIT(NULL)
+    0,                         /*ob_size*/
+#endif
+    "_las.FileWrite",         /*tp_name*/
+    sizeof(PyLasFileWrite),   /*tp_basicsize*/
+    0,                         /*tp_itemsize*/
+    (destructor)PyLasFileWrite_dealloc, /*tp_dealloc*/
+    0,                         /*tp_print*/
+    0,                         /*tp_getattr*/
+    0,                         /*tp_setattr*/
+    0,                         /*tp_compare*/
+    0,                         /*tp_repr*/
+    0,                         /*tp_as_number*/
+    0,                         /*tp_as_sequence*/
+    0,                         /*tp_as_mapping*/
+    0,                         /*tp_hash */
+    0,                         /*tp_call*/
+    0,                         /*tp_str*/
+    0,                         /*tp_getattro*/
+    0,                         /*tp_setattro*/
+    0,                         /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
+    "Las File Writer object",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    PyLasFileWrite_methods,             /* tp_methods */
+    0,             /* tp_members */
+    0,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)PyLasFileWrite_init,      /* tp_init */
+    0,                         /* tp_alloc */
+    0,                 /* tp_new */
+};
+
 
 #if PY_MAJOR_VERSION >= 3
 
@@ -1024,17 +1225,29 @@ init_las(void)
     }
     PyModule_AddObject(pModule, "error", state->error);
 
-    /* Scan file type */
-    PyLasFileType.tp_new = PyType_GenericNew;
-    if( PyType_Ready(&PyLasFileType) < 0 )
+    /* las file read type */
+    PyLasFileReadType.tp_new = PyType_GenericNew;
+    if( PyType_Ready(&PyLasFileReadType) < 0 )
 #if PY_MAJOR_VERSION >= 3
         return NULL;
 #else
         return;
 #endif
 
-    Py_INCREF(&PyLasFileType);
-    PyModule_AddObject(pModule, "LasFile", (PyObject *)&PyLasFileType);
+    Py_INCREF(&PyLasFileReadType);
+    PyModule_AddObject(pModule, "LasFileRead", (PyObject *)&PyLasFileReadType);
+
+    /* las file write type */
+    PyLasFileWriteType.tp_new = PyType_GenericNew;
+    if( PyType_Ready(&PyLasFileWriteType) < 0 )
+#if PY_MAJOR_VERSION >= 3
+        return NULL;
+#else
+        return;
+#endif
+
+    Py_INCREF(&PyLasFileWriteType);
+    PyModule_AddObject(pModule, "LasFileWrite", (PyObject *)&PyLasFileWriteType);
 
     // module constants
     PyModule_AddIntConstant(pModule, "FIRST_RETURN", FIRST_RETURN);
