@@ -490,8 +490,9 @@ class SPDV4File(generic.LiDARFile):
         # attempt to open the file
         try:
             self.fileHandle = h5py.File(fname, h5py_mode)
-        except OSError as err:
+        except (OSError, IOError) as err:
             # always seems to throw an OSError
+            # found another one!
             raise generic.LiDARFormatNotUnderstood(str(err))
             
         # check that it is indeed the right version
@@ -2011,7 +2012,7 @@ class SPDV4FileInfo(generic.LiDARFileInfo):
         # attempt to open the file
         try:
             fileHandle = h5py.File(fname, 'r')
-        except OSError as err:
+        except (OSError, IOError) as err:
             # always seems to through an OSError
             raise generic.LiDARFormatNotUnderstood(str(err))
 
