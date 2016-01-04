@@ -103,7 +103,7 @@ SPDV3_INDEX_SPHERICAL = 2
 SPDV3_INDEX_CYLINDRICAL = 3
 SPDV3_INDEX_POLAR = 4
 SPDV3_INDEX_SCAN = 5
-    
+
 class SPDV3File(generic.LiDARFile):
     """
     Class to support reading and writing of SPD Version 3.x files.
@@ -126,8 +126,9 @@ class SPDV3File(generic.LiDARFile):
         # attempt to open the file
         try:
             self.fileHandle = h5py.File(fname, h5py_mode)
-        except OSError as err:
+        except (OSError, IOError) as err:
             # always seems to through an OSError
+            # found another one!
             raise generic.LiDARFormatNotUnderstood(str(err))
             
         # check that it is indeed the right version
@@ -1348,7 +1349,7 @@ class SPDV3FileInfo(generic.LiDARFileInfo):
         # attempt to open the file
         try:
             fileHandle = h5py.File(fname, 'r')
-        except OSError as err:
+        except (OSError, IOError) as err:
             # always seems to through an OSError
             raise generic.LiDARFormatNotUnderstood(str(err))
             
