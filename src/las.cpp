@@ -22,6 +22,7 @@
 
 #define _USE_MATH_DEFINES // for Windows
 #include <cmath>
+#include <map>
 #include <Python.h>
 #include "numpy/arrayobject.h"
 #include "pylvector.h"
@@ -476,7 +477,7 @@ void ConvertCoordsToAngles(double x0, double x1, double y0, double y1, double z0
 // it seems only possible to read all these at once with las.
 static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
 {
-    Py_ssize_t nPulseStart, nPulseEnd, nPulses;
+    Py_ssize_t nPulseStart, nPulseEnd, nPulses = 0;
     if( !PyArg_ParseTuple(args, "|nn:readData", &nPulseStart, &nPulseEnd ) )
         return NULL;
 
@@ -1063,6 +1064,195 @@ PyObject *pOptionDict;
     return 0;
 }
 
+// to help us remember info for each field without having to look it up each time
+typedef struct {
+    char cKind;
+    int nOffset;
+    int nSize;
+} SFieldInfo;
+
+#define DO_INT64_READ(tempVar) memcpy(&tempVar, (char*)pRow + info.nOffset, sizeof(tempVar)); \
+            nRetVal = (npy_int64)tempVar; 
+
+#define DO_FLOAT64_READ(tempVar) memcpy(&tempVar, (char*)pRow + info.nOffset, sizeof(tempVar)); \
+            dRetVal = (double)tempVar; 
+
+class CFieldInfoMap : public std::map<std::string, SFieldInfo>
+{
+public:
+    CFieldInfoMap(PyObject *pArray) 
+    {
+        SFieldInfo info;
+        PyArray_Descr *pDescr = PyArray_DESCR(pArray);
+        PyObject *pKeys = PyDict_Keys(pDescr->fields);
+        for( Py_ssize_t i = 0; i < PyList_Size(pKeys); i++)
+        {
+            PyObject *pKey = PyList_GetItem(pKeys, i);
+#if PY_MAJOR_VERSION >= 3
+            PyObject *bytesKey = PyUnicode_AsEncodedString(pKey, NULL, NULL);
+            char *pszElementName = PyBytes_AsString(bytesKey);
+#else
+            char *pszElementName = PyString_AsString(pKey);
+#endif
+
+            pylidar_getFieldDescr(pArray, pszElementName, &info.nOffset, &info.cKind, &info.nSize, NULL);
+            insert( std::pair<std::string, SFieldInfo>(pszElementName, info) );
+
+#if PY_MAJOR_VERSION >= 3
+            Py_DECREF(bytesKey);
+#endif
+        }
+        Py_DECREF(pKeys);
+    }
+
+    npy_int64 getIntValue(std::string sName, void *pRow)
+    {
+        npy_char nCharVal;
+        npy_bool nBoolVal;
+        npy_byte nByteVal;
+        npy_ubyte nUByteVal;
+        npy_short nShortVal;
+        npy_ushort nUShortVal;
+        npy_int nIntVal;
+        npy_uint nUIntVal;
+        npy_long nLongVal;
+        npy_ulong nULongVal;
+        npy_float fFloatVal;
+        npy_double fDoubleVal;
+        npy_int64 nRetVal=0;
+
+        iterator it = find(sName);
+        if( it == end() )
+        {
+            return 0;
+        }
+        SFieldInfo info = it->second;
+        if( ( info.cKind == 'b' ) && ( info.nSize == 1 ) )
+        {
+            DO_INT64_READ(nBoolVal);
+        }
+        else if ( ( info.cKind == 'i' ) && ( info.nSize == 1 ) )
+        {
+            DO_INT64_READ(nByteVal);
+        }
+        else if ( ( info.cKind == 'S' ) && ( info.nSize == 1 ) )
+        {
+            DO_INT64_READ(nCharVal);
+        }
+        else if ( ( info.cKind == 'u' ) && ( info.nSize == 1 ) )
+        {
+            DO_INT64_READ(nUByteVal);
+        }
+        else if ( ( info.cKind == 'i' ) && ( info.nSize == 2 ) )
+        {
+            DO_INT64_READ(nShortVal);
+        }
+        else if ( ( info.cKind == 'u' ) && ( info.nSize == 2 ) )
+        {
+            DO_INT64_READ(nUShortVal);
+        }
+        else if ( ( info.cKind == 'i' ) && ( info.nSize == 4 ) )
+        {
+            DO_INT64_READ(nIntVal);
+        }
+        else if ( ( info.cKind == 'u' ) && ( info.nSize == 4 ) )
+        {
+            DO_INT64_READ(nUIntVal);
+        }
+        else if ( ( info.cKind == 'i' ) && ( info.nSize == 8 ) )
+        {
+            DO_INT64_READ(nLongVal);
+        }
+        else if ( ( info.cKind == 'u' ) && ( info.nSize == 8 ) )
+        {
+            DO_INT64_READ(nULongVal);
+        }
+        else if ( ( info.cKind == 'f' ) && ( info.nSize == 4 ) )
+        {
+            DO_INT64_READ(fFloatVal);
+        }
+        else if ( ( info.cKind == 'f' ) && ( info.nSize == 8 ) )
+        {
+            DO_INT64_READ(fDoubleVal);
+        }
+        return nRetVal;        
+    }
+    double getDoubleValue(std::string sName, void *pRow)
+    {
+        npy_char nCharVal;
+        npy_bool nBoolVal;
+        npy_byte nByteVal;
+        npy_ubyte nUByteVal;
+        npy_short nShortVal;
+        npy_ushort nUShortVal;
+        npy_int nIntVal;
+        npy_uint nUIntVal;
+        npy_long nLongVal;
+        npy_ulong nULongVal;
+        npy_float fFloatVal;
+        npy_double fDoubleVal;
+        double dRetVal=0;
+
+        iterator it = find(sName);
+        if( it == end() )
+        {
+            return 0;
+        }
+
+        SFieldInfo info = it->second;
+        if( ( info.cKind == 'b' ) && ( info.nSize == 1 ) )
+        {
+            DO_FLOAT64_READ(nBoolVal);
+        }
+        else if ( ( info.cKind == 'i' ) && ( info.nSize == 1 ) )
+        {
+            DO_FLOAT64_READ(nByteVal);
+        }
+        else if ( ( info.cKind == 'S' ) && ( info.nSize == 1 ) )
+        {
+            DO_FLOAT64_READ(nCharVal);
+        }
+        else if ( ( info.cKind == 'u' ) && ( info.nSize == 1 ) )
+        {
+            DO_FLOAT64_READ(nUByteVal);
+        }
+        else if ( ( info.cKind == 'i' ) && ( info.nSize == 2 ) )
+        {
+            DO_FLOAT64_READ(nShortVal);
+        }
+        else if ( ( info.cKind == 'u' ) && ( info.nSize == 2 ) )
+        {
+            DO_FLOAT64_READ(nUShortVal);
+        }
+        else if ( ( info.cKind == 'i' ) && ( info.nSize == 4 ) )
+        {
+            DO_FLOAT64_READ(nIntVal);
+        }
+        else if ( ( info.cKind == 'u' ) && ( info.nSize == 4 ) )
+        {
+            DO_FLOAT64_READ(nUIntVal);
+        }
+        else if ( ( info.cKind == 'i' ) && ( info.nSize == 8 ) )
+        {
+            DO_FLOAT64_READ(nLongVal);
+        }
+        else if ( ( info.cKind == 'u' ) && ( info.nSize == 8 ) )
+        {
+            DO_FLOAT64_READ(nULongVal);
+        }
+        else if ( ( info.cKind == 'f' ) && ( info.nSize == 4 ) )
+        {
+            DO_FLOAT64_READ(fFloatVal);
+        }
+        else if ( ( info.cKind == 'f' ) && ( info.nSize == 8 ) )
+        {
+            DO_FLOAT64_READ(fDoubleVal);
+        }
+        return dRetVal;        
+    }
+
+};
+
 static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
 {
     PyObject *pHeader, *pPulses, *pPoints, *pWaveformInfos, *pReceived;
@@ -1121,6 +1311,71 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             return NULL;
         }
     }
+
+    // create a mapping between names of fields and their 'info' which has
+    // the type, offset etc
+    CFieldInfoMap pulseMap(pPulses);
+    CFieldInfoMap pointMap(pPoints);
+    
+    for( npy_intp nPulseIdx = 0; nPulseIdx < PyArray_DIM(pPulses, 0); nPulseIdx++)
+    {
+        void *pPulseRow = PyArray_GETPTR1(pPulses, nPulseIdx);
+        // fill in the info from the pulses
+        npy_int64 nPoints = pulseMap.getIntValue("NUMBER_OF_RETURNS", pPulseRow);
+        npy_int64 nPointsStartIdx = pulseMap.getIntValue("PTS_START_IDX", pPulseRow);
+
+        self->pPoint->set_scan_angle_rank(pulseMap.getDoubleValue("SCAN_ANGLE_RANK", pPulseRow));
+        // TODO: check if extended?
+        self->pPoint->set_extended_scan_angle(pulseMap.getDoubleValue("SCAN_ANGLE", pPulseRow));
+        self->pPoint->set_number_of_returns(nPoints);
+        // TODO: GPS_TIME or TIMESTAMP?
+        self->pPoint->set_gps_time(pulseMap.getDoubleValue("GPS_TIME", pPulseRow));
+        self->pPoint->set_scan_direction_flag(pulseMap.getIntValue("SCAN_DIRECTION_FLAG", pPulseRow));
+        self->pPoint->set_edge_of_flight_line(pulseMap.getIntValue("EDGE_OF_FLIGHT_LINE", pPulseRow));
+        self->pPoint->set_extended_scanner_channel(pulseMap.getIntValue("SCANNER_CHANNEL", pPulseRow));
+
+        // now the point
+        for( npy_intp nPointCount = 0; nPointCount < nPoints; nPointCount++ )
+        {
+            void *pPointRow = PyArray_GETPTR1(pPoints, nPointsStartIdx + nPointCount);
+            npy_int64 nExtended = pointMap.getDoubleValue("EXTENDED_POINT_TYPE", pPointRow);
+            self->pPoint->extended_point_type = nExtended;
+            self->pPoint->set_x(pointMap.getDoubleValue("X", pPointRow));
+            self->pPoint->set_y(pointMap.getDoubleValue("Y", pPointRow));
+            self->pPoint->set_z(pointMap.getDoubleValue("Z", pPointRow));
+            self->pPoint->set_intensity(pointMap.getIntValue("INTENSITY", pPointRow));
+            
+            npy_int64 nReturnNumber = pointMap.getIntValue("RETURN_NUMBER", pPointRow);
+            npy_int64 nClassification = pointMap.getIntValue("CLASSIFICATION", pPointRow);
+            if(nExtended)
+            {
+                self->pPoint->extended_return_number = nReturnNumber;
+                self->pPoint->set_extended_classification(nClassification);
+            }
+            else
+            {
+                self->pPoint->set_return_number(nReturnNumber);
+                self->pPoint->set_classification(nClassification);
+            }
+            
+            self->pPoint->set_synthetic_flag(pointMap.getIntValue("SYNTHETIC_FLAG", pPointRow));
+            self->pPoint->set_keypoint_flag(pointMap.getIntValue("KEYPOINT_FLAG", pPointRow));
+            self->pPoint->set_withheld_flag(pointMap.getIntValue("WITHHELD_FLAG", pPointRow));
+            self->pPoint->set_user_data(pointMap.getIntValue("USER_DATA", pPointRow));
+            self->pPoint->set_point_source_ID(pointMap.getIntValue("POINT_SOURCE_ID", pPointRow));
+            self->pPoint->set_deleted_flag(pointMap.getIntValue("DELETED_FLAG", pPointRow));
+            self->pPoint->rgb[0] = pointMap.getIntValue("RED", pPointRow);
+            self->pPoint->rgb[1] = pointMap.getIntValue("GREEN", pPointRow);
+            self->pPoint->rgb[2] = pointMap.getIntValue("BLUE", pPointRow);
+            self->pPoint->rgb[3] = pointMap.getIntValue("NIR", pPointRow);
+
+            self->pWriter->write_point(self->pPoint);
+            self->pWriter->update_inventory(self->pPoint);
+        }
+
+        
+    }
+    self->pWriter->update_header(self->pHeader, TRUE);
 
     Py_RETURN_NONE;
 }
