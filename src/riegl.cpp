@@ -821,10 +821,7 @@ PyObject *pOptionDict;
         }
 
         // ensure Float32
-        PyArrayObject *pRotationMatrixF32 = (PyArrayObject*)PyArray_SimpleNew(PyArray_NDIM(pRotationMatrix),
-                                            PyArray_DIMS(pRotationMatrix), NPY_FLOAT32);
-
-        PyArray_CopyInto(pRotationMatrixF32, (PyArrayObject*)pRotationMatrix);
+        PyArrayObject *pRotationMatrixF32 = (PyArrayObject*)PyArray_FROM_OT(pRotationMatrix, NPY_FLOAT32);
         // make our matrix
         self->pRotationMatrix = new pylidar::CMatrix<float>(pRotationMatrixF32);
 

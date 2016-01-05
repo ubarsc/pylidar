@@ -298,8 +298,10 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         
         if mode == generic.READ or mode == generic.UPDATE:
             # read it in if it exists.
-            group = fileHandle[SPATIALINDEX_GROUP]
-            if group is not None:
+            group = None
+            if SPATIALINDEX_GROUP in fileHandle:
+                group = fileHandle[SPATIALINDEX_GROUP]
+            if group is not None and SIMPLEPULSEGRID_GROUP in group:
                 group = group[SIMPLEPULSEGRID_GROUP]
         
             if group is None:
@@ -656,7 +658,8 @@ spatial index will be recomputed on the fly"""
         """
         Close all open file handles
         """
-        self.si_handler.close()
+        if self.si_handler is not None:
+            self.si_handler.close()
 
         # flush the scaling values
         if self.mode != generic.READ:
@@ -1864,8 +1867,8 @@ spatial index will be recomputed on the fly"""
         nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
         startIdxs = self.readPulsesForRange('PTS_START_IDX')
         
-        nOut = pointsHandle.shape[0]
-        point_space, point_idx, point_idx_mask = self.convertSPDIdxToReadIdxAndMaskInfo(
+        nOut = pointsHandle['RETURN_NUMBER'].shape[0]
+        point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
         
         points = self.readFieldsAndUnScale(pointsHandle, colNames, point_space)
@@ -1896,10 +1899,9 @@ spatial index will be recomputed on the fly"""
                 self.lastPulsesColumns == colNames):
             return self.lastPulses
         
-        firstCol = list(pulsesHandle.keys())[0]
-        size = pulsesHandle[firstCol].shape[0]
+        nOut = pulsesHandle['PULSE_ID'].shape[0]
         space = h5space.createSpaceFromRange(self.pulseRange.startPulse, 
-                        self.pulseRange.endPulse, size)
+                        self.pulseRange.endPulse, nOut)
         pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, space)
 
         self.lastPulses = pulses
@@ -2038,6 +2040,9 @@ class SPDV4FileInfo(generic.LiDARFileInfo):
         self.zMin = fileHandle.attrs['Z_MIN']
         self.wavelengths = fileHandle.attrs['WAVELENGTHS']
         self.bandwidths = fileHandle.attrs['BANDWIDTHS']
+        
+        si_handler = SPDV4SpatialIndex.getHandlerForFile(fileHandle, generic.READ)
+        self.hasSpatialIndex = si_handler is not None
         # probably other things too
         
         

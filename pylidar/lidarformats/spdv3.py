@@ -1378,6 +1378,7 @@ class SPDV3FileInfo(generic.LiDARFileInfo):
         self.zMin = self.header['Z_MIN']
         self.wavelengths = self.header['WAVELENGTHS']
         self.bandwidths = self.header['BANDWIDTHS']
+        self.hasSpatialIndex = 'INDEX' in fileHandle
         # probably other things too
         
         

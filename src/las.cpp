@@ -23,6 +23,7 @@
 #define _USE_MATH_DEFINES // for Windows
 #include <cmath>
 #include <map>
+#include <string>
 #include <Python.h>
 #include "numpy/arrayobject.h"
 #include "pylvector.h"
@@ -1000,6 +1001,7 @@ typedef struct {
     LASwriter *pWriter;
     LASheader *pHeader;
     LASpoint *pPoint;
+    int nEPSG;
 } PyLasFileWrite;
 
 
@@ -1039,17 +1041,20 @@ PyObject *pOptionDict;
         return -1;
     }
 
-    if( !PyDict_Check(pOptionDict) )
+    if( pOptionDict != Py_None )
     {
-        // raise Python exception
-        PyObject *m;
+        if( !PyDict_Check(pOptionDict) )
+        {
+            // raise Python exception
+            PyObject *m;
 #if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
 #endif
-        PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
-        return -1;
+            PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
+            return -1;
+        }
     }
 
     // set up when first block written
@@ -1057,6 +1062,7 @@ PyObject *pOptionDict;
     self->pWriter = NULL;
     self->pHeader = NULL;
     self->pPoint = NULL;
+    self->nEPSG = 0;
 
     // copy filename so we can open later
     self->pszFilename = strdup(pszFname);
@@ -1253,26 +1259,223 @@ public:
 
 };
 
+// copies recognised fields from pHeaderDict into pHeader
+void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
+{
+    PyObject *pVal;
+    // TODO: be better at checking types
+    // TODO: error if key not recognised? maybe copying (PyDict_Copy) then
+    // deleting recognised keys - if stuff left then error etc.
+
+    pVal = PyDict_GetItemString(pHeaderDict, "FILE_SIGNATURE");
+    if( pVal != NULL )
+    {
+#if PY_MAJOR_VERSION >= 3
+        PyObject *bytesKey = PyUnicode_AsEncodedString(pVal, NULL, NULL);
+        char *pszSignature = PyBytes_AsString(bytesKey);
+#else
+        char *pszSignature = PyString_AsString(pVal);
+#endif
+        strncpy(pHeader->file_signature, pszSignature, GET_LENGTH(pHeader->file_signature));
+    }
+
+    pVal = PyDict_GetItemString(pHeaderDict, "FILE_SOURCE_ID");
+    if( pVal != NULL )
+        pHeader->file_source_ID = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "GLOBAL_ENCODING");
+    if( pVal != NULL )
+        pHeader->global_encoding = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_1");
+    if( pVal != NULL )
+        pHeader->project_ID_GUID_data_1 = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_2");
+    if( pVal != NULL )
+        pHeader->project_ID_GUID_data_2 = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_3");
+    if( pVal != NULL )
+        pHeader->project_ID_GUID_data_3 = PyLong_AsLong(pVal);
+
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_4");
+    if( pVal != NULL )
+    {    
+        PyObject *pArray = PyArray_FROM_OT(pVal, NPY_UINT8);
+        // TODO: check 1d?
+        for( npy_intp i = 0; i < PyArray_DIM(pArray, 0); i++ )
+        {
+            pHeader->project_ID_GUID_data_4[i] = *((U8*)PyArray_GETPTR1(pArray, i));
+        }
+        Py_DECREF(pArray);
+    }
+
+    pVal = PyDict_GetItemString(pHeaderDict, "VERSION_MAJOR");
+    if( pVal != NULL )
+        pHeader->version_major = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "VERSION_MINOR");
+    if( pVal != NULL )
+        pHeader->version_minor = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "SYSTEM_IDENTIFIER");
+    if( pVal != NULL )
+    {
+#if PY_MAJOR_VERSION >= 3
+        PyObject *bytesKey = PyUnicode_AsEncodedString(pVal, NULL, NULL);
+        char *pszIdent = PyBytes_AsString(bytesKey);
+#else
+        char *pszIdent = PyString_AsString(pVal);
+#endif
+        strncpy(pHeader->system_identifier, pszIdent, GET_LENGTH(pHeader->system_identifier));
+    }
+
+    pVal = PyDict_GetItemString(pHeaderDict, "GENERATING_SOFTWARE");
+    if( pVal != NULL )
+    {
+#if PY_MAJOR_VERSION >= 3
+        PyObject *bytesKey = PyUnicode_AsEncodedString(pVal, NULL, NULL);
+        char *pszSW = PyBytes_AsString(bytesKey);
+#else
+        char *pszSW = PyString_AsString(pVal);
+#endif
+        strncpy(pHeader->generating_software, pszSW, GET_LENGTH(pHeader->generating_software));
+    }
+
+    pVal = PyDict_GetItemString(pHeaderDict, "FILE_CREATION_DAY");
+    if( pVal != NULL )
+        pHeader->file_creation_day = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "FILE_CREATION_YEAR");
+    if( pVal != NULL )
+        pHeader->file_creation_year = PyLong_AsLong(pVal);
+
+    // should this be set at all?
+    pVal = PyDict_GetItemString(pHeaderDict, "HEADER_SIZE");
+    if( pVal != NULL )
+        pHeader->header_size = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "OFFSET_TO_POINT_DATA");
+    if( pVal != NULL )
+        pHeader->offset_to_point_data = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "NUMBER_OF_VARIABLE_LENGTH_RECORDS");
+    if( pVal != NULL )
+        pHeader->number_of_variable_length_records = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "POINT_DATA_FORMAT");
+    if( pVal != NULL )
+        pHeader->point_data_format = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "POINT_DATA_RECORD_LENGTH");
+    if( pVal != NULL )
+        pHeader->point_data_record_length = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "NUMBER_OF_POINT_RECORDS");
+    if( pVal != NULL )
+        pHeader->number_of_point_records = PyLong_AsLong(pVal);
+
+
+    pVal = PyDict_GetItemString(pHeaderDict, "NUMBER_OF_POINTS_BY_RETURN");
+    if( pVal != NULL )
+    {    
+        PyObject *pArray = PyArray_FROM_OT(pVal, NPY_UINT8);
+        // TODO: check 1d?
+        for( npy_intp i = 0; i < PyArray_DIM(pArray, 0); i++ )
+        {
+            pHeader->number_of_points_by_return[i] = *((U8*)PyArray_GETPTR1(pArray, i));
+        }
+        Py_DECREF(pArray);
+    }
+
+    pVal = PyDict_GetItemString(pHeaderDict, "MAX_X");
+    if( pVal != NULL )
+        pHeader->max_x = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "MIN_X");
+    if( pVal != NULL )
+        pHeader->min_x = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "MAX_Y");
+    if( pVal != NULL )
+        pHeader->max_y = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "MIN_Y");
+    if( pVal != NULL )
+        pHeader->min_y = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "MAX_Z");
+    if( pVal != NULL )
+        pHeader->max_z = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "MIN_Z");
+    if( pVal != NULL )
+        pHeader->min_z = PyFloat_AsDouble(pVal);
+}
+
 static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
 {
     PyObject *pHeader, *pPulses, *pPoints, *pWaveformInfos, *pReceived;
     if( !PyArg_ParseTuple(args, "OOOOO:writeData", &pHeader, &pPulses, &pPoints, &pWaveformInfos, &pReceived ) )
         return NULL;
 
-    if( !PyDict_Check(pHeader) )
+    if( pHeader != Py_None )
     {
-        // raise Python exception
-        PyObject *m;
+        if( !PyDict_Check(pHeader) )
+        {
+            // raise Python exception
+            PyObject *m;
 #if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
 #endif
-        PyErr_SetString(GETSTATE(m)->error, "First parameter to writeData must be header dictionary");
-        return NULL;
+            PyErr_SetString(GETSTATE(m)->error, "First parameter to writeData must be header dictionary");
+            return NULL;
+        }
     }
 
-    if( !PyArray_Check(pPulses) || !PyArray_Check(pPoints) || !PyArray_Check(pWaveformInfos) || !PyArray_Check(pReceived) )
+    bool bArraysOk = true;
+    const char *pszMessage = "";
+    if( (pPulses == Py_None) || (pPoints == Py_None) )
+    {
+        bArraysOk = false;
+        pszMessage = "Both points and pulses must be set for writing";
+    }
+    if( bArraysOk && (!PyArray_Check(pPulses) || !PyArray_Check(pPoints)))
+    {
+        bArraysOk = false;
+        pszMessage = "Both points and pulses must be numpy arrays";
+    }
+    bool bHaveWaveformInfos = (pWaveformInfos != Py_None);
+    bool bHaveReceived = (pReceived != Py_None);
+    if( bArraysOk && (bHaveWaveformInfos != bHaveReceived) )
+    {
+        bArraysOk = false;
+        pszMessage = "Either both waveform info and reveived must be set, or neither";
+    }
+    if( bArraysOk && bHaveWaveformInfos && !PyArray_Check(pWaveformInfos) )
+    {
+        bArraysOk = false;
+        pszMessage = "Waveform info must be a numpy array";
+    }
+    if( bArraysOk && bHaveReceived && !PyArray_Check(pReceived) )
+    {
+        bArraysOk = false;
+        pszMessage = "Waveform info must be a numpy array";
+    }
+    if( bArraysOk && ((PyArray_NDIM(pPulses) != 1) || (PyArray_NDIM(pPoints) != 2) || 
+            (bHaveWaveformInfos && (PyArray_NDIM(pWaveformInfos) != 1)) || 
+            (bHaveReceived && (PyArray_NDIM(pReceived) != 1)) ) )
+    {
+        bArraysOk = false;
+        pszMessage = "all arrays must be 1 dimensional - aparts from points which must be 2d";
+    }
+
+
+    if( !bArraysOk )
     {
         // raise Python exception
         PyObject *m;
@@ -1281,7 +1484,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         // from inside a class method. Not needed for Python < 3.
         m = PyState_FindModule(&moduledef);
 #endif
-        PyErr_SetString(GETSTATE(m)->error, "Last 4 parameters to writeData must be numpy arrays");
+        PyErr_SetString(GETSTATE(m)->error, pszMessage);
         return NULL;
     }
 
@@ -1290,7 +1493,22 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         // create writer
         self->pHeader = new LASheader;
         self->pPoint = new LASpoint;
-        // TODO: populate header from pHeader dictionary
+        // populate header from pHeader dictionary
+        setHeaderFromDictionary(pHeader, self->pHeader);
+
+        // set epsg
+        if( self->nEPSG != 0 )
+        {
+            LASvlr_key_entry ent;
+            ent.key_id = 3072;
+            ent.value_offset = self->nEPSG;
+            ent.tiff_tag_location = 0;
+            ent.count = 1;
+            self->pHeader->set_geo_keys(1, &ent);
+        }
+
+        // TODO: point_data_format?
+
         self->pPoint->init(self->pHeader, self->pHeader->point_data_format, 
                 self->pHeader->point_data_record_length, 0);
 
@@ -1322,7 +1540,6 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         void *pPulseRow = PyArray_GETPTR1(pPulses, nPulseIdx);
         // fill in the info from the pulses
         npy_int64 nPoints = pulseMap.getIntValue("NUMBER_OF_RETURNS", pPulseRow);
-        npy_int64 nPointsStartIdx = pulseMap.getIntValue("PTS_START_IDX", pPulseRow);
 
         self->pPoint->set_scan_angle_rank(pulseMap.getDoubleValue("SCAN_ANGLE_RANK", pPulseRow));
         // TODO: check if extended?
@@ -1337,24 +1554,24 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         // now the point
         for( npy_intp nPointCount = 0; nPointCount < nPoints; nPointCount++ )
         {
-            void *pPointRow = PyArray_GETPTR1(pPoints, nPointsStartIdx + nPointCount);
-            npy_int64 nExtended = pointMap.getDoubleValue("EXTENDED_POINT_TYPE", pPointRow);
+            void *pPointRow = PyArray_GETPTR2(pPoints, nPointCount, nPulseIdx);
+            // TODO: extended creation option?
+            npy_int64 nExtended = pointMap.getIntValue("EXTENDED_POINT_TYPE", pPointRow);
             self->pPoint->extended_point_type = nExtended;
             self->pPoint->set_x(pointMap.getDoubleValue("X", pPointRow));
             self->pPoint->set_y(pointMap.getDoubleValue("Y", pPointRow));
             self->pPoint->set_z(pointMap.getDoubleValue("Z", pPointRow));
             self->pPoint->set_intensity(pointMap.getIntValue("INTENSITY", pPointRow));
             
-            npy_int64 nReturnNumber = pointMap.getIntValue("RETURN_NUMBER", pPointRow);
             npy_int64 nClassification = pointMap.getIntValue("CLASSIFICATION", pPointRow);
             if(nExtended)
             {
-                self->pPoint->extended_return_number = nReturnNumber;
+                self->pPoint->extended_return_number = nPointCount;
                 self->pPoint->set_extended_classification(nClassification);
             }
             else
             {
-                self->pPoint->set_return_number(nReturnNumber);
+                self->pPoint->set_return_number(nPointCount);
                 self->pPoint->set_classification(nClassification);
             }
             
@@ -1382,6 +1599,10 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
 
 static PyObject *PyLasFileWrite_setEPSG(PyLasFileWrite *self, PyObject *args)
 {
+    // just grab the epsg for now. Written when we write the header.
+    if( !PyArg_ParseTuple(args, "i:setEPSG", &self->nEPSG ) )
+        return NULL;
+    
     Py_RETURN_NONE;
 }
 

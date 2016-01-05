@@ -34,6 +34,24 @@ Write Driver Options
 
 No driver options for writing are supported yet.
 
+Note that for writing, the extension currently controls the format witten:
+
++-----------+-----------------------+
+| Extension | Format                |
++-----------+-----------------------+
+| .las      | LAS                   |
++-----------+-----------------------+
+| .laz      | LAZ (compressed las)  |
++-----------+-----------------------+
+| .bin      | terrasolid            |
++-----------+-----------------------+
+| .qi       | QFIT                  |
++-----------+-----------------------+
+| .wrl      | VRML                  |
++-----------+-----------------------+
+| other     | ASCII                 |
++-----------+-----------------------+
+
 """
 
 # This file is part of PyLidar
@@ -94,7 +112,7 @@ def isLasFile(fname):
 
 class LasFile(generic.LiDARFile):
     """
-    Reader for .las files.
+    Reader/Writer for .las files.
     """
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
@@ -111,18 +129,27 @@ class LasFile(generic.LiDARFile):
         if mode == generic.READ:
             options = READSUPPORTEDOPTIONS
         else:
-            options == WRITESUPPORTEDOPTIONS
+            options = WRITESUPPORTEDOPTIONS
             
         for key in userClass.lidarDriverOptions:
             if key not in options:
                 msg = '%s not a supported las option' % repr(key)
                 raise generic.LiDARInvalidSetting(msg)
         
-        try:
-            self.lasFile = _las.LasFileRead(fname, userClass.lidarDriverOptions)
-        except _las.error as e:
-            msg = 'cannot open as las file' + str(e)
-            raise generic.LiDARFileException(msg)
+        if mode == generic.READ:
+            try:
+                self.lasFile = _las.LasFileRead(fname, userClass.lidarDriverOptions)
+            except _las.error as e:
+                msg = 'cannot open as las file' + str(e)
+                raise generic.LiDARFileException(msg)
+                
+        else:
+            # create
+            try:
+                self.lasFile = _las.LasFileWrite(fname, userClass.lidarDriverOptions)
+            except _las.error as e:
+                msg = 'cannot create las file' + str(e)
+                raise generic.LiDARFileException(msg)
 
         self.header = None
         self.range = None
@@ -133,6 +160,7 @@ class LasFile(generic.LiDARFile):
         self.lastReceived = None
         self.extent = None
         self.lastExtent = None
+        self.firstBlockWritten = False # can't write header values when this is True
 
     @staticmethod        
     def getDriverName():
@@ -524,9 +552,33 @@ class LasFile(generic.LiDARFile):
         if self.mode == generic.READ:
             # the processor always calls this so if a reading driver just ignore
             return
-        
-        msg = 'las driver does not support update/creating'
-        raise generic.LiDARWritingNotSupported(msg)
+
+        print(points.shape)
+        # TODO: flatten if necessary
+        self.lasFile.writeData(self.header, pulses, points, waveformInfo,
+                                received)
+        self.firstBlockWritten = True
+
+    def setPixelGrid(self, pixGrid):
+        """
+        Set the PixelGridDefn for the reading or 
+        writing. We don't need to do much here
+        apart from record the EPSG since LAS doesn't use a grid.
+        """
+        if self.mode == generic.READ or self.mode == generic.UPDATE:
+            msg = 'Can only set new pixel grid when creating'
+            raise generic.LiDARInvalidData(msg)
+
+        if self.firstBlockWritten:
+            msg = 'Projection can only be updated before first block written'
+            raise generic.LiDARFunctionUnsupported(msg)
+            
+        sr = osr.SpatialReference()
+        sr.ImportFromWkt(pixGrid.wkt)
+        # TODO: check this is ok for all coordinate systems
+        epsg = sr.GetAttrValue("PROJCS|GEOGCS|AUTHORITY", 1)
+                
+        self.lasFile.setEPSG(epsg)
                 
     def getHeader(self):
         """
@@ -543,6 +595,41 @@ class LasFile(generic.LiDARFile):
         Just extract the one value and return it
         """
         return self.getHeader()[name]
+
+    def setHeader(self, newHeaderDict):
+        """
+        Update our cached dictionary
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on read or create'
+            raise generic.LiDARInvalidSetting(msg)
+            
+        if self.firstBlockWritten:
+            msg = 'Header can only be updated before first block written'
+            raise generic.LiDARFunctionUnsupported(msg)
+            
+        if self.header is None:
+            self.header = {}
+            
+        for key in newHeaderDict.keys():
+            self.header[key] = newHeaderDict[key]
+
+    def setHeaderValue(self, name, value):
+        """
+        Just update one value in the header
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on read or create'
+            raise generic.LiDARInvalidSetting(msg)
+
+        if self.firstBlockWritten:
+            msg = 'Header can only be updated before first block written'
+            raise generic.LiDARFunctionUnsupported(msg)
+
+        if self.header is None:
+            self.header = {}
+            
+        self.header[name] = value
 
 class LasFileInfo(generic.LiDARFileInfo):
     """
