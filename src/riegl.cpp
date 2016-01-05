@@ -823,7 +823,23 @@ PyObject *pOptionDict;
         // ensure Float32
         PyArrayObject *pRotationMatrixF32 = (PyArrayObject*)PyArray_FROM_OT(pRotationMatrix, NPY_FLOAT32);
         // make our matrix
-        self->pRotationMatrix = new pylidar::CMatrix<float>(pRotationMatrixF32);
+        try
+        {
+            self->pRotationMatrix = new pylidar::CMatrix<float>(pRotationMatrixF32);
+        }
+        catch(std::exception e)
+        {
+            Py_DECREF(pRotationMatrixF32);
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, e.what());
+            return -1;
+        }
 
         Py_DECREF(pRotationMatrixF32);
     }
