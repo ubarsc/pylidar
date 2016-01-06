@@ -440,22 +440,22 @@ static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
     PyDict_SetItemString(pHeaderDict, "NUMBER_OF_POINTS_BY_RETURN", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_x);
-    PyDict_SetItemString(pHeaderDict, "MAX_X", pVal);
+    PyDict_SetItemString(pHeaderDict, "X_MAX", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->min_x);
-    PyDict_SetItemString(pHeaderDict, "MIN_X", pVal);
+    PyDict_SetItemString(pHeaderDict, "X_MIN", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_y);
-    PyDict_SetItemString(pHeaderDict, "MAX_Y", pVal);
+    PyDict_SetItemString(pHeaderDict, "Y_MAX", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->min_y);
-    PyDict_SetItemString(pHeaderDict, "MIN_Y", pVal);
+    PyDict_SetItemString(pHeaderDict, "Y_MIN", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_z);
-    PyDict_SetItemString(pHeaderDict, "MAX_Z", pVal);
+    PyDict_SetItemString(pHeaderDict, "Z_MAX", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->min_z);
-    PyDict_SetItemString(pHeaderDict, "MIN_Z", pVal);
+    PyDict_SetItemString(pHeaderDict, "Z_MIN", pVal);
 
     return pHeaderDict;
 }
@@ -1002,6 +1002,15 @@ typedef struct {
     LASheader *pHeader;
     LASpoint *pPoint;
     int nEPSG;
+    bool bXScalingSet;
+    bool bYScalingSet;
+    bool bZScalingSet;
+    F64 dXGain;
+    F64 dXOffset;
+    F64 dYGain;
+    F64 dYOffset;
+    F64 dZGain;
+    F64 dZOffset;
 } PyLasFileWrite;
 
 
@@ -1015,6 +1024,7 @@ PyLasFileWrite_dealloc(PyLasFileWrite *self)
     }   
     if(self->pWriter != NULL)
     {
+        self->pWriter->update_header(self->pHeader, TRUE);
         self->pWriter->close();
         delete self->pWriter;
     }
@@ -1063,6 +1073,15 @@ PyObject *pOptionDict;
     self->pHeader = NULL;
     self->pPoint = NULL;
     self->nEPSG = 0;
+    self->dXGain = 0;
+    self->dXOffset = 0;
+    self->dYGain = 0;
+    self->dYOffset = 0;
+    self->dZGain = 0;
+    self->dZOffset = 0;
+    self->bXScalingSet = false;
+    self->bYScalingSet = false;
+    self->bZScalingSet = false;
 
     // copy filename so we can open later
     self->pszFilename = strdup(pszFname);
@@ -1390,27 +1409,27 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
         Py_DECREF(pArray);
     }
 
-    pVal = PyDict_GetItemString(pHeaderDict, "MAX_X");
+    pVal = PyDict_GetItemString(pHeaderDict, "X_MAX");
     if( pVal != NULL )
         pHeader->max_x = PyFloat_AsDouble(pVal);
 
-    pVal = PyDict_GetItemString(pHeaderDict, "MIN_X");
+    pVal = PyDict_GetItemString(pHeaderDict, "X_MIN");
     if( pVal != NULL )
         pHeader->min_x = PyFloat_AsDouble(pVal);
 
-    pVal = PyDict_GetItemString(pHeaderDict, "MAX_Y");
+    pVal = PyDict_GetItemString(pHeaderDict, "Y_MAX");
     if( pVal != NULL )
         pHeader->max_y = PyFloat_AsDouble(pVal);
 
-    pVal = PyDict_GetItemString(pHeaderDict, "MIN_Y");
+    pVal = PyDict_GetItemString(pHeaderDict, "Y_MIN");
     if( pVal != NULL )
         pHeader->min_y = PyFloat_AsDouble(pVal);
 
-    pVal = PyDict_GetItemString(pHeaderDict, "MAX_Z");
+    pVal = PyDict_GetItemString(pHeaderDict, "Z_MAX");
     if( pVal != NULL )
         pHeader->max_z = PyFloat_AsDouble(pVal);
 
-    pVal = PyDict_GetItemString(pHeaderDict, "MIN_Z");
+    pVal = PyDict_GetItemString(pHeaderDict, "Z_MIN");
     if( pVal != NULL )
         pHeader->min_z = PyFloat_AsDouble(pVal);
 }
@@ -1467,11 +1486,11 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         pszMessage = "Waveform info must be a numpy array";
     }
     if( bArraysOk && ((PyArray_NDIM(pPulses) != 1) || (PyArray_NDIM(pPoints) != 2) || 
-            (bHaveWaveformInfos && (PyArray_NDIM(pWaveformInfos) != 1)) || 
-            (bHaveReceived && (PyArray_NDIM(pReceived) != 1)) ) )
+            (bHaveWaveformInfos && (PyArray_NDIM(pWaveformInfos) != 2)) || 
+            (bHaveReceived && (PyArray_NDIM(pReceived) != 3)) ) )
     {
         bArraysOk = false;
-        pszMessage = "all arrays must be 1 dimensional - aparts from points which must be 2d";
+        pszMessage = "pulses must be 1d, points and received 2d and wavforminfo 3d";
     }
 
 
@@ -1490,9 +1509,32 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
 
     if( self->pWriter == NULL )
     {
+        // check that all the scaling has been set
+        if( !self->bXScalingSet || !self->bYScalingSet || !self->bZScalingSet )
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, "Must set scaling for X, Y and Z columns before writing data");
+            return NULL;
+        }
+
         // create writer
         self->pHeader = new LASheader;
         self->pPoint = new LASpoint;
+
+        // set scaling
+        self->pHeader->x_scale_factor = 1.0 / self->dXGain;
+        self->pHeader->y_scale_factor = 1.0 / self->dYGain;
+        self->pHeader->z_scale_factor = 1.0 / self->dZGain;
+        self->pHeader->x_offset = self->dXOffset;
+        self->pHeader->y_offset = self->dYOffset;
+        self->pHeader->z_offset = self->dZOffset;
+        
         // populate header from pHeader dictionary
         setHeaderFromDictionary(pHeader, self->pHeader);
 
@@ -1566,12 +1608,12 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             npy_int64 nClassification = pointMap.getIntValue("CLASSIFICATION", pPointRow);
             if(nExtended)
             {
-                self->pPoint->extended_return_number = nPointCount;
+                self->pPoint->extended_return_number = nPointCount + 1;
                 self->pPoint->set_extended_classification(nClassification);
             }
             else
             {
-                self->pPoint->set_return_number(nPointCount);
+                self->pPoint->set_return_number(nPointCount + 1);
                 self->pPoint->set_classification(nClassification);
             }
             
@@ -1592,7 +1634,6 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
 
         
     }
-    self->pWriter->update_header(self->pHeader, TRUE);
 
     Py_RETURN_NONE;
 }
@@ -1606,10 +1647,55 @@ static PyObject *PyLasFileWrite_setEPSG(PyLasFileWrite *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+static PyObject *PyLasFileWrite_setScaling(PyLasFileWrite *self, PyObject *args)
+{
+    double dGain, dOffset;
+    const char *pszField;
+    if( !PyArg_ParseTuple(args, "sdd:setScaling", &pszField, &dGain, &dOffset) )
+        return NULL;
+
+    // note: only handle X, Y and Z on the points at the moment
+    // potentially this scheme could be extended to 'additional' fields
+    // ie las attributes. 
+    if( strcmp(pszField, "X") == 0)
+    {
+        self->dXGain = dGain;
+        self->dXOffset = dOffset;
+        self->bXScalingSet = true;
+    }
+    else if( strcmp(pszField, "Y") == 0)
+    {
+        self->dYGain = dGain;
+        self->dYOffset = dOffset;
+        self->bYScalingSet = true;
+    }
+    else if( strcmp(pszField, "Z") == 0)
+    {
+        self->dZGain = dGain;
+        self->dZOffset = dOffset;
+        self->bZScalingSet = true;
+    }
+    else
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_Format(GETSTATE(m)->error, "Unable to set scaling for field %s", pszField);
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
 /* Table of methods */
 static PyMethodDef PyLasFileWrite_methods[] = {
     {"writeData", (PyCFunction)PyLasFileWrite_writeData, METH_VARARGS, NULL}, 
     {"setEPSG", (PyCFunction)PyLasFileWrite_setEPSG, METH_VARARGS, NULL},
+    {"setScaling", (PyCFunction)PyLasFileWrite_setScaling, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 

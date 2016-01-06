@@ -352,7 +352,7 @@ def doProcessing(userFunc, dataFiles, otherArgs=None, controls=None):
     # need to determine if we have a spatial index for all LiDAR files
     if controls.spatialProcessing:
         for driver in driverList:
-            if isinstance(driver, generic.LiDARFile):
+            if driver.mode != generic.CREATE and isinstance(driver, generic.LiDARFile):
                 if not driver.hasSpatialIndex():
                     msg = """Warning: Not all LiDAR files have a spatial index. 
 Non-spatial processing will now occur. 

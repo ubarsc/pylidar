@@ -91,6 +91,7 @@ def testConvert(infile, outfile):
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
+    controls.setSpatialProcessing(False)
     
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls)
     

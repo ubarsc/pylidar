@@ -44,6 +44,14 @@ class CmdArgs(object):
             p.print_help()
             sys.exit()
     
+def setOutputScaling(indata, outdata):
+    """
+    Sets the output scaling for las. Currently this is on X, Y and Z
+    """
+    for colName in ("X", "Y", "Z"):
+        gain, offset = indata.getScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS)
+        outdata.setScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
+        
 def transFunc(data):
     """
     Called from pylidar. Does the actual conversion to las
@@ -61,8 +69,8 @@ def transFunc(data):
     #        lidarprocessor.ARRAY_TYPE_PULSES)
             
     # set scaling
-    #if data.info.isFirstBlock():
-    #    setOutputScaling(rangeDict, data.output1)
+    if data.info.isFirstBlock():
+        setOutputScaling(data.input1, data.output1)
 
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)

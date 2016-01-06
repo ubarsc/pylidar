@@ -668,33 +668,33 @@ spatial index will be recomputed on the fly"""
                 gain, offset = self.pulseScalingValues[colName]
                 if colName not in pulsesHandle:
                     msg = 'scaling set for column %s but no data written' % colName
-                    raise generic.LiDARArrayColumnError(msg)
-                
-                attrs = pulsesHandle[colName].attrs
-                attrs[GAIN_NAME] = gain
-                attrs[OFFSET_NAME] = offset
+                    self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+                else:    
+                    attrs = pulsesHandle[colName].attrs
+                    attrs[GAIN_NAME] = gain
+                    attrs[OFFSET_NAME] = offset
             
             pointsHandle = self.fileHandle['DATA']['POINTS']
             for colName in self.pointScalingValues.keys():
                 gain, offset = self.pointScalingValues[colName]
                 if colName not in pointsHandle:
                     msg = 'scaling set for column %s but no data written' % colName
-                    raise generic.LiDARArrayColumnError(msg)
-                
-                attrs = pointsHandle[colName].attrs
-                attrs[GAIN_NAME] = gain
-                attrs[OFFSET_NAME] = offset
+                    self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+                else:
+                    attrs = pointsHandle[colName].attrs
+                    attrs[GAIN_NAME] = gain
+                    attrs[OFFSET_NAME] = offset
                 
             waveHandle = self.fileHandle['DATA']['WAVEFORMS']
             for colName in self.waveFormScalingValues.keys():
                 gain, offset = self.waveFormScalingValues[colName]
                 if colName not in waveHandle:
                     msg = 'scaling set for column %s but no data written' % colName
-                    raise generic.LiDARArrayColumnError(msg)
-                
-                attrs = waveHandle[colName].attrs
-                attrs[GAIN_NAME] = gain
-                attrs[OFFSET_NAME] = offset
+                    self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+                else:                
+                    attrs = waveHandle[colName].attrs
+                    attrs[GAIN_NAME] = gain
+                    attrs[OFFSET_NAME] = offset
         
             # write the version information
             headerArray = numpy.array([SPDV4_VERSION_MAJOR, SPDV4_VERSION_MINOR], 
@@ -1262,7 +1262,7 @@ spatial index will be recomputed on the fly"""
                 # to use one of the fields
                 firstField = points.dtype.names[0]
                 
-                nreturns = points[firstField].count(axis=0)
+                nreturns = points[firstField].count(axis=0) - 1
                 pointsHandle = self.fileHandle['DATA']['POINTS']
                 currPointsCount = 0
                 if firstField in pointsHandle:
@@ -1954,7 +1954,7 @@ spatial index will be recomputed on the fly"""
         Set the scaling for the given column name
         """
         if self.mode == generic.READ:
-            msg = 'Can only set scaling values on read or create'
+            msg = 'Can only set scaling values on update or create'
             raise generic.LiDARInvalidSetting(msg)
             
         if arrayType == generic.ARRAY_TYPE_PULSES:

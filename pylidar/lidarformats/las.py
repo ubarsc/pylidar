@@ -332,7 +332,7 @@ class LasFile(generic.LiDARFile):
         """
         Set the extent for reading for the ForExtent() functions.
         """
-        if not self.hasSpatialIndex():
+        if self.mode == generic.READ and not self.hasSpatialIndex():
             msg = 'las file has no index. See lasindex'
             raise generic.LiDARFunctionUnsupported(msg)
             
@@ -553,7 +553,7 @@ class LasFile(generic.LiDARFile):
             # the processor always calls this so if a reading driver just ignore
             return
 
-        print(points.shape)
+        #print(pulses.shape, points.shape, received.shape, waveformInfo.shape)
         # TODO: flatten if necessary
         self.lasFile.writeData(self.header, pulses, points, waveformInfo,
                                 received)
@@ -574,11 +574,10 @@ class LasFile(generic.LiDARFile):
             raise generic.LiDARFunctionUnsupported(msg)
             
         sr = osr.SpatialReference()
-        sr.ImportFromWkt(pixGrid.wkt)
+        sr.ImportFromWkt(pixGrid.projection)
         # TODO: check this is ok for all coordinate systems
         epsg = sr.GetAttrValue("PROJCS|GEOGCS|AUTHORITY", 1)
-                
-        self.lasFile.setEPSG(epsg)
+        self.lasFile.setEPSG(int(epsg))
                 
     def getHeader(self):
         """
@@ -595,6 +594,15 @@ class LasFile(generic.LiDARFile):
         Just extract the one value and return it
         """
         return self.getHeader()[name]
+        
+    @staticmethod
+    def createBlankHeader():
+        """
+        Creates a header dictionary with one field filled in:
+        GENERATING_SOFTWARE
+        """
+        header = {"GENERATING_SOFTWARE" : generic.SOFTWARE_NAME}
+        return header
 
     def setHeader(self, newHeaderDict):
         """
@@ -609,7 +617,7 @@ class LasFile(generic.LiDARFile):
             raise generic.LiDARFunctionUnsupported(msg)
             
         if self.header is None:
-            self.header = {}
+            self.header = self.createBlankHeader()
             
         for key in newHeaderDict.keys():
             self.header[key] = newHeaderDict[key]
@@ -627,9 +635,24 @@ class LasFile(generic.LiDARFile):
             raise generic.LiDARFunctionUnsupported(msg)
 
         if self.header is None:
-            self.header = {}
+            self.header = self.createBlankHeader()
             
         self.header[name] = value
+
+    def setScaling(self, colName, arrayType, gain, offset):
+        """
+        Set the scaling for the given column name. Currently
+        scaling is only supported for X, Y and Z columns for points.
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set scaling values on create'
+            raise generic.LiDARInvalidSetting(msg)
+            
+        if arrayType != generic.ARRAY_TYPE_POINTS:
+            msg = 'Can only set scaling for points'
+            raise generic.LiDARInvalidSetting(msg)
+            
+        self.lasFile.setScaling(colName, gain, offset)
 
 class LasFileInfo(generic.LiDARFileInfo):
     """
