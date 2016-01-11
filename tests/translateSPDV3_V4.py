@@ -20,10 +20,30 @@ from __future__ import print_function, division
 
 import sys
 import numpy
+import optparse
 from pylidar import lidarprocessor
+from pylidar.lidarformats import generic
 from rios import cuiprogress
 
-MAX_UINT16 = 2**16
+MAX_UINT16 = numpy.iinfo(numpy.uint16).max
+
+class CmdArgs(object):
+    def __init__(self):
+        p = optparse.OptionParser()
+        p.add_option("--spatial", dest="spatial", 
+            help="process the data spatially. Specify 'yes' or 'no'. " +
+            "Default is spatial if a spatial index exists.")
+        p.add_option("--v3", dest="v3",
+            help="input v3 .spd file")
+        p.add_option("--v4", dest="v4",
+            help="output SPD V4 file name")
+            
+        (options, args) = p.parse_args()
+        self.__dict__.update(options.__dict__)
+
+        if self.v3 is None or self.v4 is None:
+            p.print_help()
+            sys.exit()
 
 def setOutputScaling(header, output):
     xOffset = header['X_MIN']
@@ -81,7 +101,16 @@ def transFunc(data):
     data.output1.setReceived(revc)
     data.output1.setTransmitted(trans)
     
-def testConvert(infile, outfile):
+def convert(infile, outfile, spatial):
+
+    # first we need to determine if the file is spatial or not
+    info = generic.getLidarFileInfo(infile)
+    if spatial is not None:
+        if spatial and not info.hasSpatialIndex:
+            raise SystemExit("Spatial processing requested but file does not have spatial index")
+    else:
+        spatial = info.hasSpatialIndex
+
     dataFiles = lidarprocessor.DataFiles()
     
     dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
@@ -91,10 +120,19 @@ def testConvert(infile, outfile):
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
-    controls.setSpatialProcessing(False)
+    controls.setSpatialProcessing(spatial)
     
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls)
     
 if __name__ == '__main__':
-    testConvert(sys.argv[1], sys.argv[2])
+    cmdargs = CmdArgs()
+    spatial = None
+    if cmdargs.spatial is not None:
+        spatialStr = cmdargs.spatial.lower()
+        if spatialStr != 'yes' and spatialStr != 'no':
+            raise SystemExit("Must specify either 'yes' or 'no' for --spatial flag")
+    
+        spatial = (spatialStr == 'yes')
+
+    convert(cmdargs.v3, cmdargs.v4, spatial)
     

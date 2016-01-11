@@ -1970,6 +1970,9 @@ spatial index will be recomputed on the fly"""
         """
         Returns the scaling (gain, offset) for the given column name
         reads from our cache since only written to file on close
+
+        Raises generic.LiDARArrayColumnError if no scaling (yet) 
+        set for this column.
         """
         if arrayType == generic.ARRAY_TYPE_PULSES:
             if colName in self.pulseScalingValues:
@@ -2002,6 +2005,41 @@ spatial index will be recomputed on the fly"""
             
         return gain, offset
         
+    def getNativeDataType(self, colName, arrayType):
+        """
+        Return the native dtype (numpy.int16 etc)that a column is stored
+        as internally after scaling is applied. Provided so scaling
+        can be adjusted when translating between formats.
+        
+        Note that for 'non essential' columns this will depend on the
+        data type that the column was to begin with.
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        """
+        if arrayType == generic.ARRAY_TYPE_PULSES:
+            if colName in PULSE_FIELDS:
+                return PULSE_FIELDS[colName]
+                
+            handle = self.fileHandle['DATA']['PULSES']
+        elif arrayType == generic.ARRAY_TYPE_POINTS:
+            if colName in POINT_FIELDS:
+                return POINT_FIELDS[colName]
+                
+            handle = self.fileHandle['DATA']['POINTS']
+        elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
+            if colName in WAVEFORM_FIELDS:
+                return WAVEFORM_FIELDS[colName]
+                
+            handle = self.fileHandle['DATA']['WAVEFORMS']
+        else:
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+            
+        if colName in handle:
+            return handle[colName].dtype
+        else:
+            msg = 'Cannot find column %s' % colName
+            raise generic.LiDARArrayColumnError(msg)
+            
 
 class SPDV4FileInfo(generic.LiDARFileInfo):
     """

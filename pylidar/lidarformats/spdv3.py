@@ -1290,6 +1290,29 @@ spatial index will be recomputed on the fly"""
         self.headerDict[name] =  value
         self.headerUpdated = True 
         
+    def getNativeDataType(self, colName, arrayType):
+        """
+        Return the native dtype (numpy.int16 etc)that a column is stored
+        as internally. Provided so scaling
+        can be adjusted when translating between formats.
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        """
+        if arrayType == generic.ARRAY_TYPE_PULSES:
+            if colName in PULSE_DTYPE.fields:
+                return PULSE_DTYPE.fields[colName][0]
+            else:
+                raise generic.LiDARArrayColumnError('column not found')
+        elif arrayType == generic.ARRAY_TYPE_POINTS:
+            if colName in POINT_DTYPE.fields:
+                return POINT_DTYPE.fields[colName][0]
+            else:
+                raise generic.LiDARArrayColumnError('column not found')
+        else:
+            # we don't really have waveform info dtype since we 
+            # don't write it to file
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+        
     def close(self):
         """
         Write out the spatial index, header and close file handle.

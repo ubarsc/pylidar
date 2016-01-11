@@ -540,6 +540,18 @@ class LidarData(object):
         """
         return self.driver.getScaling(colName, arrayType)
         
+    def getNativeDataType(self, colName, arrayType):
+        """
+        Return the native dtype (numpy.int16 etc)that a column is stored
+        as internally after scaling (if any) is applied. Provided so scaling
+        can be adjusted when translating between formats.
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        
+        generic.LiDARArrayColumnError is raised if information cannot be found.
+        """
+        return self.driver.getNativeDataType(colName, arrayType)
+        
     def setWaveformInfo(self, info):
         """
         Set the waveform info as a masked 2d array

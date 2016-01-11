@@ -654,6 +654,39 @@ class LasFile(generic.LiDARFile):
             
         self.lasFile.setScaling(colName, gain, offset)
 
+    def getScaling(self, colName, arrayType):
+        """
+        Returns the scaling (gain, offset) for the given column name
+        reads from our cache since only written to file on close
+
+        Raises generic.LiDARArrayColumnError if no scaling (yet) 
+        set for this column.
+        """
+        if self.mode != generic.READ:
+            msg = 'Can only get scaling values on read'
+            raise generic.LiDARInvalidSetting(msg)
+            
+        if arrayType != generic.ARRAY_TYPE_POINTS:
+            msg = 'Can only get scaling for points'
+            raise generic.LiDARInvalidSetting(msg)
+
+        return self.lasFile.getScaling(colName)
+
+    def getNativeDataType(self, colName, arrayType):
+        """
+        Return the native dtype (numpy.int16 etc)that a column is stored
+        as internally after scaling is applied. Provided so scaling
+        can be adjusted when translating between formats.
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        """
+        scaledCols = ("X", "Y", "Z")
+        if arrayType == generic.ARRAY_TYPE_POINTS and colName in scaledCols:
+            return numpy.int32
+        else:
+            raise generic.LiDARArrayColumnError('Unsupported array type or column')
+        
+
 class LasFileInfo(generic.LiDARFileInfo):
     """
     Class that gets information about a .las file

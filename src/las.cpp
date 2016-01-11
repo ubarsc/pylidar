@@ -875,12 +875,52 @@ static PyObject *PyLasFileRead_setExtent(PyLasFileRead *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+static PyObject *PyLasFileRead_getScaling(PyLasFileRead *self, PyObject *args)
+{
+    const char *pszField;
+    if( !PyArg_ParseTuple(args, "s:getScaling", &pszField ) )
+        return NULL;
+
+    double dGain, dOffset;
+    LASheader *pHeader = &self->pReader->header;
+    if( strcmp(pszField, "X") == 0 )
+    {
+        dGain = 1.0 / pHeader->x_scale_factor;
+        dOffset = pHeader->x_offset;
+    }
+    else if( strcmp(pszField, "Y") == 0 )
+    {
+        dGain = 1.0 / pHeader->y_scale_factor;
+        dOffset = pHeader->y_offset;
+    }
+    else if( strcmp(pszField, "Z") == 0 )
+    {
+        dGain = 1.0 / pHeader->z_scale_factor;
+        dOffset = pHeader->z_offset;
+    }
+    else
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_Format(GETSTATE(m)->error, "Unable to get scaling for field %s", pszField);
+        return NULL;
+    }
+
+    return Py_BuildValue("dd", dGain, dOffset);
+}
+
 /* Table of methods */
 static PyMethodDef PyLasFileRead_methods[] = {
     {"readHeader", (PyCFunction)PyLasFileRead_readHeader, METH_NOARGS, NULL},
     {"readData", (PyCFunction)PyLasFileRead_readData, METH_VARARGS, NULL}, 
     {"getEPSG", (PyCFunction)PyLasFileRead_getEPSG, METH_NOARGS, NULL},
     {"setExtent", (PyCFunction)PyLasFileRead_setExtent, METH_VARARGS, NULL},
+    {"getScaling", (PyCFunction)PyLasFileRead_getScaling, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 

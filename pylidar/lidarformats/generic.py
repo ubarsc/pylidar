@@ -299,10 +299,26 @@ class LiDARFile(basedriver.Driver):
         """
         Returns the scaling (gain, offset) for the given column name
 
-        arrayType is one of the ARRAY_TYPE_* constants
+        arrayType is one of the ARRAY_TYPE_* constants.
+        
+        Raises generic.LiDARArrayColumnError if no scaling (yet) 
+        set for this column.
         """
         raise NotImplementedError()
-
+        
+    def getNativeDataType(self, colName, arrayType):
+        """
+        Return the native dtype (numpy.int16 etc)that a column is stored
+        as internally after scaling (if any) is applied. Provided so scaling
+        can be adjusted when translating between formats.
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        
+        Raises generic.LiDARArrayColumnError if information cannot be
+        found for the column.
+        """
+        return NotImplementedError()
+    
     def writeData(self, pulses=None, points=None, transmitted=None, 
                 received=None, waveformInfo=None):
         """

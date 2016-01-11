@@ -24,7 +24,7 @@ from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from rios import cuiprogress
 
-MAX_UINT16 = 2**16
+MAX_UINT16 = numpy.iinfo(numpy.uint16).max
 
 class CmdArgs(object):
     def __init__(self):

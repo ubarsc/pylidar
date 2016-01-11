@@ -20,11 +20,12 @@ from __future__ import print_function, division
 
 import sys
 import optparse
+import numpy
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from rios import cuiprogress
 
-MAX_UINT16 = 2**16
+MAX_UINT16 = numpy.iinfo(numpy.uint16).max
 
 class CmdArgs(object):
     def __init__(self):
@@ -50,6 +51,26 @@ def setOutputScaling(indata, outdata):
     """
     for colName in ("X", "Y", "Z"):
         gain, offset = indata.getScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS)
+        indtype = indata.getNativeDataType(colName, lidarprocessor.ARRAY_TYPE_POINTS)
+        ininfo = numpy.iinfo(indtype)
+        outdtype = outdata.getNativeDataType(colName, lidarprocessor.ARRAY_TYPE_POINTS)
+        outinfo = numpy.iinfo(outdtype)
+        maxVal = offset + ((ininfo.max - ininfo.min) * gain)
+        # adjust gain
+        # assume min always 0. Not currect in the las case since
+        # X, Y and Z are I32 which seems a bit weird so keep it all positive
+        print(gain, offset, maxVal)
+        gain = (maxVal - offset) / outinfo.max
+        print(gain)
+        
+        if colName == "Y" and gain < 0:
+            # we need to do another fiddle since las is strict
+            # in its min and max for Y
+            gain = abs(gain)
+            offest = maxVal
+            print(colName, gain, offset)
+            
+        
         outdata.setScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
         
 def transFunc(data):
