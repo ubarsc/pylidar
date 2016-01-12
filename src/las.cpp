@@ -174,7 +174,7 @@ static PyObject *las_getReadSupportedOptions(PyObject *self, PyObject *args)
     return pylidar_stringArrayToTuple(SupportedDriverOptionsRead);
 }
 
-static const char *SupportedDriverOptionsWrite[] = {NULL};
+static const char *SupportedDriverOptionsWrite[] = {"FORMAT", "RECORD_LENGTH", NULL};
 static PyObject *las_getWriteSupportedOptions(PyObject *self, PyObject *args)
 {
     return pylidar_stringArrayToTuple(SupportedDriverOptionsWrite);
@@ -1051,6 +1051,8 @@ typedef struct {
     F64 dYOffset;
     F64 dZGain;
     F64 dZOffset;
+    U8 point_data_format;
+    U16 point_data_record_length;
 } PyLasFileWrite;
 
 
@@ -1091,6 +1093,11 @@ PyObject *pOptionDict;
         return -1;
     }
 
+    // defaults from lasexample_write_only.cpp
+    // I can't find any documentation so I assume these
+    // are sensible.
+    self->point_data_format = 1;
+    self->point_data_record_length = 28;
     if( pOptionDict != Py_None )
     {
         if( !PyDict_Check(pOptionDict) )
@@ -1104,6 +1111,42 @@ PyObject *pOptionDict;
 #endif
             PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
             return -1;
+        }
+
+        PyObject *pVal = PyDict_GetItemString(pOptionDict, "FORMAT");
+        if( pVal != NULL )
+        {
+            if( !PyLong_Check(pVal) )
+            {
+                // raise Python exception
+                PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+                // best way I could find for obtaining module reference
+                // from inside a class method. Not needed for Python < 3.
+                m = PyState_FindModule(&moduledef);
+#endif
+                PyErr_SetString(GETSTATE(m)->error, "FORMAT parameter must be integer");
+                return -1;
+            }
+            self->point_data_format = PyLong_AsLong(pVal);
+        }
+
+        pVal = PyDict_GetItemString(pOptionDict, "RECORD_LENGTH");
+        if( pVal != NULL )
+        {
+            if( !PyLong_Check(pVal) )
+            {
+                // raise Python exception
+                PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+                // best way I could find for obtaining module reference
+                // from inside a class method. Not needed for Python < 3.
+                m = PyState_FindModule(&moduledef);
+#endif
+                PyErr_SetString(GETSTATE(m)->error, "RECORD_LENGTH parameter must be integer");
+                return -1;
+            }
+            self->point_data_record_length = PyLong_AsLong(pVal);
         }
     }
 
@@ -1336,6 +1379,9 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
         char *pszSignature = PyString_AsString(pVal);
 #endif
         strncpy(pHeader->file_signature, pszSignature, GET_LENGTH(pHeader->file_signature));
+#if PY_MAJOR_VERSION >= 3
+        Py_DECREF(bytesKey);
+#endif
     }
 
     pVal = PyDict_GetItemString(pHeaderDict, "FILE_SOURCE_ID");
@@ -1389,6 +1435,9 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
         char *pszIdent = PyString_AsString(pVal);
 #endif
         strncpy(pHeader->system_identifier, pszIdent, GET_LENGTH(pHeader->system_identifier));
+#if PY_MAJOR_VERSION >= 3
+        Py_DECREF(bytesKey);
+#endif
     }
 
     pVal = PyDict_GetItemString(pHeaderDict, "GENERATING_SOFTWARE");
@@ -1401,6 +1450,9 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
         char *pszSW = PyString_AsString(pVal);
 #endif
         strncpy(pHeader->generating_software, pszSW, GET_LENGTH(pHeader->generating_software));
+#if PY_MAJOR_VERSION >= 3
+        Py_DECREF(bytesKey);
+#endif
     }
 
     pVal = PyDict_GetItemString(pHeaderDict, "FILE_CREATION_DAY");
@@ -1435,7 +1487,6 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
     pVal = PyDict_GetItemString(pHeaderDict, "NUMBER_OF_POINT_RECORDS");
     if( pVal != NULL )
         pHeader->number_of_point_records = PyLong_AsLong(pVal);
-
 
     pVal = PyDict_GetItemString(pHeaderDict, "NUMBER_OF_POINTS_BY_RETURN");
     if( pVal != NULL )
@@ -1589,10 +1640,10 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             self->pHeader->set_geo_keys(1, &ent);
         }
 
-        // TODO: point_data_format?
-
-        self->pPoint->init(self->pHeader, self->pHeader->point_data_format, 
-                self->pHeader->point_data_record_length, 0);
+        // point_data_format and point_data_record_length set in init
+        // from option dict if available
+        self->pPoint->init(self->pHeader, self->point_data_format, 
+                self->point_data_record_length, 0);
 
         LASwriteOpener laswriteopener;
         laswriteopener.set_file_name(self->pszFilename);

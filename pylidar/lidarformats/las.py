@@ -32,7 +32,17 @@ These are contained in the READSUPPORTEDOPTIONS module level variable.
 Write Driver Options
 --------------------
 
-No driver options for writing are supported yet.
+These are contained in the WRITESUPPORTEDOPTIONS module level variable.
+
++-----------------------+-------------------------------------------+
+| Name                  | Use                                       |
++=======================+===========================================+
+| FORMAT                | LAS point format. Defaults to 1. Not sure |
+|                       | what it means.                            |
++-----------------------+-------------------------------------------+
+| RECORD_LENGTH         | LAS record length. Defaults to 28. Not    |
+|                       | sure what it means.                       |
++-----------------------+-------------------------------------------+
 
 Note that for writing, the extension currently controls the format witten:
 

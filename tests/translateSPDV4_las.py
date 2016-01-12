@@ -59,16 +59,14 @@ def setOutputScaling(indata, outdata):
         # adjust gain
         # assume min always 0. Not currect in the las case since
         # X, Y and Z are I32 which seems a bit weird so keep it all positive
-        print(gain, offset, maxVal)
         gain = (maxVal - offset) / outinfo.max
-        print(gain)
         
         if colName == "Y" and gain < 0:
             # we need to do another fiddle since las is strict
             # in its min and max for Y
+            # not sure if this should be in the driver...
             gain = abs(gain)
             offest = maxVal
-            print(colName, gain, offset)
             
         
         outdata.setScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
