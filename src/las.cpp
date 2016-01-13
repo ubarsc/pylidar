@@ -1063,6 +1063,7 @@ typedef struct {
     U8 point_data_format;
     U16 point_data_record_length;
     std::vector<SFieldInfo> *pAttributeFields; // index is the position in the vector
+    std::map<std::string, std::pair<double, double> > *pScalingMap;
 } PyLasFileWrite;
 
 
@@ -1091,6 +1092,10 @@ PyLasFileWrite_dealloc(PyLasFileWrite *self)
     if(self->pAttributeFields != NULL)
     {
         delete self->pAttributeFields;
+    }
+    if(self->pScalingMap != NULL)
+    {
+        delete self->pScalingMap;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -1180,6 +1185,7 @@ PyObject *pOptionDict;
     self->bYScalingSet = false;
     self->bZScalingSet = false;
     self->pAttributeFields = NULL;
+    self->pScalingMap = new std::map<std::string, std::pair<double, double> >;
 
     // copy filename so we can open later
     self->pszFilename = strdup(pszFname);
@@ -1533,6 +1539,30 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
         pHeader->min_z = PyFloat_AsDouble(pVal);
 }
 
+// returns a set of names we recognise and match to 
+// 'essential' fields in the LASpoint structure
+std::set<std::string> getEssentialPointFieldNames()
+{
+    std::set<std::string> nonAttrPointSet;
+    nonAttrPointSet.insert("EXTENDED_POINT_TYPE");
+    nonAttrPointSet.insert("X");
+    nonAttrPointSet.insert("Y");
+    nonAttrPointSet.insert("Z");
+    nonAttrPointSet.insert("INTENSITY");
+    nonAttrPointSet.insert("CLASSIFICATION");
+    nonAttrPointSet.insert("SYNTHETIC_FLAG");
+    nonAttrPointSet.insert("KEYPOINT_FLAG");
+    nonAttrPointSet.insert("WITHHELD_FLAG");
+    nonAttrPointSet.insert("USER_DATA");
+    nonAttrPointSet.insert("POINT_SOURCE_ID");
+    nonAttrPointSet.insert("DELETED_FLAG");
+    nonAttrPointSet.insert("RED");
+    nonAttrPointSet.insert("GREEN");
+    nonAttrPointSet.insert("BLUE");
+    nonAttrPointSet.insert("NIR");
+    return nonAttrPointSet;
+}
+
 static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
 {
     PyObject *pHeader, *pPulses, *pPoints, *pWaveformInfos, *pReceived;
@@ -1663,23 +1693,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         self->pAttributeFields = new std::vector<SFieldInfo>();
         // temp set of the fields we use to populate LASpoint fields
         // others must be attributes
-        std::set<std::string> nonAttrPointSet;
-        nonAttrPointSet.insert("EXTENDED_POINT_TYPE");
-        nonAttrPointSet.insert("X");
-        nonAttrPointSet.insert("Y");
-        nonAttrPointSet.insert("Z");
-        nonAttrPointSet.insert("INTENSITY");
-        nonAttrPointSet.insert("CLASSIFICATION");
-        nonAttrPointSet.insert("SYNTHETIC_FLAG");
-        nonAttrPointSet.insert("KEYPOINT_FLAG");
-        nonAttrPointSet.insert("WITHHELD_FLAG");
-        nonAttrPointSet.insert("USER_DATA");
-        nonAttrPointSet.insert("POINT_SOURCE_ID");
-        nonAttrPointSet.insert("DELETED_FLAG");
-        nonAttrPointSet.insert("RED");
-        nonAttrPointSet.insert("GREEN");
-        nonAttrPointSet.insert("BLUE");
-        nonAttrPointSet.insert("NIR");
+        std::set<std::string> nonAttrPointSet = getEssentialPointFieldNames();
 
         // iterate over our field map and see what isn't in nonAttrPointSet
         for( std::map<std::string, SFieldInfo>::iterator itr = pointMap.begin(); itr != pointMap.end(); itr++ )
@@ -1716,6 +1730,15 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
                 // else error?
 
                 LASattribute attr(type, itr->first.c_str());
+                // have they set the scaling for this field?
+                std::map<std::string, std::pair<double, double> >::iterator scalingItr = self->pScalingMap->find(itr->first);
+                if( scalingItr != self->pScalingMap->end() )
+                {
+                    std::pair<double, double> vals = scalingItr->second;
+                    attr.set_scale(vals.first);
+                    attr.set_offset(vals.second);
+                }
+
                 self->pHeader->add_attribute(attr);
             }
         }
@@ -1776,7 +1799,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         // now the point
         for( npy_intp nPointCount = 0; nPointCount < nPoints; nPointCount++ )
         {
-            // IF ADDING OTHER FIELDS also add to nonAttrPointSet above
+            // IF ADDING OTHER FIELDS also add to getEssentialPointFieldNames() above
             void *pPointRow = PyArray_GETPTR2(pPoints, nPointCount, nPulseIdx);
             // TODO: extended creation option?
             npy_int64 nExtended = pointMap.getIntValue("EXTENDED_POINT_TYPE", pPointRow);
@@ -1867,15 +1890,25 @@ static PyObject *PyLasFileWrite_setScaling(PyLasFileWrite *self, PyObject *args)
     }
     else
     {
-        // raise Python exception
-        PyObject *m;
+        std::set<std::string> essentialFields = getEssentialPointFieldNames();
+        if( essentialFields.find(pszField) != essentialFields.end() )
+        {
+            // is an essential field that we can't store scaling for.
+            // raise Python exception
+            PyObject *m;
 #if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
 #endif
-        PyErr_Format(GETSTATE(m)->error, "Unable to set scaling for field %s", pszField);
-        return NULL;
+            PyErr_Format(GETSTATE(m)->error, "Unable to set scaling for field %s", pszField);
+            return NULL;
+        }
+        else
+        {
+            // store for creation
+            self->pScalingMap->insert(std::pair<std::string, std::pair<double, double> >(pszField, std::pair<double, double>(dGain, dOffset)));
+        }
     }
 
     Py_RETURN_NONE;

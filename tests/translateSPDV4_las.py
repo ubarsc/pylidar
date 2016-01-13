@@ -45,15 +45,26 @@ class CmdArgs(object):
             p.print_help()
             sys.exit()
     
-def setOutputScaling(indata, outdata):
+def setOutputScaling(points, indata, outdata):
     """
     Sets the output scaling for las. Currently this is on X, Y and Z
     """
-    for colName in ("X", "Y", "Z"):
-        gain, offset = indata.getScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS)
+    for colName in points.dtype.fields:
+        try:
+            gain, offset = indata.getScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS)
+        except generic.LiDARArrayColumnError:
+            # no scaling
+            continue
         indtype = indata.getNativeDataType(colName, lidarprocessor.ARRAY_TYPE_POINTS)
         ininfo = numpy.iinfo(indtype)
-        outdtype = outdata.getNativeDataType(colName, lidarprocessor.ARRAY_TYPE_POINTS)
+        try:
+            outdtype = outdata.getNativeDataType(colName, lidarprocessor.ARRAY_TYPE_POINTS)
+        except generic.LiDARArrayColumnError:
+            outdtype = points[colName].dtype
+            
+        if numpy.issubdtype(outdtype, numpy.floating):
+            continue
+            
         outinfo = numpy.iinfo(outdtype)
         maxVal = offset + ((ininfo.max - ininfo.min) * gain)
         # adjust gain
@@ -89,7 +100,7 @@ def transFunc(data):
             
     # set scaling
     if data.info.isFirstBlock():
-        setOutputScaling(data.input1, data.output1)
+        setOutputScaling(points, data.input1, data.output1)
 
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
