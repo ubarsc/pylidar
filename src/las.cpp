@@ -176,7 +176,7 @@ static PyObject *las_getReadSupportedOptions(PyObject *self, PyObject *args)
     return pylidar_stringArrayToTuple(SupportedDriverOptionsRead);
 }
 
-static const char *SupportedDriverOptionsWrite[] = {"FORMAT", "RECORD_LENGTH", NULL};
+static const char *SupportedDriverOptionsWrite[] = {"FORMAT_VERSION", "RECORD_LENGTH", NULL};
 static PyObject *las_getWriteSupportedOptions(PyObject *self, PyObject *args)
 {
     return pylidar_stringArrayToTuple(SupportedDriverOptionsWrite);
@@ -1132,7 +1132,7 @@ PyObject *pOptionDict;
             return -1;
         }
 
-        PyObject *pVal = PyDict_GetItemString(pOptionDict, "FORMAT");
+        PyObject *pVal = PyDict_GetItemString(pOptionDict, "FORMAT_VERSION");
         if( pVal != NULL )
         {
             if( !PyLong_Check(pVal) )
@@ -1490,11 +1490,6 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
     if( pVal != NULL )
         pHeader->number_of_variable_length_records = PyLong_AsLong(pVal);
 
-    pVal = PyDict_GetItemString(pHeaderDict, "POINT_DATA_FORMAT");
-    if( pVal != NULL )
-        pHeader->point_data_format = PyLong_AsLong(pVal);
-
-    pVal = PyDict_GetItemString(pHeaderDict, "POINT_DATA_RECORD_LENGTH");
     if( pVal != NULL )
         pHeader->point_data_record_length = PyLong_AsLong(pVal);
 

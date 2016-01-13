@@ -37,7 +37,7 @@ These are contained in the WRITESUPPORTEDOPTIONS module level variable.
 +-----------------------+-------------------------------------------+
 | Name                  | Use                                       |
 +=======================+===========================================+
-| FORMAT                | LAS point format. Defaults to 1. Not sure |
+| FORMAT_VERSION        | LAS point format. Defaults to 1. Not sure |
 |                       | what it means.                            |
 +-----------------------+-------------------------------------------+
 | RECORD_LENGTH         | LAS record length. Defaults to 28. Not    |
