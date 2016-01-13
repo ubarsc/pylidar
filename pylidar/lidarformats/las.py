@@ -84,6 +84,7 @@ from __future__ import print_function, division
 import os
 import copy
 import numpy
+import datetime
 from osgeo import osr
 
 from rios import pixelgrid
@@ -102,6 +103,12 @@ LAST_RETURN = _las.LAST_RETURN
 # types for the spatial index
 LAS_SIMPLEGRID_COUNT_DTYPE = numpy.uint32
 LAS_SIMPLEGRID_INDEX_DTYPE = numpy.uint64
+
+# for new files
+today = datetime.date.today()
+DEFAULT_HEADER = {"GENERATING_SOFTWARE" : generic.SOFTWARE_NAME, 
+"FILE_CREATION_DAY" : today.toordinal() - datetime.date(today.year, 1, 1).toordinal(), 
+"FILE_CREATION_YEAR" : today.year}
 
 def isLasFile(fname):
     """
@@ -161,7 +168,10 @@ class LasFile(generic.LiDARFile):
                 msg = 'cannot create las file' + str(e)
                 raise generic.LiDARFileException(msg)
 
-        self.header = None
+        if mode == generic.READ:
+            self.header = None
+        else:
+            self.header = DEFAULT_HEADER
         self.range = None
         self.lastRange = None
         self.lastPoints = None
@@ -605,15 +615,6 @@ class LasFile(generic.LiDARFile):
         """
         return self.getHeader()[name]
         
-    @staticmethod
-    def createBlankHeader():
-        """
-        Creates a header dictionary with one field filled in:
-        GENERATING_SOFTWARE
-        """
-        header = {"GENERATING_SOFTWARE" : generic.SOFTWARE_NAME}
-        return header
-
     def setHeader(self, newHeaderDict):
         """
         Update our cached dictionary
@@ -625,9 +626,6 @@ class LasFile(generic.LiDARFile):
         if self.firstBlockWritten:
             msg = 'Header can only be updated before first block written'
             raise generic.LiDARFunctionUnsupported(msg)
-            
-        if self.header is None:
-            self.header = self.createBlankHeader()
             
         for key in newHeaderDict.keys():
             self.header[key] = newHeaderDict[key]
@@ -644,9 +642,6 @@ class LasFile(generic.LiDARFile):
             msg = 'Header can only be updated before first block written'
             raise generic.LiDARFunctionUnsupported(msg)
 
-        if self.header is None:
-            self.header = self.createBlankHeader()
-            
         self.header[name] = value
 
     def setScaling(self, colName, arrayType, gain, offset):

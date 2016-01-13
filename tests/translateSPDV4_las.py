@@ -122,6 +122,7 @@ def doTranslation(spatial, spd, las):
     
     dataFiles.output1 = lidarprocessor.LidarFile(las, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('las')
+    #dataFiles.output1.setLiDARDriverOption('RECORD_LENGTH', 32)
 
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls)
     

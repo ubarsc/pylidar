@@ -23,6 +23,8 @@
 #define _USE_MATH_DEFINES // for Windows
 #include <cmath>
 #include <map>
+#include <vector>
+#include <set>
 #include <string>
 #include <Python.h>
 #include "numpy/arrayobject.h"
@@ -1034,6 +1036,14 @@ static PyTypeObject PyLasFileReadType = {
     0,                 /* tp_new */
 };
 
+// to help us remember info for each field without having to look it up each time
+// used by CFieldInfoMap
+typedef struct {
+    char cKind;
+    int nOffset;
+    int nSize;
+} SFieldInfo;
+
 /* Python object wrapping a LASwriter */
 typedef struct {
     PyObject_HEAD
@@ -1053,6 +1063,7 @@ typedef struct {
     F64 dZOffset;
     U8 point_data_format;
     U16 point_data_record_length;
+    std::vector<SFieldInfo> *pAttributeFields; // index is the position in the vector
 } PyLasFileWrite;
 
 
@@ -1077,6 +1088,10 @@ PyLasFileWrite_dealloc(PyLasFileWrite *self)
     if(self->pPoint != NULL)
     {
         delete self->pPoint;
+    }
+    if(self->pAttributeFields != NULL)
+    {
+        delete self->pAttributeFields;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -1165,19 +1180,13 @@ PyObject *pOptionDict;
     self->bXScalingSet = false;
     self->bYScalingSet = false;
     self->bZScalingSet = false;
+    self->pAttributeFields = NULL;
 
     // copy filename so we can open later
     self->pszFilename = strdup(pszFname);
 
     return 0;
 }
-
-// to help us remember info for each field without having to look it up each time
-typedef struct {
-    char cKind;
-    int nOffset;
-    int nSize;
-} SFieldInfo;
 
 #define DO_INT64_READ(tempVar) memcpy(&tempVar, (char*)pRow + info.nOffset, sizeof(tempVar)); \
             nRetVal = (npy_int64)tempVar; 
@@ -1598,6 +1607,13 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         return NULL;
     }
 
+    // create a mapping between names of fields and their 'info' which has
+    // the type, offset etc
+    // do it up here in case we need info for the attributes when setting
+    // up the header and writer
+    CFieldInfoMap pulseMap(pPulses);
+    CFieldInfoMap pointMap(pPoints);
+
     if( self->pWriter == NULL )
     {
         // check that all the scaling has been set
@@ -1627,7 +1643,10 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         self->pHeader->z_offset = self->dZOffset;
         
         // populate header from pHeader dictionary
-        setHeaderFromDictionary(pHeader, self->pHeader);
+        if( pHeader != Py_None )
+        {
+            setHeaderFromDictionary(pHeader, self->pHeader);
+        }
 
         // set epsg
         if( self->nEPSG != 0 )
@@ -1640,10 +1659,86 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             self->pHeader->set_geo_keys(1, &ent);
         }
 
+        // work out what are the additional (point) fields that aren't standard LAS
+        // ones. 'attributes' in laslib terms.
+        self->pAttributeFields = new std::vector<SFieldInfo>();
+        // temp set of the fields we use to populate LASpoint fields
+        // others must be attributes
+        std::set<std::string> nonAttrPointSet;
+        nonAttrPointSet.insert("EXTENDED_POINT_TYPE");
+        nonAttrPointSet.insert("X");
+        nonAttrPointSet.insert("Y");
+        nonAttrPointSet.insert("Z");
+        nonAttrPointSet.insert("INTENSITY");
+        nonAttrPointSet.insert("CLASSIFICATION");
+        nonAttrPointSet.insert("SYNTHETIC_FLAG");
+        nonAttrPointSet.insert("KEYPOINT_FLAG");
+        nonAttrPointSet.insert("WITHHELD_FLAG");
+        nonAttrPointSet.insert("USER_DATA");
+        nonAttrPointSet.insert("POINT_SOURCE_ID");
+        nonAttrPointSet.insert("DELETED_FLAG");
+        nonAttrPointSet.insert("RED");
+        nonAttrPointSet.insert("GREEN");
+        nonAttrPointSet.insert("BLUE");
+        nonAttrPointSet.insert("NIR");
+
+        // iterate over our field map and see what isn't in nonAttrPointSet
+        for( std::map<std::string, SFieldInfo>::iterator itr = pointMap.begin(); itr != pointMap.end(); itr++ )
+        {
+            if( nonAttrPointSet.find(itr->first) == nonAttrPointSet.end() )
+            {
+                // not in our 'compulsory' fields - must be an attribute
+                self->pAttributeFields->push_back(itr->second);
+
+                // tell the header
+                U32 type = 0;
+                char cKind = itr->second.cKind;
+                int nSize = itr->second.nSize;
+                if( (cKind == 'u') && (nSize == 1) )
+                    type = LAS_ATTRIBUTE_U8;
+                else if( (cKind == 'i') && (nSize == 1) )
+                    type = LAS_ATTRIBUTE_I8;
+                else if( (cKind == 'u') && (nSize == 2) )
+                    type = LAS_ATTRIBUTE_U16;
+                else if( (cKind == 'i') && (nSize == 2) )
+                    type = LAS_ATTRIBUTE_I16;
+                else if( (cKind == 'u') && (nSize == 4) )
+                    type = LAS_ATTRIBUTE_U32;
+                else if( (cKind == 'i') && (nSize == 4) )
+                    type = LAS_ATTRIBUTE_I32;
+                else if( (cKind == 'u') && (nSize == 8) )
+                    type = LAS_ATTRIBUTE_U64;
+                else if( (cKind == 'i') && (nSize == 8) )
+                    type = LAS_ATTRIBUTE_I64;
+                else if( (cKind == 'f') && (nSize == 4) )
+                    type = LAS_ATTRIBUTE_F32;
+                else if( (cKind == 'f') && (nSize == 8) )
+                    type = LAS_ATTRIBUTE_F64;
+                // else error?
+
+                LASattribute attr(type, itr->first.c_str());
+                self->pHeader->add_attribute(attr);
+            }
+        }
+
+        // add a vlr if we actually have attributes
+        // note - I don't completely understand how this all works.
+        if( !self->pAttributeFields->empty() )
+        {
+            self->pHeader->add_vlr("LASF_Spec\0\0\0\0\0\0", 4, self->pHeader->number_attributes*sizeof(LASattribute),
+                    (U8*)self->pHeader->attributes, FALSE, "by Pylidar");
+        }
+
         // point_data_format and point_data_record_length set in init
         // from option dict if available
+        self->pHeader->point_data_format = self->point_data_format;
+        self->pHeader->point_data_record_length = self->point_data_record_length;
         self->pPoint->init(self->pHeader, self->point_data_format, 
-                self->point_data_record_length, 0);
+                self->point_data_record_length, self->pHeader);
+
+        // need to do this after pPoint->init since that deletes extra_bytes
+        // not sure why we have to do this at all, but there you go.
+        self->pPoint->extra_bytes = new U8[self->pHeader->get_attributes_size()];
 
         LASwriteOpener laswriteopener;
         laswriteopener.set_file_name(self->pszFilename);
@@ -1663,11 +1758,6 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         }
     }
 
-    // create a mapping between names of fields and their 'info' which has
-    // the type, offset etc
-    CFieldInfoMap pulseMap(pPulses);
-    CFieldInfoMap pointMap(pPoints);
-    
     for( npy_intp nPulseIdx = 0; nPulseIdx < PyArray_DIM(pPulses, 0); nPulseIdx++)
     {
         void *pPulseRow = PyArray_GETPTR1(pPulses, nPulseIdx);
@@ -1687,6 +1777,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         // now the point
         for( npy_intp nPointCount = 0; nPointCount < nPoints; nPointCount++ )
         {
+            // IF ADDING OTHER FIELDS also add to nonAttrPointSet above
             void *pPointRow = PyArray_GETPTR2(pPoints, nPointCount, nPulseIdx);
             // TODO: extended creation option?
             npy_int64 nExtended = pointMap.getIntValue("EXTENDED_POINT_TYPE", pPointRow);
@@ -1718,6 +1809,15 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             self->pPoint->rgb[1] = pointMap.getIntValue("GREEN", pPointRow);
             self->pPoint->rgb[2] = pointMap.getIntValue("BLUE", pPointRow);
             self->pPoint->rgb[3] = pointMap.getIntValue("NIR", pPointRow);
+
+            // now loop through any attributes and set them
+            I32 index = 0;
+            for( std::vector<SFieldInfo>::iterator itr = self->pAttributeFields->begin();
+                    itr != self->pAttributeFields->end(); itr++ )
+            {
+                self->pPoint->set_attribute(index, (U8*)pPointRow + itr->nOffset);
+                index++;
+            }
 
             self->pWriter->write_point(self->pPoint);
             self->pWriter->update_inventory(self->pPoint);
