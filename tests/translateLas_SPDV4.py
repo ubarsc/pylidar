@@ -20,6 +20,7 @@ from __future__ import print_function, division
 
 import sys
 import optparse
+import numpy
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from rios import cuiprogress

@@ -645,17 +645,16 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
         // now extra fields
         if( self->pLasPointFieldsWithExt != NULL )
         {
-            for( int i = 0; i < pPoint->attributer->number_attributes; i++ )
+            for( I32 i = 0; i < pPoint->attributer->number_attributes; i++ )
             {
-                LASattribute *pAttr = &pPoint->attributer->attributes[i];
-                double dVal = pAttr->get_value_as_float(pPoint->extra_bytes + 
-                                        pPoint->attributer->attribute_starts[i]);
+                // TODO: _U etc
+                double dVal = pPoint->get_attribute_as_float(i);
 
                 // find offset
                 SpylidarFieldDefn *pDefn = &self->pLasPointFieldsWithExt[0];
                 while( pDefn->pszName != NULL )
                 {
-                    if( strcmp(pAttr->name, pDefn->pszName) == 0 )
+                    if( strcmp(pPoint->get_attribute_name(i), pDefn->pszName) == 0 )
                     {
                         // use memcpy so works on SPARC etc without unaligned mem access
                         memcpy((char*)pLasPoint + pDefn->nOffset, &dVal, sizeof(double));
