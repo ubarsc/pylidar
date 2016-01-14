@@ -25,8 +25,6 @@ from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from rios import cuiprogress
 
-MAX_UINT16 = numpy.iinfo(numpy.uint16).max
-
 class CmdArgs(object):
     def __init__(self):
         p = optparse.OptionParser()
@@ -47,34 +45,62 @@ class CmdArgs(object):
 
 def setOutputScaling(header, output):
     xOffset = header['X_MIN']
-    xGain = MAX_UINT16 / (header['X_MAX'] - header['X_MIN'])
     yOffset = header['Y_MAX']
-    yGain = MAX_UINT16 / (header['Y_MIN'] - header['Y_MAX'])
     zOffset = header['Z_MIN']
-    zGain = MAX_UINT16 / (header['Z_MAX'] - header['Z_MIN'])
     rangeOffset = header['RANGE_MIN']
-    rangeGain = MAX_UINT16 / (header['RANGE_MAX'] - header['RANGE_MIN'])
     
+    dtype = output.getNativeDataType('X_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES)
+    xGain = numpy.iinfo(dtype).max / (header['X_MAX'] - header['X_MIN'])
     output.setScaling('X_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, xGain, xOffset)
+    
+    dtype = output.getNativeDataType('Y_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES)
+    yGain = numpy.iinfo(dtype).max / (header['Y_MAX'] - header['Y_MIN'])
     output.setScaling('Y_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, yGain, yOffset)
+    
+    dtype = output.getNativeDataType('Z_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES)
+    zGain = numpy.iinfo(dtype).max / (header['Z_MAX'] - header['Z_MIN'])
     output.setScaling('Z_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, zGain, zOffset)
+    
+    dtype = output.getNativeDataType('H_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES)
+    zGain = numpy.iinfo(dtype).max / (header['Z_MAX'] - header['Z_MIN'])
     output.setScaling('H_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, zGain, zOffset)
+    
+    dtype = output.getNativeDataType('X_IDX', lidarprocessor.ARRAY_TYPE_PULSES)
+    xGain = numpy.iinfo(dtype).max / (header['X_MAX'] - header['X_MIN'])
     output.setScaling('X_IDX', lidarprocessor.ARRAY_TYPE_PULSES, xGain, xOffset)
+    
+    dtype = output.getNativeDataType('Y_IDX', lidarprocessor.ARRAY_TYPE_PULSES)
+    yGain = numpy.iinfo(dtype).max / (header['Y_MAX'] - header['Y_MIN'])
     output.setScaling('Y_IDX', lidarprocessor.ARRAY_TYPE_PULSES, yGain, yOffset)
     
     azOffset = header['AZIMUTH_MIN']
-    azGain = MAX_UINT16 / (header['AZIMUTH_MAX'] - header['AZIMUTH_MIN'])
+    dtype = output.getNativeDataType('AZIMUTH', lidarprocessor.ARRAY_TYPE_PULSES)
+    azGain = numpy.iinfo(dtype).max / (header['AZIMUTH_MAX'] - header['AZIMUTH_MIN'])
     output.setScaling('AZIMUTH', lidarprocessor.ARRAY_TYPE_PULSES, azGain, azOffset)
     
     zenOffset = header['ZENITH_MIN']
-    zenGain = MAX_UINT16 / (header['ZENITH_MAX'] - header['ZENITH_MIN'])
+    dtype = output.getNativeDataType('ZENITH', lidarprocessor.ARRAY_TYPE_PULSES)
+    zenGain = numpy.iinfo(dtype).max / (header['ZENITH_MAX'] - header['ZENITH_MIN'])
     output.setScaling('ZENITH', lidarprocessor.ARRAY_TYPE_PULSES, zenGain, zenOffset)
 
+    dtype = output.getNativeDataType('X', lidarprocessor.ARRAY_TYPE_POINTS)
+    xGain = numpy.iinfo(dtype).max / (header['X_MAX'] - header['X_MIN'])
     output.setScaling('X', lidarprocessor.ARRAY_TYPE_POINTS, xGain, xOffset)
+    
+    dtype = output.getNativeDataType('Y', lidarprocessor.ARRAY_TYPE_POINTS)
+    yGain = numpy.iinfo(dtype).max / (header['Y_MAX'] - header['Y_MIN'])
     output.setScaling('Y', lidarprocessor.ARRAY_TYPE_POINTS, yGain, yOffset)
+    
+    dtype = output.getNativeDataType('Z', lidarprocessor.ARRAY_TYPE_POINTS)
+    zGain = numpy.iinfo(dtype).max / (header['Z_MAX'] - header['Z_MIN'])
     output.setScaling('Z', lidarprocessor.ARRAY_TYPE_POINTS, zGain, zOffset)
+    
+    dtype = output.getNativeDataType('HEIGHT', lidarprocessor.ARRAY_TYPE_POINTS)
+    zGain = numpy.iinfo(dtype).max / (header['Z_MAX'] - header['Z_MIN'])
     output.setScaling('HEIGHT', lidarprocessor.ARRAY_TYPE_POINTS, zGain, zOffset)
     
+    dtype = output.getNativeDataType('RANGE_TO_WAVEFORM_START', lidarprocessor.ARRAY_TYPE_WAVEFORMS)
+    rangeGain = numpy.iinfo(dtype).max / (header['RANGE_MAX'] - header['RANGE_MIN'])
     output.setScaling('RANGE_TO_WAVEFORM_START', lidarprocessor.ARRAY_TYPE_WAVEFORMS, 
             rangeGain, rangeOffset)
 

@@ -656,8 +656,11 @@ class LasFile(generic.LiDARFile):
         if arrayType != generic.ARRAY_TYPE_POINTS:
             msg = 'Can only set scaling for points'
             raise generic.LiDARInvalidSetting(msg)
-            
-        self.lasFile.setScaling(colName, gain, offset)
+
+        try:            
+            self.lasFile.setScaling(colName, gain, offset)
+        except _las.error as e:
+            raise generic.LiDARArrayColumnError(str(e))
 
     def getScaling(self, colName, arrayType):
         """
@@ -679,7 +682,12 @@ class LasFile(generic.LiDARFile):
             msg = 'Can only get scaling for points'
             raise generic.LiDARInvalidSetting(msg)
 
-        return self.lasFile.getScaling(colName)
+        try:
+            scaling = self.lasFile.getScaling(colName)
+        except _las.error as e:
+            raise generic.LiDARArrayColumnError(str(e))
+            
+        return scaling
 
     def getNativeDataType(self, colName, arrayType):
         """
@@ -692,8 +700,13 @@ class LasFile(generic.LiDARFile):
         if arrayType != generic.ARRAY_TYPE_POINTS:
             raise generic.LiDARInvalidSetting('Unsupported array type')
         
-        # implemented for both read and write
-        return self.lasFile.getNativeDataType(colName)
+        try:
+            # implemented for both read and write
+            dtype = self.lasFile.getNativeDataType(colName)
+        except _las.error as e:
+            raise generic.LiDARArrayColumnError(str(e))
+            
+        return dtype
         
 
 class LasFileInfo(generic.LiDARFileInfo):

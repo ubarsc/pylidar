@@ -25,8 +25,6 @@ from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from rios import cuiprogress
 
-MAX_UINT16 = numpy.iinfo(numpy.uint16).max
-
 class CmdArgs(object):
     def __init__(self):
         p = optparse.OptionParser()
@@ -47,7 +45,7 @@ class CmdArgs(object):
     
 def setOutputScaling(points, indata, outdata):
     """
-    Sets the output scaling for las. Currently this is on X, Y and Z
+    Sets the output scaling for las. Tries to copy scaling accross.
     """
     for colName in points.dtype.fields:
         try:
@@ -59,7 +57,7 @@ def setOutputScaling(points, indata, outdata):
         ininfo = numpy.iinfo(indtype)
         try:
             outdtype = outdata.getNativeDataType(colName, lidarprocessor.ARRAY_TYPE_POINTS)
-        except:
+        except generic.LiDARArrayColumnError:
             outdtype = points[colName].dtype
             
         if numpy.issubdtype(outdtype, numpy.floating):

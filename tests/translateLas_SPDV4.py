@@ -25,8 +25,6 @@ from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from rios import cuiprogress
 
-MAX_UINT16 = numpy.iinfo(numpy.uint16).max
-
 class CmdArgs(object):
     def __init__(self):
         p = optparse.OptionParser()
@@ -103,22 +101,25 @@ def setOutputScaling(rangeDict, output):
                 field = key[6:-4]
                 minVal = rangeDict[key]
                 maxVal = rangeDict['pulse_' + field + '_max']
-                
-                gain = MAX_UINT16 / (maxVal - minVal)
+
+                dtype = output.getNativeDataType(field, lidarprocessor.ARRAY_TYPE_PULSES)
+                gain = numpy.iinfo(dtype).max / (maxVal - minVal)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, minVal)
             elif key.startswith('point_'):
                 field = key[6:-4]
                 minVal = rangeDict[key]
                 maxVal = rangeDict['point_' + field + '_max']
                                                                 
-                gain = MAX_UINT16 / (maxVal - minVal)
+                dtype = output.getNativeDataType(field, lidarprocessor.ARRAY_TYPE_POINTS)
+                gain = numpy.iinfo(dtype).max / (maxVal - minVal)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, minVal)
             elif key.startswith('winfo_'):
                 field = key[6:-4]
                 minVal = rangeDict[key]
                 maxVal = rangeDict['winfo_' + field + '_max']
                                                                 
-                gain = MAX_UINT16 / (maxVal - minVal)
+                dtype = output.getNativeDataType(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS)
+                gain = numpy.iinfo(dtype).max / (maxVal - minVal)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, minVal)
 
 def transFunc(data, rangeDict):
