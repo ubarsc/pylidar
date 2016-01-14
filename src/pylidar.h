@@ -114,6 +114,10 @@ static SpylidarFieldDefn fields[] = {
 /* Use PyArray_malloc to obtain the memory */
 PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn);
 
+/* Returns NULL on failure, but doesn't set exception state */
+/* On success, a new reference is returned */
+PyArray_Descr *pylidar_getDtypeForField(SpylidarFieldDefn *pDefn, const char *pszFieldname);
+
 #ifdef __cplusplus
 } // extern C
 #endif

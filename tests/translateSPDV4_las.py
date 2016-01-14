@@ -59,7 +59,7 @@ def setOutputScaling(points, indata, outdata):
         ininfo = numpy.iinfo(indtype)
         try:
             outdtype = outdata.getNativeDataType(colName, lidarprocessor.ARRAY_TYPE_POINTS)
-        except generic.LiDARArrayColumnError:
+        except:
             outdtype = points[colName].dtype
             
         if numpy.issubdtype(outdtype, numpy.floating):
@@ -79,7 +79,6 @@ def setOutputScaling(points, indata, outdata):
             gain = abs(gain)
             offest = maxVal
             
-        
         outdata.setScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
         
 def transFunc(data):

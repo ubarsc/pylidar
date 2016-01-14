@@ -689,12 +689,11 @@ class LasFile(generic.LiDARFile):
         
         arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
         """
-        # TODO: support more types
-        scaledCols = ("X", "Y", "Z")
-        if arrayType == generic.ARRAY_TYPE_POINTS and colName in scaledCols:
-            return numpy.int32
-        else:
-            raise generic.LiDARArrayColumnError('Unsupported array type or column')
+        if arrayType != generic.ARRAY_TYPE_POINTS:
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+        
+        # implemented for both read and write
+        return self.lasFile.getNativeDataType(colName)
         
 
 class LasFileInfo(generic.LiDARFileInfo):

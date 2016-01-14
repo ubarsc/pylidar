@@ -915,6 +915,47 @@ static PyObject *PyLasFileRead_getScaling(PyLasFileRead *self, PyObject *args)
     return Py_BuildValue("dd", dGain, dOffset);
 }
 
+// i've implemented this for read and write - not sure how much use it is
+static PyObject *PyLasFileRead_getNativeDataType(PyLasFileRead *self, PyObject *args)
+{
+    const char *pszField;
+    if( !PyArg_ParseTuple(args, "s:getNativeDataType", &pszField) )
+        return NULL;
+
+    PyArray_Descr *pDescr = NULL;
+    // X, Y and Z are always int32 - we just present them as double
+    // the other fields mirror the underlying type
+    if( ( strcmp(pszField, "X") == 0) || ( strcmp(pszField, "Y") == 0) ||
+        ( strcmp(pszField, "Z") == 0) )
+    {
+        pDescr = PyArray_DescrFromType(NPY_INT32);
+    }
+    else
+    {
+        if( self->pLasPointFieldsWithExt != NULL )
+        {
+            pDescr = pylidar_getDtypeForField(self->pLasPointFieldsWithExt, pszField);
+        }
+        else
+        {
+            pDescr = pylidar_getDtypeForField(LasPointFields, pszField);
+        }
+        if( pDescr == NULL )
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_Format(GETSTATE(m)->error, "Unable to find data type for %s", pszField);
+            return NULL;
+        }
+    }    
+    return (PyObject*)pDescr;
+}
+
 /* Table of methods */
 static PyMethodDef PyLasFileRead_methods[] = {
     {"readHeader", (PyCFunction)PyLasFileRead_readHeader, METH_NOARGS, NULL},
@@ -922,6 +963,7 @@ static PyMethodDef PyLasFileRead_methods[] = {
     {"getEPSG", (PyCFunction)PyLasFileRead_getEPSG, METH_NOARGS, NULL},
     {"setExtent", (PyCFunction)PyLasFileRead_setExtent, METH_VARARGS, NULL},
     {"getScaling", (PyCFunction)PyLasFileRead_getScaling, METH_VARARGS, NULL},
+    {"getNativeDataType", (PyCFunction)PyLasFileRead_getNativeDataType, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 
@@ -1539,22 +1581,22 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
 std::set<std::string> getEssentialPointFieldNames()
 {
     std::set<std::string> nonAttrPointSet;
-    nonAttrPointSet.insert("EXTENDED_POINT_TYPE");
-    nonAttrPointSet.insert("X");
-    nonAttrPointSet.insert("Y");
-    nonAttrPointSet.insert("Z");
-    nonAttrPointSet.insert("INTENSITY");
-    nonAttrPointSet.insert("CLASSIFICATION");
-    nonAttrPointSet.insert("SYNTHETIC_FLAG");
-    nonAttrPointSet.insert("KEYPOINT_FLAG");
-    nonAttrPointSet.insert("WITHHELD_FLAG");
-    nonAttrPointSet.insert("USER_DATA");
-    nonAttrPointSet.insert("POINT_SOURCE_ID");
-    nonAttrPointSet.insert("DELETED_FLAG");
-    nonAttrPointSet.insert("RED");
-    nonAttrPointSet.insert("GREEN");
-    nonAttrPointSet.insert("BLUE");
-    nonAttrPointSet.insert("NIR");
+    SpylidarFieldDefn *pDefn = LasPointFields;
+    while(pDefn->pszName != NULL )
+    {
+        /* Convert to upper case */
+        char *pszName = strdup(pDefn->pszName);
+        for( int i = 0; pszName[i] != '\0'; i++ )
+        {
+            pszName[i] = toupper(pszName[i]);
+        }
+
+        nonAttrPointSet.insert(pszName);
+
+        free(pszName);
+        pDefn++;
+    }
+
     return nonAttrPointSet;
 }
 
@@ -1794,7 +1836,6 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         // now the point
         for( npy_intp nPointCount = 0; nPointCount < nPoints; nPointCount++ )
         {
-            // IF ADDING OTHER FIELDS also add to getEssentialPointFieldNames() above
             void *pPointRow = PyArray_GETPTR2(pPoints, nPointCount, nPulseIdx);
             // TODO: extended creation option?
             npy_int64 nExtended = pointMap.getIntValue("EXTENDED_POINT_TYPE", pPointRow);
@@ -1909,11 +1950,70 @@ static PyObject *PyLasFileWrite_setScaling(PyLasFileWrite *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+static PyObject *PyLasFileWrite_getNativeDataType(PyLasFileWrite *self, PyObject *args)
+{
+    const char *pszField;
+    if( !PyArg_ParseTuple(args, "s:getNativeDataType", &pszField) )
+        return NULL;
+
+    PyArray_Descr *pDescr = NULL;
+    // X, Y and Z are always int32 - we just present them as double
+    // the other fields mirror the underlying type
+    if( ( strcmp(pszField, "X") == 0) || ( strcmp(pszField, "Y") == 0) ||
+        ( strcmp(pszField, "Z") == 0) )
+    {
+        pDescr = PyArray_DescrFromType(NPY_INT32);
+    }
+    else
+    {
+        // first check the essential fields
+        pDescr = pylidar_getDtypeForField(LasPointFields, pszField);
+        if( (pDescr == NULL ) && (self->pAttributeFields != NULL ) )
+        {
+            // no luck, try the attributes
+            I32 index = 0;
+            for( std::vector<SFieldInfo>::iterator itr = self->pAttributeFields->begin();
+                    itr != self->pAttributeFields->end(); itr++ )
+            {
+                if( strcmp(self->pPoint->get_attribute_name(index), pszField) == 0)
+                {
+                    /* Now build dtype string - easier than having a switch on all the combinations */
+#if PY_MAJOR_VERSION >= 3
+                    PyObject *pString = PyUnicode_FromFormat("%c%d", itr->cKind, itr->nSize);
+#else
+                    PyObject *pString = PyString_FromFormat("%c%d", itr->cKind, itr->nSize);
+#endif
+                    /* assume success */
+                    PyArray_DescrConverter(pString, &pDescr);
+                    Py_DECREF(pString);
+                    break;                
+                }
+                index++;
+            }
+        }
+    }
+    if( pDescr == NULL )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_Format(GETSTATE(m)->error, "Unable to find data type for %s", pszField);
+        return NULL;
+    }
+    
+    return (PyObject*)pDescr;
+}
+
 /* Table of methods */
 static PyMethodDef PyLasFileWrite_methods[] = {
     {"writeData", (PyCFunction)PyLasFileWrite_writeData, METH_VARARGS, NULL}, 
     {"setEPSG", (PyCFunction)PyLasFileWrite_setEPSG, METH_VARARGS, NULL},
     {"setScaling", (PyCFunction)PyLasFileWrite_setScaling, METH_VARARGS, NULL},
+    {"getNativeDataType", (PyCFunction)PyLasFileWrite_getNativeDataType, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 

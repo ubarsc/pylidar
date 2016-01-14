@@ -519,3 +519,42 @@ char *pszName;
     }
     return pOut;
 }
+
+PyArray_Descr *pylidar_getDtypeForField(SpylidarFieldDefn *pDefn, const char *pszFieldname)
+{
+PyArray_Descr *pDescr = NULL;
+PyObject *pString;
+int i;
+char *pszName;
+
+    while( pDefn->pszName != NULL )
+    {
+        /* Convert to upper case */
+        pszName = strdup(pDefn->pszName);
+        for( i = 0; pszName[i] != '\0'; i++ )
+        {
+            pszName[i] = toupper(pszName[i]);
+        }
+
+        if( strcmp(pszName, pszFieldname) == 0 )
+        {
+            /* Now build dtype string - easier than having a switch on all the combinations */
+#if PY_MAJOR_VERSION >= 3
+            pString = PyUnicode_FromFormat("%c%d", pDefn->cKind, pDefn->nSize);
+#else
+            pString = PyString_FromFormat("%c%d", pDefn->cKind, pDefn->nSize);
+#endif
+            /* assume success */
+            PyArray_DescrConverter(pString, &pDescr);
+            Py_DECREF(pString);
+            break;
+        }
+
+        free(pszName);
+
+        pDefn++;
+    }
+
+    return pDescr;
+}
+
