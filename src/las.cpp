@@ -72,6 +72,8 @@ typedef struct {
     double z_origin;
     double azimuth;
     double zenith;
+    npy_uint8 number_of_waveform_samples;
+    npy_uint64 wfm_start_idx;
 } SLasPulse;
 
 /* field info for pylidar_structArrayToNumpy */
@@ -92,6 +94,8 @@ static SpylidarFieldDefn LasPulseFields[] = {
     CREATE_FIELD_DEFN(SLasPulse, z_origin, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, azimuth, 'f'),
     CREATE_FIELD_DEFN(SLasPulse, zenith, 'f'),
+    CREATE_FIELD_DEFN(SLasPulse, number_of_waveform_samples, 'u'),
+    CREATE_FIELD_DEFN(SLasPulse, wfm_start_idx, 'u'),
     {NULL} // Sentinel
 };
 
@@ -708,6 +712,9 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
                 double pulse_duration = lasWaveformInfo.number_of_waveform_received_bins * 
                     (self->pReader->header.vlr_wave_packet_descr[lasindex]->getTemporalSpacing());
 
+                lasPulse.number_of_waveform_samples = 1;
+                lasPulse.wfm_start_idx = waveformInfos.getNumElems();
+
                 waveformInfos.push(&lasWaveformInfo);
                 
                 // the actual received data
@@ -751,6 +758,8 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
                 lasPulse.z_origin = 0;
                 lasPulse.zenith = 0;
                 lasPulse.azimuth = 0;
+                lasPulse.number_of_waveform_samples = 0;
+                lasPulse.wfm_start_idx = 0;
             }
 
             pulses.push(&lasPulse);
@@ -1092,6 +1101,7 @@ typedef struct {
     LASwriter *pWriter;
     LASheader *pHeader;
     LASpoint *pPoint;
+    LASwaveform13writer *pWaveformWriter;
     int nEPSG;
     bool bXScalingSet;
     bool bYScalingSet;
@@ -1116,7 +1126,12 @@ PyLasFileWrite_dealloc(PyLasFileWrite *self)
     if(self->pszFilename != NULL)
     {
         free(self->pszFilename);
-    }   
+    }
+    if(self->pWaveformWriter != NULL)
+    {
+        self->pWaveformWriter->close();
+        delete self->pWaveformWriter;
+    }
     if(self->pWriter != NULL)
     {
         self->pWriter->update_header(self->pHeader, TRUE);
@@ -1216,6 +1231,7 @@ PyObject *pOptionDict;
     self->pWriter = NULL;
     self->pHeader = NULL;
     self->pPoint = NULL;
+    self->pWaveformWriter = NULL;
     self->nEPSG = 0;
     self->dXGain = 0;
     self->dXOffset = 0;
@@ -1875,6 +1891,21 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             {
                 self->pPoint->set_attribute(index, (U8*)pPointRow + itr->nOffset);
                 index++;
+            }
+
+            // now waveforms
+            if( bHaveWaveformInfos && bHaveReceived )
+            {
+                // first time?
+                if( self->pWaveformWriter == NULL )
+                {
+                    //self->pWaveformWriter = new LASwaveform13writer();
+                    // don't know what to do here - I think we need 
+                    // one for each unique combo of gain/offset/temporal spacing
+                    // but don't know how to do this
+                    //self->pHeader->vlr_wave_packet_descr = new LASvlr_wave_packet_descr[1];
+                    // maybe we need to pass this in as a driver option?
+                }
             }
 
             self->pWriter->write_point(self->pPoint);
