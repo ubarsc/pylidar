@@ -184,7 +184,7 @@ class LasFile(generic.LiDARFile):
 
     @staticmethod        
     def getDriverName():
-        return 'las'
+        return 'LAS'
         
     def close(self):
         self.lasFile = None
