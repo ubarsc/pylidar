@@ -540,6 +540,17 @@ class LidarData(object):
         """
         return self.driver.getScaling(colName, arrayType)
         
+    def setNativeDataType(self, colName, arrayType, dtype):
+        """
+        Set the native dtype (numpy.int16 etc)that a column is stored
+        as internally after scaling (if any) is applied.
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        
+        generic.LiDARArrayColumnError is raised if information cannot be found.
+        """
+        self.driver.setNativeDataType(colName, arrayType, dtype)
+        
     def getNativeDataType(self, colName, arrayType):
         """
         Return the native dtype (numpy.int16 etc)that a column is stored

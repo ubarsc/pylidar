@@ -891,7 +891,7 @@ static PyObject *PyLasFileRead_getScaling(PyLasFileRead *self, PyObject *args)
     if( !PyArg_ParseTuple(args, "s:getScaling", &pszField ) )
         return NULL;
 
-    double dGain, dOffset;
+    double dGain = 1.0, dOffset = 0;
     LASheader *pHeader = &self->pReader->header;
     if( strcmp(pszField, "X") == 0 )
     {
@@ -910,15 +910,32 @@ static PyObject *PyLasFileRead_getScaling(PyLasFileRead *self, PyObject *args)
     }
     else
     {
-        // raise Python exception
-        PyObject *m;
+        // no luck, try the attributes
+        bool bFound = false;
+        for( I32 index = 0; index < pHeader->number_attributes; index++ )
+        {
+            LASattribute *pAttr = &pHeader->attributes[index];
+            if( strcmp(pszField, pAttr->name) == 0)
+            {
+                dGain = pAttr->scale[0];
+                dOffset = pAttr->offset[0];
+                bFound = true;
+                break;
+            }
+        }
+
+        if( !bFound )
+        {
+            // raise Python exception
+            PyObject *m;
 #if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
 #endif
-        PyErr_Format(GETSTATE(m)->error, "Unable to get scaling for field %s", pszField);
-        return NULL;
+            PyErr_Format(GETSTATE(m)->error, "Unable to get scaling for field %s", pszField);
+            return NULL;
+        }
     }
 
     return Py_BuildValue("dd", dGain, dOffset);
@@ -1097,12 +1114,18 @@ typedef struct {
 /* Python object wrapping a LASwriter */
 typedef struct {
     PyObject_HEAD
+    // set by _init so we can create LASwriteOpener
+    // when writing the first block
     char *pszFilename;
+    // created when writing first block
     LASwriter *pWriter;
     LASheader *pHeader;
     LASpoint *pPoint;
     LASwaveform13writer *pWaveformWriter;
+    // set by setEPSG
     int nEPSG;
+    // X, Y and Z scaling
+    // set by setScaling
     bool bXScalingSet;
     bool bYScalingSet;
     bool bZScalingSet;
@@ -1112,10 +1135,15 @@ typedef struct {
     F64 dYOffset;
     F64 dZGain;
     F64 dZOffset;
+    // driver options
     U8 point_data_format;
     U16 point_data_record_length;
-    std::vector<SFieldInfo> *pAttributeFields; // index is the position in the vector
+    // following need to be set up before first block written
+    // or they will be ignored.
+    // set by setScaling for 'attribute' fields
     std::map<std::string, std::pair<double, double> > *pScalingMap;
+    // set by setNativeDataType
+    std::map<std::string, SFieldInfo> *pAttributeTypeMap;
 } PyLasFileWrite;
 
 
@@ -1146,13 +1174,13 @@ PyLasFileWrite_dealloc(PyLasFileWrite *self)
     {
         delete self->pPoint;
     }
-    if(self->pAttributeFields != NULL)
-    {
-        delete self->pAttributeFields;
-    }
     if(self->pScalingMap != NULL)
     {
         delete self->pScalingMap;
+    }
+    if(self->pAttributeTypeMap != NULL)
+    {
+        delete self->pAttributeTypeMap;
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -1242,8 +1270,8 @@ PyObject *pOptionDict;
     self->bXScalingSet = false;
     self->bYScalingSet = false;
     self->bZScalingSet = false;
-    self->pAttributeFields = NULL;
     self->pScalingMap = new std::map<std::string, std::pair<double, double> >;
+    self->pAttributeTypeMap = new std::map<std::string, SFieldInfo>;
 
     // copy filename so we can open later
     self->pszFilename = strdup(pszFname);
@@ -1743,7 +1771,6 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
 
         // work out what are the additional (point) fields that aren't standard LAS
         // ones. 'attributes' in laslib terms.
-        self->pAttributeFields = new std::vector<SFieldInfo>();
         // temp set of the fields we use to populate LASpoint fields
         // others must be attributes
         std::set<std::string> nonAttrPointSet = getEssentialPointFieldNames();
@@ -1754,12 +1781,20 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             if( nonAttrPointSet.find(itr->first) == nonAttrPointSet.end() )
             {
                 // not in our 'compulsory' fields - must be an attribute
-                self->pAttributeFields->push_back(itr->second);
+                SFieldInfo info;
+                char cKind = itr->second.cKind;
+                int nSize = itr->second.nSize;
+
+                // have they requested a different type?
+                std::map<std::string, SFieldInfo>::iterator attrTypeItr = self->pAttributeTypeMap->find(itr->first);
+                if( attrTypeItr != self->pAttributeTypeMap->end() )
+                {
+                    cKind = attrTypeItr->second.cKind;
+                    nSize = attrTypeItr->second.nSize;
+                }
 
                 // tell the header
                 U32 type = 0;
-                char cKind = itr->second.cKind;
-                int nSize = itr->second.nSize;
                 if( (cKind == 'u') && (nSize == 1) )
                     type = LAS_ATTRIBUTE_U8;
                 else if( (cKind == 'i') && (nSize == 1) )
@@ -1791,6 +1826,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
                     attr.set_scale(vals.first);
                     attr.set_offset(vals.second);
                 }
+                // otherwise laslib sets 1.0, 0 etc
 
                 self->pHeader->add_attribute(attr);
             }
@@ -1798,7 +1834,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
 
         // add a vlr if we actually have attributes
         // note - I don't completely understand how this all works.
-        if( !self->pAttributeFields->empty() )
+        if( self->pHeader->number_attributes > 0 )
         {
             self->pHeader->add_vlr("LASF_Spec\0\0\0\0\0\0", 4, self->pHeader->number_attributes*sizeof(LASattribute),
                     (U8*)self->pHeader->attributes, FALSE, "by Pylidar");
@@ -1885,11 +1921,75 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             self->pPoint->rgb[3] = pointMap.getIntValue("NIR", pPointRow);
 
             // now loop through any attributes and set them
-            I32 index = 0;
-            for( std::vector<SFieldInfo>::iterator itr = self->pAttributeFields->begin();
-                    itr != self->pAttributeFields->end(); itr++ )
+            for( I32 index = 0; index < self->pHeader->number_attributes; index++ )
             {
-                self->pPoint->set_attribute(index, (U8*)pPointRow + itr->nOffset);
+                LASattribute *pAttr = &self->pPoint->attributer->attributes[index];
+                double dVal = pointMap.getDoubleValue(pAttr->name, pPointRow);
+                // apply scaling - is a no-op if not set since scale, offset is 1, 0
+                dVal = (dVal / pAttr->scale[0]) - pAttr->offset[0];
+                // convert dVal back to the type that we write it as
+                // there is a method to do this, but bizarrely made private
+                I32 type = ((I32)pAttr->data_type - 1)%10;
+                switch(type)
+                {
+                    case LAS_ATTRIBUTE_U8:
+                    {
+                        U8 val = dVal;
+                        self->pPoint->set_attribute(index, (U8*)&val);
+                    }
+                    break;
+                    case LAS_ATTRIBUTE_I8:
+                    {
+                        I8 val = dVal;
+                        self->pPoint->set_attribute(index, (U8*)&val);
+                    }
+                    break;
+                    case LAS_ATTRIBUTE_U16:
+                    {
+                        U16 val = dVal;
+                        self->pPoint->set_attribute(index, (U8*)&val);
+                    }
+                    break;
+                    case LAS_ATTRIBUTE_I16:
+                    {
+                        I16 val = dVal;
+                        self->pPoint->set_attribute(index, (U8*)&val);
+                    }
+                    break;
+                    case LAS_ATTRIBUTE_U32:
+                    {
+                        U32 val = dVal;
+                        self->pPoint->set_attribute(index, (U8*)&val);
+                    }
+                    break;
+                    case LAS_ATTRIBUTE_I32:
+                    {
+                        I32 val = dVal;
+                        self->pPoint->set_attribute(index, (U8*)&val);
+                    }
+                    break;
+                    case LAS_ATTRIBUTE_U64:
+                    {
+                        U64 val = dVal;
+                        self->pPoint->set_attribute(index, (U8*)&val);
+                    }
+                    break;
+                    case LAS_ATTRIBUTE_I64:
+                    {
+                        I64 val = dVal;
+                        self->pPoint->set_attribute(index, (U8*)&val);
+                    }
+                    break;
+                    case LAS_ATTRIBUTE_F32:
+                    {
+                        F32 val = dVal;
+                        self->pPoint->set_attribute(index, (U8*)&val);
+                    }
+                    break;
+                    case LAS_ATTRIBUTE_F64:
+                    self->pPoint->set_attribute(index, (U8*)&dVal);
+                    break;
+                }
                 index++;
             }
 
@@ -1999,25 +2099,77 @@ static PyObject *PyLasFileWrite_getNativeDataType(PyLasFileWrite *self, PyObject
     {
         // first check the essential fields
         pDescr = pylidar_getDtypeForField(LasPointFields, pszField);
-        if( (pDescr == NULL ) && (self->pAttributeFields != NULL ) )
+        if( ( pDescr == NULL ) && (self->pHeader == NULL) )
         {
-            // no luck, try the attributes
-            I32 index = 0;
-            for( std::vector<SFieldInfo>::iterator itr = self->pAttributeFields->begin();
-                    itr != self->pAttributeFields->end(); itr++ )
+            // no luck, try the attributes that have been set by the user when calling setNativeDataType
+            // no data has been written yet
+            std::map<std::string, SFieldInfo>::iterator itr = self->pAttributeTypeMap->find(pszField);
+            if( itr != self->pAttributeTypeMap->end() )
             {
-                if( strcmp(self->pPoint->get_attribute_name(index), pszField) == 0)
-                {
-                    /* Now build dtype string - easier than having a switch on all the combinations */
+                /* Now build dtype string - easier than having a switch on all the combinations */
+                char cKind = itr->second.cKind;
+                int nSize = itr->second.nSize;
 #if PY_MAJOR_VERSION >= 3
-                    PyObject *pString = PyUnicode_FromFormat("%c%d", itr->cKind, itr->nSize);
+                PyObject *pString = PyUnicode_FromFormat("%c%d", cKind, nSize);
 #else
-                    PyObject *pString = PyString_FromFormat("%c%d", itr->cKind, itr->nSize);
+                PyObject *pString = PyString_FromFormat("%c%d", cKind, nSize);
 #endif
-                    /* assume success */
-                    PyArray_DescrConverter(pString, &pDescr);
-                    Py_DECREF(pString);
-                    break;                
+                /* assume success */
+                PyArray_DescrConverter(pString, &pDescr);
+                Py_DECREF(pString);
+            }
+        }
+
+        if( (pDescr == NULL ) && (self->pHeader != NULL ) && (self->pHeader->number_attributes > 0 ) )
+        {
+            // we have written stuff, check out the las info - will have fields
+            // with the same data type as the data - ie they didn't call setNativeDataType
+            for( I32 index = 0; index < self->pHeader->number_attributes; index++ )
+            {
+                LASattribute *pAttr = &self->pPoint->attributer->attributes[index];
+                
+                // not in our 'compulsory' fields - must be an attribute
+                if( strcmp(pAttr->name, pszField) == 0)
+                {
+                    // there is a method to do this, but bizarrely made private
+                    I32 type = ((I32)pAttr->data_type - 1)%10;
+                    int numpytype = 0;
+                    switch(type)
+                    {
+                        case LAS_ATTRIBUTE_U8:
+                            numpytype = NPY_UINT8;
+                            break;
+                        case LAS_ATTRIBUTE_I8:
+                            numpytype = NPY_INT8;
+                            break;
+                        case LAS_ATTRIBUTE_U16:
+                            numpytype = NPY_UINT16;
+                            break;
+                        case LAS_ATTRIBUTE_I16:
+                            numpytype = NPY_INT16;
+                            break;
+                        case LAS_ATTRIBUTE_U32:
+                            numpytype = NPY_UINT32;
+                            break;
+                        case LAS_ATTRIBUTE_I32:
+                            numpytype = NPY_INT32;
+                            break;
+                        case LAS_ATTRIBUTE_U64:
+                            numpytype = NPY_UINT64;
+                            break;
+                        case LAS_ATTRIBUTE_I64:
+                            numpytype = NPY_INT64;
+                            break;
+                        case LAS_ATTRIBUTE_F32:
+                            numpytype = NPY_FLOAT32;
+                            break;
+                        case LAS_ATTRIBUTE_F64:
+                            numpytype = NPY_FLOAT64;
+                            break;                
+                    }
+
+                    pDescr = PyArray_DescrFromType(numpytype);
+                    break;
                 }
                 index++;
             }
@@ -2035,8 +2187,52 @@ static PyObject *PyLasFileWrite_getNativeDataType(PyLasFileWrite *self, PyObject
         PyErr_Format(GETSTATE(m)->error, "Unable to find data type for %s", pszField);
         return NULL;
     }
-    
+
     return (PyObject*)pDescr;
+}
+
+static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject *args)
+{
+    const char *pszField;
+    PyObject *pDtype;
+    if( !PyArg_ParseTuple(args, "sO:setNativeDataType", &pszField, &pDtype) )
+        return NULL;
+
+    if( !PyArray_DescrCheck(pDtype) )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Last argument needs to be numpy dtype");
+        return NULL;
+    }
+
+    std::set<std::string> nonAttrPointSet = getEssentialPointFieldNames();
+    if( nonAttrPointSet.find(pszField) != nonAttrPointSet.end() )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_Format(GETSTATE(m)->error, "Can't set data type for %s", pszField);
+        return NULL;
+    }
+
+    PyArray_Descr *pDescr = (PyArray_Descr*)pDtype;
+    SFieldInfo info;
+    info.cKind = pDescr->kind;
+    info.nOffset = 0; // don't know yet
+    info.nSize = pDescr->elsize;
+    self->pAttributeTypeMap->insert(std::pair<std::string, SFieldInfo>(pszField, info));
+
+    Py_RETURN_NONE;
 }
 
 /* Table of methods */
@@ -2045,6 +2241,7 @@ static PyMethodDef PyLasFileWrite_methods[] = {
     {"setEPSG", (PyCFunction)PyLasFileWrite_setEPSG, METH_VARARGS, NULL},
     {"setScaling", (PyCFunction)PyLasFileWrite_setScaling, METH_VARARGS, NULL},
     {"getNativeDataType", (PyCFunction)PyLasFileWrite_getNativeDataType, METH_VARARGS, NULL},
+    {"setNativeDataType", (PyCFunction)PyLasFileWrite_setNativeDataType, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 

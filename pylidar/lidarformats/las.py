@@ -657,6 +657,10 @@ class LasFile(generic.LiDARFile):
             msg = 'Can only set scaling for points'
             raise generic.LiDARInvalidSetting(msg)
 
+        if self.firstBlockWritten:
+            msg = 'Scaling can only be updated before first block written'
+            raise generic.LiDARFunctionUnsupported(msg)
+
         try:            
             self.lasFile.setScaling(colName, gain, offset)
         except _las.error as e:
@@ -689,6 +693,35 @@ class LasFile(generic.LiDARFile):
             
         return scaling
 
+    def setNativeDataType(self, colName, arrayType, dtype):
+        """
+        Set the native dtype (numpy.int16 etc)that a column is stored
+        as internally after scaling (if any) is applied.
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        
+        generic.LiDARArrayColumnError is raised if this cannot be set for the format.
+        
+        The default behaviour is to create new columns in the correct type for 
+        the format, or if they are optional, in the same type as the input array.
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set scaling values on update or create'
+            raise generic.LiDARInvalidSetting(msg)
+
+        if arrayType != generic.ARRAY_TYPE_POINTS:
+            msg = 'Can only get data type for points'
+            raise generic.LiDARInvalidSetting(msg)
+            
+        if self.firstBlockWritten:
+            msg = 'Data type can only be updated before first block written'
+            raise generic.LiDARFunctionUnsupported(msg)
+            
+        try:
+            self.lasFile.setNativeDataType(colName, dtype)
+        except _las.error as e:
+            raise generic.LiDARArrayColumnError(str(e))
+                                
     def getNativeDataType(self, colName, arrayType):
         """
         Return the native dtype (numpy.int16 etc)that a column is stored

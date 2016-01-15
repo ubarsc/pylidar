@@ -562,6 +562,10 @@ class SPDV4File(generic.LiDARFile):
         self.pulseScalingValues = {}
         self.pointScalingValues = {}
         self.waveFormScalingValues = {}
+        # handle dtypes for optional fields
+        self.pulseDtypes = {}
+        self.pointDtypes = {}
+        self.waveFormDtypes = {}
         
         # the current extent or range for data being read
         self.extent = None
@@ -727,6 +731,9 @@ spatial index will be recomputed on the fly"""
         self.extent = None
         self.pulseRange = None
         self.pixGrid = None
+        self.pulseDtypes = None
+        self.pointDtypes = None
+        self.waveFormDtypes = None
 
     @staticmethod
     def readFieldAndUnScale(handle, name, selection, unScaled=False):
@@ -1587,18 +1594,24 @@ spatial index will be recomputed on the fly"""
                 needsScaling = True
             if name in POINT_FIELDS:
                 dataType = POINT_FIELDS[name]
+            elif name in self.pointDtypes:
+                dataType = self.pointDtypes[name]
                 
         elif arrayType == generic.ARRAY_TYPE_PULSES:
             if name in PULSE_SCALED_FIELDS:
                 needsScaling = True
             if name in PULSE_FIELDS:
                 dataType = PULSE_FIELDS[name]
+            elif name in self.pointDtypes:
+                dataType = self.pointDtypes[name]
                 
         elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
             if name in WAVEFORM_SCALED_FIELDS:
                 needsScaling = True
             if name in WAVEFORM_FIELDS:
                 dataType = WAVEFORM_FIELDS[name]
+            elif name in self.waveFormDtypes:
+                dataType = self.waveFormDtypes[name]
 
         # other array types we don't worry for now
         
@@ -2005,6 +2018,43 @@ spatial index will be recomputed on the fly"""
             
         return gain, offset
         
+    def setNativeDataType(self, colName, arrayType, dtype):
+        """
+        Set the native dtype (numpy.int16 etc)that a column is stored
+        as internally after scaling (if any) is applied.
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        
+        generic.LiDARArrayColumnError is raised if this cannot be set for the format.
+        
+        The default behaviour is to create new columns in the correct type for 
+        the format, or if they are optional, in the same type as the input array.
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set scaling values on update or create'
+            raise generic.LiDARInvalidSetting(msg)
+
+        if arrayType == generic.ARRAY_TYPE_PULSES:
+            if colName in PULSE_FIELDS:
+                msg = 'Cannot set type for column %s' % colName
+                raise generic.LiDARArrayColumnError(msg)
+            self.pulseDtypes[colName] = dtype
+            
+        elif arrayType == generic.ARRAY_TYPE_POINTS:
+            if colName in POINT_FIELDS:
+                msg = 'Cannot set type for column %s' % colName
+                raise generic.LiDARArrayColumnError(msg)
+            self.pointDtypes[colName] = dtype
+            
+        elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
+            if colName in WAVEFORM_FIELDS:
+                msg = 'Cannot set type for column %s' % colName
+                raise generic.LiDARArrayColumnError(msg)
+            self.waveFormDtypes[colName] = dtype
+
+        else:
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+
     def getNativeDataType(self, colName, arrayType):
         """
         Return the native dtype (numpy.int16 etc)that a column is stored

@@ -306,6 +306,20 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
+    def setNativeDataType(self, colName, arrayType, dtype):
+        """
+        Set the native dtype (numpy.int16 etc)that a column is stored
+        as internally after scaling (if any) is applied.
+        
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        
+        generic.LiDARArrayColumnError is raised if this cannot be set for the format.
+        
+        The default behaviour is to create new columns in the correct type for 
+        the format, or if they are optional, in the same type as the input array.
+        """
+        raise NotImplementedError()
+        
     def getNativeDataType(self, colName, arrayType):
         """
         Return the native dtype (numpy.int16 etc)that a column is stored
