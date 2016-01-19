@@ -439,6 +439,9 @@ public:
         m_fRoll(NPY_NAN),
         m_fPitch(NPY_NAN),
         m_fYaw(NPY_NAN),
+        m_scanline(0),
+        m_scanlineIdx(0),
+        m_maxScanlineIdx(0),
         m_bHaveData(false)
     {
 
@@ -559,6 +562,10 @@ public:
                 PyDict_SetItemString(pDict, "ROTATION_MATRIX", 
                         rotMat.getAsNumpyArray(NPY_FLOAT));
             }
+
+            // scanline info useful for building spatial index
+            PyDict_SetItemString(pDict, "MAX_SCANLINE", PyLong_FromLong(m_scanline));
+            PyDict_SetItemString(pDict, "MAX_SCANLINE_IDX", PyLong_FromLong(m_maxScanlineIdx));
         }
         return pDict;
     }
@@ -620,6 +627,31 @@ protected:
             m_fYaw = 0; // same as original code. Correct??
     }
 
+    // start of a scan line going in the up direction
+    void on_line_start_up(const scanlib::line_start_up<iterator_type>& arg) 
+    {
+        scanlib::pointcloud::on_line_start_up(arg);
+        ++m_scanline;
+        m_scanlineIdx = 0;
+    }
+    
+    // start of a scan line going in the down direction
+    void on_line_start_dn(const scanlib::line_start_dn<iterator_type>& arg) 
+    {
+        scanlib::pointcloud::on_line_start_dn(arg);
+        ++m_scanline;
+        m_scanlineIdx = 0;
+    }
+
+    void on_shot()
+    {
+        m_scanlineIdx++;
+        if( m_scanlineIdx > m_maxScanlineIdx )
+        {
+            m_maxScanlineIdx = m_scanlineIdx;
+        }
+    }
+
 private:
     float m_fLat;
     float m_fLong;
@@ -628,6 +660,9 @@ private:
     float m_fRoll;
     float m_fPitch;
     float m_fYaw;
+    long m_scanline;
+    long m_scanlineIdx;
+    long m_maxScanlineIdx;
     bool m_bHaveData;
 };
 
