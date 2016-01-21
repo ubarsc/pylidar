@@ -186,12 +186,23 @@ static PyObject *las_getWriteSupportedOptions(PyObject *self, PyObject *args)
     return pylidar_stringArrayToTuple(SupportedDriverOptionsWrite);
 }
 
+#define N_WAVEFORM_BINS "NUMBER_OF_WAVEFORM_RECEIVED_BINS"
+#define RECEIVE_WAVE_GAIN "RECEIVE_WAVE_GAIN"
+#define RECEIVE_WAVE_OFFSET "RECEIVE_WAVE_OFFSET"
+static const char *ExpectedWaveformFieldsForDescr[] = {N_WAVEFORM_BINS, RECEIVE_WAVE_GAIN, RECEIVE_WAVE_OFFSET, NULL};
+static PyObject *las_getExpectedWaveformFieldsForDescr(PyObject *self, PyObject *args)
+{
+    return pylidar_stringArrayToTuple(ExpectedWaveformFieldsForDescr);
+}
+
 // module methods
 static PyMethodDef module_methods[] = {
     {"getReadSupportedOptions", (PyCFunction)las_getReadSupportedOptions, METH_NOARGS,
         "Get a tuple of supported driver options for reading"},
     {"getWriteSupportedOptions", (PyCFunction)las_getWriteSupportedOptions, METH_NOARGS,
         "Get a tuple of supported driver options for writing"},
+    {"getExpectedWaveformFieldsForDescr", (PyCFunction)las_getExpectedWaveformFieldsForDescr, METH_NOARGS,
+        "Get a tuple of the expected fields the waveform table should have for building unique descriptor table."},
     {NULL}  /* Sentinel */
 };
 
@@ -1654,10 +1665,6 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
     if( pVal != NULL )
         pHeader->min_z = PyFloat_AsDouble(pVal);
 }
-
-#define N_WAVEFORM_BINS "NUMBER_OF_WAVEFORM_RECEIVED_BINS"
-#define RECEIVE_WAVE_GAIN "RECEIVE_WAVE_GAIN"
-#define RECEIVE_WAVE_OFFSET "RECEIVE_WAVE_OFFSET"
 
 // sets the vlr_wave_packet_descr field on the header from the array
 // returned by las.getWavePacketDescriptions()

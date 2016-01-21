@@ -808,9 +808,10 @@ def getWavePacketDescriptions(fname):
                     controls=controls)
                     
     return otherArgs.uniqueInfo
-    
-LAS_WAVEFORM_TABLE_FIELDS = ["NUMBER_OF_WAVEFORM_RECEIVED_BINS", 
-        "RECEIVE_WAVE_GAIN", "RECEIVE_WAVE_OFFSET"]
+
+# numpy needs a list before it will pull out fields, C returns
+# a tuple. Probably need to sort this at some stage    
+LAS_WAVEFORM_TABLE_FIELDS = list(_las.getExpectedWaveformFieldsForDescr())
     
 def gatherWavePackets(data, otherArgs):
     """
