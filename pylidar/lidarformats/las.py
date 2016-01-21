@@ -43,6 +43,13 @@ These are contained in the WRITESUPPORTEDOPTIONS module level variable.
 | RECORD_LENGTH         | LAS record length. Defaults to 28. Not    |
 |                       | sure what it means.                       |
 +-----------------------+-------------------------------------------+
+| WAVEFORM_DESCR        | Data returned from                        |
+|                       | getWavePacketDescriptions() which does an |
+|                       | initial run through the data to get the   |
+|                       | unique waveform info for writing to the   |
+|                       | LAS header. No output waveforms are       |
+|                       | written if this is not provided.          |
++-----------------------+-------------------------------------------+
 
 Note that for writing, the extension currently controls the format witten:
 
@@ -781,7 +788,7 @@ def getWavePacketDescriptions(fname):
     table in the header that really belongs to the waveforms. This 
     function reads the waveform info from the input file (in any format) and 
     gathers the unique information from it so it can be passed to as
-    the WAVEFORM_INFO LAS driver option.
+    the WAVEFORM_DESCR LAS driver option.
     
     Note: LAS only supports received waveforms.
     

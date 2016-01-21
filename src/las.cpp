@@ -180,7 +180,7 @@ static PyObject *las_getReadSupportedOptions(PyObject *self, PyObject *args)
     return pylidar_stringArrayToTuple(SupportedDriverOptionsRead);
 }
 
-static const char *SupportedDriverOptionsWrite[] = {"FORMAT_VERSION", "RECORD_LENGTH", NULL};
+static const char *SupportedDriverOptionsWrite[] = {"FORMAT_VERSION", "RECORD_LENGTH", "WAVEFORM_DESCR", NULL};
 static PyObject *las_getWriteSupportedOptions(PyObject *self, PyObject *args)
 {
     return pylidar_stringArrayToTuple(SupportedDriverOptionsWrite);
@@ -1144,6 +1144,8 @@ typedef struct {
     std::map<std::string, std::pair<double, double> > *pScalingMap;
     // set by setNativeDataType
     std::map<std::string, SFieldInfo> *pAttributeTypeMap;
+    // set by WAVEFORM_DESCR driver option
+    PyArrayObject *pWaveformDescr;
 } PyLasFileWrite;
 
 
@@ -1182,6 +1184,7 @@ PyLasFileWrite_dealloc(PyLasFileWrite *self)
     {
         delete self->pAttributeTypeMap;
     }
+    Py_XDECREF(self->pWaveformDescr);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -1202,6 +1205,7 @@ PyObject *pOptionDict;
     // are sensible.
     self->point_data_format = 1;
     self->point_data_record_length = 28;
+    self->pWaveformDescr = NULL;
     if( pOptionDict != Py_None )
     {
         if( !PyDict_Check(pOptionDict) )
@@ -1251,6 +1255,37 @@ PyObject *pOptionDict;
                 return -1;
             }
             self->point_data_record_length = PyLong_AsLong(pVal);
+        }
+
+        pVal = PyDict_GetItemString(pOptionDict, "WAVEFORM_DESCR");
+        if( pVal != NULL )
+        {
+            if( !PyArray_Check(pVal) )
+            {
+                // raise Python exception
+                PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+                // best way I could find for obtaining module reference
+                // from inside a class method. Not needed for Python < 3.
+                m = PyState_FindModule(&moduledef);
+#endif
+                PyErr_SetString(GETSTATE(m)->error, "WAVEFORM_DESCR parameter must be an array");
+                return -1;
+            }
+            if( PyArray_SIZE(pVal) > 256 )
+            {
+                // raise Python exception
+                PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+                // best way I could find for obtaining module reference
+                // from inside a class method. Not needed for Python < 3.
+                m = PyState_FindModule(&moduledef);
+#endif
+                PyErr_SetString(GETSTATE(m)->error, "WAVEFORM_DESCR parameter must be shorter than 256 - LAS restriction");
+                return -1;
+            }
+            Py_INCREF(pVal);
+            self->pWaveformDescr = (PyArrayObject*)pVal;
         }
     }
 
@@ -1620,6 +1655,55 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
         pHeader->min_z = PyFloat_AsDouble(pVal);
 }
 
+#define N_WAVEFORM_BINS "NUMBER_OF_WAVEFORM_RECEIVED_BINS"
+#define RECEIVE_WAVE_GAIN "RECEIVE_WAVE_GAIN"
+#define RECEIVE_WAVE_OFFSET "RECEIVE_WAVE_OFFSET"
+
+// sets the vlr_wave_packet_descr field on the header from the array
+// returned by las.getWavePacketDescriptions()
+void setWavePacketDescr(PyArrayObject *pArray, LASheader *pHeader, U8 nBitsPerSample)
+{
+    npy_intp nSize = PyArray_SIZE(pArray);
+    if( nSize > 0 )
+    {
+        CFieldInfoMap infoMap((PyObject*)pArray);
+        // ok apparently there are always 256. _init raises an error if more.
+        pHeader->vlr_wave_packet_descr = new LASvlr_wave_packet_descr*[256];
+        memset(pHeader->vlr_wave_packet_descr, 0, sizeof(LASvlr_wave_packet_descr*) * 256);
+        for( npy_intp n = 0; n < nSize; n++ )
+        {
+            void *pRow = PyArray_GETPTR1(pArray, n);
+            LASvlr_wave_packet_descr *pDescr = new LASvlr_wave_packet_descr;
+            pDescr->setNumberOfSamples(infoMap.getIntValue(N_WAVEFORM_BINS, pRow));
+            pDescr->setDigitizerGain(infoMap.getDoubleValue(RECEIVE_WAVE_GAIN, pRow));
+            pDescr->setDigitizerOffset(infoMap.getDoubleValue(RECEIVE_WAVE_OFFSET, pRow));
+            pDescr->setBitsPerSample(nBitsPerSample);
+            pHeader->vlr_wave_packet_descr[n] = pDescr;
+        }
+    }
+}
+
+// gets the index info pHeader->vlr_wave_packet_descr
+// that is needed by LASwavepacket.setIndex
+U8 getWavepacketIndex(LASheader *pHeader, U32 nSamples, F64 fGain, F64 fOffset)
+{
+    U8 index = 0; // not sure what to do on error
+    for( int n = 0; n < 256; n++ )
+    {
+        LASvlr_wave_packet_descr *pDescr = pHeader->vlr_wave_packet_descr[n];
+        if( pDescr != NULL )
+        {
+            if( (pDescr->getNumberOfSamples() == nSamples) && (pDescr->getDigitizerGain() == fGain)
+                && (pDescr->getDigitizerOffset() == fOffset) )
+            {
+                index = n;
+                break;
+            }
+        }
+    }
+    return index;
+}
+
 // returns a set of names we recognise and match to 
 // 'essential' fields in the LASpoint structure
 std::set<std::string> getEssentialPointFieldNames()
@@ -1840,6 +1924,13 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
                     (U8*)self->pHeader->attributes, FALSE, "by Pylidar");
         }
 
+        // do we have waveform info?
+        if( ( self->pWaveformDescr != NULL ) && bHaveWaveformInfos && bHaveReceived)
+        {
+            U8 nBitsPerSample = PyArray_ITEMSIZE(pReceived) * 8;
+            setWavePacketDescr(self->pWaveformDescr, self->pHeader, nBitsPerSample);
+        }
+
         // point_data_format and point_data_record_length set in init
         // from option dict if available
         self->pHeader->point_data_format = self->point_data_format;
@@ -1867,8 +1958,28 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             PyErr_SetString(GETSTATE(m)->error, "Unable to open las file");
             return NULL;
         }
+
+        // waveform writer?
+        // set by setWavePacketDescr
+        if( self->pHeader->vlr_wave_packet_descr != NULL )
+        {
+            self->pWaveformWriter = new LASwaveform13writer;
+            if( !self->pWaveformWriter->open(self->pszFilename, self->pHeader->vlr_wave_packet_descr) )
+            {
+                // raise Python exception
+                PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+                // best way I could find for obtaining module reference
+                // from inside a class method. Not needed for Python < 3.
+                m = PyState_FindModule(&moduledef);
+#endif
+                PyErr_SetString(GETSTATE(m)->error, "Unable to open las waveform file");
+                return NULL;
+            }
+        }
     }
 
+    // now write all the pulses
     for( npy_intp nPulseIdx = 0; nPulseIdx < PyArray_DIM(pPulses, 0); nPulseIdx++)
     {
         void *pPulseRow = PyArray_GETPTR1(pPulses, nPulseIdx);
@@ -1994,18 +2105,31 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             }
 
             // now waveforms
-            if( bHaveWaveformInfos && bHaveReceived )
+            self->pPoint->have_wavepacket = FALSE;
+            if( bHaveWaveformInfos && bHaveReceived && (self->pWaveformWriter != NULL) )
             {
-                // first time?
-                if( self->pWaveformWriter == NULL )
+                // set point data
+                // note that this will be repeated for each point that is part
+                // of the pulse
+                npy_int64 nInfos = pulseMap.getIntValue("NUMBER_OF_WAVEFORM_SAMPLES", pPulseRow);
+                if( nInfos > 0 ) // print error if more than 1? LAS can only handle 1
                 {
-                    //self->pWaveformWriter = new LASwaveform13writer();
-                    // don't know what to do here - I think we need 
-                    // one for each unique combo of gain/offset/temporal spacing
-                    // but don't know how to do this
-                    //self->pHeader->vlr_wave_packet_descr = new LASvlr_wave_packet_descr[1];
-                    // maybe we need to pass this in as a driver option?
+                    CFieldInfoMap waveMap(pWaveformInfos); // create once?
+                    void *pInfoRow = PyArray_GETPTR2(pWaveformInfos, 0, nPulseIdx);
+                    U32 nSamples = waveMap.getIntValue(N_WAVEFORM_BINS, pInfoRow);
+                    F64 fGain = waveMap.getDoubleValue(RECEIVE_WAVE_GAIN, pInfoRow);
+                    F64 fOffset = waveMap.getDoubleValue(RECEIVE_WAVE_OFFSET, pInfoRow);
+                    U8 index = getWavepacketIndex(self->pHeader, nSamples, fGain, fOffset);
+
+                    self->pPoint->wavepacket.setIndex(index);
+                    self->pPoint->have_wavepacket = TRUE;
+
+                    npy_int64 nStartIdx = pulseMap.getIntValue("WFM_START_IDX", pPulseRow);
+                    void *pSamples = PyArray_GETPTR1(pReceived, nStartIdx);
+                    self->pWaveformWriter->write_waveform(self->pPoint, (U8*)pSamples);
+                    // TODO: zentih, azimuth -> vector etc
                 }
+
             }
 
             self->pWriter->write_point(self->pPoint);

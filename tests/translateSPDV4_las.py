@@ -23,6 +23,7 @@ import optparse
 import numpy
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
+from pylidar.lidarformats import las
 from rios import cuiprogress
 
 class CmdArgs(object):
@@ -101,12 +102,12 @@ def transFunc(data):
 
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
-    if waveformInfo is not None and waveformInfo.size > 0:
-        data.output1.setWaveformInfo(waveformInfo)
-    if revc is not None and revc.size > 0:
-        data.output1.setReceived(revc)
+    #if waveformInfo is not None and waveformInfo.size > 0:
+    data.output1.setWaveformInfo(waveformInfo)
+    #if revc is not None and revc.size > 0:
+    data.output1.setReceived(revc)
 
-def doTranslation(spatial, spd, las):
+def doTranslation(spatial, spd, lasFile):
     """
     Does the translation between SPD V4 and .las format files.
     """
@@ -117,6 +118,13 @@ def doTranslation(spatial, spd, las):
             raise SystemExit("Spatial processing requested but file does not have spatial index")
     else:
         spatial = info.hasSpatialIndex
+
+    # get the waveform info
+    print('getting waveform descr')
+    try:
+        wavePacketDescr = las.getWavePacketDescriptions(spd)
+    except generic.LiDARInvalidData:
+        wavePacketDescr = None
         
     # set up the variables
     dataFiles = lidarprocessor.DataFiles()
@@ -128,9 +136,10 @@ def doTranslation(spatial, spd, las):
     controls.setProgress(progress)
     controls.setSpatialProcessing(spatial)
     
-    dataFiles.output1 = lidarprocessor.LidarFile(las, lidarprocessor.CREATE)
+    dataFiles.output1 = lidarprocessor.LidarFile(lasFile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('LAS')
-    #dataFiles.output1.setLiDARDriverOption('RECORD_LENGTH', 32)
+    if wavePacketDescr is not None:
+        dataFiles.output1.setLiDARDriverOption('WAVEFORM_DESCR', wavePacketDescr)
 
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls)
     
