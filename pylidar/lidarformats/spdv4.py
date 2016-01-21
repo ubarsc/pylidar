@@ -1530,7 +1530,7 @@ spatial index will be recomputed on the fly"""
     
         firstField = waveformInfo.dtype.names[0]
         
-        nwaveforms = waveformInfo[firstField].count(axis=0)
+        nwaveforms = waveformInfo[firstField].count(axis=0) - 1
         waveHandle = self.fileHandle['DATA']['WAVEFORMS']
         currWaveformsCount = 0
         if firstField in waveHandle:

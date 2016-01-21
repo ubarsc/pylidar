@@ -775,4 +775,71 @@ class LasFileInfo(generic.LiDARFileInfo):
         self.hasSpatialIndex = lasFile.hasSpatialIndex
         
     
+def getWavePacketDescriptions(fname):
+    """
+    When writing a LAS file, it is necessary to write information to a
+    table in the header that really belongs to the waveforms. This 
+    function reads the waveform info from the input file (in any format) and 
+    gathers the unique information from it so it can be passed to as
+    the WAVEFORM_INFO LAS driver option.
+    
+    Note: LAS only supports received waveforms.
+    
+    """
+    from pylidar import lidarprocessor
+    
+    dataFiles = lidarprocessor.DataFiles()
+    dataFiles.input = lidarprocessor.LidarFile(fname, lidarprocessor.READ)
+    
+    controls = lidarprocessor.Controls()
+    controls.setSpatialProcessing(False)
+    
+    otherArgs = lidarprocessor.OtherArgs()
+    otherArgs.uniqueInfo = None
+    
+    lidarprocessor.doProcessing(gatherWavePackets, dataFiles, otherArgs,
+                    controls=controls)
+                    
+    return otherArgs.uniqueInfo
+    
+LAS_WAVEFORM_TABLE_FIELDS = ["NUMBER_OF_WAVEFORM_RECEIVED_BINS", 
+        "RECEIVE_WAVE_GAIN", "RECEIVE_WAVE_OFFSET"]
+    
+def gatherWavePackets(data, otherArgs):
+    """
+    Called from lidarprocessor, is the function that does the identification of 
+    unique waveform length and gain and offset.
+    """
+    from . import gridindexutils
+    info = data.input.getWaveformInfo()
+
+    if info is None:
+        msg = 'input file does not have waveforms'
+        raise generic.LiDARInvalidData(msg)
+    
+    # check they all the fields we need
+    for field in LAS_WAVEFORM_TABLE_FIELDS:
+        if field not in info.dtype.names:
+            msg = 'Input file does not have the %s field' % field
+            raise generic.LiDARArrayColumnError(msg)
+
+    # need to flatten it
+    firstField = LAS_WAVEFORM_TABLE_FIELDS[0]
+    ptsCount = info[firstField].count()
+    outInfo = numpy.empty(ptsCount, dtype=info.data.dtype)
+    returnNumber = numpy.empty(ptsCount, dtype=numpy.uint64) # not needed
+    gridindexutils.flattenMaskedStructuredArray(info.data, 
+                info[firstField].mask, outInfo, returnNumber)
+            
+    info = outInfo
+            
+    # just the fields we are interested in
+    info = info[LAS_WAVEFORM_TABLE_FIELDS]
+    
+    if otherArgs.uniqueInfo is not None:
+        # append it so we can do unique on the whole thing
+        info = numpy.append(otherArgs.uniqueInfo, info)
+    
+    # save the unique ones
+    otherArgs.uniqueInfo = numpy.unique(info)
     
