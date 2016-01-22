@@ -102,9 +102,7 @@ def transFunc(data):
 
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
-    #if waveformInfo is not None and waveformInfo.size > 0:
     data.output1.setWaveformInfo(waveformInfo)
-    #if revc is not None and revc.size > 0:
     data.output1.setReceived(revc)
 
 def doTranslation(spatial, spd, lasFile):

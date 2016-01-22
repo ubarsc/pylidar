@@ -1791,9 +1791,13 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             (bHaveReceived && (PyArray_NDIM(pReceived) != 3)) ) )
     {
         bArraysOk = false;
-        pszMessage = "pulses must be 1d, points and received 2d and wavforminfo 3d";
+        pszMessage = "pulses must be 1d, points and received 2d and waveforminfo 3d";
     }
-
+    if( bArraysOk && bHaveReceived && (PyArray_TYPE(pReceived) != NPY_UINT16))
+    {
+        bArraysOk = false;
+        pszMessage = "received must be 16bit";
+    }
 
     if( !bArraysOk )
     {
@@ -2131,9 +2135,14 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
                     self->pPoint->wavepacket.setIndex(index);
                     self->pPoint->have_wavepacket = TRUE;
 
-                    npy_int64 nStartIdx = pulseMap.getIntValue("WFM_START_IDX", pPulseRow);
-                    void *pSamples = PyArray_GETPTR1(pReceived, nStartIdx);
-                    self->pWaveformWriter->write_waveform(self->pPoint, (U8*)pSamples);
+                    U16 *pBuffer = (U16*)malloc(sizeof(U16) * nSamples);
+                    for( U32 n = 0; n < nSamples; n++ )
+                    {
+                        void *pSample = PyArray_GETPTR3(pReceived, n, 0, nPulseIdx);
+                        memcpy(&pBuffer[n], pSample, sizeof(U16));
+                    }
+                    self->pWaveformWriter->write_waveform(self->pPoint, (U8*)pBuffer);
+                    free(pBuffer);
                     // TODO: zentih, azimuth -> vector etc
                 }
 

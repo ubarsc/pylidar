@@ -580,6 +580,15 @@ class LasFile(generic.LiDARFile):
             # the processor always calls this so if a reading driver just ignore
             return
 
+        if waveformInfo is not None and received is not None:
+            # must convert received to uint16. In theory liblas can handle
+            # uint8 also, but for simplicity have made it uint16
+            for waveform in range(waveformInfo.shape[0]):
+                gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
+                offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
+                received[...,waveform,...] = (received[...,waveform,...] - gain) / offset
+            received = received.astype(numpy.uint16)
+
         #print(pulses.shape, points.shape, received.shape, waveformInfo.shape)
         # TODO: flatten if necessary
         self.lasFile.writeData(self.header, pulses, points, waveformInfo,
