@@ -1041,7 +1041,7 @@ spatial index will be recomputed on the fly"""
 
     def readWaveformInfo(self):
         """
-        Return 3d masked array of information about
+        Return 2d masked array of information about
         the waveforms.
         """
         if self.controls.spatialProcessing:
@@ -1103,7 +1103,7 @@ spatial index will be recomputed on the fly"""
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
             gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
-            trans[waveform] = (trans[waveform] / gain) + offset
+            trans[...,waveform,...] = (trans[...,waveform,...] / gain) + offset
             
         self.lastTransSpace = trans_shape
         self.lastTrans_Idx = trans_idx
@@ -1145,8 +1145,8 @@ spatial index will be recomputed on the fly"""
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
             gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
-            recv[waveform] = (recv[waveform] / gain) + offset
-            
+            recv[...,waveform,...] = (recv[...,waveform,...] / gain) + offset
+
         self.lastRecvSpace = recv_shape
         self.lastRecv_Idx = recv_idx
         self.lastRecv_IdxMask = recv_idx_mask
