@@ -350,7 +350,4 @@ class RieglFileInfo(generic.LiDARFileInfo):
             msg = 'not a riegl file'
             raise generic.LiDARFormatNotUnderstood(msg)
 
-        dict = _riegl.getFileInfo(fname)
-        # transfer the fields to this object
-        for key in dict.keys():
-            self.__dict__[key] = dict[key]
+        self.header = _riegl.getFileInfo(fname)

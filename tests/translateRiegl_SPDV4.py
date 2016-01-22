@@ -165,9 +165,9 @@ def doTranslation(internalrotation, magneticdeclination, riegl, spd):
     if internalrotation:
         print('Obtaining Internal Rotation Matrix...')
         info = generic.getLidarFileInfo(riegl)
-        if "ROTATION_MATRIX" in info:
+        if "ROTATION_MATRIX" in info.header:
             dataFiles.output1.setLiDARDriverOption("ROTATION_MATRIX", 
-                    info["ROTATION_MATRIX"])
+                    info.header["ROTATION_MATRIX"])
         else:
             msg = "Internal Rotation requested but no information found in input file"
             raise SystemError(msg)

@@ -564,8 +564,10 @@ public:
             }
 
             // scanline info useful for building spatial index
-            PyDict_SetItemString(pDict, "MAX_SCANLINE", PyLong_FromLong(m_scanline));
-            PyDict_SetItemString(pDict, "MAX_SCANLINE_IDX", PyLong_FromLong(m_maxScanlineIdx));
+            PyDict_SetItemString(pDict, "SCANLINE_MIN", PyLong_FromLong(0));
+            PyDict_SetItemString(pDict, "SCANLINE_MAX", PyLong_FromLong(m_scanline));
+            PyDict_SetItemString(pDict, "SCANLINE_IDX_MIN", PyLong_FromLong(0));
+            PyDict_SetItemString(pDict, "SCANLINE_IDX_MAX", PyLong_FromLong(m_maxScanlineIdx));
         }
         return pDict;
     }
