@@ -66,7 +66,7 @@ class Driver(object):
         fname is the file to open or create
         mode is READ, UPDATE or CREATE
         controls is an instance of lidarprocessing.Controls
-        userClass is the instance of userclass.LidarFile or userclass.ImageFile
+        userClass is the instance of lidarprocessor.LidarFile or lidarprocessor.ImageFile
             used to define the file.
         """
         self.fname = fname 

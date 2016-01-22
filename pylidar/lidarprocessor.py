@@ -525,7 +525,6 @@ def openFiles(dataFiles, userContainer, controls):
         for inputFile in inputFiles:
             if isinstance(inputFile, LidarFile):
                 if inputFile.mode == generic.CREATE:
-                    # TODO: Creation options?
                     driver = generic.getWriterForLiDARFormat(inputFile.lidarDriver,
                         inputFile.fname, inputFile.mode, controls, inputFile)
                 else:
