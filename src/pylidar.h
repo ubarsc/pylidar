@@ -47,13 +47,13 @@ void pylidar_error(char *errstr, ...);
 
 /* Helper function to get information about a named field within an array
  pass null for params you not interested in */
-int pylidar_getFieldDescr(PyObject *pArray, const char *pszName, int *pnOffset, char *pcKind, int *pnSize, int *pnLength);
+int pylidar_getFieldDescr(PyArrayObject *pArray, const char *pszName, int *pnOffset, char *pcKind, int *pnSize, int *pnLength);
 
 /* return a field as a npy_int64 array. Caller to delete */
-npy_int64 *pylidar_getFieldAsInt64(PyObject *pArray, const char *pszName);
+npy_int64 *pylidar_getFieldAsInt64(PyArrayObject *pArray, const char *pszName);
 
 /* return a field as a double array. Caller to delete */
-double *pylidar_getFieldAsFloat64(PyObject *pArray, const char *pszName);
+double *pylidar_getFieldAsFloat64(PyArrayObject *pArray, const char *pszName);
 
 /* return a tuple containing the strings in data. data should be NULL terminated */
 PyObject *pylidar_stringArrayToTuple(const char *data[]);
@@ -112,7 +112,7 @@ static SpylidarFieldDefn fields[] = {
 /* Wrap an existing C array of structures and return as a numpy array */
 /* Python will free data when finished */
 /* Use PyArray_malloc to obtain the memory */
-PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn);
+PyArrayObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn);
 
 /* Returns NULL on failure, but doesn't set exception state */
 /* On success, a new reference is returned */

@@ -145,21 +145,21 @@ public:
     }
 
     // for structured arrays
-    PyObject *getNumpyArray(SpylidarFieldDefn *pDefn)
+    PyArrayObject *getNumpyArray(SpylidarFieldDefn *pDefn)
     {
         // TODO: resize array down to nElems?
         m_bOwned = false;
-        PyObject *p = pylidar_structArrayToNumpy(m_pData, m_nElems, pDefn);
+        PyArrayObject *p = pylidar_structArrayToNumpy(m_pData, m_nElems, pDefn);
         return p;
     }
 
     // for non structured arrays
-    PyObject *getNumpyArray(int typenum)
+    PyArrayObject *getNumpyArray(int typenum)
     {
         m_bOwned = false;
         npy_intp dims = m_nElems;
-        PyObject *p = PyArray_SimpleNewFromData(1, &dims, typenum, (void*)m_pData);
-        PyArray_ENABLEFLAGS((PyArrayObject *)p, NPY_ARRAY_OWNDATA);
+        PyArrayObject *p = (PyArrayObject*)PyArray_SimpleNewFromData(1, &dims, typenum, (void*)m_pData);
+        PyArray_ENABLEFLAGS(p, NPY_ARRAY_OWNDATA);
         return p;
     }
 

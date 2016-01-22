@@ -53,7 +53,7 @@ va_list args;
 
 /* Helper function to get information about a named field within an array
  pass null for params you not interested in */
-int pylidar_getFieldDescr(PyObject *pArray, const char *pszName, int *pnOffset, char *pcKind, int *pnSize, int *pnLength)
+int pylidar_getFieldDescr(PyArrayObject *pArray, const char *pszName, int *pnOffset, char *pcKind, int *pnSize, int *pnLength)
 {
 PyObject *pKey, *pValue;
 Py_ssize_t pos = 0;
@@ -189,7 +189,7 @@ PyArray_Descr *pDescr;
         } 
 
 
-npy_int64 *pylidar_getFieldAsInt64(PyObject *pArray, const char *pszName)
+npy_int64 *pylidar_getFieldAsInt64(PyArrayObject *pArray, const char *pszName)
 {
 int nOffset, nSize, nLength;
 char cKind;
@@ -296,7 +296,7 @@ npy_double fDoubleVal;
             pOut[nIdx] = (double)tempVar; \
         } 
 
-double *pylidar_getFieldAsFloat64(PyObject *pArray, const char *pszName)
+double *pylidar_getFieldAsFloat64(PyArrayObject *pArray, const char *pszName)
 {
 int nOffset, nSize, nLength;
 char cKind;
@@ -427,7 +427,7 @@ PyObject *pylidar_stringArrayToTuple(const char *data[])
 
 /* Wrap an existing C array of structures and return as a numpy array */
 /* Python will free data when finished */
-PyObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn)
+PyArrayObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, SpylidarFieldDefn *pDefn)
 {
 PyObject *pNameList, *pFormatList, *pOffsetList;
 PyObject *pNameString, *pFormatString, *pOffsetInt, *pItemSizeObj;

@@ -400,7 +400,7 @@ static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
 
     pylidar::CVector<U8> project_ID_GUID_data_4Vector(pHeader->project_ID_GUID_data_4, 
                             sizeof(pHeader->project_ID_GUID_data_4));    
-    pVal = project_ID_GUID_data_4Vector.getNumpyArray(NPY_UINT8);
+    pVal = (PyObject*)project_ID_GUID_data_4Vector.getNumpyArray(NPY_UINT8);
     PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_4", pVal);
 
     pVal = PyLong_FromLong(pHeader->version_major);
@@ -453,7 +453,7 @@ static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
 
     pylidar::CVector<U32> number_of_points_by_returnVector(pHeader->number_of_points_by_return, 
                             sizeof(pHeader->number_of_points_by_return));    
-    pVal = number_of_points_by_returnVector.getNumpyArray(NPY_UINT32);
+    pVal = (PyObject*)number_of_points_by_returnVector.getNumpyArray(NPY_UINT32);
     PyDict_SetItemString(pHeaderDict, "NUMBER_OF_POINTS_BY_RETURN", pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_x);
@@ -821,7 +821,7 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
     // as we only allocated when we knew the size with extra fields
     free(pLasPoint);
 
-    PyObject *pNumpyPulses = pulses.getNumpyArray(LasPulseFields);
+    PyArrayObject *pNumpyPulses = pulses.getNumpyArray(LasPulseFields);
     SpylidarFieldDefn *pPointDefn = LasPointFields;
     if( self->pLasPointFieldsWithExt != NULL )
     {
@@ -829,10 +829,10 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
         pPointDefn = self->pLasPointFieldsWithExt;
     }
 
-    PyObject *pNumpyPoints = pPoints->getNumpyArray(pPointDefn);
+    PyArrayObject *pNumpyPoints = pPoints->getNumpyArray(pPointDefn);
     delete pPoints;
-    PyObject *pNumpyInfos = waveformInfos.getNumpyArray(LasWaveformInfoFields);
-    PyObject *pNumpyReceived = received.getNumpyArray(NPY_UINT8);
+    PyArrayObject *pNumpyInfos = waveformInfos.getNumpyArray(LasWaveformInfoFields);
+    PyArrayObject *pNumpyReceived = received.getNumpyArray(NPY_UINT8);
 
     // build tuple
     PyObject *pTuple = PyTuple_Pack(4, pNumpyPulses, pNumpyPoints, pNumpyInfos, pNumpyReceived);
@@ -1334,7 +1334,7 @@ PyObject *pOptionDict;
 class CFieldInfoMap : public std::map<std::string, SFieldInfo>
 {
 public:
-    CFieldInfoMap(PyObject *pArray) 
+    CFieldInfoMap(PyArrayObject *pArray) 
     {
         SFieldInfo info;
         PyArray_Descr *pDescr = PyArray_DESCR(pArray);
@@ -1673,7 +1673,7 @@ void setWavePacketDescr(PyArrayObject *pArray, LASheader *pHeader, U8 nBitsPerSa
     npy_intp nSize = PyArray_SIZE(pArray);
     if( nSize > 0 )
     {
-        CFieldInfoMap infoMap((PyObject*)pArray);
+        CFieldInfoMap infoMap(pArray);
         // ok apparently there are always 256. _init raises an error if more.
         pHeader->vlr_wave_packet_descr = new LASvlr_wave_packet_descr*[256];
         memset(pHeader->vlr_wave_packet_descr, 0, sizeof(LASvlr_wave_packet_descr*) * 256);
@@ -1816,8 +1816,8 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
     // the type, offset etc
     // do it up here in case we need info for the attributes when setting
     // up the header and writer
-    CFieldInfoMap pulseMap(pPulses);
-    CFieldInfoMap pointMap(pPoints);
+    CFieldInfoMap pulseMap((PyArrayObject*)pPulses);
+    CFieldInfoMap pointMap((PyArrayObject*)pPoints);
 
     if( self->pWriter == NULL )
     {
@@ -2125,7 +2125,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
                 npy_int64 nInfos = pulseMap.getIntValue("NUMBER_OF_WAVEFORM_SAMPLES", pPulseRow);
                 if( nInfos > 0 ) // print error if more than 1? LAS can only handle 1
                 {
-                    CFieldInfoMap waveMap(pWaveformInfos); // create once?
+                    CFieldInfoMap waveMap((PyArrayObject*)pWaveformInfos); // create once?
                     void *pInfoRow = PyArray_GETPTR2(pWaveformInfos, 0, nPulseIdx);
                     U32 nSamples = waveMap.getIntValue(N_WAVEFORM_BINS, pInfoRow);
                     F64 fGain = waveMap.getDoubleValue(RECEIVE_WAVE_GAIN, pInfoRow);

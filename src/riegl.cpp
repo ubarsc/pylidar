@@ -218,7 +218,7 @@ public:
         }
     }
 
-    PyObject *getPulses(Py_ssize_t n, Py_ssize_t *pPointIdx)
+    PyArrayObject *getPulses(Py_ssize_t n, Py_ssize_t *pPointIdx)
     {
         pylidar::CVector<SRieglPulse> *lower = m_Pulses.splitLower(n);
         // record the index of the next point
@@ -231,17 +231,17 @@ public:
         {
             *pPointIdx = 0;
         }
-        PyObject *p = lower->getNumpyArray(RieglPulseFields);
+        PyArrayObject *p = lower->getNumpyArray(RieglPulseFields);
         delete lower; // linked mem now owned by numpy
         renumberPointIdxs();
         return p;
     }
 
-    PyObject *getPoints(Py_ssize_t n)
+    PyArrayObject *getPoints(Py_ssize_t n)
     {
         pylidar::CVector<SRieglPoint> *lower = m_Points.splitLower(n);
         //fprintf(stderr, "points %ld %ld %ld\n", m_Points.getNumElems(), lower->getNumElems(), n);
-        PyObject *p = lower->getNumpyArray(RieglPointFields);
+        PyArrayObject *p = lower->getNumpyArray(RieglPointFields);
         delete lower; // linked mem now owned by numpy
         return p;
     }
@@ -560,7 +560,7 @@ public:
                 pylidar::CMatrix<float> rotMat = tempMat.multiply(rollMat);
 
                 PyDict_SetItemString(pDict, "ROTATION_MATRIX", 
-                        rotMat.getAsNumpyArray(NPY_FLOAT));
+                        (PyObject*)rotMat.getAsNumpyArray(NPY_FLOAT));
             }
 
             // scanline info useful for building spatial index
@@ -1138,9 +1138,9 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 
     // get pulse array as numpy array
     Py_ssize_t point_idx;
-    PyObject *pPulses = self->pReader->getPulses(nPulses, &point_idx); 
+    PyArrayObject *pPulses = self->pReader->getPulses(nPulses, &point_idx); 
     // points
-    PyObject *pPoints = self->pReader->getPoints(point_idx);
+    PyArrayObject *pPoints = self->pReader->getPoints(point_idx);
 
     // we have finished if we are at the end
     self->bFinishedReading = self->pDecoder->eoi() && (self->pReader->getNumPulsesRead() == 0);
@@ -1289,10 +1289,10 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
     }
 
     // extract values as numpy arrays
-    PyObject *pNumpyInfo = waveInfo.getNumpyArray(RieglWaveformInfoFields);
-    PyObject *pNumpyRec = received.getNumpyArray(NPY_UINT16);
-    PyObject *pNumpyWfmStart = wfmStart.getNumpyArray(NPY_UINT32);
-    PyObject *pNumpyWfmNumber = wfmNumber.getNumpyArray(NPY_UINT8);
+    PyArrayObject *pNumpyInfo = waveInfo.getNumpyArray(RieglWaveformInfoFields);
+    PyArrayObject *pNumpyRec = received.getNumpyArray(NPY_UINT16);
+    PyArrayObject *pNumpyWfmStart = wfmStart.getNumpyArray(NPY_UINT32);
+    PyArrayObject *pNumpyWfmNumber = wfmNumber.getNumpyArray(NPY_UINT8);
 
     // build tuple
     PyObject *pTuple = PyTuple_Pack(4, pNumpyInfo, pNumpyRec, pNumpyWfmStart, pNumpyWfmNumber);

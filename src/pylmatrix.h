@@ -143,12 +143,12 @@ public:
 
     // return a new numpy array with the contents
     // of this object. typenum should correspond to T.
-    PyObject *getAsNumpyArray(int typenum=NPY_FLOAT) const
+    PyArrayObject *getAsNumpyArray(int typenum=NPY_FLOAT) const
     {
         npy_intp dims[2];
         dims[0] = m_nRows;
         dims[1] = m_nCols;
-        PyObject *pNumpyArray = PyArray_SimpleNew(2, dims, typenum);
+        PyArrayObject *pNumpyArray = (PyArrayObject*)PyArray_SimpleNew(2, dims, typenum);
         T *p;
         for(int r = 0; r < m_nRows; ++r)
         {
