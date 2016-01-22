@@ -1194,7 +1194,7 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
         Py_ssize_t nPulseStart, Py_ssize_t nPulseEnd)
 {
     pylidar::CVector<SRieglWaveformInfo> waveInfo(nInitSize, nGrowBy);
-    pylidar::CVector<npy_uint32> received(nInitSize, nGrowBy);
+    pylidar::CVector<npy_uint16> received(nInitSize, nGrowBy);
     pylidar::CVector<npy_uint32> wfmStart(nInitSize, nGrowBy);
     pylidar::CVector<npy_uint8> wfmNumber(nInitSize, nGrowBy);
 
@@ -1213,7 +1213,7 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
 
     npy_uint64 nRecStartIdx = 0;
     SRieglWaveformInfo info;
-    npy_uint32 waveSample;
+    npy_uint16 waveSample;
     npy_uint32 waveformStartIdx = 0;
     npy_uint8 waveformCount;
 
@@ -1290,7 +1290,7 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
 
     // extract values as numpy arrays
     PyObject *pNumpyInfo = waveInfo.getNumpyArray(RieglWaveformInfoFields);
-    PyObject *pNumpyRec = received.getNumpyArray(NPY_UINT32);
+    PyObject *pNumpyRec = received.getNumpyArray(NPY_UINT16);
     PyObject *pNumpyWfmStart = wfmStart.getNumpyArray(NPY_UINT32);
     PyObject *pNumpyWfmNumber = wfmNumber.getNumpyArray(NPY_UINT8);
 
