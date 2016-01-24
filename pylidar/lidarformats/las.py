@@ -403,9 +403,9 @@ class LasFile(generic.LiDARFile):
             msg = 'Must set BIN_SIZE option to read Las files spatially'
             raise generic.LiDARFunctionUnsupported(msg)
 
-        pixgrid = pixelgrid.PixelGridDefn(projection=wkt, xMin=header['MIN_X'],
-                        xMax=header['MAX_X'], yMin=header['MIN_Y'], 
-                        yMax=header['MAX_Y'], xRes=binSize, yRes=binSize)
+        pixgrid = pixelgrid.PixelGridDefn(projection=wkt, xMin=header['X_MIN'],
+                        xMax=header['X_MAX'], yMin=header['Y_MIN'], 
+                        yMax=header['Y_MAX'], xRes=binSize, yRes=binSize)
         return pixgrid
 
     def readPointsForExtent(self, colNames=None):
@@ -859,4 +859,4 @@ def gatherWavePackets(data, otherArgs):
     
     # save the unique ones
     otherArgs.uniqueInfo = numpy.unique(info)
-    
+
