@@ -123,6 +123,7 @@ class RieglFile(generic.LiDARFile):
         self.lastWaveRange = None
         self.lastWaveInfo = None
         self.lastReceived = None
+        self.header = None # only populate when asked for - slow operation
         self.scanFile = _riegl.ScanFile(fname, waveName, 
                         userClass.lidarDriverOptions)
                           
@@ -326,9 +327,12 @@ class RieglFile(generic.LiDARFile):
         
     def getHeader(self):
         """
-        Riegl doesn't seem to have a header as such
+        Riegl doesn't seem to have a header as such but we can 
+        fake it by providing the info from _riegl.getFileInfo
         """
-        return {}
+        if self.header is None:
+            self.header = _riegl.getFileInfo(self.fname)
+        return self.header
         
     def getHeaderValue(self, name):
         """
