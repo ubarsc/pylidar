@@ -1269,13 +1269,20 @@ spatial index will be recomputed on the fly"""
                 # to use one of the fields
                 firstField = points.dtype.names[0]
                 
-                nreturns = points[firstField].count(axis=0) - 1
+                nreturns = points[firstField].count(axis=0)
                 pointsHandle = self.fileHandle['DATA']['POINTS']
                 currPointsCount = 0
                 if firstField in pointsHandle:
                     currPointsCount = pointsHandle[firstField].shape[0]
                     
-                pts_start = numpy.cumsum(nreturns) - nreturns[0] + currPointsCount
+                # cumsum gives us the end of the points
+                # so need roll to move to the start
+                # then add the current size of the data written
+                pts_start = numpy.cumsum(nreturns)
+                pts_start = numpy.roll(pts_start, 1)
+                pts_start[0] = 0
+                pts_start += currPointsCount
+                
                 # unfortunately points.compressed() doesn't work
                 # for structured arrays. Use our own version instead
                 ptsCount = points[firstField].count()
@@ -1530,13 +1537,19 @@ spatial index will be recomputed on the fly"""
     
         firstField = waveformInfo.dtype.names[0]
         
-        nwaveforms = waveformInfo[firstField].count(axis=0) - 1
+        nwaveforms = waveformInfo[firstField].count(axis=0)
         waveHandle = self.fileHandle['DATA']['WAVEFORMS']
         currWaveformsCount = 0
         if firstField in waveHandle:
             currWaveformsCount = waveHandle[firstField].shape[0]
-                    
-        wfm_start = numpy.cumsum(nwaveforms) - nwaveforms[0] + currWaveformsCount
+
+        # cumsum gives us the end of the points
+        # so need roll to move to the start
+        # then add the current size of the data written
+        wfm_start = numpy.cumsum(nwaveforms)
+        wfm_start = numpy.roll(wfm_start, 1)
+        wfm_start[0] = 0
+        wfm_start += currWaveformsCount
         
         # unfortunately points.compressed() doesn't work
         # for structured arrays. Use our own version instead

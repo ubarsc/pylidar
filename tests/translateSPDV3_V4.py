@@ -120,6 +120,8 @@ def transFunc(data):
     if data.info.isFirstBlock():
         header = data.input1.getHeader()
         setOutputScaling(header, data.output1)
+        # write header while we are at it
+        data.output1.setHeader(header)
     
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)

@@ -190,7 +190,7 @@ class LiDARFile(basedriver.Driver):
         
     def readPointsByPulse(self):     
         """
-        Read a 3d structured masked array containing the points
+        Read a 2d structured masked array containing the points
         for each pulse.
         """
         raise NotImplementedError()
