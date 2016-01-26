@@ -433,7 +433,7 @@ PyObject *pNameList, *pFormatList, *pOffsetList;
 PyObject *pNameString, *pFormatString, *pOffsetInt, *pItemSizeObj;
 PyObject *pDtypeDict, *pNamesKey, *pFormatsKey, *pOffsetsKey, *pItemSizeKey;
 PyArray_Descr *pDescr;
-PyObject *pOut;
+PyArrayObject *pOut;
 int nStructTotalSize = 0, i;
 char *pszName;
 
@@ -507,11 +507,11 @@ char *pszName;
     }
 
     /* Create new array wrapping the existing C one */
-    pOut = PyArray_NewFromDescr(&PyArray_Type, pDescr, 1, &nElems, NULL, pStructArray,
+    pOut = (PyArrayObject*)PyArray_NewFromDescr(&PyArray_Type, pDescr, 1, &nElems, NULL, pStructArray,
                     NPY_ARRAY_CARRAY, NULL );
     /* Need to set this separately since PyArray_NewFromDescr always */
     /* has it unset, even if you pass it as the flags parameter */
-    PyArray_ENABLEFLAGS((PyArrayObject *)pOut, NPY_ARRAY_OWNDATA);
+    PyArray_ENABLEFLAGS(pOut, NPY_ARRAY_OWNDATA);
     if( pOut == NULL )
     {
         pylidar_error("Unable to create array");
