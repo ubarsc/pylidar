@@ -289,9 +289,7 @@ protected:
         pulse.zenith = shot_zenith;
         pulse.scanline = m_scanline;
         pulse.scanline_Idx = m_scanlineIdx;
-        // do we need these separate?
-        pulse.x_Idx = m_scanline;
-        pulse.y_Idx = m_scanlineIdx;
+        
         // do matrix transform and store result
         applyTransformation(beam_origin[0], beam_origin[1], beam_origin[2],
                             &pulse.x_Origin, &pulse.y_Origin, &pulse.z_Origin);
@@ -436,6 +434,14 @@ public:
         m_fLong(0),
         m_fHeight(0),
         m_fHMSL(0),
+        m_beamDivergence(0),
+        m_sensorAperture(0),
+        m_thetaMin(0),
+        m_thetaMax(0),
+        m_phiMin(0),
+        m_phiMax(0),
+        m_thetaInc(0),
+        m_phiInc(0),
         m_fRoll(NPY_NAN),
         m_fPitch(NPY_NAN),
         m_fYaw(NPY_NAN),
@@ -488,6 +494,14 @@ public:
             PyDict_SetItemString(pDict, "LONGITUDE", PyFloat_FromDouble(m_fLong));
             PyDict_SetItemString(pDict, "HEIGHT", PyFloat_FromDouble(m_fHeight));
             PyDict_SetItemString(pDict, "HMSL", PyFloat_FromDouble(m_fHMSL));
+            PyDict_SetItemString(pDict, "BEAM_DIVERGENCE", PyFloat_FromDouble(m_beamDivergence));
+            PyDict_SetItemString(pDict, "SENSOR_APERTURE", PyFloat_FromDouble(m_sensorAperture));
+            PyDict_SetItemString(pDict, "THETA_MIN", PyFloat_FromDouble(m_thetaMin));
+            PyDict_SetItemString(pDict, "THETA_MAX", PyFloat_FromDouble(m_thetaMax));
+            PyDict_SetItemString(pDict, "PHI_MIN", PyFloat_FromDouble(m_phiMin));
+            PyDict_SetItemString(pDict, "PHI_MAX", PyFloat_FromDouble(m_phiMax));
+            PyDict_SetItemString(pDict, "THETA_INC", PyFloat_FromDouble(m_thetaInc));
+            PyDict_SetItemString(pDict, "PHI_INC", PyFloat_FromDouble(m_phiInc));
             if( !npy_isnan(m_fRoll) )
                 PyDict_SetItemString(pDict, "ROLL", PyFloat_FromDouble(m_fRoll));
             if( !npy_isnan(m_fPitch) )
@@ -654,6 +668,25 @@ protected:
         }
     }
 
+    // beam geometry
+    void on_beam_geometry(const scanlib::beam_geometry<iterator_type>& arg) {
+        scanlib::pointcloud::on_beam_geometry(arg);
+        m_beamDivergence = arg.beam_divergence;
+        m_sensorAperture = arg.beam_exit_diameter;
+    }
+
+    // scan configuration
+    void on_scan_rect_fov(const scanlib::scan_rect_fov<iterator_type>& arg) {
+        scanlib::pointcloud::on_scan_rect_fov(arg);
+        m_thetaMin = arg.theta_min;
+        m_thetaMax = arg.theta_max;
+        m_phiMin = arg.phi_min;
+        m_phiMax = arg.phi_max;
+        m_phiInc = arg.phi_incr;
+        m_thetaInc = arg.theta_incr;        
+    }
+
+
 private:
     float m_fLat;
     float m_fLong;
@@ -662,6 +695,14 @@ private:
     float m_fRoll;
     float m_fPitch;
     float m_fYaw;
+    float m_beamDivergence;
+    float m_sensorAperture;
+    float m_thetaMin;
+    float m_thetaMax;
+    float m_phiMin;
+    float m_phiMax;
+    float m_thetaInc;
+    float m_phiInc;
     long m_scanline;
     long m_scanlineIdx;
     long m_maxScanlineIdx;
