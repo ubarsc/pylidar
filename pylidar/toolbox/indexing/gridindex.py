@@ -64,10 +64,10 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
                 yMax = header['ZENITH_MAX']
                 yMin = header['ZENITH_MIN']
             elif indexMethod == spdv4.SPDV4_INDEX_SCAN:
-                xMax = header['SCANLINE_MAX']
-                xMin = header['SCANLINE_MIN']
-                yMax = header['SCANLINE_IDX_MAX']
-                yMin = header['SCANLINE_IDX_MIN']
+                xMax = header['SCANLINE_IDX_MAX']
+                xMin = header['SCANLINE_IDX_MIN']
+                yMax = header['SCANLINE_MAX']
+                yMin = header['SCANLINE_MIN']
             else:
                 msg = 'unsupported indexing method'
                 raise generic.LiDARSpatialIndexNotAvailable(msg)
@@ -132,6 +132,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     
     otherArgs = lidarprocessor.OtherArgs()
     otherArgs.outList = extentList
+    otherArgs.indexMethod = indexMethod
     
     lidarprocessor.doProcessing(classifyFunc, dataFiles, controls=controls, 
                 otherArgs=otherArgs)
@@ -173,12 +174,18 @@ def copyScaling(input, output):
     """
     for field in ('X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN', 'X_IDX',
                 'Y_IDX', 'AZIMUTH', 'ZENITH'):
-        gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_PULSES)
-        output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
+        try:
+            gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_PULSES)
+            output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
+        except generic.LiDARArrayColumnError:
+            pass
                 
     for field in ('X', 'Y', 'Z', 'HEIGHT'):
-        gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_POINTS)
-        output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
+        try:
+            gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_POINTS)
+            output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
+        except generic.LiDARArrayColumnError:
+            pass
                 
     for field in ('RANGE_TO_WAVEFORM_START',):
         try:
@@ -208,8 +215,19 @@ def classifyFunc(data, otherArgs):
             # deal with scaling. There must be a better way to do this.
             copyScaling(data.input, driver)
     
-        xIdx = pulses['X_IDX']
-        yIdx = pulses['Y_IDX']
+        if otherArgs.indexMethod == spdv4.SPDV4_INDEX_CARTESIAN:
+            xIdx = pulses['X_IDX']
+            yIdx = pulses['Y_IDX']            
+        elif otherArgs.indexMethod == spdv4.SPDV4_INDEX_SPHERICAL:
+            xIdx = pulses['AZIMUTH']
+            yIdx = pulses['ZENITH']            
+        elif otherArgs.indexMethod == spdv4.SPDV4_INDEX_SCAN:
+            xIdx = pulses['SCANLINE_IDX']
+            yIdx = pulses['SCANLINE']            
+        else:
+            msg = 'unsupported indexing method'
+            raise generic.LiDARSpatialIndexNotAvailable(msg)
+            
         #xIdx_min = xIdx.min()
         #xIdx_max = xIdx.max()
         #yIdx_min = yIdx.min()
