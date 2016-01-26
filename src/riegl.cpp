@@ -435,7 +435,7 @@ public:
         m_fHeight(0),
         m_fHMSL(0),
         m_beamDivergence(0),
-        m_sensorAperture(0),
+        m_beamExitDiameter(0),
         m_thetaMin(0),
         m_thetaMax(0),
         m_phiMin(0),
@@ -495,7 +495,7 @@ public:
             PyDict_SetItemString(pDict, "HEIGHT", PyFloat_FromDouble(m_fHeight));
             PyDict_SetItemString(pDict, "HMSL", PyFloat_FromDouble(m_fHMSL));
             PyDict_SetItemString(pDict, "BEAM_DIVERGENCE", PyFloat_FromDouble(m_beamDivergence));
-            PyDict_SetItemString(pDict, "SENSOR_APERTURE", PyFloat_FromDouble(m_sensorAperture));
+            PyDict_SetItemString(pDict, "BEAM_EXIT_DIAMETER", PyFloat_FromDouble(m_beamExitDiameter));
             PyDict_SetItemString(pDict, "THETA_MIN", PyFloat_FromDouble(m_thetaMin));
             PyDict_SetItemString(pDict, "THETA_MAX", PyFloat_FromDouble(m_thetaMax));
             PyDict_SetItemString(pDict, "PHI_MIN", PyFloat_FromDouble(m_phiMin));
@@ -672,7 +672,7 @@ protected:
     void on_beam_geometry(const scanlib::beam_geometry<iterator_type>& arg) {
         scanlib::pointcloud::on_beam_geometry(arg);
         m_beamDivergence = arg.beam_divergence;
-        m_sensorAperture = arg.beam_exit_diameter;
+        m_beamExitDiameter = arg.beam_exit_diameter;
     }
 
     // scan configuration
@@ -696,7 +696,7 @@ private:
     float m_fPitch;
     float m_fYaw;
     float m_beamDivergence;
-    float m_sensorAperture;
+    float m_beamExitDiameter;
     float m_thetaMin;
     float m_thetaMax;
     float m_phiMin;
