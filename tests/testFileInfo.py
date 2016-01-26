@@ -10,7 +10,12 @@ from pylidar.lidarformats import generic
 from pylidar import lidarprocessor
 
 info = generic.getLidarFileInfo(sys.argv[1])
-for key in info.__dict__.keys():
-    print(key, getattr(info, key))
+for key,val in info.__dict__.items():
+    if isinstance(val, dict):
+        print(key.upper())
+        for hkey,hval in val.items():
+            print(" ", hkey.upper(), hval)
+    else:
+        print(key.upper(), val)
     
 
