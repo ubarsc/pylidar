@@ -46,27 +46,27 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     If blockSize isn't set then it is picked.
     
     """
-    info = None
+    info = generic.getLidarFileInfo(infile)
+    header = info.header
     
     if extent is None:
         # work out from header
-        info = generic.getLidarFileInfo(infile)
         try:
             if indexMethod == spdv4.SPDV4_INDEX_CARTESIAN:
-                xMax = info.header['X_MAX']
-                xMin = info.header['X_MIN']
-                yMax = info.header['Y_MAX']
-                yMin = info.header['Y_MIN']
+                xMax = header['X_MAX']
+                xMin = header['X_MIN']
+                yMax = header['Y_MAX']
+                yMin = header['Y_MIN']
             elif indexMethod == spdv4.SPDV4_INDEX_SPHERICAL:
-                xMax = info.header['AZIMUTH_MAX']
-                xMin = info.header['AZIMUTH_MIN']
-                yMax = info.header['ZENITH_MAX']
-                yMin = info.header['ZENITH_MIN']
+                xMax = header['AZIMUTH_MAX']
+                xMin = header['AZIMUTH_MIN']
+                yMax = header['ZENITH_MAX']
+                yMin = header['ZENITH_MIN']
             elif indexMethod == spdv4.SPDV4_INDEX_SCAN:
-                xMax = info.header['SCANLINE_MAX']
-                xMin = info.header['SCANLINE_MIN']
-                yMax = info.header['SCANLINE_IDX_MAX']
-                yMin = info.header['SCANLINE_IDX_MIN']
+                xMax = header['SCANLINE_MAX']
+                xMin = header['SCANLINE_MIN']
+                yMax = header['SCANLINE_IDX_MAX']
+                yMin = header['SCANLINE_IDX_MIN']
             else:
                 msg = 'unsupported indexing method'
                 raise generic.LiDARSpatialIndexNotAvailable(msg)
@@ -81,13 +81,13 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
         binSize = extent.binSize
         
     if wkt is None:
-        if info is None:
-            info = generic.getLidarFileInfo(infile)
-        wkt = info.header['SPATIAL_REFERENCE']
+        wkt = header['SPATIAL_REFERENCE']
 
     if blockSize is None:
-        maxAxis = max(extent.xMax - extent.xMin, extent.yMax - extent.yMin)
-        blockSize = min(maxAxis / BLOCKSIZE_N_BLOCKS, 200.0)
+        minAxis = min(extent.xMax - extent.xMin, extent.yMax - extent.yMin)
+        blockSize = min(minAxis / BLOCKSIZE_N_BLOCKS, 200.0)
+        # make it a multiple of binSize
+        blockSize = int(numpy.ceil(blockSize / binSize)) * binSize
     
     extentList = []
     subExtent = Extent(extent.xMin, extent.xMin + blockSize, 
@@ -125,6 +125,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
+    progress.setLabelText('Splitting...')
     controls.setProgress(progress)
     controls.setSpatialProcessing(False)
     
@@ -133,8 +134,57 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     
     lidarprocessor.doProcessing(classifyFunc, dataFiles, controls=controls, 
                 otherArgs=otherArgs)
+    
+    # close all the output files and re-open in read mode
+    newExtentList = []
+    for subExtent, driver in extentList:
+        fname = driver.fname
+        driver.close()
+        userClass = lidarprocessor.LidarFile(fname, generic.READ)
+        driver = spdv4.SPDV4File(fname, generic.READ, controls, userClass)
+        
+        data = (subExtent, driver)
+        newExtentList.append(data)
                 
-    indexAndMerge(extentList, extent, wkt, outfile)
+    # update header
+    header['INDEX_TLX'] = extent.xMin
+    header['INDEX_TLY'] = extent.yMax
+    # TODO: should this come from the spatial index itself?
+    header['NUMBER_BINS_X'] = int(numpy.ceil((extent.xMax - extent.xMin) / binSize))
+    header['NUMBER_BINS_Y'] = int(numpy.ceil((extent.yMax - extent.yMin) / binSize))
+    header['INDEX_TYPE'] = indexMethod
+    header['BIN_SIZE'] = binSize
+                
+    progress.reset()
+    progress.setLabelText('Merging...')
+    indexAndMerge(newExtentList, extent, wkt, outfile, header, progress)
+    
+    # close all inputs and delete
+    for extent, driver in newExtentList:
+        fname = driver.fname
+        driver.close()
+        os.remove(fname)
+
+def copyScaling(input, output):
+    """
+    Copy the known scaling required fields accross.
+    There must be a better way to do this.
+    """
+    for field in ('X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN', 'X_IDX',
+                'Y_IDX', 'AZIMUTH', 'ZENITH'):
+        gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_PULSES)
+        output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
+                
+    for field in ('X', 'Y', 'Z', 'HEIGHT'):
+        gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_POINTS)
+        output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
+                
+    for field in ('RANGE_TO_WAVEFORM_START',):
+        try:
+            gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS)
+            output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, offset)
+        except generic.LiDARArrayColumnError:
+            pass
     
 def classifyFunc(data, otherArgs):
     """
@@ -144,7 +194,7 @@ def classifyFunc(data, otherArgs):
     pulses = data.input.getPulses()
     points = data.input.getPointsByPulse()
     waveformInfo = data.input.getWaveformInfo()
-    revc = data.input.getReceived()
+    recv = data.input.getReceived()
     trans = data.input.getTransmitted()
 
     #xMin = None
@@ -155,21 +205,7 @@ def classifyFunc(data, otherArgs):
     
         if data.info.isFirstBlock():
             # deal with scaling. There must be a better way to do this.
-            for field in ('X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN', 'X_IDX',
-                        'Y_IDX', 'AZIMUTH', 'ZENITH'):
-                gain, offset = data.input.getScaling(field, lidarprocessor.ARRAY_TYPE_PULSES)
-                driver.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
-                
-            for field in ('X', 'Y', 'Z', 'HEIGHT'):
-                gain, offset = data.input.getScaling(field, lidarprocessor.ARRAY_TYPE_POINTS)
-                driver.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
-                
-            for field in ('RANGE_TO_WAVEFORM_START',):
-                try:
-                    gain, offset = data.input.getScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS)
-                    driver.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, offset)
-                except generic.LiDARArrayColumnError:
-                    pass
+            copyScaling(data.input, driver)
     
         xIdx = pulses['X_IDX']
         yIdx = pulses['Y_IDX']
@@ -192,12 +228,17 @@ def classifyFunc(data, otherArgs):
         # subset the data
         pulsesSub = pulses[mask]
         pointsSub = points[..., mask]
-        print(pulsesSub.shape, pointsSub.shape)
-        #waveformInfoSub = waveformInfo[mask]
-        # TODO: waveforms
-        driver.writeData(pulsesSub, pointsSub)
+        if waveformInfo is not None:
+            waveformInfo = waveformInfo[...,mask]
+        if recv is not None:
+            recv = recv[...,...,mask]
+        if trans is not None:
+            trans = trans[...,...,mask]
+            
+        driver.writeData(pulsesSub, pointsSub, trans, recv, 
+                    waveformInfo)
         
-def indexAndMerge(extentList, extent, wkt, outfile):
+def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
     """
     Internal method to merge all the temproray files into the output
     spatially indexing as we go.
@@ -213,15 +254,30 @@ def indexAndMerge(extentList, extent, wkt, outfile):
                 xRes=extent.binSize, yRes=extent.binSize)
     outDriver.setPixelGrid(pixGrid)
     
-    for extent, driver in extentList:
+    progress.setTotalSteps(len(extentList))
+    progress.setProgress(0)
+    nFilesProcessed = 0
+    for subExtent, driver in extentList:
         # read in all the data
         npulses = driver.getTotalNumberPulses()
         pulseRange = generic.PulseRange(0, npulses)
         driver.setPulseRange(pulseRange)
-        pulses = driver.getPulses()
+        pulses = driver.readPulsesForRange()
         points = driver.readPointsByPulse()
-    
-        outDriver.setExtent(extent)
-        # on create, a spatial index is created
-        outDriver.writeData(points, pulses)
+        waveformInfo = driver.readWaveformInfo()
+        recv = driver.readReceived()
+        trans = driver.readTransmitted()
+
+        outDriver.setExtent(subExtent)
+        if nFilesProcessed == 0:
+            copyScaling(driver, outDriver)
+            outDriver.setHeader(header)
         
+        # on create, a spatial index is created
+        outDriver.writeData(pulses, points, trans, recv, 
+                            waveformInfo)
+        
+        nFilesProcessed += 1
+        progress.setProgress(nFilesProcessed)
+
+    outDriver.close()
