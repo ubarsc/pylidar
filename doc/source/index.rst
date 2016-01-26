@@ -79,6 +79,7 @@ Drivers
    lidarformats/generic
    lidarformats/spdv3
    lidarformats/spdv4
+   lidarformats/las
    lidarformats/riegl
    lidarformats/h5space
    lidarformats/gridindexutils
