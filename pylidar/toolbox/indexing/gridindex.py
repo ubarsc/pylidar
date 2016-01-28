@@ -214,7 +214,9 @@ def classifyFunc(data, otherArgs):
         if data.info.isFirstBlock():
             # deal with scaling. There must be a better way to do this.
             copyScaling(data.input, driver)
-    
+
+        # TODO: should we always be able to rely on X_IDX, Y_IDX for
+        # whatever index we are building?    
         if otherArgs.indexMethod == spdv4.SPDV4_INDEX_CARTESIAN:
             xIdx = pulses['X_IDX']
             yIdx = pulses['Y_IDX']            
@@ -245,17 +247,22 @@ def classifyFunc(data, otherArgs):
         mask = ((xIdx >= extent.xMin) & (xIdx < extent.xMax) & 
                 (yIdx >= extent.yMin) & (yIdx < extent.yMax))
         # subset the data
-        pulsesSub = pulses[mask]
-        pointsSub = points[..., mask]
-        if waveformInfo is not None:
-            waveformInfo = waveformInfo[...,mask]
-        if recv is not None:
-            recv = recv[...,...,mask]
-        if trans is not None:
-            trans = trans[...,...,mask]
+        pulsesSub = pulses[mask].copy()
+        pointsSub = points[..., mask].copy()
+        waveformInfoSub = None
+        recvSub = None
+        transSub = None
+        if waveformInfo is not None and waveformInfo.size > 0:
+            # TODO: seem to need copy here or crash happens... weird
+            # something to do with structured arrays?
+            waveformInfoSub = waveformInfo[...,mask].copy()
+        if recv is not None and recv.size > 0:
+            recvSub = recv[...,...,mask].copy()
+        if trans is not None and trans.size > 0:
+            transSub = trans[...,...,mask].copy()
             
-        driver.writeData(pulsesSub, pointsSub, trans, recv, 
-                    waveformInfo)
+        driver.writeData(pulsesSub, pointsSub, transSub, recvSub, 
+                    waveformInfoSub)
         
 def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
     """

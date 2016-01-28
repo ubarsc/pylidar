@@ -1067,7 +1067,7 @@ spatial index will be recomputed on the fly"""
         nOut = waveHandle['NUMBER_OF_WAVEFORM_RECEIVED_BINS'].shape[0]
         wave_space, wave_idx, wave_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                     idx, cnt, nOut)
-        
+
         waveformInfo = self.readFieldsAndUnScale(waveHandle, colNames, wave_space)
         waveformInfo = waveformInfo[wave_idx]
         wave_masked = numpy.ma.array(waveformInfo, mask=wave_idx_mask)
@@ -1281,7 +1281,8 @@ spatial index will be recomputed on the fly"""
                 # then add the current size of the data written
                 pts_start = numpy.cumsum(nreturns)
                 pts_start = numpy.roll(pts_start, 1)
-                pts_start[0] = 0
+                if pts_start.size > 0: 
+                    pts_start[0] = 0
                 pts_start += currPointsCount
                 
                 # unfortunately points.compressed() doesn't work
@@ -1444,8 +1445,12 @@ spatial index will be recomputed on the fly"""
             if 'TRANSMITTED' in self.fileHandle['DATA']:
                 transHandle = self.fileHandle['DATA']['TRANSMITTED']
                 currTransCount = transHandle.shape[0]
-            
-            trans_start = numpy.cumsum(ntrans) - ntrans[0] + currTransCount
+
+            trans_start = numpy.cumsum(ntrans)
+            trans_start = numpy.roll(trans_start, 1)
+            if trans_start.size > 0:
+                trans_start[0] = 0
+            trans_start += currTransCount            
 
             transmitted = flattened                
                 
@@ -1525,7 +1530,11 @@ spatial index will be recomputed on the fly"""
                 recvHandle = self.fileHandle['DATA']['RECEIVED']
                 currRecvCount = recvHandle.shape[0]
             
-            recv_start = numpy.cumsum(nrecv) - nrecv[0] + currRecvCount
+            recv_start = numpy.cumsum(nrecv)
+            recv_start = numpy.roll(recv_start, 1)
+            if recv_start.size > 0:
+                recv_start[0] = 0
+            recv_start += currRecvCount            
                 
             received = flattened
 
@@ -1549,7 +1558,8 @@ spatial index will be recomputed on the fly"""
         # then add the current size of the data written
         wfm_start = numpy.cumsum(nwaveforms)
         wfm_start = numpy.roll(wfm_start, 1)
-        wfm_start[0] = 0
+        if wfm_start.size > 0:
+            wfm_start[0] = 0
         wfm_start += currWaveformsCount
         
         # unfortunately points.compressed() doesn't work
