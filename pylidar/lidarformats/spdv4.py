@@ -1089,8 +1089,10 @@ spatial index will be recomputed on the fly"""
             return None
         nOut = self.fileHandle['DATA']['TRANSMITTED'].shape[0]
 
-        idx = waveformInfo['TRANSMITTED_START_IDX']
+        # NB: waveformInfo is masked
+        idx = waveformInfo['TRANSMITTED_START_IDX'].data
         cnt = waveformInfo['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
+        cnt = cnt.filled(0)
         
         trans_shape, trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         idx, cnt, nOut)
@@ -1131,8 +1133,10 @@ spatial index will be recomputed on the fly"""
             return None
         nOut = self.fileHandle['DATA']['RECEIVED'].shape[0]
         
-        idx = waveformInfo['RECEIVED_START_IDX']
+        # NB: waveformInfo is masked
+        idx = waveformInfo['RECEIVED_START_IDX'].data
         cnt = waveformInfo['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
+        cnt = cnt.filled(0)
         
         recv_shape, recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         idx, cnt, nOut)

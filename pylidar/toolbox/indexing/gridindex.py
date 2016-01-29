@@ -247,19 +247,17 @@ def classifyFunc(data, otherArgs):
         mask = ((xIdx >= extent.xMin) & (xIdx < extent.xMax) & 
                 (yIdx >= extent.yMin) & (yIdx < extent.yMax))
         # subset the data
-        pulsesSub = pulses[mask].copy()
-        pointsSub = points[..., mask].copy()
+        pulsesSub = pulses[mask]
+        pointsSub = points[..., mask]
         waveformInfoSub = None
         recvSub = None
         transSub = None
         if waveformInfo is not None and waveformInfo.size > 0:
-            # TODO: seem to need copy here or crash happens... weird
-            # something to do with structured arrays?
-            waveformInfoSub = waveformInfo[...,mask].copy()
+            waveformInfoSub = waveformInfo[...,mask]
         if recv is not None and recv.size > 0:
-            recvSub = recv[...,...,mask].copy()
+            recvSub = recv[...,...,mask]
         if trans is not None and trans.size > 0:
-            transSub = trans[...,...,mask].copy()
+            transSub = trans[...,...,mask]
             
         driver.writeData(pulsesSub, pointsSub, transSub, recvSub, 
                     waveformInfoSub)

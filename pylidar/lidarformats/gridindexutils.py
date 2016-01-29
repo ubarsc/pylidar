@@ -18,9 +18,19 @@ Common utility functions for dealing with grid spatial indices
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function, division
 
+import os
 import numpy
-from numba import jit
 from . import h5space
+
+DEBUG_MODE = os.getenv('PYLIDAR_DEBUG', '0')
+DEBUG_MODE = int(DEBUG_MODE) > 0
+if DEBUG_MODE:
+    def jit(func):
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+        return wrapper
+else:
+    from numba import jit
 
 @jit
 def unsortArray(inArray, sortIndices, outArray):
