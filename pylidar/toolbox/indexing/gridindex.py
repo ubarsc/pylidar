@@ -63,11 +63,13 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
                 xMin = header['AZIMUTH_MIN']
                 yMax = header['ZENITH_MAX']
                 yMin = header['ZENITH_MIN']
+                wkt = getDefaultWKT()
             elif indexMethod == spdv4.SPDV4_INDEX_SCAN:
                 xMax = header['SCANLINE_IDX_MAX']
                 xMin = header['SCANLINE_IDX_MIN']
                 yMax = header['SCANLINE_MAX']
                 yMin = header['SCANLINE_MIN']
+                wkt = getDefaultWKT()
             else:
                 msg = 'unsupported indexing method'
                 raise generic.LiDARSpatialIndexNotAvailable(msg)
@@ -167,6 +169,18 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
         driver.close()
         os.remove(fname)
 
+def getDefaultWKT():
+    """
+    For scan and spherical indexing methods we don't have a WKT.
+    However, rios.pixelgrid requires something. For now
+    return the WKT for GDA96/MGA zone 55 until we think of something
+    better.
+    """
+    from osgeo import osr
+    sr = osr.SpatialReference()
+    sr.ImportFromEPSG(28355)
+    return sr.ExportToWkt()
+
 def copyScaling(input, output):
     """
     Copy the known scaling required fields accross.
@@ -223,9 +237,37 @@ def classifyFunc(data, otherArgs):
         elif otherArgs.indexMethod == spdv4.SPDV4_INDEX_SPHERICAL:
             xIdx = pulses['AZIMUTH']
             yIdx = pulses['ZENITH']            
+            # we are going to put the values into X_IDX etc
+            # so we need to copy the scaling
+            try:
+                gain, offset = data.input.getScaling('AZIMUTH', lidarprocessor.ARRAY_TYPE_PULSES)
+            except generic.LiDARArrayColumnError:
+                gain = 1.0 # ???
+                offset = 0.0
+            driver.setScaling('X_IDX', lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
+            try:
+                gain, offset = data.input.getScaling('ZENITH', lidarprocessor.ARRAY_TYPE_PULSES)
+            except generic.LiDARArrayColumnError:
+                gain = 1.0 # ???
+                offset = 0.0
+            driver.setScaling('Y_IDX', lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
         elif otherArgs.indexMethod == spdv4.SPDV4_INDEX_SCAN:
             xIdx = pulses['SCANLINE_IDX']
             yIdx = pulses['SCANLINE']            
+            # we are going to put the values into X_IDX etc
+            # so we need to copy the scaling
+            try:
+                gain, offset = data.input.getScaling('SCANLINE_IDX', lidarprocessor.ARRAY_TYPE_PULSES)
+            except generic.LiDARArrayColumnError:
+                gain = 1.0 # ???
+                offset = 0.0
+            driver.setScaling('X_IDX', lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
+            try:
+                gain, offset = data.input.getScaling('SCANLINE', lidarprocessor.ARRAY_TYPE_PULSES)
+            except generic.LiDARArrayColumnError:
+                gain = 1.0 # ???
+                offset = 0.0
+            driver.setScaling('Y_IDX', lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
         else:
             msg = 'unsupported indexing method'
             raise generic.LiDARSpatialIndexNotAvailable(msg)
@@ -248,7 +290,15 @@ def classifyFunc(data, otherArgs):
                 (yIdx >= extent.yMin) & (yIdx < extent.yMax))
         # subset the data
         pulsesSub = pulses[mask]
+        # this is required otherwise the pulses get stripped out
+        # when we write the pulses in spatial mode (in indexAndMerge)
+        pulsesSub['X_IDX'] = xIdx[mask]
+        pulsesSub['Y_IDX'] = yIdx[mask]
+        
         pointsSub = points[..., mask]
+        if pulsesSub.shape[0] != pointsSub.shape[1]:
+            raise SystemExit(driver.fname)
+            
         waveformInfoSub = None
         recvSub = None
         transSub = None
@@ -284,21 +334,22 @@ def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
     for subExtent, driver in extentList:
         # read in all the data
         npulses = driver.getTotalNumberPulses()
-        pulseRange = generic.PulseRange(0, npulses)
-        driver.setPulseRange(pulseRange)
-        pulses = driver.readPulsesForRange()
-        points = driver.readPointsByPulse()
-        waveformInfo = driver.readWaveformInfo()
-        recv = driver.readReceived()
-        trans = driver.readTransmitted()
+        if npulses > 0:
+            pulseRange = generic.PulseRange(0, npulses)
+            driver.setPulseRange(pulseRange)
+            pulses = driver.readPulsesForRange()
+            points = driver.readPointsByPulse()
+            waveformInfo = driver.readWaveformInfo()
+            recv = driver.readReceived()
+            trans = driver.readTransmitted()
 
-        outDriver.setExtent(subExtent)
-        if nFilesProcessed == 0:
-            copyScaling(driver, outDriver)
-            outDriver.setHeader(header)
+            outDriver.setExtent(subExtent)
+            if nFilesProcessed == 0:
+                copyScaling(driver, outDriver)
+                outDriver.setHeader(header)
         
-        # on create, a spatial index is created
-        outDriver.writeData(pulses, points, trans, recv, 
+            # on create, a spatial index is created
+            outDriver.writeData(pulses, points, trans, recv, 
                             waveformInfo)
         
         nFilesProcessed += 1

@@ -247,7 +247,7 @@ class SPDV4SpatialIndex(object):
     def createNewIndex(self, pixelGrid):
         raise NotImplementedError()
         
-    def setPointsAndPulsesForExtent(self, extent, points, pulses, lastPulseID):
+    def setPulsesForExtent(self, extent, pulses, lastPulseID):
         raise NotImplementedError()
         
     @staticmethod
@@ -428,7 +428,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         # save the pixelGrid
         self.pixelGrid = pixelGrid
 
-    def setPointsAndPulsesForExtent(self, extent, points, pulses, lastPulseID):
+    def setPulsesForExtent(self, extent, pulses, lastPulseID):
         """
         Update the spatial index. Given extent and data works out what
         needs to be written.
@@ -469,7 +469,8 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         pulses = pulses[sortedBins]
         
         # return the new ones in the correct order to write
-        return points, pulses
+        # and the mask to remove points, waveforms etc
+        return pulses, mask
                                     
 class SPDV4File(generic.LiDARFile):
     """
@@ -1035,7 +1036,9 @@ spatial index will be recomputed on the fly"""
             points = self.readPointsForRange(colNames)
         idx = self.lastPoints_Idx
         idxMask = self.lastPoints_IdxMask
-        
+
+        if points is None:
+            return None        
         pointsByPulse = points[idx]
         points = numpy.ma.array(pointsByPulse, mask=idxMask)
         return points
@@ -1169,6 +1172,8 @@ spatial index will be recomputed on the fly"""
         if pulses.size == 0:
             return None, None
             
+        mask = None
+            
         if pulses.ndim == 3:
             # must flatten back to be 1d using the indexes
             # used to create the 3d version (pulsesbybin)
@@ -1199,40 +1204,30 @@ spatial index will be recomputed on the fly"""
                     msg = ('Essential field %s must exist in pulse data ' +
                              'when writing new file') % essential
                     raise generic.LiDARInvalidData(msg)
-                    
-            # while we are at it, grab the X_IDX and Y_IDX fields since
-            # they are essential
-            x_idx = pulses['X_IDX']
-            y_idx = pulses['Y_IDX']
             
-        else:
-            # update
-            # we need x_idx and y_idx for removing overlap, 
-            # but it may not exist in the input, or be altered
-            # so re-read it
-            if self.controls.spatialProcessing:
-                x_idx = self.readPulsesForExtent('X_IDX')
-                y_idx = self.readPulsesForExtent('Y_IDX')
-
         if self.extent is not None and self.controls.spatialProcessing:
-            # if we doing spatial index we need to strip out areas in the overlap
-            # self.extent is the size of the block without the overlap
-            # so just strip out everything outside of it
-            mask = ( (x_idx >= self.extent.xMin) & 
+            if self.mode == generic.UPDATE:
+                # while we are at it, grab the X_IDX and Y_IDX fields since
+                # they are essential
+                x_idx = pulses['X_IDX']
+                y_idx = pulses['Y_IDX']
+                # if we doing spatial processing we need to strip out areas in the overlap
+                # self.extent is the size of the block without the overlap
+                # so just strip out everything outside of it
+                mask = ( (x_idx >= self.extent.xMin) & 
                         (x_idx <= self.extent.xMax) & 
                         (y_idx >= self.extent.yMin) &
                         (y_idx <= self.extent.yMax))
-            pulses = pulses[mask]
-            if self.mode == generic.UPDATE:
+                pulses = pulses[mask]
                 self.lastPulsesSpace.updateBoolArray(mask)
+            else:  # update
+                # get the spatial index handling code to sort it.
+                pulses, mask = self.si_handler.setPulsesForExtent(
+                                        self.extent, pulses, self.lastPulseID)
             
-            elif self.mode == generic.CREATE and points is not None and points.ndim == 2:
-                # strip out points as well
-                points = points[..., mask]
-            
-        return pulses, points
+        return pulses, mask
 
-    def preparePointsForWriting(self, points, pulses):
+    def preparePointsForWriting(self, points, mask):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -1309,28 +1304,32 @@ spatial index will be recomputed on the fly"""
             # strip out the points connected with pulses that were 
             # originally outside
             # the window and within the overlap.
-            if self.controls.spatialProcessing and origPointsDims == 3:
-                x_idx = self.readPulsesForExtent('X_IDX')
-                y_idx = self.readPulsesForExtent('Y_IDX')
-                nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
+            #if self.controls.spatialProcessing and origPointsDims == 3:
+            #    x_idx = self.readPulsesForExtent('X_IDX')
+            #    y_idx = self.readPulsesForExtent('Y_IDX')
+            #    nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
 
-                x_idx = numpy.repeat(x_idx, nreturns)
-                y_idx = numpy.repeat(y_idx, nreturns)
+            #    x_idx = numpy.repeat(x_idx, nreturns)
+            #    y_idx = numpy.repeat(y_idx, nreturns)
                 
-                mask = ( (x_idx >= self.extent.xMin) & 
-                    (x_idx <= self.extent.xMax) &
-                    (y_idx >= self.extent.yMin) &
-                    (y_idx <= self.extent.yMax))
-                if origPointsDims == 3:
-                    sortedPointsundo = numpy.empty_like(points)
-                    gridindexutils.unsortArray(points, 
-                            self.lastPoints3d_InRegionSort, sortedPointsundo)
-                    points = sortedPointsundo
-                        
-                    mask = mask[self.lastPoints3d_InRegionMask]
-                    self.lastPointsSpace.updateBoolArray(self.lastPoints3d_InRegionMask)
+            #    mask = ( (x_idx >= self.extent.xMin) & 
+            #        (x_idx <= self.extent.xMax) &
+            #        (y_idx >= self.extent.yMin) &
+            #        (y_idx <= self.extent.yMax))
+            #    if origPointsDims == 3:
+            #        sortedPointsundo = numpy.empty_like(points)
+            #        gridindexutils.unsortArray(points, 
+            #                self.lastPoints3d_InRegionSort, sortedPointsundo)
+            #        points = sortedPointsundo
+            #            
+            #        mask = mask[self.lastPoints3d_InRegionMask]
+            #        self.lastPointsSpace.updateBoolArray(self.lastPoints3d_InRegionMask)
 
-                points = points[mask]
+            #    points = points[mask]
+            #    self.lastPointsSpace.updateBoolArray(mask)
+            if self.controls.spatialProcessing:
+                nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
+                mask = numpy.repeat(mask, nreturns)
                 self.lastPointsSpace.updateBoolArray(mask)
 
         else:
@@ -1377,7 +1376,7 @@ spatial index will be recomputed on the fly"""
                 
         return points, pts_start, nreturns, returnNumber
         
-    def prepareTransmittedForWriting(self, transmitted, waveformInfo):
+    def prepareTransmittedForWriting(self, transmitted, waveformInfo, mask):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -1415,13 +1414,6 @@ spatial index will be recomputed on the fly"""
             # mask out those in the overlap using the pulses
             if self.controls.spatialProcessing:
 
-                x_idx = self.readPulsesForExtent('X_IDX')
-                y_idx = self.readPulsesForExtent('Y_IDX')
-                mask = ( (x_idx >= self.extent.xMin) & 
-                        (x_idx <= self.extent.xMax) & 
-                        (y_idx >= self.extent.yMin) &
-                        (y_idx <= self.extent.yMax))
-
                 # Repeat the mask so that it is the same shape as the 
                 # original transmitted and then flatten in the same way
                 # we can then remove the transmitted outside the extent.         
@@ -1434,7 +1426,6 @@ spatial index will be recomputed on the fly"""
                 gridindexutils.flatten3dMaskedArray(flatMask, mask, 
                     self.lastTrans_IdxMask, self.lastTrans_Idx)
             
-                transmitted = transmitted[flatMask]
                 self.lastTransSpace.updateBoolArray(flatMask)
                 
         else:
@@ -1460,7 +1451,7 @@ spatial index will be recomputed on the fly"""
                 
         return transmitted, trans_start, ntrans
         
-    def prepareReceivedForWriting(self, received, waveformInfo):
+    def prepareReceivedForWriting(self, received, waveformInfo, mask):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -1497,13 +1488,6 @@ spatial index will be recomputed on the fly"""
                 
             # mask out those in the overlap using the pulses
             if self.controls.spatialProcessing:
-
-                x_idx = self.readPulsesForExtent('X_IDX')
-                y_idx = self.readPulsesForExtent('Y_IDX')
-                mask = ( (x_idx >= self.extent.xMin) & 
-                        (x_idx <= self.extent.xMax) & 
-                        (y_idx >= self.extent.yMin) &
-                        (y_idx <= self.extent.yMax))
 
                 # Repeat the mask so that it is the same shape as the 
                 # original received and then flatten in the same way
@@ -1726,29 +1710,53 @@ spatial index will be recomputed on the fly"""
             if (transmitted is not None or received is not None) and waveformInfo is None:
                 msg = 'If transmitted or received is supplied, so must waveformInfo'
                 raise generic.LiDARInvalidData(msg)
+                
+            if transmitted is not None and transmitted.ndim != 3:
+                msg = 'transmitted must be 3d as returned by readTransmitted'
+                raise generic.LiDARInvalidData(msg)
+
+            if received is not None and received.ndim != 3:
+                msg = 'received must be 3d as returned by readReceived'
+                raise generic.LiDARInvalidData(msg)
+                
+            if waveformInfo is not None and waveformInfo.ndim != 2:
+                msg = 'waveformInfo must be 2d as returned by readWaveformInfo'
+                raise generic.LiDARInvalidData(msg)
 
         writeWavefromInfo = waveformInfo is not None
         if waveformInfo is None and self.mode == generic.UPDATE:
             waveformInfo = self.readWaveformInfo()
-        
+    
         if pulses is not None:
-            pulses, points = self.preparePulsesForWriting(pulses, points)
+            #print('b4', pulses.shape)    
+            pulses, mask = self.preparePulsesForWriting(pulses, points)
+            if mask is not None:
+                #print('removed', mask.size - mask.sum())
+                # strip out the ones outside the current extent
+                if points is not None:
+                    points = points[...,mask]
+                if waveformInfo is not None:
+                    waveformInfo = waveformInfo[...,mask]
+                if received is not None:
+                    received = received[...,...,mask]
+                if transmitted is not None:
+                    transmitted = transmitted[...,...,mask]
             
         if points is not None:
             points, pts_start, nreturns, returnNumber = (
-                                self.preparePointsForWriting(points, pulses))
+                                self.preparePointsForWriting(points, mask))
 
         trans_start = None
         ntrans = None            
         if transmitted is not None:
             transmitted, trans_start, ntrans = (
-                self.prepareTransmittedForWriting(transmitted, waveformInfo))
+                self.prepareTransmittedForWriting(transmitted, waveformInfo, mask))
             
         recv_start = None
         nrecv = None
         if received is not None:
             received, recv_start, nrecv = (
-                self.prepareReceivedForWriting(received, waveformInfo))
+                self.prepareReceivedForWriting(received, waveformInfo, mask))
                 
         # deal with situation where there is transmitted but not
         # received etc. Assume other wise they will be the same length.
@@ -1770,12 +1778,6 @@ spatial index will be recomputed on the fly"""
                         self.prepareWaveformInfoForWriting(waveformInfo))
             
         if self.mode == generic.CREATE:
-
-            if self.controls.spatialProcessing and pulses is not None:
-                # write spatial index. The pulses/points may need
-                # to be re-ordered before writing so we do this first
-                points, pulses = self.si_handler.setPointsAndPulsesForExtent(
-                        self.extent, points, pulses, self.lastPulseID)
 
             if pulses is not None and len(pulses) > 0:
                         
@@ -1907,6 +1909,12 @@ spatial index will be recomputed on the fly"""
         
         nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
         startIdxs = self.readPulsesForRange('PTS_START_IDX')
+
+        if 'RETURN_NUMBER' not in pointsHandle:
+            # not much else we can do...
+            # means to points were written to the file, 
+            # although there might be pulses
+            return None
         
         nOut = pointsHandle['RETURN_NUMBER'].shape[0]
         point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
@@ -1957,7 +1965,11 @@ spatial index will be recomputed on the fly"""
         Return the total number of pulses
         """
         # PULSE_ID is always present.
-        return self.fileHandle['DATA']['PULSES']['PULSE_ID'].shape[0]
+        pulseHandle = self.fileHandle['DATA']['PULSES']
+        if 'PULSE_ID' in pulseHandle:
+            return pulseHandle['PULSE_ID'].shape[0]
+        else:
+            return 0
         
     def getHeader(self):
         """
