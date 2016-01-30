@@ -1209,8 +1209,8 @@ spatial index will be recomputed on the fly"""
             if self.mode == generic.UPDATE:
                 # while we are at it, grab the X_IDX and Y_IDX fields since
                 # they are essential
-                x_idx = pulses['X_IDX']
-                y_idx = pulses['Y_IDX']
+                x_idx = self.readPulsesForExtent('X_IDX')
+                y_idx = self.readPulsesForExtent('Y_IDX')
                 # if we doing spatial processing we need to strip out areas in the overlap
                 # self.extent is the size of the block without the overlap
                 # so just strip out everything outside of it
@@ -1330,6 +1330,7 @@ spatial index will be recomputed on the fly"""
             if self.controls.spatialProcessing:
                 nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
                 mask = numpy.repeat(mask, nreturns)
+                
                 self.lastPointsSpace.updateBoolArray(mask)
 
         else:
@@ -1725,25 +1726,33 @@ spatial index will be recomputed on the fly"""
 
         writeWavefromInfo = waveformInfo is not None
         if waveformInfo is None and self.mode == generic.UPDATE:
+            # needed so we can process the waveforms
             waveformInfo = self.readWaveformInfo()
+
+        writePulses = pulses is not None
+        if pulses is None and self.mode == generic.UPDATE:
+            # needed so we can create the mask
+            if self.controls.spatialProcessing:
+                pulses = self.readPulsesForExtent()
+            else:
+                pulses = self.readPulsesForRange()
     
-        if pulses is not None:
-            pulses, mask = self.preparePulsesForWriting(pulses, points)
-            if mask is not None:
-                # strip out the ones outside the current extent
-                if points is not None:
-                    points = points[...,mask]
-                if waveformInfo is not None:
-                    waveformInfo = waveformInfo[...,mask]
-                if received is not None:
-                    received = received[...,...,mask]
-                if transmitted is not None:
-                    transmitted = transmitted[...,...,mask]
-            
+        pulses, mask = self.preparePulsesForWriting(pulses, points)
+        if mask is not None:
+            # strip out the ones outside the current extent
+            if points is not None:
+                points = points[...,mask]
+            if waveformInfo is not None:
+                waveformInfo = waveformInfo[...,mask]
+            if received is not None:
+                received = received[...,...,mask]
+            if transmitted is not None:
+                transmitted = transmitted[...,...,mask]
+        
         if points is not None:
             points, pts_start, nreturns, returnNumber = (
                                 self.preparePointsForWriting(points, mask))
-
+        
         trans_start = None
         ntrans = None            
         if transmitted is not None:
@@ -1777,7 +1786,7 @@ spatial index will be recomputed on the fly"""
             
         if self.mode == generic.CREATE:
 
-            if pulses is not None and len(pulses) > 0:
+            if writePulses and pulses is not None and len(pulses) > 0:
                         
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
                 
@@ -1847,9 +1856,9 @@ spatial index will be recomputed on the fly"""
                                     points[name], name, generic.ARRAY_TYPE_POINTS)
 
                     if data.size > 0:
-                        self.lastPointsShape.write(pointsHandle[hdfname], data)
+                        self.lastPointsSpace.write(pointsHandle[hdfname], data)
                     
-            if pulses is not None:
+            if writePulses and pulses is not None:
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
                 for name in pulses.dtype.names:
                     if (name != 'X_IDX' and name != 'Y_IDX' and 
@@ -1857,7 +1866,9 @@ spatial index will be recomputed on the fly"""
                         data, hdfname = self.prepareDataForWriting(
                                     pulses[name], name, generic.ARRAY_TYPE_PULSES)
                         if data.size > 0:
-                            self.lastPulsesShape.write(pulsesHandle[hdfname], data)
+                            # get: Array must be C-contiguous 
+                            # without the copy
+                            self.lastPulsesSpace.write(pulsesHandle[hdfname], data.copy())
                                     
             if transmitted is not None:
                 self.lastTransSpace.write(self.fileHandle['DATA']['TRANSMITTED'], 
