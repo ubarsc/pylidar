@@ -1728,10 +1728,8 @@ spatial index will be recomputed on the fly"""
             waveformInfo = self.readWaveformInfo()
     
         if pulses is not None:
-            #print('b4', pulses.shape)    
             pulses, mask = self.preparePulsesForWriting(pulses, points)
             if mask is not None:
-                #print('removed', mask.size - mask.sum())
                 # strip out the ones outside the current extent
                 if points is not None:
                     points = points[...,mask]
