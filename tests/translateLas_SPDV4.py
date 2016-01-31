@@ -25,12 +25,16 @@ from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from rios import cuiprogress
 
+
 class CmdArgs(object):
     def __init__(self):
         p = optparse.OptionParser()
         p.add_option("--spatial", dest="spatial", 
             help="process the data spatially. Specify 'yes' or 'no'. " +
             "Default is spatial if a spatial index exists.")
+        p.add_option("--buildpulses", dest="buildpulses", default=False, action="store_true",
+            help="build pulse data structure. " +
+            "Default is False.")
         p.add_option("--binsize", "-b", dest="binSize",
             help="bin size to use when processing spatially")
         p.add_option("--las", dest="las",
@@ -93,6 +97,7 @@ def setOutputScaling(rangeDict, output):
     Set the scaling on the output SPD V4 file using info gathered
     by rangeFunc.
     """
+    #numpy.seterr(all='raise')
     for key in rangeDict.keys():
         # process all the _min ones and assume there is a matching
         # _max
@@ -103,7 +108,11 @@ def setOutputScaling(rangeDict, output):
                 maxVal = rangeDict['pulse_' + field + '_max']
 
                 dtype = output.getNativeDataType(field, lidarprocessor.ARRAY_TYPE_PULSES)
-                gain = numpy.iinfo(dtype).max / (maxVal - minVal)
+                try:
+                    gain = numpy.iinfo(dtype).max / (maxVal - minVal)
+                except FloatingPointError:
+                    #print(numpy.iinfo(dtype).max, maxVal, minVal)
+                    gain = 1.0                       
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, minVal)
             elif key.startswith('point_'):
                 field = key[6:-4]
@@ -111,7 +120,10 @@ def setOutputScaling(rangeDict, output):
                 maxVal = rangeDict['point_' + field + '_max']
                                                                 
                 dtype = output.getNativeDataType(field, lidarprocessor.ARRAY_TYPE_POINTS)
-                gain = numpy.iinfo(dtype).max / (maxVal - minVal)
+                try:
+                    gain = numpy.iinfo(dtype).max / (maxVal - minVal)
+                except FloatingPointError:
+                    gain = 1.0
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, minVal)
             elif key.startswith('winfo_'):
                 field = key[6:-4]
@@ -119,7 +131,10 @@ def setOutputScaling(rangeDict, output):
                 maxVal = rangeDict['winfo_' + field + '_max']
                                                                 
                 dtype = output.getNativeDataType(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS)
-                gain = numpy.iinfo(dtype).max / (maxVal - minVal)
+                try:
+                    gain = numpy.iinfo(dtype).max / (maxVal - minVal)
+                except FloatingPointError:
+                    gain = 1.0
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, minVal)
 
 def transFunc(data, rangeDict):
@@ -149,7 +164,7 @@ def transFunc(data, rangeDict):
     if revc is not None and revc.size > 0:
         data.output1.setReceived(revc)
 
-def doTranslation(spatial, binSize, las, spd):
+def doTranslation(spatial, buildpulses, binSize, las, spd):
     """
     Does the translation between .las and SPD v4 format files.
     """
@@ -168,6 +183,8 @@ def doTranslation(spatial, binSize, las, spd):
     dataFiles = lidarprocessor.DataFiles()
         
     dataFiles.input1 = lidarprocessor.LidarFile(las, lidarprocessor.READ)
+    if not buildpulses:
+        dataFiles.input1.setLiDARDriverOption('BUILD_PULSES', False)
     if spatial:
         dataFiles.input1.setLiDARDriverOption('BIN_SIZE', float(binSize))
 
@@ -191,7 +208,7 @@ def doTranslation(spatial, binSize, las, spd):
     pickle.dump(rangeDict, fh)
     fh.close()
 
-    print('Coverting to SPD V4...')
+    print('Converting to SPD V4...')
     dataFiles.output1 = lidarprocessor.LidarFile(spd, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
 
@@ -210,5 +227,5 @@ if __name__ == '__main__':
     
         spatial = (spatialStr == 'yes')
     
-    doTranslation(spatial, cmdargs.binSize, cmdargs.las, cmdargs.spd)
+    doTranslation(spatial, cmdargs.buildpulses, cmdargs.binSize, cmdargs.las, cmdargs.spd)
     
