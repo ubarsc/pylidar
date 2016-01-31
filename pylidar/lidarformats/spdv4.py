@@ -291,6 +291,8 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         SPDV4SpatialIndex.__init__(self, fileHandle, mode)
         self.si_cnt = None
         self.si_idx = None
+        self.si_xPulseColName = None
+        self.si_yPulseColName = None
         # for caching
         self.lastExtent = None
         self.lastPulseSpace = None
@@ -310,6 +312,20 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
             else:
                 self.si_cnt = group['PLS_PER_BIN'][...]
                 self.si_idx = group['BIN_OFFSETS'][...]
+                    
+                # define the pulse data columns to use for the spatial index
+                if self.fileHandle.attrs['INDEX_TYPE'] == SPDV4_INDEX_CARTESIAN:
+                    self.si_xPulseColName = 'X_IDX'
+                    self.si_yPulseColName = 'Y_IDX'
+                elif self.fileHandle.attrs['INDEX_TYPE'] == SPDV4_INDEX_SPHERICAL:
+                    self.si_xPulseColName = 'AZIMUTH'
+                    self.si_yPulseColName = 'ZENITH'
+                elif self.fileHandle.attrs['INDEX_TYPE'] == SPDV4_INDEX_SCAN:
+                    self.si_xPulseColName = 'SCANLINE_IDX'
+                    self.si_yPulseColName = 'SCANLINE'
+                else:
+                    msg = 'Unsupported index type %d' % self.fileHandle.attrs['INDEX_TYPE']
+                    raise generic.LiDARInvalidSetting(msg)                    
                 
     def close(self):
         if self.mode == generic.CREATE and self.si_cnt is not None:
@@ -447,7 +463,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         ncols = int(numpy.ceil((xMax - xMin) / self.pixelGrid.xRes))
                 
         mask, sortedBins, idx_subset, cnt_subset = gridindexutils.CreateSpatialIndex(
-                pulses['Y_IDX'], pulses['X_IDX'], self.pixelGrid.xRes, yMax, xMin,
+                pulses[self.si_handler.si_yPulseColName], pulses[self.si_handler.si_xPulseColName], self.pixelGrid.xRes, yMax, xMin,
                 nrows, ncols, SPDV4_SIMPLEGRID_INDEX_DTYPE, 
                 SPDV4_SIMPLEGRID_COUNT_DTYPE)
                 
@@ -875,8 +891,8 @@ spatial index will be recomputed on the fly"""
                         self.extent.binSize))
             nrows += (self.controls.overlap * 2)
             ncols += (self.controls.overlap * 2)
-            x_idx = self.readFieldAndUnScale(pulsesHandle, 'X_IDX', pulse_space)
-            y_idx = self.readFieldAndUnScale(pulsesHandle, 'Y_IDX', pulse_space)
+            x_idx = self.readFieldAndUnScale(pulsesHandle, self.si_handler.si_xPulseColName, pulse_space)
+            y_idx = self.readFieldAndUnScale(pulsesHandle, self.si_handler.si_yPulseColName, pulse_space)
             mask, sortedbins, new_idx, new_cnt = gridindexutils.CreateSpatialIndex(
                     y_idx, x_idx, 
                     self.extent.binSize, 
@@ -966,8 +982,8 @@ spatial index will be recomputed on the fly"""
             # in theory spatial index already exists but may be more work 
             # it is worth to use
             # TODO: check these fields aren't actually already read in
-            x_idx = self.readPulsesForExtent('X_IDX')
-            y_idx = self.readPulsesForExtent('Y_IDX')
+            x_idx = self.readPulsesForExtent(self.si_handler.si_xPulseColName)
+            y_idx = self.readPulsesForExtent(self.si_handler.si_yPulseColName)
             nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
             x_idx = numpy.repeat(x_idx, nreturns)
             y_idx = numpy.repeat(y_idx, nreturns)
@@ -1209,8 +1225,8 @@ spatial index will be recomputed on the fly"""
             if self.mode == generic.UPDATE:
                 # while we are at it, grab the X_IDX and Y_IDX fields since
                 # they are essential
-                x_idx = self.readPulsesForExtent('X_IDX')
-                y_idx = self.readPulsesForExtent('Y_IDX')
+                x_idx = self.readPulsesForExtent(self.si_handler.si_xPulseColName)
+                y_idx = self.readPulsesForExtent(self.si_handler.si_yPulseColName)
                 # if we doing spatial processing we need to strip out areas in the overlap
                 # self.extent is the size of the block without the overlap
                 # so just strip out everything outside of it
