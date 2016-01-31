@@ -1301,35 +1301,20 @@ spatial index will be recomputed on the fly"""
             raise generic.LiDARInvalidData(msg)
 
         if self.mode == generic.UPDATE:
-            # strip out the points connected with pulses that were 
-            # originally outside
-            # the window and within the overlap.
-            #if self.controls.spatialProcessing and origPointsDims == 3:
-            #    x_idx = self.readPulsesForExtent('X_IDX')
-            #    y_idx = self.readPulsesForExtent('Y_IDX')
-            #    nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
-
-            #    x_idx = numpy.repeat(x_idx, nreturns)
-            #    y_idx = numpy.repeat(y_idx, nreturns)
-                
-            #    mask = ( (x_idx >= self.extent.xMin) & 
-            #        (x_idx <= self.extent.xMax) &
-            #        (y_idx >= self.extent.yMin) &
-            #        (y_idx <= self.extent.yMax))
-            #    if origPointsDims == 3:
-            #        sortedPointsundo = numpy.empty_like(points)
-            #        gridindexutils.unsortArray(points, 
-            #                self.lastPoints3d_InRegionSort, sortedPointsundo)
-            #        points = sortedPointsundo
-            #            
-            #        mask = mask[self.lastPoints3d_InRegionMask]
-            #        self.lastPointsSpace.updateBoolArray(self.lastPoints3d_InRegionMask)
-
-            #    points = points[mask]
-            #    self.lastPointsSpace.updateBoolArray(mask)
             if self.controls.spatialProcessing:
                 nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
                 mask = numpy.repeat(mask, nreturns)
+                if origPointsDims == 3:
+                    # was pointsbybins, now 1d.
+                    sortedPointsundo = numpy.empty_like(points)
+                    gridindexutils.unsortArray(points, 
+                            self.lastPoints3d_InRegionSort, sortedPointsundo)
+                    points = sortedPointsundo
+                    
+                    mask = mask[self.lastPoints3d_InRegionMask]
+                    # we didn't do this in writeData, but we can do it now
+                    points = points[mask]
+                    self.lastPointsSpace.updateBoolArray(self.lastPoints3d_InRegionMask)                        
                 
                 self.lastPointsSpace.updateBoolArray(mask)
 
@@ -1741,7 +1726,23 @@ spatial index will be recomputed on the fly"""
         if mask is not None:
             # strip out the ones outside the current extent
             if points is not None:
-                points = points[...,mask]
+                # slight problem with this approach is that we have to make
+                # points 2d first (as returned by pointsbypulse etc)
+                if points.ndim == 1:
+                    # readPoints
+                    points = points[self.lastPoints_Idx]
+                    points = numpy.ma.array(points, 
+                                mask=self.lastPoints_IdxMask)
+                    # mask out outside block
+                    points = points[...,mask]
+                elif points.ndim == 3:
+                    # readPointsByBins
+                    # handled by preparePointsForWriting
+                    # as the points need to be re-ordered first
+                    pass
+                else:
+                    # ndim == 2
+                    points = points[...,mask]
             if waveformInfo is not None:
                 waveformInfo = waveformInfo[...,mask]
             if received is not None:
