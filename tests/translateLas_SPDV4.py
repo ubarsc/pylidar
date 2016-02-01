@@ -23,6 +23,7 @@ import optparse
 import numpy
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
+from pylidar.lidarformats import spdv4
 from rios import cuiprogress
 
 
@@ -59,38 +60,40 @@ def rangeFunc(data, rangeDict):
     waveformInfo = data.input1.getWaveformInfo()
 
     if pulses.size > 0:    
-        for field in ('X_IDX', 'Y_IDX', 'X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 
-                'AZIMUTH', 'ZENITH'):
+        for field in spdv4.PULSE_SCALED_FIELDS:
             minKey = 'pulse_' + field + '_min'
             maxKey = 'pulse_' + field + '_max'
-            minVal = pulses[field].min()
-            maxVal = pulses[field].max()
-            if minKey not in rangeDict or minVal < rangeDict[minKey]:
-                rangeDict[minKey] = minVal
-            if maxKey not in rangeDict or maxVal > rangeDict[maxKey]:
-                rangeDict[maxKey] = maxVal
+            if field in pulses.dtype.names:
+                minVal = pulses[field].min()
+                maxVal = pulses[field].max()
+                if minKey not in rangeDict or minVal < rangeDict[minKey]:
+                    rangeDict[minKey] = minVal
+                if maxKey not in rangeDict or maxVal > rangeDict[maxKey]:
+                    rangeDict[maxKey] = maxVal
         
     if points.size > 0:    
-        for field in ('X', 'Y', 'Z', 'INTENSITY'):
+        for field in spdv4.POINT_SCALED_FIELDS:
             minKey = 'point_' + field + '_min'
             maxKey = 'point_' + field + '_max'
-            minVal = points[field].min()
-            maxVal = points[field].max()
-            if minKey not in rangeDict or minVal < rangeDict[minKey]:
-                rangeDict[minKey] = minVal
-            if maxKey not in rangeDict or maxVal > rangeDict[maxKey]:
-                rangeDict[maxKey] = maxVal
+            if field in points.dtype.names:
+                minVal = points[field].min()
+                maxVal = points[field].max()
+                if minKey not in rangeDict or minVal < rangeDict[minKey]:
+                    rangeDict[minKey] = minVal
+                if maxKey not in rangeDict or maxVal > rangeDict[maxKey]:
+                    rangeDict[maxKey] = maxVal
             
     if waveformInfo is not None and waveformInfo.size > 0:
-        for field in ('RANGE_TO_WAVEFORM_START',):
+        for field in spdv4.WAVEFORM_SCALED_FIELDS:
             minKey = 'winfo_' + field + '_min'
             maxKey = 'winfo_' + field + '_max'
-            minVal = waveformInfo[field].min()
-            maxVal = waveformInfo[field].max()
-            if minKey not in rangeDict or minVal < rangeDict[minKey]:
-                rangeDict[minKey] = minVal
-            if maxKey not in rangeDict or maxVal > rangeDict[maxKey]:
-                rangeDict[maxKey] = maxVal
+            if field in waveformInfo.dtype.names:
+                minVal = waveformInfo[field].min()
+                maxVal = waveformInfo[field].max()
+                if minKey not in rangeDict or minVal < rangeDict[minKey]:
+                    rangeDict[minKey] = minVal
+                if maxKey not in rangeDict or maxVal > rangeDict[maxKey]:
+                    rangeDict[maxKey] = maxVal
 
 def setOutputScaling(rangeDict, output):
     """

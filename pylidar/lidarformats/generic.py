@@ -332,7 +332,16 @@ class LiDARFile(basedriver.Driver):
         found for the column.
         """
         return NotImplementedError()
-    
+
+    def getScalingColumns(self, arrayType):
+        """
+        Return a list of columns names that will need scaling to be set 
+        when creating a new file.
+
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        """
+        return []
+
     def writeData(self, pulses=None, points=None, transmitted=None, 
                 received=None, waveformInfo=None):
         """

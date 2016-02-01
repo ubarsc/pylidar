@@ -43,66 +43,40 @@ class CmdArgs(object):
             p.print_help()
             sys.exit()
 
+def getInfoFromHeader(colName, header):
+    """
+    Guesses at the range and offset of data given
+    column name and header
+    """
+    if colName.startswith('X_') or colName == 'X':
+        return (header['X_MAX'] - header['X_MIN']), header['X_MIN']
+    elif colName.startswith('Y_') or colName == 'Y':
+        return (header['Y_MAX'] - header['Y_MIN']), header['Y_MIN']
+    elif colName.startswith('Z_') or colName.startswith('H_') or colName == 'Z' or colName == 'HEIGHT':
+        return (header['Z_MAX'] - header['Z_MIN']), header['Z_MIN']
+    elif colName == 'ZENITH':
+        return (header['ZENITH_MAX'] - header['ZENITH_MIN']), header['ZENITH_MIN']
+    elif colName == 'AZIMUTH':
+        return (header['AZIMUTH_MAX'] - header['AZIMUTH_MIN']), header['AZIMUTH_MIN']
+    elif colName.startswith('RANGE_'):
+        return (header['RANGE_MAX'] - header['RANGE_MIN']), header['RANGE_MIN']
+    else:
+        return 100, 0
+
 def setOutputScaling(header, output):
     xOffset = header['X_MIN']
     yOffset = header['Y_MAX']
     zOffset = header['Z_MIN']
     rangeOffset = header['RANGE_MIN']
-    
-    dtype = output.getNativeDataType('X_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES)
-    xGain = numpy.iinfo(dtype).max / (header['X_MAX'] - header['X_MIN'])
-    output.setScaling('X_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, xGain, xOffset)
-    
-    dtype = output.getNativeDataType('Y_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES)
-    yGain = numpy.iinfo(dtype).max / (header['Y_MAX'] - header['Y_MIN'])
-    output.setScaling('Y_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, yGain, yOffset)
-    
-    dtype = output.getNativeDataType('Z_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES)
-    zGain = numpy.iinfo(dtype).max / (header['Z_MAX'] - header['Z_MIN'])
-    output.setScaling('Z_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, zGain, zOffset)
-    
-    dtype = output.getNativeDataType('H_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES)
-    zGain = numpy.iinfo(dtype).max / (header['Z_MAX'] - header['Z_MIN'])
-    output.setScaling('H_ORIGIN', lidarprocessor.ARRAY_TYPE_PULSES, zGain, zOffset)
-    
-    dtype = output.getNativeDataType('X_IDX', lidarprocessor.ARRAY_TYPE_PULSES)
-    xGain = numpy.iinfo(dtype).max / (header['X_MAX'] - header['X_MIN'])
-    output.setScaling('X_IDX', lidarprocessor.ARRAY_TYPE_PULSES, xGain, xOffset)
-    
-    dtype = output.getNativeDataType('Y_IDX', lidarprocessor.ARRAY_TYPE_PULSES)
-    yGain = numpy.iinfo(dtype).max / (header['Y_MAX'] - header['Y_MIN'])
-    output.setScaling('Y_IDX', lidarprocessor.ARRAY_TYPE_PULSES, yGain, yOffset)
-    
-    azOffset = header['AZIMUTH_MIN']
-    dtype = output.getNativeDataType('AZIMUTH', lidarprocessor.ARRAY_TYPE_PULSES)
-    azGain = numpy.iinfo(dtype).max / (header['AZIMUTH_MAX'] - header['AZIMUTH_MIN'])
-    output.setScaling('AZIMUTH', lidarprocessor.ARRAY_TYPE_PULSES, azGain, azOffset)
-    
-    zenOffset = header['ZENITH_MIN']
-    dtype = output.getNativeDataType('ZENITH', lidarprocessor.ARRAY_TYPE_PULSES)
-    zenGain = numpy.iinfo(dtype).max / (header['ZENITH_MAX'] - header['ZENITH_MIN'])
-    output.setScaling('ZENITH', lidarprocessor.ARRAY_TYPE_PULSES, zenGain, zenOffset)
 
-    dtype = output.getNativeDataType('X', lidarprocessor.ARRAY_TYPE_POINTS)
-    xGain = numpy.iinfo(dtype).max / (header['X_MAX'] - header['X_MIN'])
-    output.setScaling('X', lidarprocessor.ARRAY_TYPE_POINTS, xGain, xOffset)
-    
-    dtype = output.getNativeDataType('Y', lidarprocessor.ARRAY_TYPE_POINTS)
-    yGain = numpy.iinfo(dtype).max / (header['Y_MAX'] - header['Y_MIN'])
-    output.setScaling('Y', lidarprocessor.ARRAY_TYPE_POINTS, yGain, yOffset)
-    
-    dtype = output.getNativeDataType('Z', lidarprocessor.ARRAY_TYPE_POINTS)
-    zGain = numpy.iinfo(dtype).max / (header['Z_MAX'] - header['Z_MIN'])
-    output.setScaling('Z', lidarprocessor.ARRAY_TYPE_POINTS, zGain, zOffset)
-    
-    dtype = output.getNativeDataType('HEIGHT', lidarprocessor.ARRAY_TYPE_POINTS)
-    zGain = numpy.iinfo(dtype).max / (header['Z_MAX'] - header['Z_MIN'])
-    output.setScaling('HEIGHT', lidarprocessor.ARRAY_TYPE_POINTS, zGain, zOffset)
-    
-    dtype = output.getNativeDataType('RANGE_TO_WAVEFORM_START', lidarprocessor.ARRAY_TYPE_WAVEFORMS)
-    rangeGain = numpy.iinfo(dtype).max / (header['RANGE_MAX'] - header['RANGE_MIN'])
-    output.setScaling('RANGE_TO_WAVEFORM_START', lidarprocessor.ARRAY_TYPE_WAVEFORMS, 
-            rangeGain, rangeOffset)
+    for arrayType in (lidarprocessor.ARRAY_TYPE_PULSES, 
+            lidarprocessor.ARRAY_TYPE_POINTS, lidarprocessor.ARRAY_TYPE_WAVEFORMS):
+        cols = output.getScalingColumns(arrayType)
+        for col in cols:
+            dtype = output.getNativeDataType(col, arrayType)
+            range, offset = getInfoFromHeader(col, header)
+            gain = numpy.iinfo(dtype).max / range
+            output.setScaling(col, arrayType, gain, offset)
 
 def transFunc(data):
     pulses = data.input1.getPulses()

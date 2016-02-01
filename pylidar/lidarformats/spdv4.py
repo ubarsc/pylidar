@@ -291,8 +291,8 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         SPDV4SpatialIndex.__init__(self, fileHandle, mode)
         self.si_cnt = None
         self.si_idx = None
-        self.si_xPulseColName = None
-        self.si_yPulseColName = None
+        self.si_xPulseColName = 'X_IDX'
+        self.si_yPulseColName = 'Y_IDX'
         # for caching
         self.lastExtent = None
         self.lastPulseSpace = None
@@ -461,9 +461,9 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         # size of spatial index we need to write
         nrows = int(numpy.ceil((yMax - yMin) / self.pixelGrid.xRes))
         ncols = int(numpy.ceil((xMax - xMin) / self.pixelGrid.xRes))
-                
+
         mask, sortedBins, idx_subset, cnt_subset = gridindexutils.CreateSpatialIndex(
-                pulses[self.si_handler.si_yPulseColName], pulses[self.si_handler.si_xPulseColName], self.pixelGrid.xRes, yMax, xMin,
+                pulses[self.si_yPulseColName], pulses[self.si_xPulseColName], self.pixelGrid.xRes, yMax, xMin,
                 nrows, ncols, SPDV4_SIMPLEGRID_INDEX_DTYPE, 
                 SPDV4_SIMPLEGRID_COUNT_DTYPE)
                 
@@ -2156,6 +2156,40 @@ spatial index will be recomputed on the fly"""
             msg = 'Cannot find column %s' % colName
             raise generic.LiDARArrayColumnError(msg)
             
+    def getScalingColumns(self, arrayType):
+        """
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        """
+        cols = []
+        if arrayType == generic.ARRAY_TYPE_PULSES:
+            # first add the compulsory ones
+            for col in PULSE_SCALED_FIELDS:
+                cols.append(col)
+            # then other ones they may have set that aren't compulsory
+            for col in self.pulseScalingValues.keys():
+                if col not in cols:
+                    cols.append(col)
+        elif arrayType == generic.ARRAY_TYPE_POINTS:
+            # first add the compulsory ones
+            for col in POINT_SCALED_FIELDS:
+                cols.append(col)
+            # then other ones they may have set that aren't compulsory
+            for col in self.pointScalingValues.keys():
+                if col not in cols:
+                    cols.append(col)
+
+        elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
+            # first add the compulsory ones
+            for col in WAVEFORM_SCALED_FIELDS:
+                cols.append(col)
+            # then other ones they may have set that aren't compulsory
+            for col in self.waveFormScalingValues.keys():
+                if col not in cols:
+                    cols.append(col)
+        else:
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+
+        return cols
 
 class SPDV4FileInfo(generic.LiDARFileInfo):
     """

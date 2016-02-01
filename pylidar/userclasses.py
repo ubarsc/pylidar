@@ -562,6 +562,15 @@ class LidarData(object):
         generic.LiDARArrayColumnError is raised if information cannot be found.
         """
         return self.driver.getNativeDataType(colName, arrayType)
+
+    def getScalingColumns(self, arrayType):
+        """
+        Return a list of column names that require scaling to be 
+        set on write. 
+
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        """
+        return self.driver.getScalingColumns(arrayType)
         
     def setWaveformInfo(self, info):
         """

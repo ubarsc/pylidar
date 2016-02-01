@@ -756,7 +756,14 @@ class LasFile(generic.LiDARFile):
             raise generic.LiDARArrayColumnError(str(e))
             
         return dtype
-        
+
+    def getScalingColumns(self, arrayType):
+        """
+        Return the list of columns that need scaling. Only valid on write
+        """
+        if arrayType != generic.ARRAY_TYPE_POINTS:
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+        return self.lasFile.getScalingColumns()
 
 class LasFileInfo(generic.LiDARFileInfo):
     """

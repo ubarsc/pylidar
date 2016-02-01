@@ -1876,7 +1876,6 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             if( nonAttrPointSet.find(itr->first) == nonAttrPointSet.end() )
             {
                 // not in our 'compulsory' fields - must be an attribute
-                SFieldInfo info;
                 char cKind = itr->second.cKind;
                 int nSize = itr->second.nSize;
 
@@ -2375,6 +2374,51 @@ static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject
     Py_RETURN_NONE;
 }
 
+static PyObject *PyLasFileWrite_getScalingColumns(PyLasFileWrite *self, PyObject *args)
+{
+    PyObject *pString;
+    PyObject *pColumns = PyList_New(0);
+#if PY_MAJOR_VERSION >= 3
+    pString = PyUnicode_FromString("X");
+#else
+    pString = PyString_FromString("X");
+#endif
+    PyList_Append(pColumns, pString);    
+    Py_DECREF(pString);
+
+#if PY_MAJOR_VERSION >= 3
+    pString = PyUnicode_FromString("Y");
+#else
+    pString = PyString_FromString("Y");
+#endif
+    PyList_Append(pColumns, pString);    
+    Py_DECREF(pString);
+
+#if PY_MAJOR_VERSION >= 3
+    pString = PyUnicode_FromString("Z");
+#else
+    pString = PyString_FromString("Z");
+#endif
+    PyList_Append(pColumns, pString);    
+    Py_DECREF(pString);
+
+    if( self->pScalingMap != NULL )
+    {
+        for(std::map<std::string, std::pair<double, double> >::iterator itr = self->pScalingMap->begin();
+                itr != self->pScalingMap->end(); itr++ )
+        {
+#if PY_MAJOR_VERSION >= 3
+            pString = PyUnicode_FromString(itr->first.c_str());
+#else
+            pString = PyString_FromString(itr->first.c_str());
+#endif
+            PyList_Append(pColumns, pString);    
+            Py_DECREF(pString);
+        }
+    }
+    return pColumns;
+}
+
 /* Table of methods */
 static PyMethodDef PyLasFileWrite_methods[] = {
     {"writeData", (PyCFunction)PyLasFileWrite_writeData, METH_VARARGS, NULL}, 
@@ -2382,6 +2426,7 @@ static PyMethodDef PyLasFileWrite_methods[] = {
     {"setScaling", (PyCFunction)PyLasFileWrite_setScaling, METH_VARARGS, NULL},
     {"getNativeDataType", (PyCFunction)PyLasFileWrite_getNativeDataType, METH_VARARGS, NULL},
     {"setNativeDataType", (PyCFunction)PyLasFileWrite_setNativeDataType, METH_VARARGS, NULL},
+    {"getScalingColumns", (PyCFunction)PyLasFileWrite_getScalingColumns, METH_NOARGS, NULL},
     {NULL}  /* Sentinel */
 };
 

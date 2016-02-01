@@ -204,33 +204,19 @@ def getDefaultWKT():
 def copyScaling(input, output):
     """
     Copy the known scaling required fields accross.
-    There must be a better way to do this.
     
     Internal method. Called from classifyFunc.
     
     """
-    for field in ('X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN', 'X_IDX',
-                'Y_IDX', 'AZIMUTH', 'ZENITH'):
-        try:
-            gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_PULSES)
-            output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
-        except generic.LiDARArrayColumnError:
-            pass
+    for arrayType in (lidarprocessor.ARRAY_TYPE_PULSES, 
+            lidarprocessor.ARRAY_TYPE_POINTS, lidarprocessor.ARRAY_TYPE_WAVEFORMS):
+        for field in output.getScalingColumns(arrayType):
+            try:
+                gain, offset = input.getScaling(field, arrayType)
+                output.setScaling(field, arrayType, gain, offset)
+            except generic.LiDARArrayColumnError:
+                pass
                 
-    for field in ('X', 'Y', 'Z', 'HEIGHT'):
-        try:
-            gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_POINTS)
-            output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
-        except generic.LiDARArrayColumnError:
-            pass
-                
-    for field in ('RANGE_TO_WAVEFORM_START',):
-        try:
-            gain, offset = input.getScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS)
-            output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, offset)
-        except generic.LiDARArrayColumnError:
-            pass
-    
 def setScalingForCoordField(driver, field, range, offset):
     """
     Internal method to set the output scaling for range of data.
