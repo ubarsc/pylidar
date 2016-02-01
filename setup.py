@@ -147,7 +147,8 @@ setup(name='pylidar',
       ext_modules=externalModules,
       description='Tools for simplifying LiDAR data I/O and tools for processing.',
       packages=['pylidar', 'pylidar/lidarformats', 'pylidar/toolbox', 
-                'pylidar/toolbox/grdfilters', 'pylidar/toolbox/indexing'],
+                'pylidar/toolbox/grdfilters', 'pylidar/toolbox/indexing',
+                'pylidar/testing'],
       license='LICENSE.txt', 
       url='http://pylidar.org/')
       

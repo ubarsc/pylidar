@@ -67,6 +67,7 @@ Processing
    userclasses
    lidarprocessor
    toolbox/toolbox
+   toolbox/indexing
 
 Drivers
 ---------
@@ -84,6 +85,12 @@ Drivers
    lidarformats/h5space
    lidarformats/gridindexutils
 
+Testing
+-------
+.. toctree::
+   :maxdepth: 2
+
+   testing
 
 Indices and tables
 ==================
