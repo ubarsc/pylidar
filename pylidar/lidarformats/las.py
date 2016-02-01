@@ -432,7 +432,7 @@ class LasFile(generic.LiDARFile):
         self.readData()
         return self.subsetColumns(self.lastPulses, colNames)
         
-    def readPulsesForExtentByBins(extent=None, colNames=None):
+    def readPulsesForExtentByBins(self, extent=None, colNames=None):
         """
         Read all the pulses within the given extent as a 3d structured 
         masked array to match the block/bins being used.
@@ -482,7 +482,7 @@ class LasFile(generic.LiDARFile):
         pulsesByBins = numpy.ma.array(pulsesByBins, mask=pulse_idx_mask)              
         return pulsesByBins
         
-    def readPointsForExtentByBins(extent=None, colNames=None, indexByPulse=False, 
+    def readPointsForExtentByBins(self, extent=None, colNames=None, indexByPulse=False, 
                 returnPulseIndex=False):
         """
         Read all the points within the given extent as a 3d structured 
