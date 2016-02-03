@@ -53,6 +53,8 @@ Example
 
 See :doc:`processorexamples` for more information.
 
+.. image:: pylidar.jpg
+
 Downloads
 ---------
 
