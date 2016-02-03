@@ -33,6 +33,7 @@ from .lidarformats import generic
 # we can use the __subclasses__() python feature
 from .lidarformats import spdv3
 from .lidarformats import spdv4
+from .lidarformats import ascii_ts
 try:
     from .lidarformats import riegl
 except ImportError:
