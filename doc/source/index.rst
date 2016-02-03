@@ -53,6 +53,8 @@ Example
 
 See :doc:`processorexamples` for more information.
 
+.. image:: pylidar.jpg
+
 Downloads
 ---------
 
@@ -82,6 +84,7 @@ Drivers
    lidarformats/spdv4
    lidarformats/las
    lidarformats/riegl
+   lidarformats/ascii_ts
    lidarformats/h5space
    lidarformats/gridindexutils
 
