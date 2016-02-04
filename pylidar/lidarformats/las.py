@@ -507,7 +507,7 @@ class LasFile(generic.LiDARFile):
             extent = self.extent
             
         self.readData(extent)
-        
+
         # TODO: cache somehow with colNames
         nrows = int(numpy.ceil((extent.yMax - extent.yMin) / 
             extent.binSize))
@@ -537,7 +537,7 @@ class LasFile(generic.LiDARFile):
         points = self.lastPoints[mask]
         points = points[sortedbins]
         
-        pointsByBins = point[point_idx]
+        pointsByBins = points[point_idx]
         if colNames is None:
             # workaround - seems a structured array returned from
             # C doesn't work with masked arrays. The dtype looks different.
