@@ -26,7 +26,20 @@ from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
 from rios import cuiprogress
 
-MAX_UINT16 = 2**16
+
+PULSE_DEFAULT_GAINS = {'AZIMUTH':100.0, 'ZENITH':100.0, 'X_IDX':100.0, 'Y_IDX':100.0,
+'X_ORIGIN':100.0, 'Y_ORIGIN':100.0, 'Z_ORIGIN':100.0, 'H_ORIGIN':100.0,
+'AMPLITUDE_PULSE':100.0, 'WIDTH_PULSE':100.0}
+PULSE_DEFAULT_OFFSETS = {'AZIMUTH':0.0, 'ZENITH':0.0, 'X_IDX':0.0, 'Y_IDX':0.0, 
+'X_ORIGIN':0.0, 'Y_ORIGIN':0.0, 'Z_ORIGIN':0.0, 'H_ORIGIN':0.0,
+'AMPLITUDE_PULSE':0.0, 'WIDTH_PULSE':0.0}
+
+POINT_DEFAULT_GAINS = {'X':100.0, 'Y':100.0, 'Z':100.0, 'HEIGHT':100.0, 'INTENSITY':1.0, 'RANGE':100.0, 'AMPLITUDE_RETURN':1.0, 'WIDTH_RETURN':1.0}
+POINT_DEFAULT_OFFSETS = {'X':0.0, 'Y':0.0, 'Z':0.0, 'HEIGHT':0.0, 'INTENSITY':0.0, 'RANGE':0.0, 'AMPLITUDE_RETURN':0.0, 'WIDTH_RETURN':0.0}
+
+WAVEFORM_DEFAULT_GAINS = {'RANGE_TO_WAVEFORM_START':100.0}
+WAVEFORM_DEFAULT_OFFSETS = {'RANGE_TO_WAVEFORM_START':0.0}
+
 
 
 class CmdArgs(object):
@@ -63,7 +76,7 @@ def rangeFunc(data, rangeDict):
     waveformInfo = data.input1.getWaveformInfo()
 
     if pulses.size > 0:
-        if 'NUMBER_OF_PULSES' not in rangeDict['pulses']:
+        if 'NUMBER_OF_PULSES' not in rangeDict['header']:
             rangeDict['header']['NUMBER_OF_PULSES'] = pulses.size
         else:
             rangeDict['header']['NUMBER_OF_PULSES'] += pulses.size
@@ -79,7 +92,7 @@ def rangeFunc(data, rangeDict):
                     rangeDict['pulses'][maxKey] = maxVal
     
     if points.size > 0:
-        if 'NUMBER_OF_POINTS' not in rangeDict['points']:
+        if 'NUMBER_OF_POINTS' not in rangeDict['header']:
             rangeDict['header']['NUMBER_OF_POINTS'] = points.size
         else:
             rangeDict['header']['NUMBER_OF_POINTS'] += points.size
@@ -97,7 +110,7 @@ def rangeFunc(data, rangeDict):
                     rangeDict['header'][maxKey] = maxVal
     
     if waveformInfo.size > 0:      
-        if 'NUMBER_OF_WAVEFORMS' not in rangeDict['waveforms']:        
+        if 'NUMBER_OF_WAVEFORMS' not in rangeDict['header']:        
             rangeDict['header']['NUMBER_OF_WAVEFORMS'] = waveformInfo.size
         else:
             rangeDict['header']['NUMBER_OF_WAVEFORMS'] += waveformInfo.size        
@@ -113,7 +126,7 @@ def rangeFunc(data, rangeDict):
                     rangeDict['waveforms'][maxKey] = maxVal
     
 
-def setOutputScaling(rangeDict, output):
+def setOutputScaling(rangeDict, output, usedefaults=False):
     """
     Set the scaling on the output SPD V4 file using info gathered
     by rangeFunc.
@@ -121,24 +134,33 @@ def setOutputScaling(rangeDict, output):
     for key in rangeDict['pulses'].keys():
         if key.endswith('_MIN'):
             field = key[0:-4]
-            minVal = rangeDict['pulses'][key]
-            maxVal = rangeDict['pulses'][key.replace('_MIN','_MAX')]
-            gain = MAX_UINT16 / (maxVal - minVal)
-            output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, minVal)
+            if field in PULSE_DEFAULT_GAINS:
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, PULSE_DEFAULT_GAINS[field], PULSE_DEFAULT_OFFSETS[field])
+            else:
+                minVal = rangeDict['pulses'][key]
+                maxVal = rangeDict['pulses'][key.replace('_MIN','_MAX')]            
+                gain = np.iinfo(spdv4.PULSE_FIELDS[field]).max / (maxVal - minVal)
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, minVal)
     for key in rangeDict['points'].keys():
         if key.endswith('_MIN'):
-            field = key[0:-4]
-            minVal = rangeDict['points'][key]
-            maxVal = rangeDict['points'][key.replace('_MIN','_MAX')]
-            gain = MAX_UINT16 / (maxVal - minVal)
-            output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, minVal)
+            field = key[0:-4]            
+            if field in POINT_DEFAULT_GAINS:
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, POINT_DEFAULT_GAINS[field], POINT_DEFAULT_OFFSETS[field])            
+            else:
+                minVal = rangeDict['points'][key]
+                maxVal = rangeDict['points'][key.replace('_MIN','_MAX')]
+                gain = np.iinfo(spdv4.POINT_FIELDS[field]).max / (maxVal - minVal)
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, minVal)
     for key in rangeDict['waveforms'].keys():
         if key.endswith('_MIN'):
             field = key[0:-4]
-            minVal = rangeDict['waveforms'][key]
-            maxVal = rangeDict['waveforms'][key.replace('_MIN','_MAX')]
-            gain = MAX_UINT16 / (maxVal - minVal)
-            output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, minVal)
+            if field in WAVEFORM_DEFAULT_GAINS:
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, WAVEFORM_DEFAULT_GAINS[field], WAVEFORM_DEFAULT_OFFSETS[field])            
+            else:
+                minVal = rangeDict['waveforms'][key]
+                maxVal = rangeDict['waveforms'][key.replace('_MIN','_MAX')]
+                gain = np.iinfo(spdv4.WAVEFORM_FIELDS[field]).max / (maxVal - minVal)
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, minVal)
 
 
 def setHeaderValues(rangeDict, lasInfo, output):
@@ -147,7 +169,6 @@ def setHeaderValues(rangeDict, lasInfo, output):
     by rangeFunc
     """
     h = rangeDict['header']
-    #print(lasInfo)
     output.setHeader(h)
 
 
@@ -160,16 +181,8 @@ def transFunc(data, rangeDict):
     waveformInfo = data.input1.getWaveformInfo()
     revc = data.input1.getReceived()
     
-    #if points is not None:
-    #    data.output1.translateFieldNames(data.input1, points, 
-    #        lidarprocessor.ARRAY_TYPE_POINTS)
-    #if pulses is not None:
-    #    data.output1.translateFieldNames(data.input1, pulses, 
-    #        lidarprocessor.ARRAY_TYPE_PULSES)
-            
     # set scaling and write header
     if data.info.isFirstBlock():
-        print("Setting output scaling and writing header") 
         setOutputScaling(rangeDict, data.output1)
         lasInfo = data.input1.getHeader()
         setHeaderValues(rangeDict, lasInfo, data.output1)
@@ -213,7 +226,7 @@ def doTranslation(spatial, buildpulses, binSize, las, spd):
     
     # now read through the file and get the range of values for fields 
     # that need scaling.
-    print('Determining range of input data...')
+    print('Determining range of input data fields...')
 
     #import pickle    
     rangeDict = {'pulses':{},'points':{},'waveforms':{},'header':{}}
