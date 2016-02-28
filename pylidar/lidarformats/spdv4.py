@@ -65,10 +65,10 @@ HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float32, 'AZIMUTH_MIN' : numpy.float32,
 'SYSTEM_IDENTIFIER' : bytes, 'USER_META_DATA' : bytes,
 'VERSION_SPD' : numpy.uint8, 'VERSION_DATA' : numpy.uint8, 
 'WAVEFORM_BIT_RES' : numpy.uint16, 'WAVELENGTHS' : numpy.float32,
-'X_MAX' : numpy.float32, 'X_MIN' : numpy.float32, 'Y_MAX' : numpy.float32,
-'Y_MIN' : numpy.float32, 'Z_MAX' : numpy.float64, 'Z_MIN' : numpy.float64,
+'X_MAX' : numpy.float64, 'X_MIN' : numpy.float64, 'Y_MAX' : numpy.float64,
+'Y_MIN' : numpy.float64, 'Z_MAX' : numpy.float64, 'Z_MIN' : numpy.float64,
 'HEIGHT_MIN' : numpy.float32, 'HEIGHT_MAX' : numpy.float32, 
-'ZENITH_MAX' : numpy.float32, 'ZENITH_MIN' : numpy.float64,
+'ZENITH_MAX' : numpy.float32, 'ZENITH_MIN' : numpy.float32,
 'RGB_FIELD' : bytes}
 
 HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS', 'VERSION_SPD', 'VERSION_DATA', 'RGB_FIELD')
@@ -86,20 +86,20 @@ PULSE_FIELDS = {'PULSE_ID' : numpy.uint64, 'TIMESTAMP' : numpy.uint64,
 'ZENITH' : numpy.uint16, 'SOURCE_ID' : numpy.uint16, 
 'PULSE_WAVELENGTH_IDX' : numpy.uint8, 'NUMBER_OF_WAVEFORM_SAMPLES' : numpy.uint8,
 'WFM_START_IDX' : numpy.uint64, 'PTS_START_IDX' : numpy.uint64, 
-'SCANLINE' : numpy.uint32, 'SCANLINE_IDX' : numpy.uint16, 'X_IDX' : numpy.uint16,
-'Y_IDX' : numpy.uint16, 'X_ORIGIN' : numpy.uint16, 'Y_ORIGIN' : numpy.uint16,
-'Z_ORIGIN' : numpy.uint16, 'H_ORIGIN' : numpy.uint16, 'PULSE_FLAGS' : numpy.uint8,
-'AMPLITUDE_PULSE' : numpy.float32, 'WIDTH_PULSE' : numpy.float32, 
+'SCANLINE' : numpy.uint32, 'SCANLINE_IDX' : numpy.uint16, 'X_IDX' : numpy.uint32,
+'Y_IDX' : numpy.uint32, 'X_ORIGIN' : numpy.uint32, 'Y_ORIGIN' : numpy.uint32,
+'Z_ORIGIN' : numpy.uint32, 'H_ORIGIN' : numpy.uint32, 'PULSE_FLAGS' : numpy.uint8,
+'AMPLITUDE_PULSE' : numpy.uint16, 'WIDTH_PULSE' : numpy.uint16, 
 'SCAN_ANGLE_RANK' : numpy.int16, 'PRISM_FACET' : numpy.uint8}
 
 # The following fields have defined type
-POINT_FIELDS = {'RANGE' : numpy.uint16, 'RETURN_NUMBER' : numpy.uint8,
-'X' : numpy.uint16, 'Y' : numpy.uint16, 'Z' : numpy.uint16, 
+POINT_FIELDS = {'RANGE' : numpy.uint32, 'RETURN_NUMBER' : numpy.uint8,
+'X' : numpy.uint32, 'Y' : numpy.uint32, 'Z' : numpy.uint32, 
 'HEIGHT' : numpy.uint16, 'CLASSIFICATION' : numpy.uint8, 
 'POINT_FLAGS' : numpy.uint8, 'INTENSITY' : numpy.uint16, 
-'AMPLITUDE_RETURN' : numpy.float32, 'WIDTH_RETURN' : numpy.float32, 
+'AMPLITUDE_RETURN' : numpy.uint16, 'WIDTH_RETURN' : numpy.uint16, 
 'RED' : numpy.uint16, 'GREEN' : numpy.uint16, 'BLUE' : numpy.uint16, 
-'NIR' : numpy.uint16, 'RHO_APP' : numpy.float32, 'DEVIATION' : numpy.float32,
+'NIR' : numpy.uint16, 'RHO_APP' : numpy.uint16, 'DEVIATION' : numpy.uint16,
 'ECHO_TYPE' : numpy.uint16, 'POINT_WAVELENGTH_IDX' : numpy.uint8}
 
 # The following fields have defined type
@@ -112,12 +112,12 @@ WAVEFORM_FIELDS = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : numpy.uint16,
 'TRANS_WAVE_GAIN' : numpy.float32, 'TRANS_WAVE_OFFSET' : numpy.float32}
 
 # need scaling applied 
-PULSE_SCALED_FIELDS = ('AZIMUTH', 'ZENITH', 'X_IDX', 'Y_IDX', 'Y_IDX', 
-'X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN')
-
-POINT_SCALED_FIELDS = ('X', 'Y', 'Z', 'HEIGHT', 'INTENSITY')
-
+PULSE_SCALED_FIELDS = ('AZIMUTH', 'ZENITH', 'X_IDX', 'Y_IDX', 
+'X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN', 
+'AMPLITUDE_PULSE', 'WIDTH_PULSE')
+POINT_SCALED_FIELDS = ('X', 'Y', 'Z', 'HEIGHT', 'INTENSITY', 'RANGE')
 WAVEFORM_SCALED_FIELDS = ('RANGE_TO_WAVEFORM_START',)
+
 
 TRANSMITTED_DTYPE = numpy.uint32
 RECEIVED_DTYPE = numpy.uint32
@@ -1220,7 +1220,7 @@ spatial index will be recomputed on the fly"""
                     msg = ('Essential field %s must exist in pulse data ' +
                              'when writing new file') % essential
                     raise generic.LiDARInvalidData(msg)
-            
+        
         if self.extent is not None and self.controls.spatialProcessing:
             if self.mode == generic.UPDATE:
                 # while we are at it, grab the X_IDX and Y_IDX fields since
@@ -1230,7 +1230,7 @@ spatial index will be recomputed on the fly"""
                 # if we doing spatial processing we need to strip out areas in the overlap
                 # self.extent is the size of the block without the overlap
                 # so just strip out everything outside of it
-                mask = ( (x_idx >= self.extent.xMin) & 
+                mask = ((x_idx >= self.extent.xMin) & 
                         (x_idx <= self.extent.xMax) & 
                         (y_idx >= self.extent.yMin) &
                         (y_idx <= self.extent.yMax))
@@ -1240,7 +1240,7 @@ spatial index will be recomputed on the fly"""
                 # get the spatial index handling code to sort it.
                 pulses, mask = self.si_handler.setPulsesForExtent(
                                         self.extent, pulses, self.lastPulseID)
-            
+          
         return pulses, mask
 
     def preparePointsForWriting(self, points, mask):
@@ -2008,7 +2008,7 @@ spatial index will be recomputed on the fly"""
         Update our cached dictionary
         """
         if self.mode == generic.READ:
-            msg = 'Can only set header values on read or create'
+            msg = 'Can only set header values on update or create'
             raise generic.LiDARInvalidSetting(msg)
         for key in newHeaderDict.keys():
             self.fileHandle.attrs[key] = newHeaderDict[key]
@@ -2024,7 +2024,7 @@ spatial index will be recomputed on the fly"""
         Just update one value in the header
         """
         if self.mode == generic.READ:
-            msg = 'Can only set header values on read or create'
+            msg = 'Can only set header values on update or create'
             raise generic.LiDARInvalidSetting(msg)
         self.fileHandle.attrs[name] = value
     
