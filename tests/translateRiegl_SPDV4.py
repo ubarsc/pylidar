@@ -24,10 +24,23 @@ import numpy
 import json
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
+from pylidar.lidarformats import spdv4
 
 from rios import cuiprogress
 
-MAX_UINT16 = 2**16
+PULSE_DEFAULT_GAINS = {'AZIMUTH':100.0, 'ZENITH':100.0, 'X_IDX':100.0, 'Y_IDX':100.0,
+'X_ORIGIN':100.0, 'Y_ORIGIN':100.0, 'Z_ORIGIN':100.0, 'H_ORIGIN':100.0,
+'AMPLITUDE_PULSE':100.0, 'WIDTH_PULSE':100.0}
+PULSE_DEFAULT_OFFSETS = {'AZIMUTH':0.0, 'ZENITH':0.0, 'X_IDX':0.0, 'Y_IDX':0.0, 
+'X_ORIGIN':0.0, 'Y_ORIGIN':0.0, 'Z_ORIGIN':0.0, 'H_ORIGIN':0.0,
+'AMPLITUDE_PULSE':0.0, 'WIDTH_PULSE':0.0}
+
+POINT_DEFAULT_GAINS = {'X':100.0, 'Y':100.0, 'Z':100.0, 'HEIGHT':100.0, 'INTENSITY':1.0, 'RANGE':100.0, 'AMPLITUDE_RETURN':1.0, 'WIDTH_RETURN':1.0}
+POINT_DEFAULT_OFFSETS = {'X':0.0, 'Y':0.0, 'Z':0.0, 'HEIGHT':0.0, 'INTENSITY':0.0, 'RANGE':0.0, 'AMPLITUDE_RETURN':0.0, 'WIDTH_RETURN':0.0}
+
+WAVEFORM_DEFAULT_GAINS = {'RANGE_TO_WAVEFORM_START':100.0}
+WAVEFORM_DEFAULT_OFFSETS = {'RANGE_TO_WAVEFORM_START':0.0}
+
 
 class CmdArgs(object):
     def __init__(self):
@@ -64,55 +77,58 @@ def rangeFunc(data, rangeDict):
             rangeDict['header']['NUMBER_OF_PULSES'] = pulses.size
         else:
             rangeDict['header']['NUMBER_OF_PULSES'] += pulses.size
-        for field in ('X_IDX', 'Y_IDX', 'X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 
-                'AZIMUTH', 'ZENITH'):
-            minKey = field + '_MIN'
-            maxKey = field + '_MAX'
-            minVal = pulses[field].min()
-            maxVal = pulses[field].max()
-            if minKey not in rangeDict['pulses'] or minVal < rangeDict['pulses'][minKey]:
-                rangeDict['pulses'][minKey] = minVal
-                if field in ('AZIMUTH', 'ZENITH'):
-                    rangeDict['header'][minKey] = minVal
-            if maxKey not in rangeDict['pulses'] or maxVal > rangeDict['pulses'][maxKey]:
-                rangeDict['pulses'][maxKey] = maxVal
-                if field in ('AZIMUTH', 'ZENITH'):
-                    rangeDict['header'][maxKey] = maxVal
+        for field in spdv4.PULSE_SCALED_FIELDS:
+            if field in pulses.dtype.names:
+                minKey = field + '_MIN'
+                maxKey = field + '_MAX'
+                minVal = pulses[field].min()
+                maxVal = pulses[field].max()
+                if minKey not in rangeDict['pulses'] or minVal < rangeDict['pulses'][minKey]:
+                    rangeDict['pulses'][minKey] = minVal
+                    if field in ('AZIMUTH', 'ZENITH'):
+                        rangeDict['header'][minKey] = minVal
+                if maxKey not in rangeDict['pulses'] or maxVal > rangeDict['pulses'][maxKey]:
+                    rangeDict['pulses'][maxKey] = maxVal
+                    if field in ('AZIMUTH', 'ZENITH'):
+                        rangeDict['header'][maxKey] = maxVal
         
     if points.size > 0:    
         if 'NUMBER_OF_POINTS' not in rangeDict['points']:
             rangeDict['header']['NUMBER_OF_POINTS'] = points.size
         else:
             rangeDict['header']['NUMBER_OF_POINTS'] += points.size
-        for field in ('X', 'Y', 'Z', 'RANGE'):
-            minKey = field + '_MIN'
-            maxKey = field + '_MAX'
-            minVal = points[field].min()
-            maxVal = points[field].max()
-            if minKey not in rangeDict['points'] or minVal < rangeDict['points'][minKey]:
-                rangeDict['points'][minKey] = minVal
-                rangeDict['header'][minKey] = minVal
-            if maxKey not in rangeDict['points'] or maxVal > rangeDict['points'][maxKey]:
-                rangeDict['points'][maxKey] = maxVal
-                rangeDict['header'][maxKey] = maxVal
+        for field in spdv4.POINT_SCALED_FIELDS:
+            if field in points.dtype.names:
+                minKey = field + '_MIN'
+                maxKey = field + '_MAX'
+                minVal = points[field].min()
+                maxVal = points[field].max()
+                if minKey not in rangeDict['points'] or minVal < rangeDict['points'][minKey]:
+                    rangeDict['points'][minKey] = minVal
+                    rangeDict['header'][minKey] = minVal
+                if maxKey not in rangeDict['points'] or maxVal > rangeDict['points'][maxKey]:
+                    rangeDict['points'][maxKey] = maxVal
+                    rangeDict['header'][maxKey] = maxVal
             
     if waveformInfo is not None:
         if 'NUMBER_OF_WAVEFORMS' not in rangeDict['waveforms']:        
             rangeDict['header']['NUMBER_OF_WAVEFORMS'] = waveformInfo.size
         else:
             rangeDict['header']['NUMBER_OF_WAVEFORMS'] += waveformInfo.size        
-        for field in ('RANGE_TO_WAVEFORM_START',):
-            minKey = field + '_MIN'
-            maxKey = field + '_MAX'
-            minVal = waveformInfo[field].min()
-            maxVal = waveformInfo[field].max()
-            if minKey not in rangeDict['waveforms'] or minVal < rangeDict['waveforms'][minKey]:
-                rangeDict['waveforms'][minKey] = minVal
-            if maxKey not in rangeDict['waveforms'] or maxVal > rangeDict['waveforms'][maxKey]:
-                rangeDict['waveforms'][maxKey] = maxVal
+        for field in spdv4.WAVEFORM_SCALED_FIELDS:
+            if field in waveformInfo.dtype.names:
+                minKey = field + '_MIN'
+                maxKey = field + '_MAX'
+                minVal = waveformInfo[field].min()
+                maxVal = waveformInfo[field].max()
+                if minKey not in rangeDict['waveforms'] or minVal < rangeDict['waveforms'][minKey]:
+                    rangeDict['waveforms'][minKey] = minVal
+                if maxKey not in rangeDict['waveforms'] or maxVal > rangeDict['waveforms'][maxKey]:
+                    rangeDict['waveforms'][maxKey] = maxVal
+    
     
 
-def setOutputScaling(rangeDict, output):
+def setOutputScaling(rangeDict, output, usedefaults=False):
     """
     Set the scaling on the output SPD V4 file using info gathered
     by rangeFunc.
@@ -120,24 +136,34 @@ def setOutputScaling(rangeDict, output):
     for key in rangeDict['pulses'].keys():
         if key.endswith('_MIN'):
             field = key[0:-4]
-            minVal = rangeDict['pulses'][key]
-            maxVal = rangeDict['pulses'][key.replace('_MIN','_MAX')]                
-            gain = MAX_UINT16 / (maxVal - minVal)
-            output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, minVal)
+            if field in PULSE_DEFAULT_GAINS:
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, PULSE_DEFAULT_GAINS[field], PULSE_DEFAULT_OFFSETS[field])
+            else:
+                minVal = rangeDict['pulses'][key]
+                maxVal = rangeDict['pulses'][key.replace('_MIN','_MAX')]            
+                gain = np.iinfo(spdv4.PULSE_FIELDS[field]).max / (maxVal - minVal)
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, gain, minVal)
     for key in rangeDict['points'].keys():
         if key.endswith('_MIN'):
-            field = key[0:-4]
-            minVal = rangeDict['points'][key]
-            maxVal = rangeDict['points'][key.replace('_MIN','_MAX')]                                                                
-            gain = MAX_UINT16 / (maxVal - minVal)
-            output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, minVal)
+            field = key[0:-4]            
+            if field in POINT_DEFAULT_GAINS:
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, POINT_DEFAULT_GAINS[field], POINT_DEFAULT_OFFSETS[field])            
+            else:
+                minVal = rangeDict['points'][key]
+                maxVal = rangeDict['points'][key.replace('_MIN','_MAX')]
+                gain = np.iinfo(spdv4.POINT_FIELDS[field]).max / (maxVal - minVal)
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, minVal)
     for key in rangeDict['waveforms'].keys():
         if key.endswith('_MIN'):
             field = key[0:-4]
-            minVal = rangeDict['waveforms'][key]
-            maxVal = rangeDict['waveforms'][key.replace('_MIN','_MAX')]                                                               
-            gain = MAX_UINT16 / (maxVal - minVal)
-            output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, minVal)
+            if field in WAVEFORM_DEFAULT_GAINS:
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, WAVEFORM_DEFAULT_GAINS[field], WAVEFORM_DEFAULT_OFFSETS[field])            
+            else:
+                minVal = rangeDict['waveforms'][key]
+                maxVal = rangeDict['waveforms'][key.replace('_MIN','_MAX')]
+                gain = np.iinfo(spdv4.WAVEFORM_FIELDS[field]).max / (maxVal - minVal)
+                output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, minVal)
+
 
 
 def setHeaderValues(rangeDict, rieglInfo, output):
@@ -207,6 +233,18 @@ def doTranslation(internalrotation, magneticdeclination, riegl, spd):
     controls.setProgress(progress)
     controls.setSpatialProcessing(False)
     
+    # now read through the file and get the range of values for fields 
+    # that need scaling.
+    print('Determining range of input data...')
+    
+    rangeDict = {'pulses':{},'points':{},'waveforms':{},'header':{}}
+    lidarprocessor.doProcessing(rangeFunc, dataFiles, controls=controls, 
+                    otherArgs=rangeDict)
+
+    print('Converting to SPD V4...')
+
+    dataFiles.output1 = lidarprocessor.LidarFile(spd, lidarprocessor.CREATE)
+    dataFiles.output1.setLiDARDriver('SPDV4')
     # first get the rotation matrix out of the file if asked for
     if internalrotation:
         print('Obtaining Internal Rotation Matrix...')
@@ -222,21 +260,10 @@ def doTranslation(internalrotation, magneticdeclination, riegl, spd):
     if magneticdeclination != 0:
         dataFiles.output1.setLiDARDriverOption("MAGNETIC_DECLINATION", 
                 magneticdeclination)
-    
-    # now read through the file and get the range of values for fields 
-    # that need scaling.
-    print('Determining range of input data...')
-    
-    rangeDict = {'pulses':{},'points':{},'waveforms':{},'header':{}}
-    lidarprocessor.doProcessing(rangeFunc, dataFiles, controls=controls, 
-                    otherArgs=rangeDict)
-
-    print('Converting to SPD V4...')
-    dataFiles.output1 = lidarprocessor.LidarFile(spd, lidarprocessor.CREATE)
-    dataFiles.output1.setLiDARDriver('SPDV4')
 
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
                     otherArgs=rangeDict)
+
     
 if __name__ == '__main__':
 
