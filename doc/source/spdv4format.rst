@@ -11,44 +11,32 @@ below are understood by PyLidar.
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | Name                               | Type    | Units | Essential | Description                        |
 +====================================+=========+=======+===========+====================================+
-| AZIMUTH_MAX                        | float32 | rad   | No        | Maximum pulse azimith in this file |
+| AZIMUTH_MAX                        | float32 | deg   | No        | Maximum pulse azimith in this file |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| AZIMUTH_MIN                        | float32 | rad   | No        | Minimum pulse azimith in this file |
+| AZIMUTH_MIN                        | float32 | deg   | No        | Minimum pulse azimith in this file |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | BANDWIDTHS                         | float32 | ns    | No        | Widths of the band(s) used         |
 |                                    | array   |       |           |                                    |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| BIN_SIZE                           | float32 | m/rad | No        | Size of the bins used for spatial  |
+| BIN_SIZE                           | float32 | m/deg | No        | Size of the bins used for spatial  |
 |                                    |         |       |           | index. See INDEX_TYPE              |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| BLOCK_SIZE_POINT                   | uint16  |       | Yes       | ???                                |
+| BLOCK_SIZE_POINT                   | uint16  |       | Yes       | HDF5 chunk size for point arrays   |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| BLOCK_SIZE_PULSE                   | uint16  |       | Yes       | ???                                |
+| BLOCK_SIZE_PULSE                   | uint16  |       | Yes       | HDF5 chunk size for pulse arrays   |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| BLOCK_SIZE_WAVEFORM                | uint16  |       | Yes       | ???                                |
+| BLOCK_SIZE_WAVEFORM                | uint16  |       | Yes       | HDF5 chunk size for waveform array |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| BLOCK_SIZE_RECEIVED                | uint16  |       | Yes       | ???                                |
+| BLOCK_SIZE_RECEIVED                | uint16  |       | Yes       | HDF5 chunk size for recv array     |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| BLOCK_SIZE_TRANSMITTED             | uint16  |       | Yes       | ???                                |
+| BLOCK_SIZE_TRANSMITTED             | uint16  |       | Yes       | HDF5 chunk size for trans array    |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | CAPTURE_DATETIME                   | str     |       | Yes       | UTC ISO String of capture date/time|
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | CREATION_DATETIME                  | str     |       | Yes       | UTC ISO String of file creation    |
 |                                    |         |       |           | date/time                          |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| DEFINED_HEIGHT                     | uint8   |       | No        | ???                                |
-+------------------------------------+---------+-------+-----------+------------------------------------+
-| DEFINED_ORIGIN                     | uint8   |       | No        | ???                                |
-+------------------------------------+---------+-------+-----------+------------------------------------+
-| DEFINED_RECEIVE_WAVEFORM           | uint8   |       | No        | ???                                |
-+------------------------------------+---------+-------+-----------+------------------------------------+
-| DEFINED_RGB                        | uint8   |       | No        | ???                                |
-+------------------------------------+---------+-------+-----------+------------------------------------+
-| DEFINED_TRANS_WAVEFORM             | uint8   |       | No        | ???                                |
-+------------------------------------+---------+-------+-----------+------------------------------------+
 | FIELD_OF_VIEW                      | float32 | deg   | No        | Field of view of the sensor        |
-+------------------------------------+---------+-------+-----------+------------------------------------+
-| FILE_SIGNATURE                     | str     |       |           | ???                                |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | FILE_TYPE                          | uint16  |       | Yes       | 0=No index; 1=Sequential;          |
 |                                    |         |       |           | 2=Non-sequential                   |
@@ -86,11 +74,14 @@ below are understood by PyLidar.
 | PULSE_ALONG_TRACK_SPACING          | float32 | m     | No        | gap between pulses in direction of |
 |                                    |         |       |           | instrument movement                |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| PULSE_ANGULAR_SPACING_SCANLINE     | float32 | deg   | No        | ???                                |
+| PULSE_ACROSS_TRACK_SPACING         | float32 | m     | No        | gap between pulses in direction    |
+|                                    |         |       |           | orthogonal to instrument movement  |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| PULSE_ANGULAR_SPACING_SCANLINE_IDX | float32 | deg   | No        | ???                                |
+| PULSE_ANGULAR_SPACING_SCANLINE     | float32 | deg   | No        | Average pulse spacing between      |
+|                                    |         |       |           | scanlines                          |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| PULSE_CROSS_TRACK_SPACING          | float32 | m     | No        | ???                                |
+| PULSE_ANGULAR_SPACING_SCANLINE_IDX | float32 | deg   | No        | Average pulse spacing between      |
+|                                    |         |       |           | pulses along a scanlines           |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | PULSE_DENSITY                      | float32 | p/m2  | No        | Number of pulses per square meter  |
 |                                    |         |       |           | on average                         |
@@ -104,21 +95,21 @@ below are understood by PyLidar.
 |                                    |         |       |           | 2=START_WAVEFORM; 3=END_WAVEFORM;  |
 |                                    |         |       |           | 4=ORIGIN; 5=MAX_INTENSITY          |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| RANGE_MAX                          | float32 | m     | No        | ???                                |
+| RANGE_MAX                          | float32 | m     | No        | Maximum range of returns           |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| RANGE_MIN                          | float32 | m     | No        | ???                                |
+| RANGE_MIN                          | float32 | m     | No        | Minimum range of returns           |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| SCANLINE_IDX_MAX                   | uint32  |       | No        | ???                                |
+| SCANLINE_IDX_MAX                   | uint32  |       | No        | Maximum scanline index number      |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| SCANLINE_IDX_MIN                   | uint32  |       | No        | ???                                |
+| SCANLINE_IDX_MIN                   | uint32  |       | No        | Minimum scanline index number      |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| SCANLINE_MAX                       | uint16  |       | No        | ???                                |
+| SCANLINE_MAX                       | uint16  |       | No        | Maximum scanline number            |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| SCANLINE_MIN                       | uint16  |       | No        | ???                                |
+| SCANLINE_MIN                       | uint16  |       | No        | Minimum scanline number            |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| SENSOR_APERTURE_SIZE               | float32 | m     | No        | Size of aperture. Should be m2?    |
+| SENSOR_APERTURE_SIZE               | float32 | m2    | No        | Size of aperture                   |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| SENSOR_BEAM_DIVERGENCE             | float32 | mrad  | No        | ???                                |
+| SENSOR_BEAM_DIVERGENCE             | float32 | mrad  | No        | Laser beam divergence              |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | SENSOR_HEIGHT                      | float32 | m     | No        | Height of sensor                   |
 +------------------------------------+---------+-------+-----------+------------------------------------+
@@ -130,17 +121,17 @@ below are understood by PyLidar.
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | SENSOR_SPEED                       | float32 | km/h  | No        | How fast sensor is moving forward  |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| SENSOR_TEMPORAL_BIN_SPACING        | float64 | ns    | No        | ???                                |
+| SENSOR_TEMPORAL_BIN_SPACING        | float64 | ns    | No        | Waveform bin size                  |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| SENSOR_BEAM_EXIT_DIAMETER          | float32 | m     | No        | ???                                |
+| SENSOR_BEAM_EXIT_DIAMETER          | float32 | m     | No        | Laser beam diameter at sensor exit |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | SPATIAL_REFERENCE                  | str     |       | Yes       | Well known text (WKT) describing   |
 |                                    |         |       |           | coordinate system of file          |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| SYSTEM_IDENTIFIER                  | str     |       | No        | ???                                |
+| SYSTEM_IDENTIFIER                  | str     |       | No        | How the file was generated         |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| USER_META_DATA                     | str     |       | No        | User can put there own data here   |
-|                                    |         |       |           | Is this still needed?              |
+| USER_META_DATA                     | str     |       | No        | User can put there own metadata    |
+|                                    |         |       |           | here as a JSON or XML string       |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | VERSION_SPD                        | uint8   |       | Yes       | An array of version information    |
 |                                    | array   |       |           | for this file format               |
@@ -148,7 +139,8 @@ below are understood by PyLidar.
 | VERSION_DATA                       | uint8   |       | Yes       | An array of version information    |
 |                                    | array   |       |           | for the file data                  |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| WAVEFORM_BIT_RES                   | uint16  |       | No        | ???                                |
+| WAVEFORM_BIT_RES                   | uint16  |       | No        | Nominal waveform radiometric       |
+|                                    |         |       |           | resolution                         |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | WAVELENGTHS                        | float32 | nm    | No        | Wavelengths used in the file       |
 |                                    | array   |       |           |                                    |
@@ -191,15 +183,15 @@ Fields marked with Scaling = Yes must have these attributes.
 +============================+=========+=======+===========+=========+==============================================+
 | PULSE_ID                   | uint64  |       | Yes       | No      | A unique number identifying this pulse       |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| TIMESTAMP                  | uint64  | s     | No        | No      | Seconds since 1/1/1970 ??                    |
+| TIMESTAMP                  | uint64  | ns    | No        | No      | GPS time or system time                      |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | NUMBER_OF_RETURNS          | uint8   |       | Yes       | No      | Number of points for this pulse              |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| AZIMUTH                    | uint16  | rad   | No        | Yes     | Azimuth of this pulse from North ??          |
+| AZIMUTH                    | uint16  | rad   | No        | Yes     | Azimuth of this pulse from true north        |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | ZENITH                     | uint16  | rad   | No        | Yes     | Zenith of this pulse                         |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| SOURCE_ID                  | uint16  |       | No        | No      | ???                                          |
+| SOURCE_ID                  | uint16  |       | No        | No      | Pulse source (typically a flightline ID      |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | PULSE_WAVELENGTH_IDX       | uint8   |       | No        | No      | Index into WAVELENGTHS file attribute        |
 |                            |         |       |           |         | that this pulse uses                         |
@@ -212,33 +204,34 @@ Fields marked with Scaling = Yes must have these attributes.
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | PTS_START_IDX              | uint64  |       | Yes       | No      | Offset into POINTS records                   |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| SCANLINE                   | uint32  |       | No        | No      | ???                                          |
+| SCANLINE                   | uint32  |       | No        | No      | Scanline number                              |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| SCANLINE_IDX               | uint16  |       | No        | No      | ???                                          |
+| SCANLINE_IDX               | uint16  |       | No        | No      | Pulse number within a scanline               |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | X_IDX                      | uint16  |       | Yes       | Yes     | X coord to use to spatially index this pulse |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | Y_IDX                      | uint16  |       | Yes       | Yes     | Y coord to use to spatially index this pulse |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| X_ORIGIN                   | uint16  | m     | No        | Yes     | ???                                          |
+| X_ORIGIN                   | uint16  | m     | No        | Yes     | X location of pulse emission                 |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| Y_ORIGIN                   | uint16  | m     | No        | Yes     | ???                                          |
+| Y_ORIGIN                   | uint16  | m     | No        | Yes     | Y location of pulse emission                 |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| Z_ORIGIN                   | uint16  | m     | No        | Yes     | ???                                          |
+| Z_ORIGIN                   | uint16  | m     | No        | Yes     | Z location of pulse emission                 |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| H_ORIGIN                   | uint16  | m     | No        | Yes     | ???                                          |
+| H_ORIGIN                   | uint16  | m     | No        | Yes     | Height of pulse emission                     |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | PULSE_FLAGS                | uint8   |       | No        | No      | 1=IGNORE,2=OVERLAP,4=SCANLINE_DIRECTION,     |
-|                            |         |       |           |         |  8=SCANLINE_EDGE                             |
+|                            |         |       |           |         | 8=SCANLINE_EDGE                              |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| AMPLITUDE_PULSE            | float32 |       | No        | No      | ???                                          |
+| AMPLITUDE_PULSE            | float32 |       | No        | No      | Amplitude of the emitted pulse               |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| WIDTH_PULSE                | float32 |ns(FWHM)| No       | No      | ???                                          |
+| WIDTH_PULSE                | float32 | ns    | No        | No      | Width (FWHM) of the emitted pulse            |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | SCAN_ANGLE_RANK            | int16   | deg   | No        | No      | In LAS specification and defined differently |
 |                            |         |       |           |         | to zenith angle                              |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| PRISM_FACET                | uint8   |       | No        | No      | For RIEGL ALS and TLS data                   |
+| PRISM_FACET                | uint8   |       | No        | No      | For RIEGL ALS and TLS data that use a        |
+|                            |         |       |           |         | rotating prism instead of a scanning mirror  |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 
 Point Data
@@ -253,9 +246,9 @@ Fields marked with Scaling = Yes must have these attributes.
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | Name                 | Type    | Units | Essential | Scaling | Description                                  |
 +======================+=========+=======+===========+=========+==============================================+
-| RANGE                | uint16  | m     | No        | Yes     | ???                                          |
+| RANGE                | uint16  | m     | No        | Yes     | Return range                                 |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| RETURN_NUMBER        | uint8   |       | Yes       | No      | ??? The base value is 1 not 0                |
+| RETURN_NUMBER        | uint8   |       | Yes       | No      | Return number. The base value is 1 not 0     |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | X                    | uint16  | m     | Yes       | Yes     | The X coord of this point                    |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
@@ -270,27 +263,27 @@ Fields marked with Scaling = Yes must have these attributes.
 | POINT_FLAGS          | uint8   |       | No        | No      | 1=IGNORE,2=OVERLAP,4=SYNTHETIC,8=KEY_POINT,  |
 |                      |         |       |           |         | 16=WAVEFORM                                  |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| INTENSITY            | uint16  |       | No        | Yes     | ???                                          |
+| INTENSITY            | uint16  |       | No        | Yes     | Uncalibrated intensity                       |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| AMPLITUDE_RETURN     | float32 |       | No        | Yes     | ???                                          |
+| AMPLITUDE_RETURN     | float32 |       | No        | Yes     | Amplitude of the return                      |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| WIDTH_RETURN         | float32 |ns(FWHM)| No       | No      | ???                                          |
+| WIDTH_RETURN         | float32 | ns    | No        | No      | Width (FWHM) of the return                   |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| RED                  | uint16  |       | No        | No?     | For display purposes. See RGB_FIELD file     |
+| RED                  | uint16  |       | No        | No      | For display purposes. See RGB_FIELD file     |
 |                      |         |       |           |         | attribute                                    |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| GREEN                | uint16  |       | No        | No?     | For display purposes. See RGB_FIELD file     |
+| GREEN                | uint16  |       | No        | No      | For display purposes. See RGB_FIELD file     |
 |                      |         |       |           |         | attribute                                    |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| BLUE                 | uint16  |       | No        | No?     | For display purposes. See RGB_FIELD file     |
+| BLUE                 | uint16  |       | No        | No      | For display purposes. See RGB_FIELD file     |
 |                      |         |       |           |         | attribute                                    |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| NIR                  | uint16  |       | No        | No?     | For display purposes. See RGB_FIELD file     |
+| NIR                  | uint16  |       | No        | No      | For display purposes. See RGB_FIELD file     |
 |                      |         |       |           |         | attribute                                    |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | RHO_APP              | float32 |       | No        | No      | Apparent reflectance                         |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| DEVIATION            | float32 |       | No        | No      | ??? Defined by RIEGL                         |
+| DEVIATION            | float32 |       | No        | No      | Return deviation (defined by RIEGL)          |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | ECHO_TYPE            | uint16  |       | No        | No      | Useful for old datasets where first/last     |
 |                      |         |       |           |         | returns are provided independently, i.e.     |
@@ -323,7 +316,7 @@ Fields marked with Scaling = Yes must have these attributes.
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | RECEIVED_START_IDX                  | uint64  |       | Yes       | No      | Index into the RECEIVED dataset              |
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| TRANSMITTED_START_IDX               | uint64  |       | No ?      | No      | Index into the TRANSMITTED dataset           |
+| TRANSMITTED_START_IDX               | uint64  |       | Yes       | No      | Index into the TRANSMITTED dataset           |
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | CHANNEL                             | uint8   |       | No        | No      | Channel number (e.g. for high/low gain)      |
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
