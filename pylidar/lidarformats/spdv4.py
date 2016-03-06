@@ -2221,15 +2221,13 @@ class SPDV4FileInfo(generic.LiDARFileInfo):
             self.header[key] = fileHandle.attrs[key]
 
         # pull a few things out to the top level
-        self.wkt = fileHandle.attrs['SPATIAL_REFERENCE']
-
-        self.zMax = fileHandle.attrs['Z_MAX']
-        self.zMin = fileHandle.attrs['Z_MIN']
-        self.wavelengths = fileHandle.attrs['WAVELENGTHS']
-        self.bandwidths = fileHandle.attrs['BANDWIDTHS']
+        self.pulse_fields = [str(k) for k in fileHandle['DATA']['PULSES'].keys()]
+        self.point_fields = [str(k) for k in fileHandle['DATA']['POINTS'].keys()]
+        if 'WAVEFORMS' in fileHandle['DATA'].keys():
+            self.waveform_fields = [str(k) for k in fileHandle['DATA']['WAVEFORMS'].keys()]
         
         si_handler = SPDV4SpatialIndex.getHandlerForFile(fileHandle, generic.READ)
-        self.hasSpatialIndex = si_handler is not None
+        self.has_Spatial_Index = si_handler is not None
         # probably other things too
         
         
