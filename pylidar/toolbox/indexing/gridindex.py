@@ -230,6 +230,9 @@ def setScalingForCoordField(driver, srcfield, coordfield):
     if srcfield in spdv4.PULSE_SCALED_FIELDS:
         gain, offset = driver.getScaling(srcfield, lidarprocessor.ARRAY_TYPE_PULSES)
         driver.setScaling(coordfield, lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
+    elif srcfield in spdv4.POINT_SCALED_FIELDS:
+        gain, offset = driver.getScaling(srcfield, lidarprocessor.ARRAY_TYPE_POINTS)
+        driver.setScaling(coordfield, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
     
 def classifyFunc(data, otherArgs):
     """
