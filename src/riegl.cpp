@@ -93,11 +93,11 @@ static SpylidarFieldDefn RieglPulseFields[] = {
 typedef struct {
     npy_uint64 return_Id;
     npy_uint64 gpsTime;
-    float amplitude_Return;
-    float width_Return;
+    float deviation_Return;
     npy_uint8 classification;
     double range;
     double rho_app;
+    double amplitude_Return;
     double x;
     double y;
     float z;
@@ -107,11 +107,11 @@ typedef struct {
 static SpylidarFieldDefn RieglPointFields[] = {
     CREATE_FIELD_DEFN(SRieglPoint, return_Id, 'u'),
     CREATE_FIELD_DEFN(SRieglPoint, gpsTime, 'u'),
-    CREATE_FIELD_DEFN(SRieglPoint, amplitude_Return, 'f'),
-    CREATE_FIELD_DEFN(SRieglPoint, width_Return, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, deviation_Return, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, classification, 'u'),
     CREATE_FIELD_DEFN(SRieglPoint, range, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, rho_app, 'f'),
+    CREATE_FIELD_DEFN(SRieglPoint, amplitude_Return, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, x, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, y, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, z, 'f'),
@@ -339,8 +339,7 @@ protected:
 
         point.return_Id = target_count;
         point.gpsTime = current_target.time * 1e9 + 0.5;
-        point.amplitude_Return = current_target.amplitude;
-        point.width_Return = current_target.deviation;
+        point.deviation_Return = current_target.deviation;
         point.classification = 1;
 
         // Get range from optical centre of scanner
@@ -353,8 +352,9 @@ protected:
         }
         point.range = point_range;
 
-        // Rescale reflectance from dB to papp
+        // Rescale reflectance and amplitude from dB to papp
         point.rho_app = std::pow(10.0, current_target.reflectance / 10.0);
+        point.amplitude_Return = std::pow(10.0, current_target.amplitude / 10.0);
 
         // apply transform and store result
         applyTransformation(current_target.vertex[0], current_target.vertex[1], current_target.vertex[2],
