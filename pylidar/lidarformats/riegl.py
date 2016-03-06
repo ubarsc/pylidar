@@ -139,8 +139,6 @@ class RieglFile(generic.LiDARFile):
         dict = {}
         if arrayType == generic.ARRAY_TYPE_POINTS:
             dict[generic.FIELD_POINTS_RETURN_NUMBER] = 'RETURN_ID'
-        elif arrayType == generic.ARRAY_TYPE_PULSES:
-            dict[generic.FIELD_PULSES_TIMESTAMP] = 'GPSTIME'
         return dict
         
     def close(self):
