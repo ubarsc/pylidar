@@ -45,9 +45,20 @@ INDEX_CYLINDRICAL = spdv4.SPDV4_INDEX_CYLINDRICAL
 INDEX_POLAR = spdv4.SPDV4_INDEX_POLAR
 INDEX_SCAN = spdv4.SPDV4_INDEX_SCAN
 
+"""
+Types of pulse indexing methods. Copied from spdv4.
+"""
+PULSE_INDEX_FIRST_RETURN = spdv4.SPDV4_PULSE_INDEX_FIRST_RETURN
+PULSE_INDEX_LAST_RETURN = spdv4.SPDV4_PULSE_INDEX_LAST_RETURN
+PULSE_INDEX_START_WAVEFORM = spdv4.SPDV4_PULSE_INDEX_START_WAVEFORM
+PULSE_INDEX_END_WAVEFORM = spdv4.SPDV4_PULSE_INDEX_END_WAVEFORM
+PULSE_INDEX_ORIGIN = spdv4.SPDV4_PULSE_INDEX_ORIGIN
+PULSE_INDEX_MAX_INTENSITY = spdv4.SPDV4_PULSE_INDEX_MAX_INTENSITY
+
+
 def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None, 
         tempDir='.', extent=None, indexMethod=INDEX_CARTESIAN,
-        wkt=None):
+        pulseIndexMethod=PULSE_INDEX_FIRST_RETURN, wkt=None):
     """
     Creates a grid spatially indexed file from a non spatial input file.
     Currently only supports creation of a SPD V4 file.
@@ -76,13 +87,11 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
                 xMin = header['AZIMUTH_MIN']
                 yMax = header['ZENITH_MAX']
                 yMin = header['ZENITH_MIN']
-                wkt = getDefaultWKT()
             elif indexMethod == INDEX_SCAN:
                 xMax = header['SCANLINE_IDX_MAX']
                 xMin = header['SCANLINE_IDX_MIN']
                 yMax = header['SCANLINE_MAX']
                 yMin = header['SCANLINE_MIN']
-                wkt = getDefaultWKT()
             else:
                 msg = 'unsupported indexing method'
                 raise generic.LiDARSpatialIndexNotAvailable(msg)
@@ -95,9 +104,11 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     else:
         # ensure that our binSize comes from their exent
         binSize = extent.binSize
-        
+    
     if wkt is None:
-        wkt = header['SPATIAL_REFERENCE']
+        wkt = header['SPATIAL_REFERENCE'] 
+        if len(wkt) == 0:
+            wkt = getDefaultWKT()
 
     if blockSize is None:
         minAxis = min(extent.xMax - extent.xMin, extent.yMax - extent.yMin)
@@ -151,6 +162,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     otherArgs = lidarprocessor.OtherArgs()
     otherArgs.outList = extentList
     otherArgs.indexMethod = indexMethod
+    otherArgs.pulseIndexMethod = pulseIndexMethod
     
     lidarprocessor.doProcessing(classifyFunc, dataFiles, controls=controls, 
                 otherArgs=otherArgs)
@@ -173,6 +185,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     header['NUMBER_BINS_X'] = int(numpy.ceil((extent.xMax - extent.xMin) / binSize))
     header['NUMBER_BINS_Y'] = int(numpy.ceil((extent.yMax - extent.yMin) / binSize))
     header['INDEX_TYPE'] = indexMethod
+    header['PULSE_INDEX_METHOD'] = pulseIndexMethod
     header['BIN_SIZE'] = binSize
                 
     progress.reset()
@@ -187,7 +200,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
 
 def getDefaultWKT():
     """
-    For scan and spherical indexing methods we don't have a WKT.
+    When processing data in sensor or project coordinates we may not have a WKT.
     However, rios.pixelgrid requires something. For now
     return the WKT for GDA96/MGA zone 55 until we think of something
     better.
@@ -239,16 +252,21 @@ def classifyFunc(data, otherArgs):
             copyScaling(data.input, driver)
 
         # TODO: should we always be able to rely on X_IDX, Y_IDX for
-        # whatever index we are building?    
+        # whatever index we are building?
+        # No - as the values of these columns may have to change if the
+        # properties of the spatial indexing method change   
         if otherArgs.indexMethod == INDEX_CARTESIAN:
-            xIdxFieldName = 'X_IDX'
-            yIdxFieldName = 'Y_IDX'          
+            xIdxFieldName = 'X'
+            yIdxFieldName = 'Y'
+            xIdx, yIdx = indexPulses(pulses, points, recv, otherArgs.pulseIndexMethod)
         elif otherArgs.indexMethod == INDEX_SPHERICAL:
             xIdxFieldName = 'AZIMUTH'
-            yIdxFieldName = 'ZENITH'   
+            yIdxFieldName = 'ZENITH'
+            xIdx, yIdx = pulses[xIdxFieldName], pulses[yIdxFieldName]
         elif otherArgs.indexMethod == INDEX_SCAN:
             xIdxFieldName = 'SCANLINE_IDX'
-            yIdxFieldName = 'SCANLINE'                   
+            yIdxFieldName = 'SCANLINE'
+            xIdx, yIdx = pulses[xIdxFieldName], pulses[yIdxFieldName]              
         else:
             msg = 'unsupported indexing method'
             raise generic.LiDARSpatialIndexNotAvailable(msg)
@@ -256,11 +274,9 @@ def classifyFunc(data, otherArgs):
         # ensure the scaling of X_IDX & Y_IDX matches the data we are putting in it
         setScalingForCoordField(driver, xIdxFieldName, 'X_IDX')
         setScalingForCoordField(driver, yIdxFieldName, 'Y_IDX')
-
+        
         # this the expression used in the spatial index building
-        # so we are consistent.             
-        xIdx = pulses[xIdxFieldName]
-        yIdx = pulses[yIdxFieldName]  
+        # so we are consistent. 
         mask = ((xIdx >= extent.xMin) & (xIdx < extent.xMax) & 
                 (yIdx > extent.yMin) & (yIdx <= extent.yMax))
         # subset the data
@@ -285,7 +301,25 @@ def classifyFunc(data, otherArgs):
            
         driver.writeData(pulsesSub, pointsSub, transSub, recvSub, 
                     waveformInfoSub)
-        
+
+def indexPulses(pulses, points, recv, pulseIndexMethod):
+    """
+    Internal method to assign a point coordinates to the X_IDX and Y_IDX
+    columns based on the user specified pulse_index_method.
+    """
+    if pulseIndexMethod == PULSE_INDEX_FIRST_RETURN:
+        xIdx = points['X'][0, ...]
+        yIdx = points['Y'][0, ...]
+    elif pulseIndexMethod == PULSE_INDEX_LAST_RETURN:
+        last = points.count(axis=0) - 1
+        xIdx = points['X'][last, ...]
+        yidx = points['Y'][last, ...]
+    else:
+        msg = 'unsupported pulse indexing method'
+        raise generic.LiDARPulseIndexUnsupported(msg)        
+
+    return xIdx, yIdx
+
 def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
     """
     Internal method to merge all the temporary files into the output
