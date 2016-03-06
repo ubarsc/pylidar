@@ -51,7 +51,7 @@ static struct RieglState _state;
 /* Structure for pulses */
 typedef struct {
     npy_uint64 pulse_ID;
-    npy_uint64 gpsTime;
+    npy_uint64 timestamp;
     npy_uint8 prism_facet;
     float azimuth;
     float zenith;
@@ -71,7 +71,7 @@ typedef struct {
 /* field info for pylidar_structArrayToNumpy */
 static SpylidarFieldDefn RieglPulseFields[] = {
     CREATE_FIELD_DEFN(SRieglPulse, pulse_ID, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, gpsTime, 'u'),
+    CREATE_FIELD_DEFN(SRieglPulse, timestamp, 'u'),
     CREATE_FIELD_DEFN(SRieglPulse, prism_facet, 'u'),
     CREATE_FIELD_DEFN(SRieglPulse, azimuth, 'f'),
     CREATE_FIELD_DEFN(SRieglPulse, zenith, 'f'),
@@ -92,7 +92,7 @@ static SpylidarFieldDefn RieglPulseFields[] = {
 /* Structure for points */
 typedef struct {
     npy_uint64 return_Id;
-    npy_uint64 gpsTime;
+    npy_uint64 timestamp;
     float deviation_Return;
     npy_uint8 classification;
     double range;
@@ -106,7 +106,7 @@ typedef struct {
 /* field info for pylidar_structArrayToNumpy */
 static SpylidarFieldDefn RieglPointFields[] = {
     CREATE_FIELD_DEFN(SRieglPoint, return_Id, 'u'),
-    CREATE_FIELD_DEFN(SRieglPoint, gpsTime, 'u'),
+    CREATE_FIELD_DEFN(SRieglPoint, timestamp, 'u'),
     CREATE_FIELD_DEFN(SRieglPoint, deviation_Return, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, classification, 'u'),
     CREATE_FIELD_DEFN(SRieglPoint, range, 'f'),
@@ -271,7 +271,7 @@ protected:
         SRieglPulse pulse;
         pulse.pulse_ID = m_nTotalPulsesReadFile;
         // TODO: where does 1e9 come from??
-        pulse.gpsTime = time_sorg * 1e9 + 0.5;
+        pulse.timestamp = time_sorg * 1e9 + 0.5;
         pulse.prism_facet = facet;
 
         // Get spherical coordinates. TODO: matrix transform
@@ -338,7 +338,7 @@ protected:
         scanlib::target& current_target(targets[target_count-1]);
 
         point.return_Id = target_count;
-        point.gpsTime = current_target.time * 1e9 + 0.5;
+        point.timestamp = current_target.time * 1e9 + 0.5;
         point.deviation_Return = current_target.deviation;
         point.classification = 1;
 
