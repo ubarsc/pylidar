@@ -25,38 +25,37 @@ from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
 from rios import cuiprogress
+from osgeo import osr
 
+PULSE_DEFAULT_GAINS = {'X_ORIGIN':100.0,'Y_ORIGIN':100.0,'X_ORIGIN':100.0,'AZIMUTH':100.0,'ZENITH':100.0}
+PULSE_DEFAULT_OFFSETS = {'X_ORIGIN':0.0,'Y_ORIGIN':0.0,'X_ORIGIN':0.0,'AZIMUTH':0.0,'ZENITH':0.0}
 
-PULSE_DEFAULT_GAINS = {'AZIMUTH':100.0, 'ZENITH':100.0, 'X_IDX':100.0, 'Y_IDX':100.0,
-'X_ORIGIN':100.0, 'Y_ORIGIN':100.0, 'Z_ORIGIN':100.0, 'H_ORIGIN':100.0,
-'AMPLITUDE_PULSE':100.0, 'WIDTH_PULSE':100.0}
-PULSE_DEFAULT_OFFSETS = {'AZIMUTH':0.0, 'ZENITH':0.0, 'X_IDX':0.0, 'Y_IDX':0.0, 
-'X_ORIGIN':0.0, 'Y_ORIGIN':0.0, 'Z_ORIGIN':0.0, 'H_ORIGIN':0.0,
-'AMPLITUDE_PULSE':0.0, 'WIDTH_PULSE':0.0}
-
-POINT_DEFAULT_GAINS = {'X':100.0, 'Y':100.0, 'Z':100.0, 'HEIGHT':100.0, 'INTENSITY':1.0, 'RANGE':100.0, 'AMPLITUDE_RETURN':1.0, 'WIDTH_RETURN':1.0}
-POINT_DEFAULT_OFFSETS = {'X':0.0, 'Y':0.0, 'Z':0.0, 'HEIGHT':0.0, 'INTENSITY':0.0, 'RANGE':0.0, 'AMPLITUDE_RETURN':0.0, 'WIDTH_RETURN':0.0}
+POINT_DEFAULT_GAINS = {'X':100.0, 'Y':100.0, 'Z':100.0}
+POINT_DEFAULT_OFFSETS = {'X':0.0, 'Y':0.0, 'Z':0.0}
 
 WAVEFORM_DEFAULT_GAINS = {'RANGE_TO_WAVEFORM_START':100.0}
 WAVEFORM_DEFAULT_OFFSETS = {'RANGE_TO_WAVEFORM_START':0.0}
-
 
 
 class CmdArgs(object):
     def __init__(self):
         p = optparse.OptionParser()
         p.add_option("--spatial", dest="spatial", 
-            help="process the data spatially. Specify 'yes' or 'no'. " +
+            help="Process the data spatially. Specify 'yes' or 'no'. " +
             "Default is spatial if a spatial index exists.")
         p.add_option("--buildpulses", dest="buildpulses", default=False, action="store_true",
-            help="build pulse data structure. " +
+            help="Build pulse data structure. " +
             "Default is False.")
+        p.add_option("--pulseindex", dest="pulseindex", default="FIRST_RETURN"
+            help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. Default is FIRST_RETURN.")
         p.add_option("--binsize", "-b", dest="binSize",
-            help="bin size to use when processing spatially")
+            help="Bin size to use when processing spatially")
         p.add_option("--las", dest="las",
-            help="input las .las file")
+            help="Input las .las file")
         p.add_option("--spd", dest="spd",
             help="output SPD V4 file name")
+        p.add_option("--epsg", dest="epsg", type=int,
+            help="Set to EPSG to override")
             
         (options, args) = p.parse_args()
         self.__dict__.update(options.__dict__)
@@ -163,12 +162,16 @@ def setOutputScaling(rangeDict, output, usedefaults=False):
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, minVal)
 
 
-def setHeaderValues(rangeDict, lasInfo, output):
+def setHeaderValues(rangeDict, lasInfo, output, epsg=None):
     """
     Set the header values in the output SPD V4 file using info gathered
     by rangeFunc
     """
     h = rangeDict['header']
+    if epsg is not None:
+        sr = osr.SpatialReference()
+        sr.ImportFromEPSG(epsg)
+        header['SPATIAL_REFERENCE'] = sr.ExportToWkt()    
     output.setHeader(h)
 
 
@@ -195,7 +198,7 @@ def transFunc(data, rangeDict):
         data.output1.setReceived(revc)
 
 
-def doTranslation(spatial, buildpulses, binSize, las, spd):
+def doTranslation(spatial, buildpulses, pulseindex, binSize, las, spd):
     """
     Does the translation between .las and SPD v4 format files.
     """
@@ -214,6 +217,7 @@ def doTranslation(spatial, buildpulses, binSize, las, spd):
     dataFiles = lidarprocessor.DataFiles()
         
     dataFiles.input1 = lidarprocessor.LidarFile(las, lidarprocessor.READ)
+    dataFiles.input1.setLiDARDriverOption('PULSE_INDEX', pulseindex)
     if not buildpulses:
         dataFiles.input1.setLiDARDriverOption('BUILD_PULSES', False)
     if spatial:
@@ -227,17 +231,10 @@ def doTranslation(spatial, buildpulses, binSize, las, spd):
     # now read through the file and get the range of values for fields 
     # that need scaling.
     print('Determining range of input data fields...')
-
-    #import pickle    
+   
     rangeDict = {'pulses':{},'points':{},'waveforms':{},'header':{}}
-    #fh = open('range.dat', 'rb')
-    #rangeDict = pickle.load(fh)
-    #fh.close()
     lidarprocessor.doProcessing(rangeFunc, dataFiles, controls=controls, 
                     otherArgs=rangeDict)
-    #fh = open('range.dat', 'wb')
-    #pickle.dump(rangeDict, fh)
-    #fh.close()
 
     print('Converting to SPD V4...')
     dataFiles.output1 = lidarprocessor.LidarFile(spd, lidarprocessor.CREATE)
@@ -258,5 +255,5 @@ if __name__ == '__main__':
     
         spatial = (spatialStr == 'yes')
     
-    doTranslation(spatial, cmdargs.buildpulses, cmdargs.binSize, cmdargs.las, cmdargs.spd)
+    doTranslation(spatial, cmdargs.buildpulses, cmdargs.pulseindex, cmdargs.binSize, cmdargs.las, cmdargs.spd)
     
