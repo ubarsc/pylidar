@@ -139,6 +139,8 @@ SPDV4_PULSE_INDEX_START_WAVEFORM = 2
 SPDV4_PULSE_INDEX_END_WAVEFORM = 3
 SPDV4_PULSE_INDEX_ORIGIN = 4
 SPDV4_PULSE_INDEX_MAX_INTENSITY = 5
+SPDV4_PULSE_INDEX_GROUND = 6 # Reserved
+SPDV4_PULSE_INDEX_ZPLANE = 7 # Reserved
 
 # types of spatial indices
 SPDV4_INDEXTYPE_SIMPLEGRID = 0
@@ -306,7 +308,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
                 group = fileHandle[SPATIALINDEX_GROUP]
             if group is not None and SIMPLEPULSEGRID_GROUP in group:
                 group = group[SIMPLEPULSEGRID_GROUP]
-        
+            
             if group is None:
                 raise generic.LiDARSpatialIndexNotAvailable()
             else:
@@ -487,7 +489,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         # return the new ones in the correct order to write
         # and the mask to remove points, waveforms etc
         return pulses, mask
-                                    
+
 class SPDV4File(generic.LiDARFile):
     """
     Class to support reading and writing of SPD Version 4.x files.
@@ -1661,7 +1663,7 @@ spatial index will be recomputed on the fly"""
         else:
             oldSize = 0
         newSize = oldSize + len(structArray)
-
+        
         for name in structArray.dtype.names:
             # don't bother writing out the ones we generate ourselves
             if name not in generatedColumns:
