@@ -181,9 +181,6 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     # update header
     header['INDEX_TLX'] = extent.xMin
     header['INDEX_TLY'] = extent.yMax
-    # TODO: should this come from the spatial index itself?
-    header['NUMBER_BINS_X'] = int(numpy.ceil((extent.xMax - extent.xMin) / binSize))
-    header['NUMBER_BINS_Y'] = int(numpy.ceil((extent.yMax - extent.yMin) / binSize))
     header['INDEX_TYPE'] = indexMethod
     header['PULSE_INDEX_METHOD'] = pulseIndexMethod
     header['BIN_SIZE'] = binSize
@@ -334,6 +331,11 @@ def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
                 yMin=extent.yMin, yMax=extent.yMax, projection=wkt,
                 xRes=extent.binSize, yRes=extent.binSize)
     outDriver.setPixelGrid(pixGrid)
+    
+    # update header
+    nrows,ncols = pixGrid.getDimensions()
+    header['NUMBER_BINS_X'] = nrows
+    header['NUMBER_BINS_Y'] = ncols
     
     progress.setTotalSteps(len(extentList))
     progress.setProgress(0)
