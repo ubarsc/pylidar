@@ -72,6 +72,9 @@ class LiDARArrayColumnError(LiDARFileException):
     
 class LiDARSpatialIndexNotAvailable(LiDARFileException):
     "The specified spatial index not available for this file"
+
+class LiDARPulseIndexUnsupported(LiDARFileException):
+    "The specified pulse index method is currently unsupported"
     
 class LiDARWritingNotSupported(LiDARFunctionUnsupported):
     "driver does not support writing"
