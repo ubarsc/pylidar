@@ -10,7 +10,7 @@ from rios import cuiprogress
 def writeImageFunc(data):
 
     pulsesByBins = data.input1.getPulsesByBins()
-    xValues = pulsesByBins['X_IDX']
+    xValues = pulsesByBins['NUMBER_OF_RETURNS']
     avgX = xValues.mean(axis=0)
     avgX = numpy.ma.expand_dims(avgX, axis=0)
     data.imageOut1.setData(avgX)
