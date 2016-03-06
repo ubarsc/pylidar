@@ -23,7 +23,22 @@ import numpy
 import optparse
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
+from pylidar.lidarformats import spdv4
 from rios import cuiprogress
+
+PULSE_DEFAULT_GAINS = {'AZIMUTH':100.0, 'ZENITH':100.0, 'X_IDX':100.0, 'Y_IDX':100.0,
+'X_ORIGIN':100.0, 'Y_ORIGIN':100.0, 'Z_ORIGIN':100.0, 'H_ORIGIN':100.0,
+'AMPLITUDE_PULSE':100.0, 'WIDTH_PULSE':100.0}
+PULSE_DEFAULT_OFFSETS = {'AZIMUTH':0.0, 'ZENITH':0.0, 'X_IDX':0.0, 'Y_IDX':0.0, 
+'X_ORIGIN':0.0, 'Y_ORIGIN':0.0, 'Z_ORIGIN':0.0, 'H_ORIGIN':0.0,
+'AMPLITUDE_PULSE':0.0, 'WIDTH_PULSE':0.0}
+
+POINT_DEFAULT_GAINS = {'X':100.0, 'Y':100.0, 'Z':100.0, 'HEIGHT':100.0, 'INTENSITY':1.0, 'RANGE':100.0, 'AMPLITUDE_RETURN':1.0, 'WIDTH_RETURN':1.0}
+POINT_DEFAULT_OFFSETS = {'X':0.0, 'Y':0.0, 'Z':0.0, 'HEIGHT':0.0, 'INTENSITY':0.0, 'RANGE':0.0, 'AMPLITUDE_RETURN':0.0, 'WIDTH_RETURN':0.0}
+
+WAVEFORM_DEFAULT_GAINS = {'RANGE_TO_WAVEFORM_START':100.0}
+WAVEFORM_DEFAULT_OFFSETS = {'RANGE_TO_WAVEFORM_START':0.0}
+
 
 class CmdArgs(object):
     def __init__(self):
@@ -74,9 +89,16 @@ def setOutputScaling(header, output):
         cols = output.getScalingColumns(arrayType)
         for col in cols:
             dtype = output.getNativeDataType(col, arrayType)
-            range, offset = getInfoFromHeader(col, header)
-            gain = numpy.iinfo(dtype).max / range
-            output.setScaling(col, arrayType, gain, offset)
+            if col in PULSE_DEFAULT_GAINS:
+                output.setScaling(col, lidarprocessor.ARRAY_TYPE_PULSES, PULSE_DEFAULT_GAINS[col], PULSE_DEFAULT_OFFSETS[col])
+            elif col in POINT_DEFAULT_GAINS:
+                output.setScaling(col, lidarprocessor.ARRAY_TYPE_POINTS, POINT_DEFAULT_GAINS[col], POINT_DEFAULT_OFFSETS[col]) 
+            elif col in WAVEFORM_DEFAULT_GAINS:
+                output.setScaling(col, lidarprocessor.ARRAY_TYPE_WAVEFORMS, WAVEFORM_DEFAULT_GAINS[col], WAVEFORM_DEFAULT_OFFSETS[col])
+            else:
+                range, offset = getInfoFromHeader(col, header)
+                gain = numpy.iinfo(dtype).max / range
+                output.setScaling(col, arrayType, gain, offset)
 
 def transFunc(data):
     pulses = data.input1.getPulses()
