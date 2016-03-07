@@ -28,8 +28,8 @@ from pylidar.lidarformats import las
 from rios import cuiprogress
 from osgeo import osr
 
-FIRST_RETURN = int(las.FIRST_RETURN)
-LAST_RETURN = int(las.LAST_RETURN)
+FIRST_RETURN = las.FIRST_RETURN
+LAST_RETURN = las.LAST_RETURN
 
 PULSE_DEFAULT_GAINS = {'X_ORIGIN':100.0,'Y_ORIGIN':100.0,'Z_ORIGIN':100.0,'AZIMUTH':100.0,'ZENITH':100.0,'X_IDX':100.0,'Y_IDX':100.0}
 PULSE_DEFAULT_OFFSETS = {'X_ORIGIN':0.0,'Y_ORIGIN':0.0,'Z_ORIGIN':0.0,'AZIMUTH':0.0,'ZENITH':0.0,'X_IDX':0.0,'Y_IDX':0.0}
