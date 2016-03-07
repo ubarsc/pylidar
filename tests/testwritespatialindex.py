@@ -23,6 +23,7 @@ import sys
 import tempfile
 import optparse
 import numpy as np
+import optparse
 from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
 from pylidar.toolbox.indexing import gridindex
