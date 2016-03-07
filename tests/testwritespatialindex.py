@@ -21,6 +21,7 @@ from __future__ import print_function, division
 import os
 import sys
 import tempfile
+import optparse
 import numpy as np
 from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
@@ -36,7 +37,7 @@ class CmdArgs(object):
     def __init__(self):
         p = optparse.OptionParser()
         p.add_option("-i","--infile", dest="infile",
-            type="Input SPD file")
+            help="Input SPD file")
         p.add_option("-o","--outfile", dest="outfile",
             help="Output SPD file with spatial index")
         p.add_option("-r","--resolution", dest="resolution",
@@ -56,7 +57,7 @@ class CmdArgs(object):
             sys.exit()
 
 
-def doindexing(cmdargs,dirname):
+def doIndexing(cmdargs,dirname):
     """
     Does the spatial indexing
     """
