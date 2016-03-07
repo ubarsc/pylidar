@@ -7,7 +7,8 @@ Introduction
 ------------
 
 A set of Python modules which makes it easy to write lidar
-processing code in Python. Built on top of `RIOS <http://rioshome.org/>`_
+processing code in Python. Based on `SPDLib <http://www.spdlib.org/>`_ and 
+built on top of `RIOS <http://rioshome.org/>`_
 it handles the details of opening and closing files, checking alignment of projection and 
 grid, stepping through the data in small blocks, etc., 
 allowing the programmer to concentrate on the processing involved. 
