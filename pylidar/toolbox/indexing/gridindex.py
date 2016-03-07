@@ -308,12 +308,22 @@ def indexPulses(pulses, points, recv, pulseIndexMethod):
     columns based on the user specified pulse_index_method.
     """
     if pulseIndexMethod == PULSE_INDEX_FIRST_RETURN:
-        xIdx = points['X'][0, ...]
-        yIdx = points['Y'][0, ...]
+        if points.shape[0] > 0:
+            xIdx = points['X'][0, ...]
+            yIdx = points['Y'][0, ...]
+        else:
+            xIdx = numpy.zeros(points.shape[1],dtype=numpy.uint32)
+            yIdx = numpy.zeros(points.shape[1],dtype=numpy.uint32)
     elif pulseIndexMethod == PULSE_INDEX_LAST_RETURN:
-        last = points.count(axis=0) - 1
-        xIdx = points['X'][last, ...]
-        yidx = points['Y'][last, ...]
+        if points.shape[0] > 0:
+            firstfield = points.dtype.names[0]
+            last = points[firstfield].count(axis=0) - 1
+            idx = numpy.arange(last.size)
+            xIdx = points['X'][last, idx]
+            yIdx = points['Y'][last, idx]
+        else:
+            xIdx = numpy.zeros(points.shape[1],dtype=numpy.uint32)
+            yIdx = numpy.zeros(points.shape[1],dtype=numpy.uint32)         
     else:
         msg = 'unsupported pulse indexing method'
         raise generic.LiDARPulseIndexUnsupported(msg)        
@@ -337,8 +347,8 @@ def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
     
     # update header
     nrows,ncols = pixGrid.getDimensions()
-    header['NUMBER_BINS_X'] = nrows
-    header['NUMBER_BINS_Y'] = ncols
+    header['NUMBER_BINS_X'] = ncols
+    header['NUMBER_BINS_Y'] = nrows
     
     progress.setTotalSteps(len(extentList))
     progress.setProgress(0)
