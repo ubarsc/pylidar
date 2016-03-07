@@ -40,13 +40,12 @@ WAVEFORM_DEFAULT_OFFSETS = {'RANGE_TO_WAVEFORM_START':0.0}
 class CmdArgs(object):
     def __init__(self):
         p = optparse.OptionParser()
-        p.add_option("--spatial", dest="spatial", 
-            help="Process the data spatially. Specify 'yes' or 'no'. " +
-            "Default is spatial if a spatial index exists.")
+        p.add_option("--spatial", dest="spatial", default=False, action="store_true", 
+            help="Process the data spatially. Default is False and if True requires a spatial index exists.")
         p.add_option("--buildpulses", dest="buildpulses", default=False, action="store_true",
             help="Build pulse data structure. " +
             "Default is False.")
-        p.add_option("--pulseindex", dest="pulseindex", default="FIRST_RETURN"
+        p.add_option("--pulseindex", dest="pulseindex", default="FIRST_RETURN",
             help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. Default is FIRST_RETURN.")
         p.add_option("--binsize", "-b", dest="binSize",
             help="Bin size to use when processing spatially")
@@ -204,11 +203,9 @@ def doTranslation(spatial, buildpulses, pulseindex, binSize, las, spd):
     """
     # first we need to determine if the file is spatial or not
     info = generic.getLidarFileInfo(las)
-    if spatial is not None:
-        if spatial and not info.hasSpatialIndex:
+    if spatial:
+        if not info.hasSpatialIndex:
             raise SystemExit("Spatial processing requested but file does not have spatial index")
-    else:
-        spatial = info.hasSpatialIndex
     
     if spatial and binSize is None:
         raise SystemExit("For spatial processing, the bin size (--binsize) must be set")
@@ -247,13 +244,5 @@ if __name__ == '__main__':
 
     cmdargs = CmdArgs()
     
-    spatial = None
-    if cmdargs.spatial is not None:
-        spatialStr = cmdargs.spatial.lower()
-        if spatialStr != 'yes' and spatialStr != 'no':
-            raise SystemExit("Must specify either 'yes' or 'no' for --spatial flag")
-    
-        spatial = (spatialStr == 'yes')
-    
-    doTranslation(spatial, cmdargs.buildpulses, cmdargs.pulseindex, cmdargs.binSize, cmdargs.las, cmdargs.spd)
+    doTranslation(cmdargs.spatial, cmdargs.buildpulses, cmdargs.pulseindex, cmdargs.binSize, cmdargs.las, cmdargs.spd)
     
