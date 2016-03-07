@@ -325,9 +325,10 @@ PyObject *pOptionDict;
     PyObject *pPulseIndex = PyDict_GetItemString(pOptionDict, "PULSE_INDEX");
     if( pPulseIndex != NULL )
     {
-        if( PyLong_Check(pPulseIndex) )
+        PyObject *pPulseIndexLong = PyNumber_Long(pPulseIndex);
+        if( PyLong_Check(pPulseIndexLong) )
         {
-            self->nPulseIndex = PyLong_AsLong(pPulseIndex);
+            self->nPulseIndex = PyLong_AsLong(pPulseIndexLong);
         }
         else
         {
