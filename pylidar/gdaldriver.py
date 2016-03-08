@@ -87,7 +87,7 @@ class GDALDriver(basedriver.Driver):
         to file coords.
         """
         self.blockxcoord, self.blockycoord = gdal.ApplyGeoTransform(self.invGeoTrans,
-                                    extent.xMin, extent.yMax)
+                                    float(extent.xMin), float(extent.yMax))
         self.blockxcoord = int(self.blockxcoord)                            
         self.blockycoord = int(self.blockycoord)                            
                                     
