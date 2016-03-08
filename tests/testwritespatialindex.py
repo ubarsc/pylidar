@@ -66,7 +66,7 @@ def doIndexing(cmdargs,dirname):
     info = generic.getLidarFileInfo(cmdargs.infile)
     h = info.header
 
-    if cmdargs.indextype is "CARTESIAN":        
+    if cmdargs.indextype == "CARTESIAN":        
         ulx = np.floor(h["X_MIN"])
         uly = np.ceil(h["Y_MAX"])
         lrx = np.ceil(h["X_MAX"])
@@ -82,7 +82,7 @@ def doIndexing(cmdargs,dirname):
                                          indexMethod=INDEX_CARTESIAN,
                                          pulseIndexMethod=pulseindexmethod)
 
-    elif cmdargs.indextype is "SPHERICAL":        
+    elif cmdargs.indextype == "SPHERICAL":        
         ulx = 0.0
         uly = 180.0
         lrx = 360.0
@@ -92,9 +92,9 @@ def doIndexing(cmdargs,dirname):
                                          extent=extent, tempDir=dirname,
                                          indexMethod=INDEX_SPHERICAL)
         
-    elif cmdargs.indextype is "SCAN":        
+    elif cmdargs.indextype == "SCAN":        
        gridindex.createGridSpatialIndex(cmdargs.infile, cmdargs.outfile, tempDir=dirname,
-                                         indexMethod=INDEX_SCAN)
+                                         indexMethod=INDEX_SCAN, binSize=cmdargs.resolution)
 
     else:
         msg = 'Unsupported spatial indexing method'
