@@ -30,7 +30,7 @@ from . import gridindexutils
 from . import h5space
 
 # Header fields have defined type in SPDV4
-HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float32, 'AZIMUTH_MIN' : numpy.float32,
+HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'BANDWIDTHS' : numpy.float32, 'BIN_SIZE' : numpy.float32,
 'BLOCK_SIZE_POINT' : numpy.uint16, 'BLOCK_SIZE_PULSE' : numpy.uint16,
 'BLOCK_SIZE_WAVEFORM' : numpy.uint16,
@@ -65,7 +65,7 @@ HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float32, 'AZIMUTH_MIN' : numpy.float32,
 'X_MAX' : numpy.float64, 'X_MIN' : numpy.float64, 'Y_MAX' : numpy.float64,
 'Y_MIN' : numpy.float64, 'Z_MAX' : numpy.float64, 'Z_MIN' : numpy.float64,
 'HEIGHT_MIN' : numpy.float32, 'HEIGHT_MAX' : numpy.float32, 
-'ZENITH_MAX' : numpy.float32, 'ZENITH_MIN' : numpy.float32,
+'ZENITH_MAX' : numpy.float64, 'ZENITH_MIN' : numpy.float64,
 'RGB_FIELD' : bytes}
 
 HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS', 'VERSION_SPD', 'VERSION_DATA', 'RGB_FIELD')
@@ -79,8 +79,8 @@ HEADER_ESSENTIAL_FIELDS = ('SPATIAL_REFERENCE', 'VERSION_DATA')
 
 # The following fields have defined type
 PULSE_FIELDS = {'PULSE_ID' : numpy.uint64, 'TIMESTAMP' : numpy.uint64,
-'NUMBER_OF_RETURNS' : numpy.uint8, 'AZIMUTH' : numpy.uint16, 
-'ZENITH' : numpy.uint16, 'SOURCE_ID' : numpy.uint16, 
+'NUMBER_OF_RETURNS' : numpy.uint8, 'AZIMUTH' : numpy.uint32, 
+'ZENITH' : numpy.uint32, 'SOURCE_ID' : numpy.uint16, 
 'PULSE_WAVELENGTH_IDX' : numpy.uint8, 'NUMBER_OF_WAVEFORM_SAMPLES' : numpy.uint8,
 'WFM_START_IDX' : numpy.uint64, 'PTS_START_IDX' : numpy.uint64, 
 'SCANLINE' : numpy.uint32, 'SCANLINE_IDX' : numpy.uint16, 'X_IDX' : numpy.uint32,
@@ -484,7 +484,8 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         
         # return the new ones in the correct order to write
         # and the mask to remove points, waveforms etc
-        return pulses, mask
+        # and the bin index to sort points, waveforms, etc
+        return pulses, mask, sortedBins
 
 class SPDV4File(generic.LiDARFile):
     """
@@ -1178,15 +1179,16 @@ spatial index will be recomputed on the fly"""
         
         return recv
             
-    def preparePulsesForWriting(self, pulses, points):
+    def preparePulsesForWriting(self, pulses):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
         """
         if pulses.size == 0:
-            return None, None
+            return None, None, None
             
         mask = None
+        binidx = None
             
         if pulses.ndim == 3:
             # must flatten back to be 1d using the indexes
@@ -1234,12 +1236,12 @@ spatial index will be recomputed on the fly"""
                         (y_idx <= self.extent.yMax))
                 pulses = pulses[mask]
                 self.lastPulsesSpace.updateBoolArray(mask)
-            else:  # update
+            else:  # create
                 # get the spatial index handling code to sort it.
-                pulses, mask = self.si_handler.setPulsesForExtent(
+                pulses, mask, binidx = self.si_handler.setPulsesForExtent(
                                         self.extent, pulses, self.lastPulseID)
           
-        return pulses, mask
+        return pulses, mask, binidx
 
     def preparePointsForWriting(self, points, mask):
         """
@@ -1329,8 +1331,8 @@ spatial index will be recomputed on the fly"""
                     # we didn't do this in writeData, but we can do it now
                     points = points[mask]
                     self.lastPointsSpace.updateBoolArray(self.lastPoints3d_InRegionMask)                        
-                
-                self.lastPointsSpace.updateBoolArray(mask)
+                else:
+                    self.lastPointsSpace.updateBoolArray(mask)
 
         else:
             # need to check that passed in data has all the required fields
@@ -1736,7 +1738,7 @@ spatial index will be recomputed on the fly"""
             else:
                 pulses = self.readPulsesForRange()
     
-        pulses, mask = self.preparePulsesForWriting(pulses, points)
+        pulses, mask, binidx = self.preparePulsesForWriting(pulses)
         if mask is not None:
             # strip out the ones outside the current extent
             if points is not None:
@@ -1749,6 +1751,8 @@ spatial index will be recomputed on the fly"""
                                 mask=self.lastPoints_IdxMask)
                     # mask out outside block
                     points = points[...,mask]
+                    if binidx is not None:
+                        points = points[...,binidx]
                 elif points.ndim == 3:
                     # readPointsByBins
                     # handled by preparePointsForWriting
@@ -1757,12 +1761,20 @@ spatial index will be recomputed on the fly"""
                 else:
                     # ndim == 2
                     points = points[...,mask]
+                    if binidx is not None:
+                        points = points[...,binidx]
             if waveformInfo is not None:
                 waveformInfo = waveformInfo[...,mask]
+                if binidx is not None:
+                    waveformInfo = waveformInfo[...,binidx]
             if received is not None:
                 received = received[...,...,mask]
+                if binidx is not None:
+                    received = received[...,...,binidx]
             if transmitted is not None:
                 transmitted = transmitted[...,...,mask]
+                if binidx is not None:
+                    transmitted = transmitted[...,...,binidx]
         
         if points is not None:
             points, pts_start, nreturns, returnNumber = (
@@ -1871,7 +1883,7 @@ spatial index will be recomputed on the fly"""
                                     points[name], name, generic.ARRAY_TYPE_POINTS)
 
                     if data.size > 0:
-                        self.lastPointsSpace.write(pointsHandle[hdfname], data)
+                        self.lastPointsSpace.write(pointsHandle[hdfname], data.copy())
                     
             if writePulses and pulses is not None:
                 pulsesHandle = self.fileHandle['DATA']['PULSES']

@@ -31,7 +31,7 @@
 #include <limits>
 #include "fwifc.h"
 
-static const int nGrowBy = 1000;
+static const int nGrowBy = 5000;
 static const int nInitSize = 40000;
 
 /* An exception object for this module */
@@ -192,7 +192,7 @@ public:
         }
     }
 
-    npy_uint32 getFirstPointIdx()
+    npy_uint64 getFirstPointIdx()
     {
         npy_uint32 idx = 0;
         SRieglPulse *p = m_Pulses.getFirstElement();
@@ -205,7 +205,7 @@ public:
 
     void renumberPointIdxs()
     {
-        npy_uint32 nPointIdx = getFirstPointIdx();
+        npy_uint64 nPointIdx = getFirstPointIdx();
         if( nPointIdx == 0 )
             return;
         // reset all the pointStartIdx fields in the pulses to match
@@ -448,6 +448,7 @@ public:
         m_scanline(0),
         m_scanlineIdx(0),
         m_maxScanlineIdx(0),
+        m_numPulses(0),
         m_bHaveData(false)
     {
 
@@ -582,6 +583,7 @@ public:
             PyDict_SetItemString(pDict, "SCANLINE_MAX", PyLong_FromLong(m_scanline));
             PyDict_SetItemString(pDict, "SCANLINE_IDX_MIN", PyLong_FromLong(0));
             PyDict_SetItemString(pDict, "SCANLINE_IDX_MAX", PyLong_FromLong(m_maxScanlineIdx));
+            PyDict_SetItemString(pDict, "NUMBER_OF_PULSES", PyLong_FromLong(m_numPulses));
         }
         return pDict;
     }
@@ -666,6 +668,7 @@ protected:
         {
             m_maxScanlineIdx = m_scanlineIdx;
         }
+        m_numPulses++;
     }
 
     // beam geometry
@@ -706,6 +709,7 @@ private:
     long m_scanline;
     long m_scanlineIdx;
     long m_maxScanlineIdx;
+    long m_numPulses;
     bool m_bHaveData;
 };
 
