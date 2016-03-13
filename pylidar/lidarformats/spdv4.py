@@ -30,7 +30,7 @@ from . import gridindexutils
 from . import h5space
 
 # Header fields have defined type in SPDV4
-HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float32, 'AZIMUTH_MIN' : numpy.float32,
+HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'BANDWIDTHS' : numpy.float32, 'BIN_SIZE' : numpy.float32,
 'BLOCK_SIZE_POINT' : numpy.uint16, 'BLOCK_SIZE_PULSE' : numpy.uint16,
 'BLOCK_SIZE_WAVEFORM' : numpy.uint16,
@@ -65,7 +65,7 @@ HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float32, 'AZIMUTH_MIN' : numpy.float32,
 'X_MAX' : numpy.float64, 'X_MIN' : numpy.float64, 'Y_MAX' : numpy.float64,
 'Y_MIN' : numpy.float64, 'Z_MAX' : numpy.float64, 'Z_MIN' : numpy.float64,
 'HEIGHT_MIN' : numpy.float32, 'HEIGHT_MAX' : numpy.float32, 
-'ZENITH_MAX' : numpy.float32, 'ZENITH_MIN' : numpy.float32,
+'ZENITH_MAX' : numpy.float64, 'ZENITH_MIN' : numpy.float64,
 'RGB_FIELD' : bytes}
 
 HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS', 'VERSION_SPD', 'VERSION_DATA', 'RGB_FIELD')
@@ -79,8 +79,8 @@ HEADER_ESSENTIAL_FIELDS = ('SPATIAL_REFERENCE', 'VERSION_DATA')
 
 # The following fields have defined type
 PULSE_FIELDS = {'PULSE_ID' : numpy.uint64, 'TIMESTAMP' : numpy.uint64,
-'NUMBER_OF_RETURNS' : numpy.uint8, 'AZIMUTH' : numpy.uint16, 
-'ZENITH' : numpy.uint16, 'SOURCE_ID' : numpy.uint16, 
+'NUMBER_OF_RETURNS' : numpy.uint8, 'AZIMUTH' : numpy.uint32, 
+'ZENITH' : numpy.uint32, 'SOURCE_ID' : numpy.uint16, 
 'PULSE_WAVELENGTH_IDX' : numpy.uint8, 'NUMBER_OF_WAVEFORM_SAMPLES' : numpy.uint8,
 'WFM_START_IDX' : numpy.uint64, 'PTS_START_IDX' : numpy.uint64, 
 'SCANLINE' : numpy.uint32, 'SCANLINE_IDX' : numpy.uint16, 'X_IDX' : numpy.uint32,
