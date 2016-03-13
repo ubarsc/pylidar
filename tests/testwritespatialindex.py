@@ -85,7 +85,7 @@ def doIndexing(cmdargs,dirname):
         ulx = 0.0
         uly = 180.0
         lrx = 360.0
-        lry = 0.0        
+        lry = 0.0
         extent = Extent(ulx, lrx, lry, uly, cmdargs.resolution)            
         gridindex.createGridSpatialIndex(cmdargs.infile, cmdargs.outfile, 
                                          extent=extent, tempDir=dirname,
@@ -102,7 +102,8 @@ def doIndexing(cmdargs,dirname):
 
 if __name__ == '__main__':
 
-    dirname = tempfile.mkdtemp()
+    cwd = os.path.join(os.getcwd(),"")
+    dirname = tempfile.mkdtemp(prefix=cwd)
     cmdargs = CmdArgs()
     doIndexing(cmdargs,dirname)
-    os.removedirs(dirname)         
+    os.removedirs(dirname)        
