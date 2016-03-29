@@ -147,6 +147,7 @@ def setOutputScaling(rangeDict, output):
         if key.endswith('_MIN'):
             field = key[0:-4]            
             if field in POINT_DEFAULT_GAINS:
+                checkScalingPositive(POINT_DEFAULT_GAINS[field], POINT_DEFAULT_OFFSETS[field], rangeDict['points'][key], key)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, POINT_DEFAULT_GAINS[field], POINT_DEFAULT_OFFSETS[field])            
             else:
                 minVal = rangeDict['points'][key]
@@ -163,6 +164,16 @@ def setOutputScaling(rangeDict, output):
                 maxVal = rangeDict['waveforms'][key.replace('_MIN','_MAX')]
                 gain = np.iinfo(spdv4.WAVEFORM_FIELDS[field]).max / (maxVal - minVal)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, gain, minVal)
+
+
+def checkScalingPositive(gain, offset, minVal, varName):
+    """
+    Check that the given gain and offset will not give rise to
+    negative values when applied to the minimum value. 
+    """
+    scaledVal = (minVal - offset) * gain
+    if scaledVal < 0:
+        raise Spd4ImportError("Scaling for %s gives negative values, which SPD4 will not cope with. Over-ride defaults on commandline. " % varName)
 
 
 def setHeaderValues(rangeDict, lasInfo, output):
@@ -248,6 +259,10 @@ def doTranslation(spatial, buildpulses, pulseindex, epsg, binSize, las, spd):
 
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
                     otherArgs=otherDict)
+
+
+class Spd4ImportError(Exception): pass
+
     
 if __name__ == '__main__':
 
