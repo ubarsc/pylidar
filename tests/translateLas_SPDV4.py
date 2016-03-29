@@ -60,6 +60,8 @@ def getCmdargs():
         help="output SPD V4 file name")
     p.add_argument("--epsg", type=int,
         help="Set to the EPSG (if not in supplied LAS file)")
+    p.add_argument("--scaling", nargs=3, metavar=('varName', 'gain', 'offset'), action='append',
+        help="Set gain and offset scaling for named variable. Can be given multiple times for different variables")
 
     cmdargs = p.parse_args()
 
@@ -178,6 +180,19 @@ def checkScalingPositive(gain, offset, minVal, varName):
         raise Spd4ImportError("Scaling for %s gives negative values, which SPD4 will not cope with. Over-ride defaults on commandline. " % varName)
 
 
+def overRideDefaultScalings(cmdargs):
+    """
+    Any scalings given on the commandline should over-ride the default behaviours
+    """
+    for (varName, gain, offset) in cmdargs.scaling:
+        if varName in POINT_DEFAULT_GAINS:
+            POINT_DEFAULT_GAINS[varName] = gain
+            POINT_DEFAULT_OFFSETS[varName] = offset
+        elif varName in PULSE_DEFAULT_GAINS:
+            PULSE_DEFAULT_GAINS[varName] = gain
+            PULSE_DEFAULT_OFFSETS[varName] = offset
+
+
 def setHeaderValues(rangeDict, lasInfo, output):
     """
     Set the header values in the output SPD V4 file using info gathered
@@ -266,12 +281,19 @@ def doTranslation(spatial, buildpulses, pulseindex, epsg, binSize, las, spd):
 class Spd4ImportError(Exception): pass
 
     
-if __name__ == '__main__':
-
-    cmdargs = CmdArgs()
+def mainRoutine():
+    """
+    Main routine
+    """
+    cmdargs = getCmdargs()
     
-    
+    overRideDefaultScalings(cmdargs)
     
     doTranslation(cmdargs.spatial, cmdargs.buildpulses, cmdargs.pulseindex, 
                   cmdargs.epsg, cmdargs.binSize, cmdargs.las, cmdargs.spd)
     
+
+
+
+if __name__ == '__main__':
+    mainRoutine()
