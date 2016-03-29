@@ -52,7 +52,7 @@ def getCmdargs():
         help="Build pulse data structure. Default is False.")
     p.add_argument("--pulseindex", default="FIRST_RETURN",
         help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. Default is FIRST_RETURN.")
-    p.add_argument("--binsize", "-b", 
+    p.add_argument("--binSize", "-b", 
         help="Bin size to use when processing spatially")
     p.add_argument("--las", 
         help="Input las .las file")
@@ -60,7 +60,7 @@ def getCmdargs():
         help="output SPD V4 file name")
     p.add_argument("--epsg", type=int,
         help="Set to the EPSG (if not in supplied LAS file)")
-    p.add_argument("--scaling", nargs=3, metavar=('varName', 'gain', 'offset'), action='append',
+    p.add_argument("--scaling", nargs=3, metavar=('varName', 'gain', 'offset'), action='append', 
         help="Set gain and offset scaling for named variable. Can be given multiple times for different variables")
 
     cmdargs = p.parse_args()
@@ -185,13 +185,16 @@ def overRideDefaultScalings(cmdargs):
     """
     Any scalings given on the commandline should over-ride the default behaviours
     """
-    for (varName, gain, offset) in cmdargs.scaling:
-        if varName in POINT_DEFAULT_GAINS:
-            POINT_DEFAULT_GAINS[varName] = gain
-            POINT_DEFAULT_OFFSETS[varName] = offset
-        elif varName in PULSE_DEFAULT_GAINS:
-            PULSE_DEFAULT_GAINS[varName] = gain
-            PULSE_DEFAULT_OFFSETS[varName] = offset
+    if cmdargs.scaling is not None:
+        for (varName, gainStr, offsetStr) in cmdargs.scaling:
+            gain = float(gainStr)
+            offset = float(offsetStr)
+            if varName in POINT_DEFAULT_GAINS:
+                POINT_DEFAULT_GAINS[varName] = gain
+                POINT_DEFAULT_OFFSETS[varName] = offset
+            elif varName in PULSE_DEFAULT_GAINS:
+                PULSE_DEFAULT_GAINS[varName] = gain
+                PULSE_DEFAULT_OFFSETS[varName] = offset
 
 
 def setHeaderValues(rangeDict, lasInfo, output):
