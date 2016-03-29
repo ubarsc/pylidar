@@ -157,7 +157,10 @@ def setOutputScaling(rangeDict, output):
             else:
                 minVal = rangeDict['points'][key]
                 maxVal = rangeDict['points'][key.replace('_MIN','_MAX')]
-                gain = np.iinfo(spdv4.POINT_FIELDS[field]).max / (maxVal - minVal)
+                if maxVal == minVal:
+                    gain = 1.0
+                else:
+                    gain = np.iinfo(spdv4.POINT_FIELDS[field]).max / (maxVal - minVal)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, gain, minVal)
     for key in rangeDict['waveforms'].keys():
         if key.endswith('_MIN'):
