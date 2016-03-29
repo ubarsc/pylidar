@@ -141,6 +141,7 @@ def setOutputScaling(rangeDict, output):
         if key.endswith('_MIN'):
             field = key[0:-4]
             if field in PULSE_DEFAULT_GAINS:
+                checkScalingPositive(PULSE_DEFAULT_GAINS[field], PULSE_DEFAULT_OFFSETS[field], rangeDict['pulses'][key], key)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, PULSE_DEFAULT_GAINS[field], PULSE_DEFAULT_OFFSETS[field])
             else:
                 minVal = rangeDict['pulses'][key]
