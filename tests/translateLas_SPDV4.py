@@ -19,7 +19,7 @@
 from __future__ import print_function, division
 
 import sys
-import optparse
+import argparse
 import numpy as np
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
@@ -41,31 +41,33 @@ WAVEFORM_DEFAULT_GAINS = {'RANGE_TO_WAVEFORM_START':100.0}
 WAVEFORM_DEFAULT_OFFSETS = {'RANGE_TO_WAVEFORM_START':0.0}
 
 
-class CmdArgs(object):
-    def __init__(self):
-        p = optparse.OptionParser()
-        p.add_option("--spatial", dest="spatial", default=False, action="store_true", 
-            help="Process the data spatially. Default is False and if True requires a spatial index exists.")
-        p.add_option("--buildpulses", dest="buildpulses", default=False, action="store_true",
-            help="Build pulse data structure. " +
-            "Default is False.")
-        p.add_option("--pulseindex", dest="pulseindex", default="FIRST_RETURN",
-            help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. Default is FIRST_RETURN.")
-        p.add_option("--binsize", "-b", dest="binSize",
-            help="Bin size to use when processing spatially")
-        p.add_option("--las", dest="las",
-            help="Input las .las file")
-        p.add_option("--spd", dest="spd",
-            help="output SPD V4 file name")
-        p.add_option("--epsg", dest="epsg", type=int,
-            help="Set to the EPSG (if not in supplied LAS file)")
-            
-        (options, args) = p.parse_args()
-        self.__dict__.update(options.__dict__)
+def getCmdargs():
+    """
+    Get commandline arguments
+    """
+    p = argparse.ArgumentParser()
+    p.add_argument("--spatial", default=False, action="store_true", 
+        help="Process the data spatially. Default is False and if True requires a spatial index exists.")
+    p.add_argument("--buildpulses", default=False, action="store_true",
+        help="Build pulse data structure. Default is False.")
+    p.add_argument("--pulseindex", default="FIRST_RETURN",
+        help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. Default is FIRST_RETURN.")
+    p.add_argument("--binsize", "-b", 
+        help="Bin size to use when processing spatially")
+    p.add_argument("--las", 
+        help="Input las .las file")
+    p.add_argument("--spd", 
+        help="output SPD V4 file name")
+    p.add_argument("--epsg", type=int,
+        help="Set to the EPSG (if not in supplied LAS file)")
 
-        if self.las is None or self.spd is None:
-            p.print_help()
-            sys.exit()
+    cmdargs = p.parse_args()
+
+    if cmdargs.las is None or cmdargs.spd is None:
+        p.print_help()
+        sys.exit()
+        
+    return cmdargs
 
 
 def rangeFunc(data, rangeDict):
