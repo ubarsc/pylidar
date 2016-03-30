@@ -209,7 +209,7 @@ def setHeaderValues(rangeDict, lasInfo, output):
     if rangeDict['epsg'] is not None:
         sr = osr.SpatialReference()
         sr.ImportFromEPSG(rangeDict['epsg'])
-        header['SPATIAL_REFERENCE'] = sr.ExportToWkt()    
+        h['SPATIAL_REFERENCE'] = sr.ExportToWkt()    
     output.setHeader(h)
 
 
