@@ -21,12 +21,14 @@ from __future__ import print_function, division
 import sys
 import argparse
 import numpy as np
+import liblas
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
 from pylidar.lidarformats import las
 from rios import cuiprogress
 from osgeo import osr
+
 
 FIRST_RETURN = las.FIRST_RETURN
 LAST_RETURN = las.LAST_RETURN
@@ -59,7 +61,7 @@ def getCmdargs():
     p.add_argument("--spd", 
         help="output SPD V4 file name")
     p.add_argument("--epsg", type=int,
-        help="Set to the EPSG (if not in supplied LAS file)")
+        help="Set to the EPSG (if not in supplied LAS file). i.e. GDA / MGA Zone 56 is 28356")
     p.add_argument("--scaling", nargs=3, metavar=('varName', 'gain', 'offset'), action='append', 
         help="Set gain and offset scaling for named variable. Can be given multiple times for different variables")
 
@@ -212,6 +214,13 @@ def setHeaderValues(rangeDict, lasInfo, output):
         h['SPATIAL_REFERENCE'] = sr.ExportToWkt()    
     output.setHeader(h)
 
+def checkSpatialRef(las):
+    """
+    Check if there is an EPSG defined in the Las file.
+    """
+    h = liblas.file.File(las, mode = 'r').header
+    wkt = h.srs.wkt
+    return wkt
 
 def transFunc(data, otherDict):
     """
@@ -296,6 +305,12 @@ def mainRoutine():
     
     overRideDefaultScalings(cmdargs)
     
+    if cmdargs.epsg is None:
+        wkt = checkSpatialRef(cmdargs.las)
+        print(wkt)
+        if len(wkt) == 0:
+            sys.exit("No projection set in las file. Must set EPSG on command line")
+       
     doTranslation(cmdargs.spatial, cmdargs.buildpulses, cmdargs.pulseindex, 
                   cmdargs.epsg, cmdargs.binSize, cmdargs.las, cmdargs.spd)
     
