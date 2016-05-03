@@ -16,7 +16,6 @@
 import sys
 import os
 import shlex
-import pylidar
 
 # Set up 'mock' modules, needed to build docs if numpy, gdal etc., aren't installed
 import mock
@@ -25,13 +24,16 @@ import importlib
 MOCK_MODULES = ['numpy','numba','scipy','scipy.ndimage','scipy.constants','scipy.stats',
         'scipy.interpolate', 'rios', 'rios.imagereader', 'rios.imagewriter',
         'rios.imageio', 'rios.cuiprogress', 'rios.pixelgrid', 
-        'h5py',
-        'osgeo','gdal','osgeo.gdal','pylidar._las', 'pylidar._riegl']
+        'h5py', 'osgeo', 'osgeo.gdal', 'osgeo.osr', 
+        'pylidar._las', 'pylidar._riegl', 'liblas', 'matplotlib']
 for mod_name in MOCK_MODULES:
     try:
         importlib.import_module(mod_name)
     except ImportError:
         sys.modules[mod_name] = mock.Mock()
+
+import pylidar
+
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
