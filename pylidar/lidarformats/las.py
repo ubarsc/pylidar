@@ -97,7 +97,11 @@ from osgeo import osr
 from rios import pixelgrid
 
 from . import generic
-from . import _las
+# Fail slightly less drastically when running from ReadTheDocs
+try:
+    from . import _las
+except ImportError:
+    pass
 from . import gridindexutils
 
 READSUPPORTEDOPTIONS = _las.getReadSupportedOptions()
