@@ -65,6 +65,7 @@ try:
     SUPPORTEDOPTIONS = _riegl.getSupportedOptions()
 except ImportError:
     pass
+    SUPPORTEDOPTIONS = {}
 from . import gridindexutils
 
 def isRieglFile(fname):

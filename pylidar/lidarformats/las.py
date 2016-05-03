@@ -111,7 +111,12 @@ try:
     # a tuple. Probably need to sort this at some stage    
     LAS_WAVEFORM_TABLE_FIELDS = list(_las.getExpectedWaveformFieldsForDescr())
 except ImportError:
-    pass
+    READSUPPORTEDOPTIONS = None
+    WRITESUPPORTEDOPTIONS = None
+    FIRST_RETURN = None
+    LAST_RETURN = None
+    LAS_WAVEFORM_TABLE_FIELDS = []
+    
 from . import gridindexutils
 
 
