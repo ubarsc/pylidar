@@ -27,17 +27,22 @@ import ctypes
 
 # Need to give ourselves access to H5Sselect_hyperslab()
 # within the HDF5 library so we can call it from numba
-if sys.platform == 'win32':
-    HDF5_DLL = ctypes.CDLL('hdf5.dll')
-elif sys.platform == 'darwin':
-    HDF5_DLL = ctypes.CDLL('libhdf5.dylib')
-else:
-    HDF5_DLL = ctypes.CDLL('libhdf5.so')
-H5Sselect_hyperslab = HDF5_DLL.H5Sselect_hyperslab
-# checked on 64 and 32 bits
-H5Sselect_hyperslab.argtypes = [ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p, 
-                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
-H5Sselect_hyperslab.restype = ctypes.c_int32
+# Sadly, we also need to cope with not accessing this, in order that ReadTheDocs will still 
+# be able to build to documentation. Hence the elaborate try/except madness. 
+try:
+    if sys.platform == 'win32':
+        HDF5_DLL = ctypes.CDLL('hdf5.dll')
+    elif sys.platform == 'darwin':
+        HDF5_DLL = ctypes.CDLL('libhdf5.dylib')
+    else:
+        HDF5_DLL = ctypes.CDLL('libhdf5.so')
+    H5Sselect_hyperslab = HDF5_DLL.H5Sselect_hyperslab
+    # checked on 64 and 32 bits
+    H5Sselect_hyperslab.argtypes = [ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p, 
+                    ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+    H5Sselect_hyperslab.restype = ctypes.c_int32
+except Exception:
+    H5Sselect_hyperslab = None
 
 @jit
 def convertBoolToHDF5Space(boolArray, boolStart, spaceid, start, count, 
