@@ -100,16 +100,21 @@ from . import generic
 # Fail slightly less drastically when running from ReadTheDocs
 try:
     from . import _las
+    READSUPPORTEDOPTIONS = _las.getReadSupportedOptions()
+    WRITESUPPORTEDOPTIONS = _las.getWriteSupportedOptions()
+
+    # bring constants over
+    FIRST_RETURN = _las.FIRST_RETURN
+    LAST_RETURN = _las.LAST_RETURN
+
+    # numpy needs a list before it will pull out fields, C returns
+    # a tuple. Probably need to sort this at some stage    
+    LAS_WAVEFORM_TABLE_FIELDS = list(_las.getExpectedWaveformFieldsForDescr())
 except ImportError:
     pass
 from . import gridindexutils
 
-READSUPPORTEDOPTIONS = _las.getReadSupportedOptions()
-WRITESUPPORTEDOPTIONS = _las.getWriteSupportedOptions()
 
-# bring constants over
-FIRST_RETURN = _las.FIRST_RETURN
-LAST_RETURN = _las.LAST_RETURN
 
 # types for the spatial index
 LAS_SIMPLEGRID_COUNT_DTYPE = numpy.uint32
@@ -829,9 +834,6 @@ def getWavePacketDescriptions(fname):
                     
     return otherArgs.uniqueInfo
 
-# numpy needs a list before it will pull out fields, C returns
-# a tuple. Probably need to sort this at some stage    
-LAS_WAVEFORM_TABLE_FIELDS = list(_las.getExpectedWaveformFieldsForDescr())
     
 def gatherWavePackets(data, otherArgs):
     """
