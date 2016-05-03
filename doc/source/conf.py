@@ -24,8 +24,9 @@ import importlib
 
 MOCK_MODULES = ['numpy','numba','scipy','scipy.ndimage','scipy.constants','scipy.stats',
         'scipy.interpolate', 'rios', 'rios.imagereader', 'rios.imagewriter',
+        'rios.imageio', 'rios.cuiprogress', 'rios.pixelgrid', 
         'h5py',
-        'osgeo','gdal','osgeo.gdal','rios', 'pylidar._las', 'pylidar._riegl']
+        'osgeo','gdal','osgeo.gdal','pylidar._las', 'pylidar._riegl']
 for mod_name in MOCK_MODULES:
     try:
         importlib.import_module(mod_name)
