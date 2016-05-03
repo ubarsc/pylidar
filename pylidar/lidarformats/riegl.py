@@ -62,11 +62,10 @@ from . import generic
 # Fail slightly less drastically when running from ReadTheDocs
 try:
     from . import _riegl
+    SUPPORTEDOPTIONS = _riegl.getSupportedOptions()
 except ImportError:
     pass
 from . import gridindexutils
-
-SUPPORTEDOPTIONS = _riegl.getSupportedOptions()
 
 def isRieglFile(fname):
     """
