@@ -20,6 +20,8 @@ Driver for GDAL supported files
 
 from __future__ import print_function, division
 
+from distutils.version import LooseVersion
+
 import numpy
 from osgeo import gdal
 from rios import pixelgrid
@@ -60,7 +62,11 @@ class GDALDriver(basedriver.Driver):
             
             # get this other information while we are here
             self.geoTrans = self.ds.GetGeoTransform()
-            success, self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
+            gdalVersion = LooseVersion(gdal.__version__)
+            if gdalVersion < LooseVersion('2.0.0')
+                success, self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
+            else:
+                self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
             self.gdalType = self.ds.GetRasterBand(1).DataType
             
             self.pixGrid = None # unused in read case
@@ -109,7 +115,11 @@ class GDALDriver(basedriver.Driver):
         # the dataset when we know the type, bands etc
         self.pixGrid = pixGrid
         self.geoTrans = self.pixGrid.makeGeoTransform()
-        success, self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
+        gdalVersion = LooseVersion(gdal.__version__)
+        if gdalVersion < LooseVersion('2.0.0')
+            success, self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
+        else:
+            self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
             
     def close(self):
         """
