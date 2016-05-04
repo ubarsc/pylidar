@@ -63,7 +63,7 @@ class GDALDriver(basedriver.Driver):
             # get this other information while we are here
             self.geoTrans = self.ds.GetGeoTransform()
             gdalVersion = LooseVersion(gdal.__version__)
-            if gdalVersion < LooseVersion('2.0.0')
+            if gdalVersion < LooseVersion('2.0.0'):
                 success, self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
             else:
                 self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
@@ -116,7 +116,7 @@ class GDALDriver(basedriver.Driver):
         self.pixGrid = pixGrid
         self.geoTrans = self.pixGrid.makeGeoTransform()
         gdalVersion = LooseVersion(gdal.__version__)
-        if gdalVersion < LooseVersion('2.0.0')
+        if gdalVersion < LooseVersion('2.0.0'):
             success, self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
         else:
             self.invGeoTrans = gdal.InvGeoTransform(self.geoTrans)
