@@ -16,10 +16,11 @@ It is licensed under GPL 3.
 
 See :doc:`spdv4format` for description of the SPD V4 file format. 
 
-See the `Array Visualisation <https://bitbucket.org/chchrsc/pylidar/wiki/arrays>`_ page to understand how numpy 
+See the :doc:`arrayvisualisation` page to understand how numpy 
 arrays are used in PyLidar.
 
-Work funded by `DSITI <https://www.qld.gov.au/dsiti/>`_ through the 
+Work funded by `DSITI <https://www.qld.gov.au/dsiti/>`_ and 
+`OEH <http://www.environment.nsw.gov.au/>`_ through the 
 `Joint Remote Sensing Research Program <https://www.gpem.uq.edu.au/jrsrp>`_.
 
 Example
@@ -60,6 +61,20 @@ Downloads
 ---------
 
 Source code is available from `BitBucket <https://bitbucket.org/chchrsc/pylidar>`_.
+
+`Conda <http://conda.pydata.org/miniconda.html#miniconda>`_ packages are available under the 'rios' channel.
+Once you have installed `Conda <http://conda.pydata.org/miniconda.html#miniconda>`_, run the following commands on the command line to install pylidar: ::
+
+    conda config --add channels conda-forge 
+    conda config --add channels rios 
+    conda create -n myenv pylidar
+    source activate myenv # omit 'source' on Windows
+
+The related `pynninterp <https://bitbucket.org/petebunting/pynninterp>`_ module is used
+for some interpolation operations and can be installed via Conda also from the 'rios' channel::
+
+    conda install pynninterp
+
 
 Processing
 -----------
