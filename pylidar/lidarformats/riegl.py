@@ -59,10 +59,14 @@ import copy
 import numpy
 
 from . import generic
-from . import _riegl
+# Fail slightly less drastically when running from ReadTheDocs
+try:
+    from . import _riegl
+    SUPPORTEDOPTIONS = _riegl.getSupportedOptions()
+except ImportError:
+    pass
+    SUPPORTEDOPTIONS = {}
 from . import gridindexutils
-
-SUPPORTEDOPTIONS = _riegl.getSupportedOptions()
 
 def isRieglFile(fname):
     """
