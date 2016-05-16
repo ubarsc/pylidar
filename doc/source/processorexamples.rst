@@ -9,7 +9,7 @@ Simple Example
 ::
 
     # Reads in an input lidar file and writes an
-    # output image file with the mean 'Z' value for 
+    # output image file with the minimum 'Z' value for 
     # each bin
     import numpy
     from pylidar import lidarprocessor
@@ -21,10 +21,10 @@ Simple Example
         (maxPts, nRows, nCols) = zVals.shape
         nullval = 0
         if maxPts > 0:
-            # there is data for this block - find mean
-            meanZ = zVals.mean(axis=0)
+            # there is data for this block - find minimum
+            minZ = zVals.min(axis=0)
             # make 3d
-            stack = numpy.ma.expand_dims(meanZ, axis=0)
+            stack = numpy.ma.expand_dims(minZ, axis=0)
         else:
             # no data for this block - set to nullval
             stack = numpy.empty((1, nRows, nCols), dtype=zVals.dtype)
@@ -40,7 +40,7 @@ Simple Example
     lidarprocessor.doProcessing(writeImageFunc, dataFiles)
 
 The program shown above is complete, and would work assuming file.spd existed and contained
-a 'Z' value for each point. It would create an output raster file with the mean Z value for each bin. 
+a 'Z' value for each point. It would create an output raster file with the minimum Z value for each bin. 
 
 The user-supplied function writeImageFunc is passed to the :func:`pylidar.lidarprocessor.doProcessing`
 function which applies it accross the lidar file. By default PyLidar attempts to process a file
@@ -146,11 +146,6 @@ This example updates a Lidar file with data from an image raster::
 
     lidarprocessor.doProcessing(writeImageFunc, dataFiles)
 
----------------------
-Creating a Lidar file
----------------------
-
-Do we need a section on this?? Gets tricky with scaling etc.
 
 --------------------------
 Passing Other Data Example
