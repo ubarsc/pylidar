@@ -55,7 +55,6 @@ PULSE_INDEX_END_WAVEFORM = spdv4.SPDV4_PULSE_INDEX_END_WAVEFORM
 PULSE_INDEX_ORIGIN = spdv4.SPDV4_PULSE_INDEX_ORIGIN
 PULSE_INDEX_MAX_INTENSITY = spdv4.SPDV4_PULSE_INDEX_MAX_INTENSITY
 
-
 def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None, 
         tempDir='.', extent=None, indexMethod=INDEX_CARTESIAN,
         pulseIndexMethod=PULSE_INDEX_FIRST_RETURN, wkt=None):
@@ -142,8 +141,6 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
             subExtent.xMax = extent.xMin + blockSize
             subExtent.yMax -= blockSize
             subExtent.yMin -= blockSize
-            if subExtent.yMin < 0:
-                subExtent.yMin = 0.0
             
         # done?
         bMoreToDo = subExtent.yMax > extent.yMin
@@ -227,11 +224,16 @@ def setScalingForCoordField(driver, srcfield, coordfield):
     """
     Internal method to set the output scaling for range of data.
     """
+    # srcfield and coordfield might not be the same type (pulses/points)
+    # this happens when we are using point X and Y to set pulse X_IDX, Y_IDX etc
     if srcfield in spdv4.PULSE_SCALED_FIELDS:
         gain, offset = driver.getScaling(srcfield, lidarprocessor.ARRAY_TYPE_PULSES)
-        driver.setScaling(coordfield, lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
     elif srcfield in spdv4.POINT_SCALED_FIELDS:
         gain, offset = driver.getScaling(srcfield, lidarprocessor.ARRAY_TYPE_POINTS)
+
+    if coordfield in spdv4.PULSE_SCALED_FIELDS:
+        driver.setScaling(coordfield, lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
+    elif coordfield in spdv4.POINT_SCALED_FIELDS:
         driver.setScaling(coordfield, lidarprocessor.ARRAY_TYPE_POINTS, gain, offset)
     
 def classifyFunc(data, otherArgs):
@@ -355,6 +357,7 @@ def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
     nFilesProcessed = 0
     nFilesWritten = 0
     for subExtent, driver in extentList:
+
         # read in all the data
         npulses = driver.getTotalNumberPulses()
         if npulses > 0:
@@ -365,7 +368,7 @@ def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
             waveformInfo = driver.readWaveformInfo()
             recv = driver.readReceived()
             trans = driver.readTransmitted()
-                
+
             outDriver.setExtent(subExtent)
             if nFilesWritten == 0:
                 copyScaling(driver, outDriver)
@@ -374,6 +377,7 @@ def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
             # on create, a spatial index is created
             outDriver.writeData(pulses, points, trans, recv, 
                             waveformInfo)        
+
             nFilesWritten += 1
             
         nFilesProcessed += 1

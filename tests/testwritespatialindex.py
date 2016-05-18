@@ -44,6 +44,8 @@ class CmdArgs(object):
         p.add_option("-r","--resolution", dest="resolution",
             default=1.0, type="float",
             help="Output SPD file grid resolution")
+        p.add_option("-b","--blocksize", dest="blocksize",
+            help="If supplied the blocksize for processing")
         p.add_option("--indextype", dest="indextype",
             default="CARTESIAN",
             help="Spatial index type")
@@ -65,6 +67,9 @@ def doIndexing(cmdargs,dirname):
         
     info = generic.getLidarFileInfo(cmdargs.infile)
     h = info.header
+    blocksize = None
+    if cmdargs.blocksize is not None:
+        blocksize = float(cmdargs.blocksize)
 
     if cmdargs.indextype == "CARTESIAN":        
         ulx = np.floor(h["X_MIN"])
@@ -80,7 +85,9 @@ def doIndexing(cmdargs,dirname):
         gridindex.createGridSpatialIndex(cmdargs.infile, cmdargs.outfile, 
                                          extent=extent, tempDir=dirname,
                                          indexMethod=INDEX_CARTESIAN,
-                                         pulseIndexMethod=pulseindexmethod)
+                                         pulseIndexMethod=pulseindexmethod,
+                                         binSize=cmdargs.resolution,
+                                         blockSize=blocksize)
 
     elif cmdargs.indextype == "SPHERICAL":        
         ulx = 0.0
@@ -90,11 +97,14 @@ def doIndexing(cmdargs,dirname):
         extent = Extent(ulx, lrx, lry, uly, cmdargs.resolution)            
         gridindex.createGridSpatialIndex(cmdargs.infile, cmdargs.outfile, 
                                          extent=extent, tempDir=dirname,
-                                         indexMethod=INDEX_SPHERICAL)
+                                         indexMethod=INDEX_SPHERICAL,
+                                         binSize=cmdargs.resolution,
+                                         blockSize=blocksize)
         
     elif cmdargs.indextype == "SCAN":        
        gridindex.createGridSpatialIndex(cmdargs.infile, cmdargs.outfile, tempDir=dirname,
-                                         indexMethod=INDEX_SCAN, binSize=cmdargs.resolution)
+                                         indexMethod=INDEX_SCAN, binSize=cmdargs.resolution,
+                                         blockSize=blocksize)
 
     else:
         msg = 'Unsupported spatial indexing method'
