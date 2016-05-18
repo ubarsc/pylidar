@@ -38,9 +38,9 @@ extern "C" {
 /* call first - preferably in the init() of your module
  this sets up the connection to numpy */
 #if PY_MAJOR_VERSION >= 3
-PyObject *pylidar_init();
+PyObject *pylidar_init(void);
 #else
-void pylidar_init();
+void pylidar_init(void);
 #endif
 /* print error - used internally */
 void pylidar_error(char *errstr, ...);

@@ -148,10 +148,10 @@ public:
         scanlib::pointcloud(false), 
         m_nTotalPulsesReadFile(0),
         m_nPulsesToIgnore(0),
-        m_scanline(0),
-        m_scanlineIdx(0),
         m_Pulses(nInitSize, nGrowBy),
         m_Points(nInitSize, nGrowBy),
+        m_scanline(0),
+        m_scanlineIdx(0),
         m_pRotationMatrix(pRotationMatrix),
         m_pMagneticMatrix(pMagneticMatrix)
     {
@@ -439,6 +439,9 @@ public:
         m_fLong(0),
         m_fHeight(0),
         m_fHMSL(0),
+        m_fRoll(NPY_NAN),
+        m_fPitch(NPY_NAN),
+        m_fYaw(NPY_NAN),
         m_beamDivergence(0),
         m_beamExitDiameter(0),
         m_thetaMin(0),
@@ -447,9 +450,6 @@ public:
         m_phiMax(0),
         m_thetaInc(0),
         m_phiInc(0),
-        m_fRoll(NPY_NAN),
-        m_fPitch(NPY_NAN),
-        m_fYaw(NPY_NAN),
         m_scanline(0),
         m_scanlineIdx(0),
         m_maxScanlineIdx(0),
@@ -1096,7 +1096,7 @@ PyObject *pOptionDict;
 
 static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 {
-    Py_ssize_t nPulseStart, nPulseEnd, nPulses, nCount;
+    Py_ssize_t nPulseStart, nPulseEnd, nPulses;
     if( !PyArg_ParseTuple(args, "nn:readData", &nPulseStart, &nPulseEnd ) )
         return NULL;
 
@@ -1382,9 +1382,9 @@ static PyObject *PyRieglScanFile_getNumWaveRecords(PyRieglScanFile *self, void *
 
 /* get/set */
 static PyGetSetDef PyRieglScanFile_getseters[] = {
-    {"finished", (getter)PyRieglScanFile_getFinished, NULL, "Get Finished reading state", NULL}, 
-    {"pulsesRead", (getter)PyRieglScanFile_getPulsesRead, NULL, "Get number of pulses read", NULL},
-    {"numWaveRecords", (getter)PyRieglScanFile_getNumWaveRecords, NULL, "Get number of waveform records in file", NULL},
+    {(char*)"finished", (getter)PyRieglScanFile_getFinished, NULL, (char*)"Get Finished reading state", NULL}, 
+    {(char*)"pulsesRead", (getter)PyRieglScanFile_getPulsesRead, NULL, (char*)"Get number of pulses read", NULL},
+    {(char*)"numWaveRecords", (getter)PyRieglScanFile_getNumWaveRecords, NULL, (char*)"Get number of waveform records in file", NULL},
     {NULL}  /* Sentinel */
 };
 

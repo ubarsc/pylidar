@@ -1056,16 +1056,16 @@ static int PyLasFileRead_setBinSize(PyLasFileRead *self, PyObject *value, void *
 
 /* get/set */
 static PyGetSetDef PyLasFileRead_getseters[] = {
-    {"build_pulses", (getter)PyLasFileRead_getBuildPulses, NULL, 
-        "Whether we are building pulses of multiple points when reading", NULL},
-    {"hasSpatialIndex", (getter)PyLasFileRead_getHasSpatialIndex, NULL,
-        "Whether a spatial index exists for this file", NULL},
-    {"finished", (getter)PyLasFileRead_getFinished, NULL, 
-        "Whether we have finished reading the file or not", NULL},
-    {"pulsesRead", (getter)PyLasFileRead_getPulsesRead, NULL,
-        "Number of pulses read", NULL},
-    {"binSize", (getter)PyLasFileRead_getBinSize, (setter)PyLasFileRead_setBinSize,
-        "Bin size to use for spatial data", NULL},
+    {(char*)"build_pulses", (getter)PyLasFileRead_getBuildPulses, NULL, 
+        (char*)"Whether we are building pulses of multiple points when reading", NULL},
+    {(char*)"hasSpatialIndex", (getter)PyLasFileRead_getHasSpatialIndex, NULL,
+        (char*)"Whether a spatial index exists for this file", NULL},
+    {(char*)"finished", (getter)PyLasFileRead_getFinished, NULL, 
+        (char*)"Whether we have finished reading the file or not", NULL},
+    {(char*)"pulsesRead", (getter)PyLasFileRead_getPulsesRead, NULL,
+        (char*)"Number of pulses read", NULL},
+    {(char*)"binSize", (getter)PyLasFileRead_getBinSize, (setter)PyLasFileRead_setBinSize,
+        (char*)"Bin size to use for spatial data", NULL},
     {NULL}  /* Sentinel */
 };
 
