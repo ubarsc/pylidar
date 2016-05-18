@@ -299,9 +299,14 @@ protected:
         pulse.pts_start_idx = 0;
         pulse.number_of_returns = 0;
 
-        // TODO:
+        // updated by setWaveformInfo()
         pulse.wfm_start_idx = 0;
         pulse.number_of_waveform_samples = 0;
+
+        // set these to zero for now. 
+        // not sure if we should even have them?
+        pulse.x_Idx = 0;
+        pulse.y_Idx = 0;
 
         m_Pulses.push(&pulse);
     }
