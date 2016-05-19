@@ -286,7 +286,7 @@ def doTranslation(spatial, buildpulses, pulseindex, epsg, binSize, las, spd):
     lidarprocessor.doProcessing(rangeFunc, dataFiles, controls=controls, 
                     otherArgs=otherDict)
 
-    print('Converting to SPD V4...')
+    print('Converting %s to SPD V4...'%las)
     dataFiles.output1 = lidarprocessor.LidarFile(spd, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
 
