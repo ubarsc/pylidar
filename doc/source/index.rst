@@ -60,10 +60,17 @@ See :doc:`processorexamples` for more information.
 Downloads
 ---------
 
-Source code is available from `BitBucket <https://bitbucket.org/chchrsc/pylidar>`_.
+Source code is available from `BitBucket <https://bitbucket.org/chchrsc/pylidar>`_. 
+`RIOS <http://rioshome.org/>`_, `Numba <http://numba.pydata.org/>`_, `Numpy <http://www.numpy.org/>`_
+and `h5py <http://h5py.org/>`_ are required dependencies. For LAS support, install
+`lastools <https://github.com/LAStools/LAStools>`_ and set the LASTOOLS_ROOT environment variable
+to point to it before installation. For Riegl format support, install `RiVLIB <http://www.riegl.com/index.php?id=224>`_ and
+`RiWaveLIB <http://www.riegl.com/index.php?id=322>`_ and set the RIVLIB_ROOT and RIWAVELIB_ROOT environment variables
+to point to them before installation.
 
 `Conda <http://conda.pydata.org/miniconda.html#miniconda>`_ packages are available under the 'rios' channel.
-Once you have installed `Conda <http://conda.pydata.org/miniconda.html#miniconda>`_, run the following commands on the command line to install pylidar: ::
+Once you have installed `Conda <http://conda.pydata.org/miniconda.html#miniconda>`_, run the following commands on the 
+command line to install pylidar (dependencies are obtained automatically): ::
 
     conda config --add channels conda-forge 
     conda config --add channels rios 
