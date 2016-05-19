@@ -231,8 +231,8 @@ class Controls(object):
         
     def setSnapGrid(self, snap):
         """
-        Snap the output grid to be multiples of the resoltution. This is only
-        needed when ReferenceResolution is not set.
+        Snap the output grid to be multiples of the resolution. This is only
+        needed when ReferenceResolution is not set. True or False.
         """
         self.snapGrid = snap
         
@@ -589,18 +589,15 @@ def getWorkingPixGrid(controls, userContainer, gridList, driverList):
     # override the resolution and snap the coords    
     if controls.referenceResolution is not None or controls.snapGrid:
         res = controls.referenceResolution
-        if controls.snapGrid:
+        if res is None:
             # just use the already calculated res
             res = referenceGrid.xRes
-        
-        referenceGrid.xMin = referenceGrid.snapToGrid(referenceGrid.xMin, 
-                referenceGrid.xMin, res)
-        referenceGrid.xMax = referenceGrid.snapToGrid(referenceGrid.xMax, 
-                referenceGrid.xMax, res)
-        referenceGrid.yMin = referenceGrid.snapToGrid(referenceGrid.yMin, 
-                referenceGrid.yMin, res)
-        referenceGrid.yMax = referenceGrid.snapToGrid(referenceGrid.yMax, 
-                referenceGrid.yMax, res)
+
+        # do the snapping
+        referenceGrid.xMin = res * numpy.floor(referenceGrid.xMin / res)
+        referenceGrid.xMax = res * numpy.ceil(referenceGrid.xMax / res)
+        referenceGrid.yMin = res * numpy.floor(referenceGrid.yMin / res)
+        referenceGrid.yMax = res * numpy.ceil(referenceGrid.yMax / res)
         referenceGrid.xRes = res
         referenceGrid.yRes = res
 
@@ -616,7 +613,6 @@ def getWorkingPixGrid(controls, userContainer, gridList, driverList):
     # work out common extent
     workingPixGrid = findCommonPixelGridRegion(gridList, referenceGrid, 
                             controls.footprint)
-                                
     # we don't support reprojection of raster datasets yet.
     # use RIOS for that. Need to ensure that any input raster datasets
     # are on the workingPixGrid.
