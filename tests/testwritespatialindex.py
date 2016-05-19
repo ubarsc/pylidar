@@ -48,10 +48,10 @@ class CmdArgs(object):
             help="If supplied the blocksize for processing")
         p.add_option("--indextype", dest="indextype",
             default="CARTESIAN",
-            help="Spatial index type")
+            help="Spatial index type: CARTESIAN | SPHERICAL | SCAN")
         p.add_option("--pulseindexmethod", dest="pulseindexmethod",
             default="FIRST_RETURN",
-            help="Pulse index method")            
+            help="Pulse index method: FIRST_RETURN | LAST_RETURN")            
         (options, args) = p.parse_args()
         self.__dict__.update(options.__dict__)
 
