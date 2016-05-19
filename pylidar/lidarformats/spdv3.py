@@ -340,10 +340,10 @@ class SPDV3File(generic.LiDARFile):
                     yMin=self.si_yMin, yMax=self.si_yMax,
                     xRes=self.si_binSize, yRes=self.si_binSize)
                 # cache it
-                self.pixGrid = pixGrid
+                self.pixGrid = copy.copy(pixGrid)
             else:
                 # return cache
-                pixGrid = self.pixGrid
+                pixGrid = copy.copy(self.pixGrid)
         else:
             # no spatial index - no pixgrid
             pixGrid = None

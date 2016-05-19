@@ -50,6 +50,9 @@ For inputs and outputs representing lidar files, objects of type :class:`pylidar
 are provided. For inputs and outputs representing raster files, objects of type
 :class:`pylidar.userclasses.ImageData` are provided.
 
+See the help on :class:`pylidar.lidarprocessor.DataFiles`, :class:`pylidar.lidarprocessor.LidarFile` and :class:`pylidar.lidarprocessor.ImageFile`
+for more information on setting up inputs.
+
 To understand more about the types of arrays returned by PyLidar for lidar data, 
 see the :doc:`arrayvisualisation` page.
 
@@ -77,7 +80,7 @@ to filter by classification::
     from pylidar.toolbox import interpolation
 
     def interpGroundReturns(data):
-        # if given a list of fields, returns a structred array with all of them
+        # if given a list of fields, returns a structured array with all of them
         ptVals = data.input.getPoints(colsNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
         # create mask for ground
         # TODO: update this when standard classifications are introduced
@@ -114,6 +117,59 @@ to filter by classification::
 The data.info object is an instance of :class:`pylidar.userclasses.UserInfo` and contains
 some useful functions for obtaining the current processing state.
 
+--------------------------------------------
+Arbitary numbers of Input (and Output) Files
+--------------------------------------------
+
+Each name on the dataFiles object can also be a list of files, instead of a single file. 
+This will cause the corresponding attribute on the dataFiles object to be a list also. 
+This allows the function to process an arbitrary number of files, without having to give each one a separate name 
+within the function. An example might be a function to to interpolate a DEM from many files, 
+which should work the same regardless of how many files are to be input. This could be written as follows::
+
+    from pylidar import lidarprocessor
+    from pylidar.toolbox import interpolation
+
+    def interpGroundReturns(data):
+        # read all the files
+        ptVals = [indata.getPoints(colNames=['X','Y','Z','CLASSIFICATION']) 
+                for indata in data.allinputs]
+        # turn into one big array
+        ptVals = numpy.ma.hstack(ptVals)
+        # create mask for ground
+        # TODO: update this when standard classifications are introduced
+        mask = ptVals['CLASSIFICATION'] == 2
+
+        # get the coords for this block
+        pxlCoords = data.info.getBlockCoordArrays()
+
+        if ptVals.shape[0] > 0:
+            # there is data for this block
+            xVals = ptVals['X'][mask]
+            yVals = ptVals['Y'][mask]
+            zVals = ptVals['Z'][mask]
+            # 'pynn' needs the pynnterp module installed
+            out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, 'pynn')
+
+            # mask out where interpolation failed
+            invalid = numpy.isnan(out)
+            out[invalid] = 0
+        else:
+            # no data - set to zero
+            out = numpy.empty(pxlCoords[0].shape, dtype=numpy.float64)
+            out.fill(0)
+
+        data.imageOut.setData(out)
+
+    dataFiles = lidarprocessor.DataFiles()
+    dataFiles.allinputs = []
+    for infile in infiles:
+        input = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
+        dataFiles.allinputs.append(input)
+    dataFiles.imageOut = lidarprocessor.ImageFile('outfile.img', lidarprocessor.CREATE)
+
+    lidarprocessor.doProcessing(writeImageFunc, dataFiles)
+
 ---------------------
 Updating a Lidar File
 ---------------------
@@ -146,6 +202,14 @@ This example updates a Lidar file with data from an image raster::
 
     lidarprocessor.doProcessing(writeImageFunc, dataFiles)
 
+---------------------
+Notes for using Numba
+---------------------
+
+`Numba <http://numba.pydata.org/>`_ is a useful tool for doing processing that can't
+be done by whole of array operations. However, Numba cannot currently deal with masked arrays.
+A solution is to pass the "data" and "mask" attributes of your masked array separately 
+to a Numba function.
 
 --------------------------
 Passing Other Data Example

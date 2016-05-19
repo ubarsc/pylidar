@@ -631,7 +631,6 @@ class SPDV4File(generic.LiDARFile):
         extentPixGrid = pixelgrid.PixelGridDefn(xMin=extent.xMin, 
                 xMax=extent.xMax, yMin=extent.yMin, yMax=extent.yMax,
                 xRes=extent.binSize, yRes=extent.binSize, projection=totalPixGrid.projection)
-        
         self.extentAlignedWithSpatialIndex = (
                 extentPixGrid.alignedWith(totalPixGrid) and 
                 extent.binSize == totalPixGrid.xRes)
@@ -648,7 +647,7 @@ spatial index will be recomputed on the fly"""
         Return the PixelGridDefn for this file
         """
         if self.hasSpatialIndex():
-            pixGrid = self.si_handler.pixelGrid
+            pixGrid = copy.copy(self.si_handler.pixelGrid)
         else:
             # no spatial index - no pixgrid
             pixGrid = None
@@ -898,7 +897,8 @@ spatial index will be recomputed on the fly"""
                     self.extent.yMax, self.extent.xMin, nrows, ncols, 
                     SPDV4_SIMPLEGRID_INDEX_DTYPE, SPDV4_SIMPLEGRID_COUNT_DTYPE)
             # ok calculate indices on new spatial indexes
-            pulse_space, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+            nOut = self.fileHandle['DATA']['PULSES']['PULSE_ID'].shape[0]
+            pulse_space, idx, mask_idx = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                             new_idx, new_cnt, nOut)
             # re-sort the pulses to match the new spatial index
             pulses = pulses[mask]
