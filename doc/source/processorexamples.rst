@@ -117,9 +117,9 @@ to filter by classification::
 The data.info object is an instance of :class:`pylidar.userclasses.UserInfo` and contains
 some useful functions for obtaining the current processing state.
 
---------------------------------------------
-Arbitary numbers of Input (and Output) Files
---------------------------------------------
+---------------------------------------------
+Arbitrary numbers of Input (and Output) Files
+---------------------------------------------
 
 Each name on the dataFiles object can also be a list of files, instead of a single file. 
 This will cause the corresponding attribute on the dataFiles object to be a list also. 
