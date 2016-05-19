@@ -71,6 +71,7 @@ def addRieglDriver(extModules, cxxFlags):
         libs = rivlibs + riwavelibs
         
         defines = getRieglWaveLibVersion(riwavelibRoot, riwavelibs[0])
+        defines.extend([('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')])
         
         rieglModule = Extension(name='pylidar.lidarformats._riegl', 
                 define_macros=defines,
@@ -134,6 +135,7 @@ def addLasDriver(extModules, cxxFlags):
                 sources=['src/las.cpp', 'src/pylidar.c'],
                 include_dirs=[os.path.join(lastoolsRoot, 'include')],
                 extra_compile_args=cxxFlags,
+                define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
                 libraries=[libname],
                 library_dirs=[os.path.join(lastoolsRoot, 'lib')])
                 

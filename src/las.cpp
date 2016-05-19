@@ -1284,7 +1284,7 @@ PyObject *pOptionDict;
                 PyErr_SetString(GETSTATE(m)->error, "WAVEFORM_DESCR parameter must be an array");
                 return -1;
             }
-            if( PyArray_SIZE(pVal) > 256 )
+            if( PyArray_SIZE((PyArrayObject*)pVal) > 256 )
             {
                 // raise Python exception
                 PyObject *m;
@@ -1557,9 +1557,9 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
     {    
         PyObject *pArray = PyArray_FROM_OT(pVal, NPY_UINT8);
         // TODO: check 1d?
-        for( npy_intp i = 0; i < PyArray_DIM(pArray, 0); i++ )
+        for( npy_intp i = 0; i < PyArray_DIM((PyArrayObject*)pArray, 0); i++ )
         {
-            pHeader->project_ID_GUID_data_4[i] = *((U8*)PyArray_GETPTR1(pArray, i));
+            pHeader->project_ID_GUID_data_4[i] = *((U8*)PyArray_GETPTR1((PyArrayObject*)pArray, i));
         }
         Py_DECREF(pArray);
     }
@@ -1635,9 +1635,9 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
     {    
         PyObject *pArray = PyArray_FROM_OT(pVal, NPY_UINT8);
         // TODO: check 1d?
-        for( npy_intp i = 0; i < PyArray_DIM(pArray, 0); i++ )
+        for( npy_intp i = 0; i < PyArray_DIM((PyArrayObject*)pArray, 0); i++ )
         {
-            pHeader->number_of_points_by_return[i] = *((U8*)PyArray_GETPTR1(pArray, i));
+            pHeader->number_of_points_by_return[i] = *((U8*)PyArray_GETPTR1((PyArrayObject*)pArray, i));
         }
         Py_DECREF(pArray);
     }
@@ -1787,14 +1787,14 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         bArraysOk = false;
         pszMessage = "Waveform info must be a numpy array";
     }
-    if( bArraysOk && ((PyArray_NDIM(pPulses) != 1) || (PyArray_NDIM(pPoints) != 2) || 
-            (bHaveWaveformInfos && (PyArray_NDIM(pWaveformInfos) != 2)) || 
-            (bHaveReceived && (PyArray_NDIM(pReceived) != 3)) ) )
+    if( bArraysOk && ((PyArray_NDIM((PyArrayObject*)pPulses) != 1) || (PyArray_NDIM((PyArrayObject*)pPoints) != 2) || 
+            (bHaveWaveformInfos && (PyArray_NDIM((PyArrayObject*)pWaveformInfos) != 2)) || 
+            (bHaveReceived && (PyArray_NDIM((PyArrayObject*)pReceived) != 3)) ) )
     {
         bArraysOk = false;
         pszMessage = "pulses must be 1d, points and received 2d and waveforminfo 3d";
     }
-    if( bArraysOk && bHaveReceived && (PyArray_TYPE(pReceived) != NPY_UINT16))
+    if( bArraysOk && bHaveReceived && (PyArray_TYPE((PyArrayObject*)pReceived) != NPY_UINT16))
     {
         bArraysOk = false;
         pszMessage = "received must be 16bit";
@@ -1938,7 +1938,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         // do we have waveform info?
         if( ( self->pWaveformDescr != NULL ) && bHaveWaveformInfos && bHaveReceived)
         {
-            U8 nBitsPerSample = PyArray_ITEMSIZE(pReceived) * 8;
+            U8 nBitsPerSample = PyArray_ITEMSIZE((PyArrayObject*)pReceived) * 8;
             setWavePacketDescr(self->pWaveformDescr, self->pHeader, nBitsPerSample);
         }
 
@@ -1991,9 +1991,9 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
     }
 
     // now write all the pulses
-    for( npy_intp nPulseIdx = 0; nPulseIdx < PyArray_DIM(pPulses, 0); nPulseIdx++)
+    for( npy_intp nPulseIdx = 0; nPulseIdx < PyArray_DIM((PyArrayObject*)pPulses, 0); nPulseIdx++)
     {
-        void *pPulseRow = PyArray_GETPTR1(pPulses, nPulseIdx);
+        void *pPulseRow = PyArray_GETPTR1((PyArrayObject*)pPulses, nPulseIdx);
         // fill in the info from the pulses
         npy_int64 nPoints = pulseMap.getIntValue("NUMBER_OF_RETURNS", pPulseRow);
 
@@ -2010,7 +2010,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         // now the point
         for( npy_intp nPointCount = 0; nPointCount < nPoints; nPointCount++ )
         {
-            void *pPointRow = PyArray_GETPTR2(pPoints, nPointCount, nPulseIdx);
+            void *pPointRow = PyArray_GETPTR2((PyArrayObject*)pPoints, nPointCount, nPulseIdx);
             // TODO: extended creation option?
             npy_int64 nExtended = pointMap.getIntValue("EXTENDED_POINT_TYPE", pPointRow);
             self->pPoint->extended_point_type = nExtended;
@@ -2126,7 +2126,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
                 if( nInfos > 0 ) // print error if more than 1? LAS can only handle 1
                 {
                     CFieldInfoMap waveMap((PyArrayObject*)pWaveformInfos); // create once?
-                    void *pInfoRow = PyArray_GETPTR2(pWaveformInfos, 0, nPulseIdx);
+                    void *pInfoRow = PyArray_GETPTR2((PyArrayObject*)pWaveformInfos, 0, nPulseIdx);
                     U32 nSamples = waveMap.getIntValue(N_WAVEFORM_BINS, pInfoRow);
                     F64 fGain = waveMap.getDoubleValue(RECEIVE_WAVE_GAIN, pInfoRow);
                     F64 fOffset = waveMap.getDoubleValue(RECEIVE_WAVE_OFFSET, pInfoRow);
@@ -2138,7 +2138,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
                     U16 *pBuffer = (U16*)malloc(sizeof(U16) * nSamples);
                     for( U32 n = 0; n < nSamples; n++ )
                     {
-                        void *pSample = PyArray_GETPTR3(pReceived, n, 0, nPulseIdx);
+                        void *pSample = PyArray_GETPTR3((PyArrayObject*)pReceived, n, 0, nPulseIdx);
                         memcpy(&pBuffer[n], pSample, sizeof(U16));
                     }
                     self->pWaveformWriter->write_waveform(self->pPoint, (U8*)pBuffer);

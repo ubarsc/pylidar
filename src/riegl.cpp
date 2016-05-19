@@ -893,8 +893,8 @@ PyObject *pOptionDict;
     PyObject *pRotationMatrix = PyDict_GetItemString(pOptionDict, "ROTATION_MATRIX");
     if( pRotationMatrix != NULL )
     {
-        if( !PyArray_Check(pRotationMatrix) || (PyArray_NDIM(pRotationMatrix) != 2) ||
-            (PyArray_DIM(pRotationMatrix, 0) != 4 ) || (PyArray_DIM(pRotationMatrix, 1) != 4 ) )
+        if( !PyArray_Check(pRotationMatrix) || (PyArray_NDIM((PyArrayObject*)pRotationMatrix) != 2) ||
+            (PyArray_DIM((PyArrayObject*)pRotationMatrix, 0) != 4 ) || (PyArray_DIM((PyArrayObject*)pRotationMatrix, 1) != 4 ) )
         {
             // raise Python exception
             PyObject *m;
@@ -1178,8 +1178,8 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
             self->nCacheWavePulseStart = nPulseStart;
             self->nCacheWavePulseEnd = nPulseEnd;
         }
-        PyObject *wfmStart = PyTuple_GetItem(self->pCachedWaveform, 2);
-        PyObject *wfmCount = PyTuple_GetItem(self->pCachedWaveform, 3);
+        PyArrayObject *wfmStart = (PyArrayObject*)PyTuple_GetItem(self->pCachedWaveform, 2);
+        PyArrayObject *wfmCount = (PyArrayObject*)PyTuple_GetItem(self->pCachedWaveform, 3);
         for( npy_intp n = 0; n < PyArray_DIM(wfmStart, 0); n++)
         {
             npy_uint32 st = *(npy_uint32*)PyArray_GETPTR1(wfmStart, n);
