@@ -57,7 +57,7 @@ To understand more about the types of arrays returned by PyLidar for lidar data,
 see the :doc:`arrayvisualisation` page.
 
 You can specify which columns you want returned from a lidar file by setting the colNames parameter
-to getPoints (and other lidar reading functions). By default all columns are returned as a structred
+to getPoints (and other lidar reading functions). By default all columns are returned as a structured
 array. If a list of columns is requested, this is also returned as a structured array. However if a
 single column name is requested (as a string, not a list) then a non-structred array is returned.
 
@@ -201,6 +201,14 @@ This example updates a Lidar file with data from an image raster::
     dataFiles.imageIn = lidarprocessor.ImageFile('dem.img', lidarprocessor.READ)
 
     lidarprocessor.doProcessing(writeImageFunc, dataFiles)
+
+If requesting a non-structured array like this::
+
+    height = data.input.getPointsByBins(colNames='HEIGHT')
+
+You will need to specify the colName when calling :func:`pylidar.userclasses.LidarData.setPoints`::
+
+    data.input.setPoints(height, colName='HEIGHT')
 
 ---------------------
 Notes for using Numba
