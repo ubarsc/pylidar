@@ -1405,6 +1405,9 @@ class SPDV3FileInfo(generic.LiDARFileInfo):
         self.hasSpatialIndex = 'INDEX' in fileHandle
         # probably other things too
         
-        
-        
-        
+    @staticmethod
+    def getDriverName():
+        """
+        Name of this driver
+        """
+        return "SPDV3"

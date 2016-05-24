@@ -400,6 +400,15 @@ class LiDARFileInfo(basedriver.FileInfo):
     """
     def __init__(self, fname):
         basedriver.FileInfo.__init__(self, fname)
+
+    @staticmethod
+    def getDriverName():
+        """
+        Return name of driver - just a short unique name is fine.
+        should match the :func:`pylidar.lidarformats.generic.LiDARFile.getDriverName`
+        call for the same format.
+        """
+        raise NotImplementedError()
         
 def getWriterForLiDARFormat(driverName, fname, mode, controls, userClass):
     """

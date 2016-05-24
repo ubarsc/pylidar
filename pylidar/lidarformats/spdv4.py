@@ -2241,6 +2241,9 @@ class SPDV4FileInfo(generic.LiDARFileInfo):
         self.has_Spatial_Index = si_handler is not None
         # probably other things too
         
-        
-        
-        
+    @staticmethod 
+    def getDriverName():
+        """
+        Name of this driver
+        """
+        return "SPDV4"

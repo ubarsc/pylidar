@@ -811,6 +811,9 @@ class LasFileInfo(generic.LiDARFileInfo):
             
         self.hasSpatialIndex = lasFile.hasSpatialIndex
         
+    @staticmethod        
+    def getDriverName():
+        return 'LAS'
     
 def getWavePacketDescriptions(fname):
     """

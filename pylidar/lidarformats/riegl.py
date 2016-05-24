@@ -357,3 +357,7 @@ class RieglFileInfo(generic.LiDARFileInfo):
             raise generic.LiDARFormatNotUnderstood(msg)
 
         self.header = _riegl.getFileInfo(fname)
+
+    @staticmethod        
+    def getDriverName():
+        return 'riegl'

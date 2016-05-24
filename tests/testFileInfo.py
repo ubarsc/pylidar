@@ -10,6 +10,9 @@ from pylidar.lidarformats import generic
 from pylidar import lidarprocessor
 
 info = generic.getLidarFileInfo(sys.argv[1])
+print('Driver Name:', info.getDriverName())
+print('')
+
 for key,val in sorted(info.__dict__.items()):
     if isinstance(val, dict):
         print(key.upper())
