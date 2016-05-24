@@ -591,26 +591,60 @@ class LidarData(object):
         a masked 3d integer array.
         """
         self.receivedToWrite = received
-        
-    def setPoints(self, points):
+
+    @staticmethod
+    def convertToStructIfNeeded(data, colName):
         """
-        Write the points to a file as a structured array. The same
+        Converts data to a structured array if it is not.
+        If conversion is required it uses colName and data type of data.
+        Raises exception if conversion not possible or does not make sense.
+        """
+        isStruct = data.dtype.names is not None
+        if isStruct and colName is not None:
+            msg = 'if using structured arrays, leave colName as None'
+            raise generic.LiDARArrayColumnError(msg)
+        if not isStruct and colName is None:
+            msg = 'if not using structured arrays, pass colName'
+            raise generic.LiDARArrayColumnError(msg)
+
+        if not isStruct:
+            # turn back into structured array so keep consistent internally
+            structdata = numpy.empty(data.shape, 
+                                        dtype=[(colName, data.dtype)])
+            structdata[colName] = data
+            data = structdata
+
+        return data
+        
+    def setPoints(self, points, colName=None):
+        """
+        Write the points to a file. If passed a structured array, the same
         field names are expected as those read with the same driver.
         
+        If the array is non-structured (ie you passed a colNames as a string
+        to getPoints()) you need to pass the same string as the colName 
+        parameter.
+
         Pass either a 1d array (like that read from getPoints()) or a
         3d masked array (like that read from getPointsByBins()).
+
         """
-        self.pointsToWrite = points
+        self.pointsToWrite = self.convertToStructIfNeeded(points, colName)
             
-    def setPulses(self, pulses):
+    def setPulses(self, pulses, colName=None):
         """
-        Write the pulses to a file as a structured array. The same
+        Write the pulses to a file. If passed a structured array, the same
         field names are expected as those read with the same driver.
         
+        If the array is non-structured (ie you passed a colNames as a string
+        to getPulses()) you need to pass the same string as the colName 
+        parameter.
+
         Pass either a 1d array (like that read from getPulses()) or a
         3d masked array (like that read from getPulsesByBins()).
+
         """
-        self.pulsesToWrite = pulses
+        self.pulsesToWrite = self.convertToStructIfNeeded(pulses, colName)
         
     def flush(self):
         """
