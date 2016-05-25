@@ -115,7 +115,7 @@ def doTranslation(spatial, spd, lasFile):
         if spatial and not info.hasSpatialIndex:
             raise SystemExit("Spatial processing requested but file does not have spatial index")
     else:
-        spatial = info.hasSpatialIndex
+        spatial = info.has_Spatial_Index
 
     # get the waveform info
     print('getting waveform descr')

@@ -213,6 +213,9 @@ class SPDV4SpatialIndex(object):
         xMax = xMin + (shape[1] * binSize)
         yMin = yMax - (shape[0] * binSize)
         wkt = fileAttrs['SPATIAL_REFERENCE']
+        if sys.version_info[0] == 3:
+            wkt = wkt.decode()
+
         if shape[0] != 0 or shape[1] != 0:        
             self.pixelGrid = pixelgrid.PixelGridDefn(projection=wkt, xMin=xMin,
                 xMax=xMax, yMin=yMin, yMax=yMax, xRes=binSize, yRes=binSize)
@@ -564,6 +567,10 @@ class SPDV4File(generic.LiDARFile):
         self.lastPulses_IdxMask = None
         self.lastPulsesColumns = None
         # h5space.H5Space
+        self.lastWaveSpace = None
+        self.lastWave_Idx = None
+        self.lastWave_IdxMask = None
+        # h5space.H5Space
         self.lastTransSpace = None
         # index to turn into 2d transbypulses
         self.lastTrans_Idx = None
@@ -736,6 +743,9 @@ spatial index will be recomputed on the fly"""
         self.lastPulses_Idx = None
         self.lastPulses_IdxMask = None
         self.lastPulsesColumns = None
+        self.lastWaveSpace = None
+        self.lastWave_Idx = None
+        self.lastWave_IdxMask = None
         self.lastTransSpace = None
         self.lastTrans_Idx = None
         self.lastTrans_IdxMask = None
@@ -1089,6 +1099,10 @@ spatial index will be recomputed on the fly"""
         waveformInfo = self.readFieldsAndUnScale(waveHandle, colNames, wave_space)
         waveformInfo = waveformInfo[wave_idx]
         wave_masked = numpy.ma.array(waveformInfo, mask=wave_idx_mask)
+
+        self.lastWaveSpace = wave_space
+        self.lastWave_Idx = wave_idx
+        self.lastWave_IdxMask = wave_idx_mask
         
         return wave_masked
         
@@ -1336,6 +1350,7 @@ spatial index will be recomputed on the fly"""
 
         else:
             # need to check that passed in data has all the required fields
+            # TODO: mask?
             for essential in POINTS_ESSENTIAL_FIELDS:
                 if essential not in points.dtype.names:
                     msg = ('Essential field %s must exist in point data ' +
@@ -1433,6 +1448,7 @@ spatial index will be recomputed on the fly"""
         else:
 
             # create arrays for flatten3dWaveformData
+            # TODO: mask?
             firstField = waveformInfo.dtype.names[0]
             ntrans = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
             flattened =  numpy.empty(transmitted.count(), dtype=transmitted.dtype)
@@ -1510,6 +1526,7 @@ spatial index will be recomputed on the fly"""
         else:
     
             # create arrays for flatten3dWaveformData
+            # TODO: mask?
             firstField = waveformInfo.dtype.names[0]
             nrecv = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
             flattened =  numpy.empty(received.count(), dtype=received.dtype)
@@ -1552,15 +1569,24 @@ spatial index will be recomputed on the fly"""
             wfm_start[0] = 0
         wfm_start += currWaveformsCount
         
-        # unfortunately points.compressed() doesn't work
-        # for structured arrays. Use our own version instead
-        waveCount = waveformInfo[firstField].count()
-        outWave = numpy.empty(waveCount, dtype=waveformInfo.data.dtype)
-        # we don't actually need this, but need to provide it
-        returnNumber = numpy.empty(waveCount, 
+        # TODO: mask?
+        if self.mode == generic.UPDATE:
+            # flatten it back to 1d so it can be written
+            flatSize = self.lastWave_Idx.max() + 1
+            outWave = numpy.empty((flatSize,), dtype=waveformInfo.data.dtype)
+            gridindexutils.flatten3dMaskedArray(outWave, waveformInfo,
+                self.lastWave_IdxMask, self.lastWave_Idx)
+
+        else:
+            # unfortunately points.compressed() doesn't work
+            # for structured arrays. Use our own version instead
+            waveCount = waveformInfo[firstField].count()
+            outWave = numpy.empty(waveCount, dtype=waveformInfo.data.dtype)
+            # we don't actually need this, but need to provide it
+            returnNumber = numpy.empty(waveCount, 
                             dtype=numpy.uint32)
                                     
-        gridindexutils.flattenMaskedStructuredArray(waveformInfo.data, 
+            gridindexutils.flattenMaskedStructuredArray(waveformInfo.data, 
                     waveformInfo[firstField].mask, outWave, returnNumber)
                     
         return outWave, wfm_start, nwaveforms
@@ -1654,6 +1680,8 @@ spatial index will be recomputed on the fly"""
         """
         Writes a structured array as named datasets under hdfHandle. Also writes
         columns in dictionary generatedColumns to the same place.
+
+        Only use for file creation.
         """
         firstField = structArray.dtype.names[0]
         if firstField in hdfHandle:
@@ -1875,7 +1903,8 @@ spatial index will be recomputed on the fly"""
                                 'RECEIVED', received)
                 
         else:
-            # TODO: ignore X_IDX, Y_IDX
+            # TODO: should we be re-writing the generated columns??
+            # Note: we can't use writeStructuredArray since that is for creation
             if points is not None:
                 pointsHandle = self.fileHandle['DATA']['POINTS']
                 for name in points.dtype.names:
@@ -1883,7 +1912,12 @@ spatial index will be recomputed on the fly"""
                                     points[name], name, generic.ARRAY_TYPE_POINTS)
 
                     if data.size > 0:
-                        self.lastPointsSpace.write(pointsHandle[hdfname], data.copy())
+                        if hdfname in pointsHandle:
+                            # get: Array must be C-contiguous 
+                            # without the copy
+                            self.lastPointsSpace.write(pointsHandle[hdfname], data.copy())
+                        else:
+                            self.createDataColumn(pointsHandle, hdfname, data)
                     
             if writePulses and pulses is not None:
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
@@ -1893,9 +1927,23 @@ spatial index will be recomputed on the fly"""
                         data, hdfname = self.prepareDataForWriting(
                                     pulses[name], name, generic.ARRAY_TYPE_PULSES)
                         if data.size > 0:
-                            # get: Array must be C-contiguous 
-                            # without the copy
-                            self.lastPulsesSpace.write(pulsesHandle[hdfname], data.copy())
+                            if hdfname in pulsesHandle:
+                                # get: Array must be C-contiguous 
+                                # without the copy
+                                self.lastPulsesSpace.write(pulsesHandle[hdfname], data.copy())
+                            else:
+                                self.createDataColumn(pulsesHandle, hdfname, data)
+
+            if writeWavefromInfo and waveformInfo is not None:
+                waveHandle = self.fileHandle['DATA']['WAVEFORMS']
+                for name in waveformInfo.dtype.names:
+                    data, hdfname = self.prepareDataForWriting(
+                                    waveformInfo[name], name, generic.ARRAY_TYPE_WAVEFORMS)
+                    if data.size > 0:
+                        if hdfname in waveHandle:
+                            self.lastWaveSpace.write(waveHandle[hdfname], data.copy())
+                        else:
+                            self.createDataColumn(waveHandle, hdfname, data)
                                     
             if transmitted is not None:
                 self.lastTransSpace.write(self.fileHandle['DATA']['TRANSMITTED'], 
