@@ -45,11 +45,15 @@ def getCmdargs():
     p.add_argument("--epsg", type=int,
         help="Set to the EPSG (if not in supplied LAS file). i.e. " + 
             "GDA / MGA Zone 56 is 28356")
-    p.add_argument("--scaling", nargs=3, metavar=('varName', 'gain', 'offset'), 
-        action='append', help="Set gain and offset scaling for named variable." +
-            " Can be given multiple times for different variables")
+    p.add_argument("--scaling", nargs=4, metavar=('type', 'varName', 'gain', 
+            'offset'), action='append', 
+            help="Set gain and offset scaling for named variable." +
+            " Can be given multiple times for different variables." +
+            " type should be one of [POINT|PULSE|WAVEFORM]")
     p.add_argument("--binsize", "-b", type=float,
         help="Bin size to use when processing spatially (only for LAS inputs)")
+    p.add_argument("--buildpulses", default=False, action="store_true",
+        help="Build pulse data structure. Default is False (only for LAS inputs)")
     p.add_argument("--pulseindex", default="FIRST_RETURN",
         help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. " + 
             "Default is FIRST_RETURN.")
@@ -86,7 +90,7 @@ def run():
     if inFormat == 'LAS' and cmdargs.format == 'SPDV4':
         las2spdv4.translate(info, cmdargs.input, cmdargs.output, 
                 cmdargs.spatial, cmdargs.scaling, cmdargs.epsg, 
-                cmdargs.binsize, cmdargs.pulseindex)
+                cmdargs.binsize, cmdargs.buildpulses, cmdargs.pulseindex)
     else:
         msg = 'Cannot convert between formats %s and %s' 
         msg = msg % (inFormat, cmdargs.format)

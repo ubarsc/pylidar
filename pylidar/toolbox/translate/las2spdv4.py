@@ -20,6 +20,7 @@ Handles conversion between LAS and SPDV4 formats
 
 from __future__ import print_function, division
 
+import copy
 import numpy
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
@@ -31,16 +32,17 @@ from osgeo import osr
 FIRST_RETURN = las.FIRST_RETURN
 LAST_RETURN = las.LAST_RETURN
 
-PULSE_DEFAULT_GAINS = {'X_ORIGIN':100.0,'Y_ORIGIN':100.0,'Z_ORIGIN':100.0,
-    'AZIMUTH':100.0,'ZENITH':100.0,'X_IDX':100.0,'Y_IDX':100.0}
-PULSE_DEFAULT_OFFSETS = {'X_ORIGIN':0.0,'Y_ORIGIN':0.0,'Z_ORIGIN':0.0,
-    'AZIMUTH':0.0,'ZENITH':0.0,'X_IDX':0.0,'Y_IDX':0.0}
+PULSE_DEFAULT_SCALING = {'X_ORIGIN':(100.0, 0.0), 'Y_ORIGIN':(100.0, 0.0),
+    'Z_ORIGIN':(100.0, 0.0), 'AZIMUTH':(100.0, 0.0), 'ZENITH':(100.0, 0.0), 
+    'X_IDX':(100.0, 0.0), 'Y_IDX':(100.0, 0.0)}
 
-POINT_DEFAULT_GAINS = {'X':100.0, 'Y':100.0, 'Z':100.0, 'HEIGHT': 100.0}
-POINT_DEFAULT_OFFSETS = {'X':0.0, 'Y':0.0, 'Z':-100.0, 'HEIGHT': -100.0}
+POINT_DEFAULT_SCALING = {'X':(100.0, 0.0), 'Y':(100.0, 0.0), 
+    'Z':(100.0, -100.0), 'HEIGHT':(100.0, -100.0)}
 
-WAVEFORM_DEFAULT_GAINS = {'RANGE_TO_WAVEFORM_START':100.0}
-WAVEFORM_DEFAULT_OFFSETS = {'RANGE_TO_WAVEFORM_START':0.0}
+WAVEFORM_DEFAULT_SCALING = {'RANGE_TO_WAVEFORM_START':(100.0, 0.0)}
+
+DEFAULT_SCALING = {'PULSE' : PULSE_DEFAULT_SCALING, 
+    'POINT' : POINT_DEFAULT_SCALING, 'WAVEFORM' : WAVEFORM_DEFAULT_SCALING}
 
 def rangeFunc(data, rangeDict):
     """
@@ -113,20 +115,22 @@ def rangeFunc(data, rangeDict):
 def setOutputScaling(rangeDict, output):
     """
     Set the scaling on the output SPD V4 file using info gathered
-    by rangeFunc.
+    by rangeFunc. Takes into account default/overridden scaling also.
     """
+    scalingDict = rangeDict['scaling']
+
     # pulses
     for key in rangeDict['pulses'].keys():
+        pulseScalingDict = scalingDict['PULSE']
         if key.endswith('_MIN'):
             field = key[0:-4]
-            if field in PULSE_DEFAULT_GAINS:
+            if field in pulseScalingDict:
+                gain, offset = pulseScalingDict[field]
                 # use the scaling we already have
-                checkScalingPositive(PULSE_DEFAULT_GAINS[field], 
-                        PULSE_DEFAULT_OFFSETS[field], 
-                        rangeDict['pulses'][key], key)
+                checkScalingPositive(gain, offset, 
+                        rangeDict['pulses'][key], key.replace('_MIN',''))
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, 
-                        PULSE_DEFAULT_GAINS[field], 
-                        PULSE_DEFAULT_OFFSETS[field])
+                        gain, offset)
             else:
                 # extract the _MAX also and set the scaling
                 minVal = rangeDict['pulses'][key]
@@ -137,15 +141,16 @@ def setOutputScaling(rangeDict, output):
 
     # points
     for key in rangeDict['points'].keys():
+        pointScalingDict = scalingDict['POINT']
         if key.endswith('_MIN'):
             field = key[0:-4]            
-            if field in POINT_DEFAULT_GAINS:
+            if field in pointScalingDict:
+                gain, offset = pointScalingDict[field]
                 # use the scaling we already have
-                checkScalingPositive(POINT_DEFAULT_GAINS[field], 
-                        POINT_DEFAULT_OFFSETS[field], 
-                        rangeDict['points'][key], key)
+                checkScalingPositive(gain, offset, 
+                        rangeDict['points'][key], key.replace('_MIN',''))
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, 
-                        POINT_DEFAULT_GAINS[field], POINT_DEFAULT_OFFSETS[field])
+                        gain, offset)
             else:
                 # extract the _MAX also and set the scaling
                 minVal = rangeDict['points'][key]
@@ -158,13 +163,16 @@ def setOutputScaling(rangeDict, output):
 
     # waveforms
     for key in rangeDict['waveforms'].keys():
+        waveformScalingDict = scalingDict['WAVEFORM']
         if key.endswith('_MIN'):
             field = key[0:-4]
             if field in WAVEFORM_DEFAULT_GAINS:
+                gain, offset = waveformScalingDict[field]
                 # use the scaling we already have
+                checkScalingPositive(gain, offset,
+                        rangeDict['waveforms'][key], key)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, 
-                        WAVEFORM_DEFAULT_GAINS[field], 
-                        WAVEFORM_DEFAULT_OFFSETS[field])
+                        gain, offset)
             else:
                 # extract the _MAX also and set the scaling
                 minVal = rangeDict['waveforms'][key]
@@ -182,25 +190,33 @@ def checkScalingPositive(gain, offset, minVal, varName):
     if scaledVal < 0:
         msg = ("Scaling for %s gives negative values, " + 
                 "which SPD4 will not cope with. Over-ride defaults on " +
-                "commandline. " % varName)
+                "commandline. ") % varName
         raise generic.LiDARInvalidSetting(msg)
 
 def overRideDefaultScalings(scaling):
     """
     Any scalings given on the commandline should over-ride 
-    the default behaviours.
-    Assumes that varName is unique between points and pulses.
-    Changes global vars which is a bit dodgy.
+    the default behaviours. if scalings is not None then 
+    it is assumed to be a list of tuples with (type, varname, gain, offset).
+
+    Returns a dictionary keyed on POINT, PULSE or WAVEFORM. Each
+    value in this dictionary is in turn a dictionary keyed on the 
+    column name in which each value is a tuple with gain and offset.
     """
-    for (varName, gainStr, offsetStr) in scaling:
-        gain = float(gainStr)
-        offset = float(offsetStr)
-        if varName in POINT_DEFAULT_GAINS:
-            POINT_DEFAULT_GAINS[varName] = gain
-            POINT_DEFAULT_OFFSETS[varName] = offset
-        elif varName in PULSE_DEFAULT_GAINS:
-            PULSE_DEFAULT_GAINS[varName] = gain
-            PULSE_DEFAULT_OFFSETS[varName] = offset
+    scalingsDict = copy.copy(DEFAULT_SCALING)
+
+    if scaling is not None:
+        for (typeName, varName, gainStr, offsetStr) in scaling:
+            gain = float(gainStr)
+            offset = float(offsetStr)
+            typeName = typeName.upper()
+            if typeName not in ['POINT', 'PULSE', 'WAVEFORM']:
+                msg = 'unrecognised type %s' % typeName
+                raise generic.LiDARInvalidSetting(msg)
+
+            scalingsDict[typeName][varName] = (gain, offset)
+
+    return scalingsDict
 
 def setHeaderValues(rangeDict, lasInfo, output):
     """
@@ -236,14 +252,25 @@ def transFunc(data, otherDict):
     if revc is not None and revc.size > 0:
         data.output1.setReceived(revc)
 
-def translate(info, infile, outfile, spatial, scaling, epsg, binSize, pulseIndex):
+def translate(info, infile, outfile, spatial, scaling, epsg, binSize, 
+        buildPulses, pulseIndex):
     """
-    Main function
-    """
-    if scaling is not None:
-        overRideDefaultScalings(scaling)
+    Main function which does the work.
 
-    if epsg is None and len(info.wkt) == 0:
+    * Info is a fileinfo object for the input file.
+    * infile and outfile are paths to the input and output files respectively.
+    * spatial is True or False - dictates whether we are processing spatially or not.
+        If True then spatial index will be created on the output file on the fly.
+    * scaling is a list of tuples with (type, varname, gain, offset).
+    * if epsg is not None should be a EPSG number to use as the coord system
+    * binSize is the used by the LAS spatial index
+    * buildPulses dictates whether to attempt to build the pulse structure
+    * pulseIndex should be 'FIRST_RETURN' or 'LAST_RETURN' and determines how the
+        pulses are indexed.
+    """
+    scalingsDict = overRideDefaultScalings(scaling)
+
+    if epsg is None and (info.wkt is None or len(info.wkt) == 0):
         msg = 'No projection set in las file. Must set EPSG on command line'
         raise generic.LiDARInvalidSetting(msg)
 
@@ -258,14 +285,14 @@ def translate(info, infile, outfile, spatial, scaling, epsg, binSize, pulseIndex
     # set up the variables
     dataFiles = lidarprocessor.DataFiles()
     
-    dataFiles.input1 = lidarprocessor.LidarFile(las, lidarprocessor.READ)
+    dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
     if pulseIndex == 'FIRST_RETURN':
         dataFiles.input1.setLiDARDriverOption('PULSE_INDEX', FIRST_RETURN)
     elif pulseIndex == 'LAST_RETURN':
         dataFiles.input1.setLiDARDriverOption('PULSE_INDEX', LAST_RETURN)
     else:
         raise SystemExit("Pulse index argument not recognised.")
-    if not buildpulses:
+    if not buildPulses:
         dataFiles.input1.setLiDARDriverOption('BUILD_PULSES', False)
     if spatial:
         dataFiles.input1.setLiDARDriverOption('BIN_SIZE', float(binSize))
@@ -283,10 +310,12 @@ def translate(info, infile, outfile, spatial, scaling, epsg, binSize, pulseIndex
     lidarprocessor.doProcessing(rangeFunc, dataFiles, controls=controls, 
                     otherArgs=otherDict)
 
-    print('Converting %s to SPD V4...'%las)
-    dataFiles.output1 = lidarprocessor.LidarFile(spd, lidarprocessor.CREATE)
+    print('Converting %s to SPD V4...' % infile)
+    dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
 
+    # also need the default/overriden scaling
+    otherDict['scaling'] = scalingsDict
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
                     otherArgs=otherDict)
 

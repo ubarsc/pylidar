@@ -213,7 +213,7 @@ class SPDV4SpatialIndex(object):
         xMax = xMin + (shape[1] * binSize)
         yMin = yMax - (shape[0] * binSize)
         wkt = fileAttrs['SPATIAL_REFERENCE']
-        if sys.version_info[0] == 3:
+        if sys.version_info[0] == 3 and isinstance(wkt, bytes):
             wkt = wkt.decode()
 
         if shape[0] != 0 or shape[1] != 0:        
