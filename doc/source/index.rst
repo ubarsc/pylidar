@@ -93,6 +93,7 @@ Processing
    lidarprocessor
    toolbox/toolbox
    toolbox/indexing
+   toolbox/translate
 
 Drivers
 ---------
