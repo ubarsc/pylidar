@@ -210,6 +210,10 @@ You will need to specify the colName when calling :func:`pylidar.userclasses.Lid
 
     data.input.setPoints(height, colName='HEIGHT')
 
+New columns can be created in SPDV4 format by creating a new column in the structured
+array passed to :func:`pylidar.userclasses.LidarData.setPoints`, or a new colName for 
+non-structured arrays.
+
 ---------------------
 Notes for using Numba
 ---------------------
