@@ -232,7 +232,7 @@ def setHeaderValues(rangeDict, lasInfo, output):
 
 def transFunc(data, otherDict):
     """
-    Called from pylidar. Does the actual conversion to SPD V4
+    Called from lidarprocessor. Does the actual conversion to SPD V4
     """
     pulses = data.input1.getPulses()
     points = data.input1.getPointsByPulse()
@@ -291,7 +291,8 @@ def translate(info, infile, outfile, spatial, scaling, epsg, binSize,
     elif pulseIndex == 'LAST_RETURN':
         dataFiles.input1.setLiDARDriverOption('PULSE_INDEX', LAST_RETURN)
     else:
-        raise SystemExit("Pulse index argument not recognised.")
+        msg = "Pulse index argument not recognised."
+        raise generic.LiDARInvalidSetting(msg)
     if not buildPulses:
         dataFiles.input1.setLiDARDriverOption('BUILD_PULSES', False)
     if spatial:

@@ -19,6 +19,13 @@ LAS to SPDV4
    :members:
    :undoc-members:
 
+SPDV3 to SPDV4
+------------------------
+
+.. automodule:: pylidar.toolbox.translate.spdv32spdv4
+   :members:
+   :undoc-members:
+
 
 
 * :ref:`genindex`

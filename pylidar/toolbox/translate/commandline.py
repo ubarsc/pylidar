@@ -30,6 +30,7 @@ from pylidar import lidarprocessor
 
 # conversion modules
 from . import las2spdv4
+from . import spdv32spdv4
 
 def getCmdargs():
     """
@@ -91,6 +92,11 @@ def run():
         las2spdv4.translate(info, cmdargs.input, cmdargs.output, 
                 cmdargs.spatial, cmdargs.scaling, cmdargs.epsg, 
                 cmdargs.binsize, cmdargs.buildpulses, cmdargs.pulseindex)
+
+    if inFormat == 'SPDV3' and cmdargs.format == 'SPDV4':
+        spdv32spdv4.translate(info, cmdargs.input, cmdargs.output,
+                cmdargs.spatial, cmdargs.scaling)
+
     else:
         msg = 'Cannot convert between formats %s and %s' 
         msg = msg % (inFormat, cmdargs.format)
