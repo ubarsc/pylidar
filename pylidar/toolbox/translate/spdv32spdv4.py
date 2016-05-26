@@ -27,21 +27,7 @@ from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
 from rios import cuiprogress
 
-PULSE_DEFAULT_SCALING = {'X_ORIGIN':(100.0, 0.0), 'Y_ORIGIN':(100.0, 0.0),
-    'Z_ORIGIN':(100.0, 0.0), 'H_ORIGIN':(100.0, 0.0), 'AZIMUTH':(100.0, 0.0), 
-    'ZENITH':(100.0, 0.0), 'X_IDX':(100.0, 0.0), 'Y_IDX':(100.0, 0.0),
-    'AMPLITUDE_PULSE':(100.0, 0.0), 'WIDTH_PULSE':(100.0, 0.0)}
-
-POINT_DEFAULT_SCALING = {'X':(100.0, 0.0), 'Y':(100.0, 0.0), 
-    'Z':(100.0, -100.0), 'HEIGHT':(100.0, -100.0), 'INTENSITY':(1.0, 0.0),
-    'RANGE':(100.0, 0.0), 'AMPLITUDE_RETURN':(1.0, 0.0),
-    'WIDTH_RETURN':(1.0, 0.0)}
-
-WAVEFORM_DEFAULT_SCALING = {'RANGE_TO_WAVEFORM_START':(100.0, 0.0)}
-
-DEFAULT_SCALING = {lidarprocessor.ARRAY_TYPE_PULSES : PULSE_DEFAULT_SCALING, 
-    lidarprocessor.ARRAY_TYPE_POINTS : POINT_DEFAULT_SCALING, 
-    lidarprocessor.ARRAY_TYPE_WAVEFORMS : WAVEFORM_DEFAULT_SCALING}
+from . import translatecommon
 
 def getInfoFromHeader(colName, header):
     """
@@ -119,31 +105,6 @@ def transFunc(data, otherArgs):
     data.output1.setReceived(revc)
     data.output1.setTransmitted(trans)
 
-def overRideDefaultScalings(scaling):
-    """
-    Any scalings given on the commandline should over-ride 
-    the default behaviours. if scalings is not None then 
-    it is assumed to be a list of tuples with (type, varname, gain, offset).
-
-    Returns a dictionary keyed on POINT, PULSE or WAVEFORM. Each
-    value in this dictionary is in turn a dictionary keyed on the 
-    column name in which each value is a tuple with gain and offset.
-    """
-    scalingsDict = copy.copy(DEFAULT_SCALING)
-
-    if scaling is not None:
-        for (typeName, varName, gainStr, offsetStr) in scaling:
-            gain = float(gainStr)
-            offset = float(offsetStr)
-            typeName = typeName.upper()
-            if typeName not in ['POINT', 'PULSE', 'WAVEFORM']:
-                msg = 'unrecognised type %s' % typeName
-                raise generic.LiDARInvalidSetting(msg)
-
-            scalingsDict[typeName][varName] = (gain, offset)
-
-    return scalingsDict
-    
 def translate(info, infile, outfile, spatial, scaling):
     """
     Main function which does the work.
@@ -154,7 +115,7 @@ def translate(info, infile, outfile, spatial, scaling):
         If True then spatial index will be created on the output file on the fly.
     * scaling is a list of tuples with (type, varname, gain, offset).
     """
-    scalingsDict = overRideDefaultScalings(scaling)
+    scalingsDict = translatecommon.overRideDefaultScalings(scaling)
 
     # first we need to determine if the file is spatial or not
     if spatial and not info.hasSpatialIndex:

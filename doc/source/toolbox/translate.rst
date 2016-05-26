@@ -12,6 +12,13 @@ Command Line
    :members:
    :undoc-members:
 
+Common functions
+------------------------
+
+.. automodule:: pylidar.toolbox.translate.translatecommon
+   :members:
+   :undoc-members:
+
 LAS to SPDV4
 ------------------------
 
@@ -26,6 +33,19 @@ SPDV3 to SPDV4
    :members:
    :undoc-members:
 
+Riegl to SPDV4
+------------------------
+
+.. automodule:: pylidar.toolbox.translate.riegl2spdv4
+   :members:
+   :undoc-members:
+
+SPDV4 to LAS
+------------------------
+
+.. automodule:: pylidar.toolbox.translate.spdv42las
+   :members:
+   :undoc-members:
 
 
 * :ref:`genindex`

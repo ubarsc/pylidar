@@ -31,6 +31,8 @@ from pylidar import lidarprocessor
 # conversion modules
 from . import las2spdv4
 from . import spdv32spdv4
+from . import riegl2spdv4
+from . import spdv42las
 
 def getCmdargs():
     """
@@ -45,7 +47,7 @@ def getCmdargs():
             "requires a spatial index in the input.")
     p.add_argument("--epsg", type=int,
         help="Set to the EPSG (if not in supplied LAS file). i.e. " + 
-            "GDA / MGA Zone 56 is 28356")
+            "GDA / MGA Zone 56 is 28356 (only for LAS inputs)")
     p.add_argument("--scaling", nargs=4, metavar=('type', 'varName', 'gain', 
             'offset'), action='append', 
             help="Set gain and offset scaling for named variable." +
@@ -57,7 +59,13 @@ def getCmdargs():
         help="Build pulse data structure. Default is False (only for LAS inputs)")
     p.add_argument("--pulseindex", default="FIRST_RETURN",
         help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. " + 
-            "Default is FIRST_RETURN.")
+            "Default is FIRST_RETURN. (only for LAS inputs)")
+    p.add_argument("--internalrotation", dest="internalrotation",
+        default=False, action="store_true", help="Use internal rotation data" +
+            " when processing .rxp files (only for RIEGL inputs)")
+    p.add_argument("--magneticdeclination", dest="magneticdeclination",
+        default=0.0, type=float, help="Use given magnetic declination when" +
+            " processing .rxp files (only for RIEGL inputs)")
 
     cmdargs = p.parse_args()
 
@@ -93,9 +101,18 @@ def run():
                 cmdargs.spatial, cmdargs.scaling, cmdargs.epsg, 
                 cmdargs.binsize, cmdargs.buildpulses, cmdargs.pulseindex)
 
-    if inFormat == 'SPDV3' and cmdargs.format == 'SPDV4':
+    elif inFormat == 'SPDV3' and cmdargs.format == 'SPDV4':
         spdv32spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.spatial, cmdargs.scaling)
+
+    elif inFormat == 'riegl' and cmdargs.format == 'SPDV4':
+        riegl2spdv4.translate(info, cmdargs.input, cmdargs.output,
+                cmdargs.scaling, cmdargs.internalrotation, 
+                cmdargs.magneticdeclination)
+
+    elif inFormat == 'SPDV4' and cmdargs.format == 'LAS':
+        spdv42las.translate(info, cmdargs.input, cmdargs.output, 
+                cmdargs.spatial)
 
     else:
         msg = 'Cannot convert between formats %s and %s' 
