@@ -1350,7 +1350,6 @@ spatial index will be recomputed on the fly"""
 
         else:
             # need to check that passed in data has all the required fields
-            # TODO: mask?
             for essential in POINTS_ESSENTIAL_FIELDS:
                 if essential not in points.dtype.names:
                     msg = ('Essential field %s must exist in point data ' +
@@ -1393,7 +1392,7 @@ spatial index will be recomputed on the fly"""
                 
         return points, pts_start, nreturns, returnNumber
         
-    def prepareTransmittedForWriting(self, transmitted, waveformInfo, mask):
+    def prepareTransmittedForWriting(self, transmitted, waveformInfo):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -1428,27 +1427,9 @@ spatial index will be recomputed on the fly"""
                 self.lastTrans_IdxMask, self.lastTrans_Idx)
             transmitted = flatTrans
                 
-            # mask out those in the overlap using the pulses
-            if self.controls.spatialProcessing:
-
-                # Repeat the mask so that it is the same shape as the 
-                # original transmitted and then flatten in the same way
-                # we can then remove the transmitted outside the extent.         
-                # We can't do this earlier since removing from transmitted
-                # would mean the above flattening trick won't work.
-                mask = numpy.expand_dims(mask, axis=0)
-                mask = numpy.expand_dims(mask, axis=0)
-                mask = numpy.repeat(mask, origShape[1], axis=2)
-                flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
-                gridindexutils.flatten3dMaskedArray(flatMask, mask, 
-                    self.lastTrans_IdxMask, self.lastTrans_Idx)
-            
-                self.lastTransSpace.updateBoolArray(flatMask)
-                
         else:
 
             # create arrays for flatten3dWaveformData
-            # TODO: mask?
             firstField = waveformInfo.dtype.names[0]
             ntrans = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
             flattened =  numpy.empty(transmitted.count(), dtype=transmitted.dtype)
@@ -1469,7 +1450,7 @@ spatial index will be recomputed on the fly"""
                 
         return transmitted, trans_start, ntrans
         
-    def prepareReceivedForWriting(self, received, waveformInfo, mask):
+    def prepareReceivedForWriting(self, received, waveformInfo):
         """
         Called from writeData(). Massages what the user has passed into something
         we can write back to the file.
@@ -1504,29 +1485,9 @@ spatial index will be recomputed on the fly"""
                 self.lastRecv_IdxMask, self.lastRecv_Idx)
             received = flatRecv
                 
-            # mask out those in the overlap using the pulses
-            if self.controls.spatialProcessing:
-
-                # Repeat the mask so that it is the same shape as the 
-                # original received and then flatten in the same way
-                # we can then remove the received outside the extent.         
-                # We can't do this earlier since removing from received
-                # would mean the above flattening trick won't work.
-                mask = numpy.expand_dims(mask, axis=0)
-                mask = numpy.expand_dims(mask, axis=0)
-                mask = numpy.repeat(mask, origShape[0], axis=0)
-                mask = numpy.repeat(mask, origShape[1], axis=2)
-                flatMask = numpy.empty((flatSize,), dtype=mask.dtype)
-                gridindexutils.flatten3dMaskedArray(flatMask, mask, 
-                    self.lastRecv_IdxMask, self.lastRecv_Idx)
-                
-                received = received[flatMask]
-                self.lastRecvSpace.updateBoolArray(flatMask)
-
         else:
     
             # create arrays for flatten3dWaveformData
-            # TODO: mask?
             firstField = waveformInfo.dtype.names[0]
             nrecv = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
             flattened =  numpy.empty(received.count(), dtype=received.dtype)
@@ -1569,7 +1530,6 @@ spatial index will be recomputed on the fly"""
             wfm_start[0] = 0
         wfm_start += currWaveformsCount
         
-        # TODO: mask?
         if self.mode == generic.UPDATE:
             # flatten it back to 1d so it can be written
             flatSize = self.lastWave_Idx.max() + 1
@@ -1812,13 +1772,13 @@ spatial index will be recomputed on the fly"""
         ntrans = None            
         if transmitted is not None:
             transmitted, trans_start, ntrans = (
-                self.prepareTransmittedForWriting(transmitted, waveformInfo, mask))
+                self.prepareTransmittedForWriting(transmitted, waveformInfo))
             
         recv_start = None
         nrecv = None
         if received is not None:
             received, recv_start, nrecv = (
-                self.prepareReceivedForWriting(received, waveformInfo, mask))
+                self.prepareReceivedForWriting(received, waveformInfo))
                 
         # deal with situation where there is transmitted but not
         # received etc. Assume other wise they will be the same length.

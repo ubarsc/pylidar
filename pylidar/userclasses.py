@@ -268,7 +268,7 @@ class LidarData(object):
         self.mode = mode
         self.driver = driver
         self.extent = None
-        self.spatialProcessing = driver.controls.spatialProcessing
+        self.controls = driver.controls
         # for writing
         self.pointsToWrite = None
         self.pulsesToWrite = None
@@ -312,7 +312,7 @@ class LidarData(object):
         colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
-        if self.spatialProcessing:
+        if self.controls.spatialProcessing:
             points = self.driver.readPointsForExtent(colNames)
         else:
             points = self.driver.readPointsForRange(colNames)
@@ -331,7 +331,7 @@ class LidarData(object):
         1d pulse array to a 3D point by bin array. pulseIndex is returned from
         getPointsByBins with returnPulseIndex=True.
         """
-        if self.spatialProcessing:
+        if self.controls.spatialProcessing:
             pulses = self.driver.readPulsesForExtent(colNames)
             if pulseIndex is not None:
                 pulses = numpy.ma.array(pulses[pulseIndex], mask=pulseIndex.mask)
@@ -359,7 +359,7 @@ class LidarData(object):
         colNames can be a name or list of column names to return. By default
         all columns are returned.
         """
-        if self.spatialProcessing:
+        if self.controls.spatialProcessing:
             pulses = self.driver.readPulsesForExtentByBins(extent, colNames)
         else:
             msg = 'Call only valid when doing spatial processing'
@@ -393,7 +393,7 @@ class LidarData(object):
         Set returnPulseIndex to True to also return a 3 dimensional masked array
         containing the indexes into the 1d array returned by getPulses().
         """
-        if self.spatialProcessing:
+        if self.controls.spatialProcessing:
             points = self.driver.readPointsForExtentByBins(extent, colNames, 
                         indexByPulse, returnPulseIndex)
         else:
