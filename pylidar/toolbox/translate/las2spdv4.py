@@ -316,6 +316,10 @@ def translate(info, infile, outfile, spatial, scaling, epsg, binSize,
 
     # also need the default/overriden scaling
     otherDict['scaling'] = scalingsDict
+    # set index type if spatial - always cartesian for LAS (??)
+    if spatial:
+        otherDict['header']['INDEX_TYPE'] = spdv4.SPDV4_INDEX_CARTESIAN
+
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
                     otherArgs=otherDict)
 

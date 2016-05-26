@@ -425,7 +425,7 @@ def getWriterForLiDARFormat(driverName, fname, mode, controls, userClass):
     raise LiDARFormatDriverNotFound(msg)
             
 
-def getReaderForLiDARFile(fname, mode, controls, userClass):
+def getReaderForLiDARFile(fname, mode, controls, userClass, verbose=False):
     """
     Returns an instance of a LiDAR format
     reader/writer or raises an exception if none
@@ -437,27 +437,32 @@ def getReaderForLiDARFile(fname, mode, controls, userClass):
             # attempt to create it
             inst = cls(fname, mode, controls, userClass)
             # worked - return it
+            if verbose:
+                print('Succeeded using class', cls)
             return inst
         except LiDARFileException:
             # failed - onto the next one
-            pass
+            if verbose:
+                print('Failed using', cls, e)
     # none worked
     msg = 'Cannot open LiDAR file %s' % fname
     raise LiDARFormatDriverNotFound(msg)
 
-def getLidarFileInfo(fname):
+def getLidarFileInfo(fname, verbose=False):
     """
     Returns an instance of a LiDAR format info class.
     Or raises an exception if none found for the file.
     """
     for cls in LiDARFileInfo.__subclasses__():
-        #print('trying', cls)
         try:
             inst = cls(fname)
+            if verbose:
+                print('Succeeded using class', cls)
             return inst
-        except LiDARFileException:
+        except LiDARFileException as e:
             # failed - onto the next one
-            pass
+            if verbose:
+                print('Failed using', cls, e)
     # none worked
     msg = 'Cannot open LiDAR file %s' % fname
     raise LiDARFormatDriverNotFound(msg)

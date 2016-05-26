@@ -235,7 +235,10 @@ class SPDV4SpatialIndex(object):
             fileAttrs['NUMBER_BINS_X'] = ncols
             fileAttrs['INDEX_TLX'] = self.pixelGrid.xMin
             fileAttrs['INDEX_TLY'] = self.pixelGrid.yMax
-            fileAttrs['SPATIAL_REFERENCE'] = self.pixelGrid.projection
+            if self.pixelGrid.projection is None:
+                fileAttrs['SPATIAL_REFERENCE'] = ''
+            else:
+                fileAttrs['SPATIAL_REFERENCE'] = self.pixelGrid.projection
         
         self.fileHandle = None
         
@@ -315,17 +318,18 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
                 self.si_idx = group['BIN_OFFSETS'][...]
                     
                 # define the pulse data columns to use for the spatial index
-                if self.fileHandle.attrs['INDEX_TYPE'] == SPDV4_INDEX_CARTESIAN:
+                indexType = self.fileHandle.attrs['INDEX_TYPE']
+                if indexType == SPDV4_INDEX_CARTESIAN:
                     self.si_xPulseColName = 'X_IDX'
                     self.si_yPulseColName = 'Y_IDX'
-                elif self.fileHandle.attrs['INDEX_TYPE'] == SPDV4_INDEX_SPHERICAL:
+                elif indexType == SPDV4_INDEX_SPHERICAL:
                     self.si_xPulseColName = 'AZIMUTH'
                     self.si_yPulseColName = 'ZENITH'
-                elif self.fileHandle.attrs['INDEX_TYPE'] == SPDV4_INDEX_SCAN:
+                elif indexType == SPDV4_INDEX_SCAN:
                     self.si_xPulseColName = 'SCANLINE_IDX'
                     self.si_yPulseColName = 'SCANLINE'
                 else:
-                    msg = 'Unsupported index type %d' % self.fileHandle.attrs['INDEX_TYPE']
+                    msg = 'Unsupported index type %d' % indexType
                     raise generic.LiDARInvalidSetting(msg)                    
                 
     def close(self):
