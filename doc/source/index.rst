@@ -53,7 +53,8 @@ Example
 
     lidarprocessor.doProcessing(writeImageFunc, dataFiles)
 
-See :doc:`processorexamples` for more information.
+See :doc:`processorexamples` for more information. :doc:`commandline` has more information on 
+running the command line utilities.
 
 .. image:: pylidar.jpg
 
