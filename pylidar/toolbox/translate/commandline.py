@@ -33,6 +33,7 @@ from . import las2spdv4
 from . import spdv32spdv4
 from . import riegl2spdv4
 from . import spdv42las
+from . import ascii2spdv4
 
 def getCmdargs():
     """
@@ -66,6 +67,13 @@ def getCmdargs():
     p.add_argument("--magneticdeclination", dest="magneticdeclination",
         default=0.0, type=float, help="Use given magnetic declination when" +
             " processing .rxp files (only for RIEGL inputs)")
+    p.add_argument("--coltype", nargs=2, metavar=('varName', 'type'),
+            action='append', help="Set column name and types. Can be given"+
+            " multiple times. type should be UINT16 format. " +
+            "(only for ASCII inputs)")
+    p.add_argument("--pulsecols", help="Comma seperated list of column names "+
+            " that are the pulse columns. Names must be definied by --coltype"+
+            " (only for ASCII inputs)")
 
     cmdargs = p.parse_args()
 
@@ -114,9 +122,22 @@ def run():
         spdv42las.translate(info, cmdargs.input, cmdargs.output, 
                 cmdargs.spatial)
 
+    elif inFormat == 'ASCII TS' and cmdargs.format == 'SPDV4':
+
+        if cmdargs.coltype is None:
+            msg = "must pass --coltypes parameter"
+            raise generic.LiDARInvalidSetting(msg)
+        if cmdargs.pulsecols is None:
+            msg = "must pass --pulsecols parameter"
+            raise generic.LiDARInvalidSetting(msg)
+
+        pulsecols = cmdargs.pulsecols.split(',')
+
+        ascii2spdv4.translate(info, cmdargs.input, cmdargs.output,
+                cmdargs.scaling, cmdargs.coltype, pulsecols)
+
     else:
         msg = 'Cannot convert between formats %s and %s' 
         msg = msg % (inFormat, cmdargs.format)
         raise generic.LiDARFunctionUnsupported(msg)
-
 

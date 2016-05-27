@@ -184,6 +184,8 @@ class ASCIITSFile(generic.LiDARFile):
             if len(dataArr) <= 1:
                 # seems to have single element when end of file....
                 self.finished = True
+                # need to delete items fom pulses that weren't read
+                pulses = numpy.delete(pulses, slice(pulseCount,self.range.endPulse))
                 break
 
             # first pass - determine if new pulse or not
@@ -337,3 +339,21 @@ class ASCIITSFile(generic.LiDARFile):
         ASCII (AFAIK) doesn't support waveforms
         """
         return None
+
+class ASCIITSFileInfo(generic.LiDARFileInfo):
+    """
+    Class that gets information about a .las file
+    and makes it available as fields.
+    """
+    def __init__(self, fname):
+        generic.LiDARFileInfo.__init__(self, fname)
+        
+        if not fname.endswith('.dat.gz'):
+            msg = 'only process *.dat.gz files at present'
+            raise generic.LiDARFileException(msg)
+
+        # I don't think there is any information we can add here??
+
+    @staticmethod        
+    def getDriverName():
+        return 'ASCII TS'

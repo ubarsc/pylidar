@@ -87,7 +87,7 @@ Processing
 -----------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    userclasses
    lidarprocessor
@@ -99,7 +99,7 @@ Drivers
 ---------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    basedriver
    gdaldriver
@@ -115,7 +115,7 @@ Drivers
 Testing
 -------
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    testing
 

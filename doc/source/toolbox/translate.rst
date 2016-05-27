@@ -40,6 +40,13 @@ Riegl to SPDV4
    :members:
    :undoc-members:
 
+ASCII to SPDV4
+------------------------
+
+.. automodule:: pylidar.toolbox.translate.ascii2spdv4
+   :members:
+   :undoc-members:
+
 SPDV4 to LAS
 ------------------------
 
