@@ -29,11 +29,11 @@ from pylidar.lidarformats import generic
 from pylidar import lidarprocessor
 
 # conversion modules
-from . import las2spdv4
-from . import spdv32spdv4
-from . import riegl2spdv4
-from . import spdv42las
-from . import ascii2spdv4
+from pylidar.toolbox.translate import las2spdv4
+from pylidar.toolbox.translate import spdv32spdv4
+from pylidar.toolbox.translate import riegl2spdv4
+from pylidar.toolbox.translate import spdv42las
+from pylidar.toolbox.translate import ascii2spdv4
 
 def getCmdargs():
     """

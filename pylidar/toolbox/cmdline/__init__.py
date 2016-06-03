@@ -1,5 +1,7 @@
-#!/usr/bin/env python
 
+"""
+Entry points for running the command line utils
+"""
 # This file is part of PyLidar
 # Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
 #
@@ -15,11 +17,3 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-from __future__ import print_function, division
-
-from pylidar.toolbox.cmdline.translate import run
-
-if __name__ == '__main__':
-    run()
-

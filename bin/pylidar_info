@@ -18,7 +18,7 @@
 
 from __future__ import print_function, division
 
-from pylidar.toolbox.info import run
+from pylidar.toolbox.cmdline.info import run
 
 if __name__ == '__main__':
     run()
