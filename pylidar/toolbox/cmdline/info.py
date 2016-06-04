@@ -32,8 +32,8 @@ def getCmdargs():
     Get commandline arguments
     """
     p = argparse.ArgumentParser()
-    p.add_argument("--input", help="Input file name")
-    p.add_argument("--verbose", default=False, action="store_true",
+    p.add_argument("-i", "--input", help="Input file name")
+    p.add_argument("-v", "--verbose", default=False, action="store_true",
             help="print more verbose output")
 
     cmdargs = p.parse_args()
