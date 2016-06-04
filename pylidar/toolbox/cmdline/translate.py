@@ -40,20 +40,25 @@ def getCmdargs():
     Get commandline arguments
     """
     p = argparse.ArgumentParser()
-    p.add_argument("--input", help="Input file name")
-    p.add_argument("--output", help="Output file name")
-    p.add_argument("--format", help="Output format. One of [SPDV4, LAS]")
+    p.add_argument("-i", "--input", help="Input file name")
+    p.add_argument("-o", "--output", help="Output file name")
+    p.add_argument("-f", "--format", help="Output format. One of [SPDV4, LAS]")
     p.add_argument("--spatial", default=False, action="store_true", 
         help="Process the data spatially. Default is False and if True " + 
             "requires a spatial index in the input.")
     p.add_argument("--epsg", type=int,
         help="Set to the EPSG (if not in supplied LAS file). i.e. " + 
             "GDA / MGA Zone 56 is 28356 (only for LAS inputs)")
-    p.add_argument("--scaling", nargs=4, metavar=('type', 'varName', 'gain', 
-            'offset'), action='append', 
+    p.add_argument("--scaling", nargs=5, metavar=('type', 'varName', 'dtype',
+            'gain', 'offset'), action='append', 
             help="Set gain and offset scaling for named variable." +
             " Can be given multiple times for different variables." +
-            " type should be one of [POINT|PULSE|WAVEFORM]")
+            " type should be one of [POINT|PULSE|WAVEFORM] dtype should be "+
+            "UINT16 format. (only for SPDV4 outputs)")
+    p.add_argument("--range", nargs=4, metavar=('type', 'varName', 'min', 
+            'max'), action='append', help="expected range for variables. " +
+            "Will fail with an error if variables outside specified limit "+
+            " or do not exist. (only for SPDV4 outputs)")
     p.add_argument("--binsize", "-b", type=float,
         help="Bin size to use when processing spatially (only for LAS inputs)")
     p.add_argument("--buildpulses", default=False, action="store_true",
@@ -67,9 +72,9 @@ def getCmdargs():
     p.add_argument("--magneticdeclination", dest="magneticdeclination",
         default=0.0, type=float, help="Use given magnetic declination when" +
             " processing .rxp files (only for RIEGL inputs)")
-    p.add_argument("--coltype", nargs=2, metavar=('varName', 'type'),
+    p.add_argument("--coltype", nargs=2, metavar=('varName', 'dtype'),
             action='append', help="Set column name and types. Can be given"+
-            " multiple times. type should be UINT16 format. " +
+            " multiple times. dtype should be UINT16 format. " +
             "(only for ASCII inputs)")
     p.add_argument("--pulsecols", help="Comma seperated list of column names "+
             " that are the pulse columns. Names must be definied by --coltype"+
@@ -106,16 +111,16 @@ def run():
 
     if inFormat == 'LAS' and cmdargs.format == 'SPDV4':
         las2spdv4.translate(info, cmdargs.input, cmdargs.output, 
-                cmdargs.spatial, cmdargs.scaling, cmdargs.epsg, 
+                cmdargs.range, cmdargs.spatial, cmdargs.scaling, cmdargs.epsg, 
                 cmdargs.binsize, cmdargs.buildpulses, cmdargs.pulseindex)
 
     elif inFormat == 'SPDV3' and cmdargs.format == 'SPDV4':
         spdv32spdv4.translate(info, cmdargs.input, cmdargs.output,
-                cmdargs.spatial, cmdargs.scaling)
+                cmdargs.range, cmdargs.spatial, cmdargs.scaling)
 
     elif inFormat == 'riegl' and cmdargs.format == 'SPDV4':
         riegl2spdv4.translate(info, cmdargs.input, cmdargs.output,
-                cmdargs.scaling, cmdargs.internalrotation, 
+                cmdargs.range, cmdargs.scaling, cmdargs.internalrotation, 
                 cmdargs.magneticdeclination)
 
     elif inFormat == 'SPDV4' and cmdargs.format == 'LAS':
@@ -134,7 +139,7 @@ def run():
         pulsecols = cmdargs.pulsecols.split(',')
 
         ascii2spdv4.translate(info, cmdargs.input, cmdargs.output,
-                cmdargs.scaling, cmdargs.coltype, pulsecols)
+                cmdargs.range, cmdargs.scaling, cmdargs.coltype, pulsecols)
 
     else:
         msg = 'Cannot convert between formats %s and %s' 

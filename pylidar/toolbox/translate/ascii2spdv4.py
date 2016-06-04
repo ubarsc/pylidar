@@ -29,12 +29,6 @@ from osgeo import osr
 
 from . import translatecommon
 
-"String to numpy dtype dictionary"
-STRING_TO_DTYPE = {'INT8':numpy.int8, 'UINT8':numpy.uint8, 'INT16':numpy.int16,
-    'UINT16':numpy.uint16, 'INT32':numpy.int32, 'UINT32':numpy.uint32,
-    'INT64':numpy.int64, 'UINT64':numpy.uint64, 'FLOAT32':numpy.float32,
-    'FLOAT64':numpy.float64}
-
 def transFunc(data, rangeDict):
     """
     Called from lidarprocessor. Does the actual conversion to SPD V4
@@ -49,12 +43,13 @@ def transFunc(data, rangeDict):
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
 
-def translate(info, infile, outfile, scaling, colTypes, pulseCols):
+def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols):
     """
     Main function which does the work.
 
     * Info is a fileinfo object for the input file.
     * infile and outfile are paths to the input and output files respectively.
+    * expectRange is a list of tuples with (type, varname, min, max).
     * scaling is a list of tuples with (type, varname, gain, offset).
     * colTypes is a list of name and data type tuples for every column
     * pulseCols is a list of strings defining the pulse columns
@@ -68,7 +63,7 @@ def translate(info, infile, outfile, scaling, colTypes, pulseCols):
     # convert from strings to numpy dtypes
     numpyColTypes = []
     for name, typeString in colTypes:
-        numpydtype = STRING_TO_DTYPE[typeString.upper()]
+        numpydtype = translatecommon.STRING_TO_DTYPE[typeString.upper()]
         numpyColTypes.append((name, numpydtype))
 
     dataFiles.input1.setLiDARDriverOption('COL_TYPES', numpyColTypes)
@@ -81,7 +76,8 @@ def translate(info, infile, outfile, scaling, colTypes, pulseCols):
     
     # now read through the file and get the range of values for fields 
     # that need scaling.
-    rangeDict = translatecommon.getRange(dataFiles.input1)
+    rangeDict = translatecommon.getRange(dataFiles.input1, 
+                        expectRange=expectRange)
 
     print('Converting %s to SPD V4...' % infile)
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)

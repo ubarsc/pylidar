@@ -11,7 +11,7 @@ More to come::
     pylidar_translate --input data.spd --output data.spdv4 --format SPDV4 --spatial
 
     # Riegl to SPDV4 with override of scaling
-    pylidar_translate --input data.rxp --output data.spdv4 --format SPDV4 --scaling PULSE Y_ORIGIN 1.0 100 
+    pylidar_translate --input data.rxp --output data.spdv4 --format SPDV4 --scaling PULSE Y_ORIGIN INT32 1.0 100 
 
     # SPDV4 to LAS
     pylidar_translate --input data.spdv4 --output data.las --format LAS

@@ -78,13 +78,14 @@ def transFunc(data, rangeDict):
     if recv is not None:
         data.output1.setReceived(recv)
 
-def translate(info, infile, outfile, scalings, internalrotation, 
+def translate(info, infile, outfile, expectRange, scalings, internalrotation, 
         magneticdeclination):
     """
     Main function which does the work.
 
     * Info is a fileinfo object for the input file.
     * infile and outfile are paths to the input and output files respectively.
+    * expectRange is a list of tuples with (type, varname, min, max).
     * scaling is a list of tuples with (type, varname, gain, offset).
     * if internalrotation is True then the internal rotation will be applied
         to data
@@ -102,7 +103,8 @@ def translate(info, infile, outfile, scalings, internalrotation,
     controls.setProgress(progress)
     controls.setSpatialProcessing(False)
     
-    rangeDict = translatecommon.getRange(dataFiles.input1)
+    rangeDict = translatecommon.getRange(dataFiles.input1, 
+                expectRange=expectRange)
 
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')

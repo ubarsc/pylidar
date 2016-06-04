@@ -66,13 +66,14 @@ def transFunc(data, otherDict):
     if revc is not None and revc.size > 0:
         data.output1.setReceived(revc)
 
-def translate(info, infile, outfile, spatial, scaling, epsg, binSize, 
-        buildPulses, pulseIndex):
+def translate(info, infile, outfile, expectRange, spatial, scaling, epsg, 
+        binSize, buildPulses, pulseIndex):
     """
     Main function which does the work.
 
     * Info is a fileinfo object for the input file.
     * infile and outfile are paths to the input and output files respectively.
+    * expectRange is a list of tuples with (type, varname, min, max).
     * spatial is True or False - dictates whether we are processing spatially or not.
         If True then spatial index will be created on the output file on the fly.
     * scaling is a list of tuples with (type, varname, gain, offset).
@@ -119,7 +120,7 @@ def translate(info, infile, outfile, spatial, scaling, epsg, binSize,
     
     # now read through the file and get the range of values for fields 
     # that need scaling.
-    otherDict = translatecommon.getRange(dataFiles.input1, spatial)
+    otherDict = translatecommon.getRange(dataFiles.input1, spatial, expectRange)
 
     print('Converting %s to SPD V4...' % infile)
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)

@@ -105,12 +105,13 @@ def transFunc(data, otherArgs):
     data.output1.setReceived(revc)
     data.output1.setTransmitted(trans)
 
-def translate(info, infile, outfile, spatial, scaling):
+def translate(info, infile, outfile, expectRange, spatial, scaling):
     """
     Main function which does the work.
 
     * Info is a fileinfo object for the input file.
     * infile and outfile are paths to the input and output files respectively.
+    * expectRange is a list of tuples with (type, varname, min, max).
     * spatial is True or False - dictates whether we are processing spatially or not.
         If True then spatial index will be created on the output file on the fly.
     * scaling is a list of tuples with (type, varname, gain, offset).
@@ -127,6 +128,10 @@ def translate(info, infile, outfile, spatial, scaling):
     dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
+
+    # if they have given us an expected range
+    if expectRange is not None:
+        translatecommon.getRange(dataFiles.input1, spatial, expectRange)
 
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
