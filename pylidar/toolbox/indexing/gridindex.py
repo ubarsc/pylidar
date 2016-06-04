@@ -230,6 +230,11 @@ def setScalingForCoordField(driver, srcfield, coordfield):
         gain, offset = driver.getScaling(srcfield, lidarprocessor.ARRAY_TYPE_PULSES)
     elif srcfield in spdv4.POINT_SCALED_FIELDS:
         gain, offset = driver.getScaling(srcfield, lidarprocessor.ARRAY_TYPE_POINTS)
+    else:
+        # we need to set these in case an unscaled variable is used for the spatial index
+        # e.g. using pulse SCANLINE and SCANLINE_IDX to set pulse X_IDX, Y_IDX
+        gain = 1.0
+        offset = 0.0
 
     if coordfield in spdv4.PULSE_SCALED_FIELDS:
         driver.setScaling(coordfield, lidarprocessor.ARRAY_TYPE_PULSES, gain, offset)
