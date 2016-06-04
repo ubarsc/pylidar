@@ -90,9 +90,15 @@ def rangeFunc(data, rangeDict):
             if (minKey not in rangeDict[PULSE] or 
                     minVal < rangeDict[PULSE][minKey]):
                 rangeDict[PULSE][minKey] = minVal
+                if minKey in spdv4.HEADER_FIELDS:
+                    # update the header while we can
+                    rangeDict['header'][minKey] = minVal
             if (maxKey not in rangeDict[PULSE] or 
                     maxVal > rangeDict[PULSE][maxKey]):
                 rangeDict[PULSE][maxKey] = maxVal
+                if maxKey in spdv4.HEADER_FIELDS:
+                    # update the header while we can
+                    rangeDict['header'][maxKey] = maxVal
     
     if points.size > 0:
         if 'NUMBER_OF_POINTS' not in rangeDict['header']:
