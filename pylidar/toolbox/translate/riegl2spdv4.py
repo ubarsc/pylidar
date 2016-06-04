@@ -30,7 +30,7 @@ from rios import cuiprogress
 
 from . import translatecommon
 
-def setHeaderValues(h, rieglInfo, output):
+def setHeaderValues(h, rieglInfo, output, rotationmatrix):
     """
     Set the header values in the output SPD V4 file using info gathered
     by rangeFunc and the riegl driver. 
@@ -39,8 +39,8 @@ def setHeaderValues(h, rieglInfo, output):
     h["PULSE_ANGULAR_SPACING_SCANLINE"] = rieglInfo["PHI_INC"]
     h["PULSE_ANGULAR_SPACING_SCANLINE_IDX"] = rieglInfo["THETA_INC"]
     h["SENSOR_BEAM_EXIT_DIAMETER"] = rieglInfo["BEAM_EXIT_DIAMETER"]
-    h["SENSOR_BEAM_DIVERGENCE"] = rieglInfo["BEAM_DIVERGENCE"]    
-    meta = {'Transform': rieglInfo['ROTATION_MATRIX'].tolist(),
+    h["SENSOR_BEAM_DIVERGENCE"] = rieglInfo["BEAM_DIVERGENCE"]
+    meta = {'Transform': rotationmatrix.tolist(),
             'Longitude': rieglInfo['LONGITUDE'],
             'Latitude': rieglInfo['LATITUDE'],
             'Height': rieglInfo['HEIGHT'],
@@ -68,7 +68,11 @@ def transFunc(data, rangeDict):
     if data.info.isFirstBlock():
         translatecommon.setOutputScaling(rangeDict, data.output1)
         rieglInfo = data.input1.getHeader()
-        setHeaderValues(rangeDict['header'], rieglInfo, data.output1)
+        if "externalrotation" in rangeDict.keys():
+            rotationmatrix = rangeDict['externalrotation']
+        else:
+            rotationmatrix = rieglInfo['ROTATION_MATRIX']
+        setHeaderValues(rangeDict['header'], rieglInfo, data.output1, rotationmatrix)
 
     data.output1.setPulses(pulses)
     if points is not None:
@@ -79,7 +83,7 @@ def transFunc(data, rangeDict):
         data.output1.setReceived(recv)
 
 def translate(info, infile, outfile, expectRange, scalings, internalrotation, 
-        magneticdeclination):
+        magneticdeclination, externalrotationfn):
     """
     Main function which does the work.
 
@@ -88,7 +92,9 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
     * expectRange is a list of tuples with (type, varname, min, max).
     * scaling is a list of tuples with (type, varname, gain, offset).
     * if internalrotation is True then the internal rotation will be applied
-        to data
+        to data. Overrides externalrotationfn
+    * if externalrotationfn is not None then then the external rotation matrix
+        will be read from this file and applied to the data
     * magneticdeclination. If not 0, then this will be applied to the data
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scalings)
@@ -116,15 +122,23 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
         else:
             msg = "Internal Rotation requested but no information found in input file"
             raise generic.LiDARInvalidSetting(msg)
+    else:
+        if externalrotationfn is not None:
+            externalrotation = numpy.loadtxt(externalrotationfn, ndmin=2, delimiter=" ")
+            dataFiles.output1.setLiDARDriverOption("ROTATION_MATRIX", 
+                    externalrotation)
+            # Add the external rotation matrix to otherArgs (in this case rangeDict)
+            # for updating the header
+            rangeDict["externalrotation"] = externalrotation
             
     # set the magnetic declination if not 0 (the default)
     if magneticdeclination != 0:
         dataFiles.output1.setLiDARDriverOption("MAGNETIC_DECLINATION", 
                 magneticdeclination)
-
+    
     # also need the default/overriden scaling
     rangeDict['scaling'] = scalingsDict
-
+    
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
                     otherArgs=rangeDict)
 
