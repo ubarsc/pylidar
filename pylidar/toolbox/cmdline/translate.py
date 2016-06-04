@@ -68,7 +68,10 @@ def getCmdargs():
             "Default is FIRST_RETURN. (only for LAS inputs)")
     p.add_argument("--internalrotation", dest="internalrotation",
         default=False, action="store_true", help="Use internal rotation data" +
-            " when processing .rxp files (only for RIEGL inputs)")
+            " when processing .rxp files. Overrides --externalrotationfn (only for RIEGL inputs)")
+    p.add_argument("--externalrotationfn", dest="externalrotationfn",
+        help="Input space delimited text file with external 4x4 rotation matrix" +
+            " (only for RIEGL inputs)")
     p.add_argument("--magneticdeclination", dest="magneticdeclination",
         default=0.0, type=float, help="Use given magnetic declination when" +
             " processing .rxp files (only for RIEGL inputs)")
@@ -121,7 +124,7 @@ def run():
     elif inFormat == 'riegl' and cmdargs.format == 'SPDV4':
         riegl2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.scaling, cmdargs.internalrotation, 
-                cmdargs.magneticdeclination)
+                cmdargs.magneticdeclination, cmdargs.externalrotationfn)
 
     elif inFormat == 'SPDV4' and cmdargs.format == 'LAS':
         spdv42las.translate(info, cmdargs.input, cmdargs.output, 
