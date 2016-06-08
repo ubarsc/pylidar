@@ -92,7 +92,7 @@ def transFunc(data):
     data.output1.setWaveformInfo(waveformInfo)
     data.output1.setReceived(revc)
 
-def translate(info, infile, outfile, spatial, scaling):
+def translate(info, infile, outfile, spatial, extent):
     """
     Does the translation between SPD V4 and .las format files.
 
@@ -100,6 +100,8 @@ def translate(info, infile, outfile, spatial, scaling):
     * infile and outfile are paths to the input and output files respectively.
     * spatial is True or False - dictates whether we are processing spatially or not.
         If True then spatial index will be created on the output file on the fly.
+    * extent is a tuple of values specifying the extent to work with. 
+        xmin ymin xmax ymax
 
     Currently does not take any command line scaling options so LAS scaling
     will be the same as the SPDV4 input file scaling. Not sure if this is
@@ -126,6 +128,14 @@ def translate(info, infile, outfile, spatial, scaling):
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     controls.setSpatialProcessing(spatial)
+
+    if extent is not None:
+        extent = [float(x) for x in extent]
+        binSize = info.header['BIN_SIZE']
+        pixgrid = pixelgrid.PixelGridDefn(xMin=extent[0], yMin=extent[1], 
+            xMax=extent[2], yMax=extent[3], xRes=binSize, yRes=binSize)
+        controls.setReferencePixgrid(pixgrid)
+        controls.setFootprint(lidarprocessor.BOUNDS_FROM_REFERENCE)
     
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('LAS')

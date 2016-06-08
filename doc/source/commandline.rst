@@ -2,28 +2,97 @@
 Command Line Examples
 =====================
 
-More to come::
+----------------------------------
+Translation with pylidar_translate
+----------------------------------
 
-    # LAS to SPDV4
-    pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --epsg 28356 --scaling POINT Z UINT32 1 -500 --spatial --binsize 1
+Run "pylidar_translate -h" to obtain full help. The basic usage is to specify input and output files
+plus the output format like this::
+    
+    pylidar_translate --input data.laz --output data.spdv4 --format SPDV4
 
-    # SPDV3 to SPDV4
-    pylidar_translate --input data.spd --output data.spdv4 --format SPDV4 --spatial
+^^^^^^^^^^^^^^^^^^^
+Setting the scaling
+^^^^^^^^^^^^^^^^^^^
 
-    # Riegl to SPDV4 with override of scaling
-    pylidar_translate --input data.rxp --output data.spdv4 --format SPDV4 --scaling PULSE Y_ORIGIN INT32 1.0 100 
+When writing to SPDV4 files, scaling can be set on the output columns with the --scaling option. This
+can be specified multiple times, once for each column that you need to set the scaling on. The
+--scaling option takes 4 parameters. The first is a string describing what sort of column it is and should
+be one of POINT, PULSE or WAVEFORM. The second is the column name. The third is the data type and can be one of the 
+following strings: INT8, UINT8, INT16, UINT16, INT32, UINT32, INT64, UINT64, FLOAT32, FLOAT64 or DFLT.
+'DFLT' means that the default type for the given column is used and it is assumed that the column is one
+of the recognised ones from :doc:`spdv4format`. The fourth and fifth arguments are the gain and offset respectively 
+and are interpreted as floats. Here is an example or overridding the scaling on the 'Z' column::
 
-    # SPDV4 to LAS
-    pylidar_translate --input data.spdv4 --output data.las --format LAS
+    pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --scaling POINT Z UINT32 1 -500
+    
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Checking the expected range
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    # ASCII to SPDV4
+In some circumstances it is useful to check that the data is within an expected range before proceeding. This 
+can be accomplished using the --range option to specify columns and their ranges. If the data is outside the 
+given ranges, or the column(s) do not exist then an error is raised. The --range option takes 4 arguments. The
+first is a string describing what sort of column it is and should be one of POINT, PULSE or WAVEFORM. The second is the column name.
+The third and fourth are the expected minimum and maximum values respectively. Here is an example::
+
+    pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --range POINT Z 0 50
+
+^^^^^^^^^^^^^^^^^^
+Spatial Processing
+^^^^^^^^^^^^^^^^^^
+
+For input formats that have a spatial index, the data can be processed in a spatial way and a new spatial index calculated 
+in the output file. The default is to process the data non-spatially. To enable spatial processing, use the --spatial option.
+
+You may also need to set the --binsize flag for LAS files.
+
+You can also restrict spatial processing to a certain extent using the --extent flag. This takes four options:
+xmin ymin xmax ymax. This is an example of spatial processing restricted to a certain extent::
+
+    pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --spatial --binsize 1 --extent 664500 7765999 664999 7767000
+
+^^^^^^^^^^^^^^^^^^^^
+LAS Specific Options
+^^^^^^^^^^^^^^^^^^^^
+
+The --binsize is required for input LAS files when processing spatially and this sets the size of each spatial bin. --epsg
+allows you to set the projection explicity since many LAS files do not have the projection set. --buildpulses tells
+pylidar to build a pulse structure from the input. If this isn't specified then there is one pulse for each point.
+--pulseindex allows to you to specify either FIRST_RETURN or LAST_RETURN and this dictates how the points are indexed
+to the pulses.
+
+^^^^^^^^^^^^^^^^^^^^^^
+Reigl Specific Options
+^^^^^^^^^^^^^^^^^^^^^^
+
+--internalrotation tells pylidar to use the internal rotation information within the file to transform points. --externalrotationfn
+allows the user to specify the transfrom in a text file. --magneticdeclination allows the user to specify a number for
+the magnetic declination that needs to be corrected. 
+
+^^^^^^^^^^^^^^^^^^^^^^
+ASCII Specific Options
+^^^^^^^^^^^^^^^^^^^^^^
+
+For ASCII Formats you need to specify all the columns and their types in the input file. This can be done with the --coltype
+option multiple times, once for each column. This takes two parameters, first is the column name, second is the data type. 
+The data type can be one of: INT8, UINT8, INT16, UINT16, INT32, UINT32, INT64, UINT64, FLOAT32, FLOAT64. 
+You also need to specify with columns are pulse columns with the --pulsecols. This needs to be a comma separated
+list of column names that are to be treated as pulses. Here is an example::
+
     pylidar_translate --input data.dat.gz --output data.spdv4 --format SPDV4 \
         --coltype GPS_TIME FLOAT64 --coltype X_IDX FLOAT64 --coltype Y_IDX FLOAT64 
         --coltype Z_IDX FLOAT64 --coltype X FLOAT64 --coltype Y FLOAT64 --coltype Z FLOAT64 \
         --coltype CLASSIFICATION UINT8 --coltype ORIG_RETURN_NUMBER UINT8 \
         --coltype ORIG_NUMBER_OF_RETURNS UINT8 --coltype AMPLITUDE FLOAT64 \
         --coltype FWHM FLOAT64 --coltype RANGE FLOAT64 --pulsecols GPS_TIME,X_IDX,Y_IDX,Z_IDX
+    
+-----------------------------------------------
+Getting Information on a File with pylidar_info
+-----------------------------------------------
 
-    # Printing info on Riegl file
+The pylidar_info command takes a --input option to specify the path to a file. Information about the file
+is then printed on the terminal. Here is an example::
+
     pylidar_info --input data.rxp
     

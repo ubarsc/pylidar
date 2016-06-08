@@ -69,8 +69,9 @@ def setOutputScaling(header, output, scalingsDict):
             dtype = output.getNativeDataType(col, arrayType)
             if col in scaling:
                 # use defaults, or overridden on command line first
-                gain, offset = scaling[col]
+                gain, offset, dtype = scaling[col]
                 output.setScaling(col, arrayType, gain, offset)
+                output.setNativeDataType(col, arrayType, dtype)
             else:
                 # otherwise guess from old header
                 range, offset = getInfoFromHeader(col, header)
@@ -105,7 +106,7 @@ def transFunc(data, otherArgs):
     data.output1.setReceived(revc)
     data.output1.setTransmitted(trans)
 
-def translate(info, infile, outfile, expectRange, spatial, scaling):
+def translate(info, infile, outfile, expectRange, spatial, extent, scaling):
     """
     Main function which does the work.
 
@@ -114,6 +115,8 @@ def translate(info, infile, outfile, expectRange, spatial, scaling):
     * expectRange is a list of tuples with (type, varname, min, max).
     * spatial is True or False - dictates whether we are processing spatially or not.
         If True then spatial index will be created on the output file on the fly.
+    * extent is a tuple of values specifying the extent to work with. 
+        xmin ymin xmax ymax
     * scaling is a list of tuples with (type, varname, gain, offset).
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scaling)
@@ -129,14 +132,22 @@ def translate(info, infile, outfile, expectRange, spatial, scaling):
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
 
-    # if they have given us an expected range
-    if expectRange is not None:
-        translatecommon.getRange(dataFiles.input1, spatial, expectRange)
-
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     controls.setSpatialProcessing(spatial)
+
+    if extent is not None:
+        extent = [float(x) for x in extent]
+        binSize = info.header['BIN_SIZE']
+        pixgrid = pixelgrid.PixelGridDefn(xMin=extent[0], yMin=extent[1], 
+            xMax=extent[2], yMax=extent[3], xRes=binSize, yRes=binSize)
+        controls.setReferencePixgrid(pixgrid)
+        controls.setFootprint(lidarprocessor.BOUNDS_FROM_REFERENCE)
+
+    # if they have given us an expected range
+    if expectRange is not None:
+        translatecommon.getRange(dataFiles.input1, controls, expectRange)
 
     otherArgs = lidarprocessor.OtherArgs()
     otherArgs.scalingsDict = scalingsDict

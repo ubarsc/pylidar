@@ -26,6 +26,7 @@ from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
 from pylidar.lidarformats import las
 from rios import cuiprogress
+from rios import pixelgrid
 from osgeo import osr
 
 from . import translatecommon
@@ -66,8 +67,8 @@ def transFunc(data, otherDict):
     if revc is not None and revc.size > 0:
         data.output1.setReceived(revc)
 
-def translate(info, infile, outfile, expectRange, spatial, scaling, epsg, 
-        binSize, buildPulses, pulseIndex):
+def translate(info, infile, outfile, expectRange, spatial, extent, scaling, 
+        epsg, binSize, buildPulses, pulseIndex):
     """
     Main function which does the work.
 
@@ -76,6 +77,8 @@ def translate(info, infile, outfile, expectRange, spatial, scaling, epsg,
     * expectRange is a list of tuples with (type, varname, min, max).
     * spatial is True or False - dictates whether we are processing spatially or not.
         If True then spatial index will be created on the output file on the fly.
+    * extent is a tuple of values specifying the extent to work with. 
+        xmin ymin xmax ymax
     * scaling is a list of tuples with (type, varname, dtype, gain, offset).
     * if epsg is not None should be a EPSG number to use as the coord system
     * binSize is the used by the LAS spatial index
@@ -117,10 +120,17 @@ def translate(info, infile, outfile, expectRange, spatial, scaling, epsg,
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     controls.setSpatialProcessing(spatial)
+
+    if extent is not None:
+        extent = [float(x) for x in extent]
+        pixgrid = pixelgrid.PixelGridDefn(xMin=extent[0], yMin=extent[1], 
+            xMax=extent[2], yMax=extent[3], xRes=binSize, yRes=binSize)
+        controls.setReferencePixgrid(pixgrid)
+        controls.setFootprint(lidarprocessor.BOUNDS_FROM_REFERENCE)
     
     # now read through the file and get the range of values for fields 
     # that need scaling.
-    otherDict = translatecommon.getRange(dataFiles.input1, spatial, expectRange)
+    otherDict = translatecommon.getRange(dataFiles.input1, controls, expectRange)
 
     print('Converting %s to SPD V4...' % infile)
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)

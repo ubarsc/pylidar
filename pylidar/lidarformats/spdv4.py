@@ -2126,21 +2126,27 @@ spatial index will be recomputed on the fly"""
 
         if arrayType == generic.ARRAY_TYPE_PULSES:
             if colName in PULSE_FIELDS:
-                msg = 'Cannot set type for column %s' % colName
-                raise generic.LiDARArrayColumnError(msg)
-            self.pulseDtypes[colName] = dtype
+                if PULSE_FIELDS[colName] != dtype:
+                    msg = 'Cannot change type for column %s' % colName
+                    raise generic.LiDARArrayColumnError(msg)
+            else:
+                self.pulseDtypes[colName] = dtype
             
         elif arrayType == generic.ARRAY_TYPE_POINTS:
             if colName in POINT_FIELDS:
-                msg = 'Cannot set type for column %s' % colName
-                raise generic.LiDARArrayColumnError(msg)
-            self.pointDtypes[colName] = dtype
+                if POINT_FIELDS[colName] != dtype:
+                    msg = 'Cannot change type for column %s' % colName
+                    raise generic.LiDARArrayColumnError(msg)
+            else:
+                self.pointDtypes[colName] = dtype
             
         elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
             if colName in WAVEFORM_FIELDS:
-                msg = 'Cannot set type for column %s' % colName
-                raise generic.LiDARArrayColumnError(msg)
-            self.waveFormDtypes[colName] = dtype
+                if WAVEFORM_FIELDS[colName] != dtype:
+                    msg = 'Cannot change type for column %s' % colName
+                    raise generic.LiDARArrayColumnError(msg)
+            else:
+                self.waveFormDtypes[colName] = dtype
 
         else:
             raise generic.LiDARInvalidSetting('Unsupported array type')

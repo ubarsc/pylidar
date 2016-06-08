@@ -110,7 +110,7 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
     controls.setSpatialProcessing(False)
     
     rangeDict = translatecommon.getRange(dataFiles.input1, 
-                expectRange=expectRange)
+                controls=controls, expectRange=expectRange)
 
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')

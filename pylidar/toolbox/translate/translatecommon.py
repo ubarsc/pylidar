@@ -142,7 +142,7 @@ def rangeFunc(data, rangeDict):
                     maxVal > rangeDict[WAVEFORM][maxKey]):
                 rangeDict[WAVEFORM][maxKey] = maxVal
 
-def getRange(infile, spatial=False, expectRange=None):
+def getRange(infile, controls=None, expectRange=None):
     """
     infile should be lidarprocessor.LidarFile so the user
     can set any driver options etc
@@ -155,7 +155,9 @@ def getRange(infile, spatial=False, expectRange=None):
     on the name of each column (with _MIN and _MAX appended) and
     contain either the minimum or maximum values.
 
-    If spatial is True then the file is processed spatially. In theory
+    If controls is not None then is should be a reference to a 
+    lidarprocessor.Controls object. This will ensure that the file
+    is processed in the same way as the translation. In theory
     it shouldn't matter, but spatial processing may not read all the 
     points/pulses in the file because of the way the spatial index
     is calculated so we allow this to be set in the same way the
@@ -171,11 +173,6 @@ def getRange(infile, spatial=False, expectRange=None):
     print('Determining input data range...')
     dataFiles = lidarprocessor.DataFiles()
     dataFiles.input1 = infile
-
-    controls = lidarprocessor.Controls()
-    progress = cuiprogress.GDALProgressBar()
-    controls.setProgress(progress)
-    controls.setSpatialProcessing(spatial)
 
     rangeDict = {PULSE:{}, POINT:{}, WAVEFORM:{}, 'header':{}}
     lidarprocessor.doProcessing(rangeFunc, dataFiles, controls=controls, 

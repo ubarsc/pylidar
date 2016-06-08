@@ -77,7 +77,7 @@ def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols):
     # now read through the file and get the range of values for fields 
     # that need scaling.
     rangeDict = translatecommon.getRange(dataFiles.input1, 
-                        expectRange=expectRange)
+                        controls=controls, expectRange=expectRange)
 
     print('Converting %s to SPD V4...' % infile)
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)

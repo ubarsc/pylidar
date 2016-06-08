@@ -46,6 +46,9 @@ def getCmdargs():
     p.add_argument("--spatial", default=False, action="store_true", 
         help="Process the data spatially. Default is False and if True " + 
             "requires a spatial index in the input.")
+    p.add_argument("--extent", nargs=4, metavar=('xmin', 'ymin', 'xmax', 'ymax'),
+        help="Only process the given spatial extent. Only valid with --spatial"+
+            " option")
     p.add_argument("--epsg", type=int,
         help="Set to the EPSG (if not in supplied LAS file). i.e. " + 
             "GDA / MGA Zone 56 is 28356 (only for LAS inputs)")
@@ -81,7 +84,7 @@ def getCmdargs():
             " multiple times. dtype should be UINT16 format. " +
             "(only for ASCII inputs)")
     p.add_argument("--pulsecols", help="Comma seperated list of column names "+
-            " that are the pulse columns. Names must be definied by --coltype"+
+            " that are the pulse columns. Names must be defined by --coltype"+
             " (only for ASCII inputs)")
 
     cmdargs = p.parse_args()
@@ -94,6 +97,11 @@ def getCmdargs():
     if (cmdargs.pulseindex != "FIRST_RETURN" and 
         cmdargs.pulseindex != "LAST_RETURN"):
         print("--pulseindex must be either FIRST_RETURN or LAST_RETURN")
+        p.print_help()
+        sys.exit()
+
+    if cmdargs.extent is not None and not cmdargs.spatial:
+        print("--extent can only be specified with --spatial")
         p.print_help()
         sys.exit()
 
@@ -115,12 +123,13 @@ def run():
 
     if inFormat == 'LAS' and cmdargs.format == 'SPDV4':
         las2spdv4.translate(info, cmdargs.input, cmdargs.output, 
-                cmdargs.range, cmdargs.spatial, cmdargs.scaling, cmdargs.epsg, 
-                cmdargs.binsize, cmdargs.buildpulses, cmdargs.pulseindex)
+                cmdargs.range, cmdargs.spatial, cmdargs.extent, cmdargs.scaling, 
+                cmdargs.epsg, cmdargs.binsize, cmdargs.buildpulses, 
+                cmdargs.pulseindex)
 
     elif inFormat == 'SPDV3' and cmdargs.format == 'SPDV4':
         spdv32spdv4.translate(info, cmdargs.input, cmdargs.output,
-                cmdargs.range, cmdargs.spatial, cmdargs.scaling)
+                cmdargs.range, cmdargs.spatial, cmdargs.extent, cmdargs.scaling)
 
     elif inFormat == 'riegl' and cmdargs.format == 'SPDV4':
         riegl2spdv4.translate(info, cmdargs.input, cmdargs.output,
@@ -129,7 +138,7 @@ def run():
 
     elif inFormat == 'SPDV4' and cmdargs.format == 'LAS':
         spdv42las.translate(info, cmdargs.input, cmdargs.output, 
-                cmdargs.spatial)
+                cmdargs.spatial, cmdargs.extent)
 
     elif inFormat == 'ASCII TS' and cmdargs.format == 'SPDV4':
 
