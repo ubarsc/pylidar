@@ -265,9 +265,9 @@ Fields marked with Scaling = Yes must have these attributes.
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | INTENSITY            | uint16  |       | No        | Yes     | Uncalibrated intensity                       |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| AMPLITUDE_RETURN     | float32 |       | No        | No      | Amplitude of the return                      |
+| AMPLITUDE_RETURN     | uint16  |       | No        | Yes     | Amplitude of the return                      |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| WIDTH_RETURN         | float32 | ns    | No        | No      | Width (FWHM) of the return                   |
+| WIDTH_RETURN         | uint16  | ns    | No        | Yes     | Width (FWHM) of the return                   |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | RED                  | uint16  |       | No        | No      | For display purposes. See RGB_FIELD file     |
 |                      |         |       |           |         | attribute                                    |
