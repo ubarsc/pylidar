@@ -67,6 +67,8 @@ STRING_TO_DTYPE = {'INT8':numpy.int8, 'UINT8':numpy.uint8, 'INT16':numpy.int16,
     'UINT16':numpy.uint16, 'INT32':numpy.int32, 'UINT32':numpy.uint32,
     'INT64':numpy.int64, 'UINT64':numpy.uint64, 'FLOAT32':numpy.float32,
     'FLOAT64':numpy.float64}
+"Code that means: use the default type"
+DEFAULT_DTYPE_STR = 'DFLT'
 
 def rangeFunc(data, rangeDict):
     """
@@ -296,12 +298,34 @@ def overRideDefaultScalings(scaling):
             gain = float(gainStr)
             offset = float(offsetStr)
             typeName = typeName.upper()
-            dtype = STRING_TO_DTYPE[dtypeName.upper()]
+            dtypeName = dtypeName.upper()
+
             if typeName not in NAME_TO_CODE_DICT:
                 msg = 'unrecognised type %s' % typeName
                 raise generic.LiDARInvalidSetting(msg)
-
             code = NAME_TO_CODE_DICT[typeName]
+
+            if dtypeName == DEFAULT_DTYPE_STR:
+                # look up spdv4 to see what it uses
+                SPDV4fieldsdict = {lidarprocessor.ARRAY_TYPE_POINTS:spdv4.POINT_FIELDS,
+                    lidarprocessor.ARRAY_TYPE_PULSES:spdv4.PULSE_FIELDS,
+                    lidarprocessor.ARRAY_TYPE_WAVEFORMS:spdv4.WAVEFORM_FIELDS}
+                        
+                SPDV4fields = SPDV4fieldsdict[code]
+                if varName not in SPDV4fields:
+                    msg = '%s is not a SPDV4 standard column for %s'
+                    msg = msg % (varName, typeName)
+                    raise generic.LiDARInvalidSetting(msg)
+
+                dtype = SPDV4fields[varName]
+
+            else:
+                if dtypeName not in STRING_TO_DTYPE:
+                    msg = 'unrecognised data type %s' % dtypeName
+                    raise generic.LiDARInvalidSetting(msg)
+
+                dtype = STRING_TO_DTYPE[dtypeName]
+
             scalingsDict[code][varName] = (gain, offset, dtype)
 
     return scalingsDict

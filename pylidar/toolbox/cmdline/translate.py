@@ -54,7 +54,8 @@ def getCmdargs():
             help="Set gain and offset scaling for named variable." +
             " Can be given multiple times for different variables." +
             " type should be one of [POINT|PULSE|WAVEFORM] dtype should be "+
-            "UINT16 format. (only for SPDV4 outputs)")
+            "UINT16 format or DFLT for standard fields. " +
+            "(only for SPDV4 outputs)")
     p.add_argument("--range", nargs=4, metavar=('type', 'varName', 'min', 
             'max'), action='append', help="expected range for variables. " +
             "Will fail with an error if variables outside specified limit "+

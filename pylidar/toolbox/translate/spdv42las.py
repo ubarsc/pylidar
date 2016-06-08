@@ -92,7 +92,7 @@ def transFunc(data):
     data.output1.setWaveformInfo(waveformInfo)
     data.output1.setReceived(revc)
 
-def translate(info, infile, outfile, spatial):
+def translate(info, infile, outfile, spatial, scaling):
     """
     Does the translation between SPD V4 and .las format files.
 

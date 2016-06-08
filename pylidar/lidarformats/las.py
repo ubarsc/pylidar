@@ -677,7 +677,8 @@ class LasFile(generic.LiDARFile):
     def setScaling(self, colName, arrayType, gain, offset):
         """
         Set the scaling for the given column name. Currently
-        scaling is only supported for X, Y and Z columns for points.
+        scaling is only supported for X, Y and Z columns for points,
+        or optional fields.
         """
         if self.mode == generic.READ:
             msg = 'Can only set scaling values on create'

@@ -76,7 +76,7 @@ def translate(info, infile, outfile, expectRange, spatial, scaling, epsg,
     * expectRange is a list of tuples with (type, varname, min, max).
     * spatial is True or False - dictates whether we are processing spatially or not.
         If True then spatial index will be created on the output file on the fly.
-    * scaling is a list of tuples with (type, varname, gain, offset).
+    * scaling is a list of tuples with (type, varname, dtype, gain, offset).
     * if epsg is not None should be a EPSG number to use as the coord system
     * binSize is the used by the LAS spatial index
     * buildPulses dictates whether to attempt to build the pulse structure
