@@ -1608,8 +1608,8 @@ spatial index will be recomputed on the fly"""
                 needsScaling = True
             if name in PULSE_FIELDS:
                 dataType = PULSE_FIELDS[name]
-            elif name in self.pointDtypes:
-                dataType = self.pointDtypes[name]
+            elif name in self.pulseDtypes:
+                dataType = self.pulseDtypes[name]
                 
         elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
             if name in WAVEFORM_SCALED_FIELDS:

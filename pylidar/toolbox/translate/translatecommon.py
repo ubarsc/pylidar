@@ -230,6 +230,8 @@ def setOutputScaling(rangeDict, output):
                 checkScaling(gain, offset, dtype, minVal, maxVal, name)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, 
                         gain, offset)
+                output.setNativeDataType(field, 
+                        lidarprocessor.ARRAY_TYPE_PULSES, dtype)
 
     # points
     for key in rangeDict[POINT].keys():
@@ -244,6 +246,8 @@ def setOutputScaling(rangeDict, output):
                 checkScaling(gain, offset, dtype, minVal, maxVal, name)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, 
                         gain, offset)
+                output.setNativeDataType(field, 
+                        lidarprocessor.ARRAY_TYPE_POINTS, dtype)
 
     # waveforms
     for key in rangeDict[WAVEFORM].keys():
@@ -258,6 +262,8 @@ def setOutputScaling(rangeDict, output):
                 checkScaling(gain, offset, dtype, minVal, maxVal, name)
                 output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, 
                         gain, offset)
+                output.setNativeDataType(field, 
+                        lidarprocessor.ARRAY_TYPE_WAVEFORMS, dtype)
 
 def checkScaling(gain, offset, dtype, minVal, maxVal, varName):
     """
