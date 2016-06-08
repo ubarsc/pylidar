@@ -5,7 +5,7 @@ Command Line Examples
 More to come::
 
     # LAS to SPDV4
-    pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --epsg 28356 --scaling POINT Z 1 -500 --spatial --binsize 1
+    pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --epsg 28356 --scaling POINT Z UINT32 1 -500 --spatial --binsize 1
 
     # SPDV3 to SPDV4
     pylidar_translate --input data.spd --output data.spdv4 --format SPDV4 --spatial

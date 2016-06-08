@@ -11,9 +11,9 @@ below are understood by PyLidar.
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | Name                               | Type    | Units | Essential | Description                        |
 +====================================+=========+=======+===========+====================================+
-| AZIMUTH_MAX                        | float32 | deg   | No        | Maximum pulse azimith in this file |
+| AZIMUTH_MAX                        | float64 | deg   | No        | Maximum pulse azimith in this file |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| AZIMUTH_MIN                        | float32 | deg   | No        | Minimum pulse azimith in this file |
+| AZIMUTH_MIN                        | float64 | deg   | No        | Minimum pulse azimith in this file |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | BANDWIDTHS                         | float32 | ns    | No        | Widths of the band(s) used         |
 |                                    | array   |       |           |                                    |
@@ -145,25 +145,25 @@ below are understood by PyLidar.
 | WAVELENGTHS                        | float32 | nm    | No        | Wavelengths used in the file       |
 |                                    | array   |       |           |                                    |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| X_MAX                              | float32 | m     | No        | maximum X coord in file            |
+| X_MAX                              | float64 | m     | No        | maximum X coord in file            |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| X_MIN                              | float32 | m     | No        | minimum X coord in file            |
+| X_MIN                              | float64 | m     | No        | minimum X coord in file            |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| Y_MAX                              | float32 | m     | No        | maximum Y coord in file            |
+| Y_MAX                              | float64 | m     | No        | maximum Y coord in file            |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| Y_MIN                              | float32 | m     | No        | minimum X coord in file            |
+| Y_MIN                              | float64 | m     | No        | minimum X coord in file            |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| Z_MAX                              | float32 | m     | No        | maximum Z coord in file            |
+| Z_MAX                              | float64 | m     | No        | maximum Z coord in file            |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| Z_MIN                              | float32 | m     | No        | minimum Z coord in file            |
+| Z_MIN                              | float64 | m     | No        | minimum Z coord in file            |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | HEIGHT_MIN                         | float32 | m     | No        | minimum height in file             |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | HEIGHT_MAX                         | float32 | m     | No        | maximum height in file             |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| ZENITH_MAX                         | float32 | m     | No        | maximum zenith in file             |
+| ZENITH_MAX                         | float64 | m     | No        | maximum zenith in file             |
 +------------------------------------+---------+-------+-----------+------------------------------------+
-| ZENITH_MIN                         | float32 | m     | No        | minimum zenith in file             |
+| ZENITH_MIN                         | float64 | m     | No        | minimum zenith in file             |
 +------------------------------------+---------+-------+-----------+------------------------------------+
 | RGB_FIELD                          | str     |       | No        | List of 3 Point columns to use for | 
 |                                    |         |       |           | visualisation                      |
@@ -187,9 +187,9 @@ Fields marked with Scaling = Yes must have these attributes.
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | NUMBER_OF_RETURNS          | uint8   |       | Yes       | No      | Number of points for this pulse              |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| AZIMUTH                    | uint16  | rad   | No        | Yes     | Azimuth of this pulse from true north        |
+| AZIMUTH                    | uint32  | rad   | No        | Yes     | Azimuth of this pulse from true north        |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| ZENITH                     | uint16  | rad   | No        | Yes     | Zenith of this pulse                         |
+| ZENITH                     | uint32  | rad   | No        | Yes     | Zenith of this pulse                         |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | SOURCE_ID                  | uint16  |       | No        | No      | Pulse source (typically a flightline ID      |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
@@ -208,24 +208,24 @@ Fields marked with Scaling = Yes must have these attributes.
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | SCANLINE_IDX               | uint16  |       | No        | No      | Pulse number within a scanline               |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| X_IDX                      | uint16  |       | Yes       | Yes     | X coord to use to spatially index this pulse |
+| X_IDX                      | uint32  |       | Yes       | Yes     | X coord to use to spatially index this pulse |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| Y_IDX                      | uint16  |       | Yes       | Yes     | Y coord to use to spatially index this pulse |
+| Y_IDX                      | uint32  |       | Yes       | Yes     | Y coord to use to spatially index this pulse |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| X_ORIGIN                   | uint16  | m     | No        | Yes     | X location of pulse emission                 |
+| X_ORIGIN                   | uint32  | m     | No        | Yes     | X location of pulse emission                 |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| Y_ORIGIN                   | uint16  | m     | No        | Yes     | Y location of pulse emission                 |
+| Y_ORIGIN                   | uint32  | m     | No        | Yes     | Y location of pulse emission                 |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| Z_ORIGIN                   | uint16  | m     | No        | Yes     | Z location of pulse emission                 |
+| Z_ORIGIN                   | uint32  | m     | No        | Yes     | Z location of pulse emission                 |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| H_ORIGIN                   | uint16  | m     | No        | Yes     | Height of pulse emission                     |
+| H_ORIGIN                   | uint32  | m     | No        | Yes     | Height of pulse emission                     |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | PULSE_FLAGS                | uint8   |       | No        | No      | 1=IGNORE,2=OVERLAP,4=SCANLINE_DIRECTION,     |
 |                            |         |       |           |         | 8=SCANLINE_EDGE                              |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| AMPLITUDE_PULSE            | float32 |       | No        | No      | Amplitude of the emitted pulse               |
+| AMPLITUDE_PULSE            | uint16  |       | No        | Yes     | Amplitude of the emitted pulse               |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| WIDTH_PULSE                | float32 | ns    | No        | No      | Width (FWHM) of the emitted pulse            |
+| WIDTH_PULSE                | uint16  | ns    | No        | Yes     | Width (FWHM) of the emitted pulse            |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | SCAN_ANGLE_RANK            | int16   | deg   | No        | No      | In LAS specification and defined differently |
 |                            |         |       |           |         | to zenith angle                              |
@@ -246,15 +246,15 @@ Fields marked with Scaling = Yes must have these attributes.
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | Name                 | Type    | Units | Essential | Scaling | Description                                  |
 +======================+=========+=======+===========+=========+==============================================+
-| RANGE                | uint16  | m     | No        | Yes     | Return range                                 |
+| RANGE                | uint32  | m     | No        | Yes     | Return range                                 |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | RETURN_NUMBER        | uint8   |       | Yes       | No      | Return number. The base value is 1 not 0     |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| X                    | uint16  | m     | Yes       | Yes     | The X coord of this point                    |
+| X                    | uint32  | m     | Yes       | Yes     | The X coord of this point                    |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| Y                    | uint16  | m     | Yes       | Yes     | The Y coord of this point                    |
+| Y                    | uint32  | m     | Yes       | Yes     | The Y coord of this point                    |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| Z                    | uint16  | m     | Yes       | Yes     | The Z coord of this point                    |
+| Z                    | uint32  | m     | Yes       | Yes     | The Z coord of this point                    |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | HEIGHT               | uint16  | m     | Yes       | Yes     | The height of this point                     |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
@@ -265,7 +265,7 @@ Fields marked with Scaling = Yes must have these attributes.
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | INTENSITY            | uint16  |       | No        | Yes     | Uncalibrated intensity                       |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| AMPLITUDE_RETURN     | float32 |       | No        | Yes     | Amplitude of the return                      |
+| AMPLITUDE_RETURN     | float32 |       | No        | No      | Amplitude of the return                      |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | WIDTH_RETURN         | float32 | ns    | No        | No      | Width (FWHM) of the return                   |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
@@ -321,6 +321,8 @@ Fields marked with Scaling = Yes must have these attributes.
 | CHANNEL                             | uint8   |       | No        | No      | Channel number (e.g. for high/low gain)      |
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | WAVEFORM_FLAGS                      | uint8   |       | No        | No      | 1=IGNORE,2=SATURATION_FIXED,4=BASELINE_FIXED |
++-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
+| WFM_WAVELENGTH_IDX                  | uint8   |       | Yes       | No      | Index of this waveform                       |
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | RECEIVE_WAVE_GAIN                   | float32 |       | Yes       | No      | Gain for the RECEIVED data                   |
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+

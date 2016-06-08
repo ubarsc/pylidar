@@ -41,12 +41,12 @@ HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'INDEX_TLX' : numpy.float64, 'INDEX_TLY' : numpy.float64,
 'NUMBER_BINS_X' : numpy.uint32, 'NUMBER_BINS_Y' : numpy.uint32,
 'NUMBER_OF_POINTS' : numpy.uint64, 'NUMBER_OF_PULSES' : numpy.uint64,
-'NUMBER_OF_WAVEFORMS' : numpy.uint16,
+'NUMBER_OF_WAVEFORMS' : numpy.uint64,
 'NUM_OF_WAVELENGTHS' : numpy.uint16, 'POINT_DENSITY' : numpy.float32,
 'PULSE_ALONG_TRACK_SPACING' : numpy.float32, 
 'PULSE_ANGULAR_SPACING_SCANLINE' : numpy.float32,
 'PULSE_ANGULAR_SPACING_SCANLINE_IDX' : numpy.float32,
-'PULSE_CROSS_TRACK_SPACING' : numpy.float32, 'PULSE_DENSITY' : numpy.float32,
+'PULSE_ACROSS_TRACK_SPACING' : numpy.float32, 'PULSE_DENSITY' : numpy.float32,
 'PULSE_ENERGY' : numpy.float32, 'PULSE_FOOTPRINT' : numpy.float32,
 'PULSE_INDEX_METHOD' : numpy.uint16, 'RANGE_MAX' : numpy.float32,
 'RANGE_MIN' : numpy.float32, 
@@ -110,8 +110,10 @@ WAVEFORM_FIELDS = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : numpy.uint16,
 
 # need scaling applied 
 PULSE_SCALED_FIELDS = ('AZIMUTH', 'ZENITH', 'X_IDX', 'Y_IDX', 
-'X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN')
-POINT_SCALED_FIELDS = ('X', 'Y', 'Z', 'HEIGHT', 'RANGE')
+'X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN', 'AMPLITUDE_PULSE', 
+'WIDTH_PULSE')
+POINT_SCALED_FIELDS = ('X', 'Y', 'Z', 'HEIGHT', 'RANGE', 'INTENSITY', 
+'AMPLITUDE_RETURN', 'WIDTH_RETURN')
 WAVEFORM_SCALED_FIELDS = ('RANGE_TO_WAVEFORM_START',)
 
 
