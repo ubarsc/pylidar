@@ -600,6 +600,7 @@ class LidarData(object):
         Raises exception if conversion not possible or does not make sense.
         """
         isStruct = data.dtype.names is not None
+        isMasked = isinstance(data, numpy.ma.MaskedArray)
         if isStruct and colName is not None:
             msg = 'if using structured arrays, leave colName as None'
             raise generic.LiDARArrayColumnError(msg)
@@ -612,6 +613,9 @@ class LidarData(object):
             structdata = numpy.empty(data.shape, 
                                         dtype=[(colName, data.dtype)])
             structdata[colName] = data
+            if isMasked:
+                data = numpy.ma.MaskedArray(structdata, mask=data.mask)
+
             data = structdata
 
         return data
