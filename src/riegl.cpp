@@ -31,8 +31,8 @@
 #include <limits>
 #include "fwifc.h"
 
-static const int nGrowBy = 5000;
-static const int nInitSize = 40000;
+static const int nGrowBy = 10000;
+static const int nInitSize = 100000;
 
 /* An exception object for this module */
 /* created in the init function */
@@ -359,7 +359,7 @@ protected:
 
         // Rescale reflectance and amplitude from dB to papp
         point.rho_app = std::pow(10.0, current_target.reflectance / 10.0);
-        point.amplitude_Return = std::pow(10.0, current_target.amplitude / 10.0);
+        point.amplitude_Return = current_target.amplitude;
 
         // apply transform and store result
         applyTransformation(current_target.vertex[0], current_target.vertex[1], current_target.vertex[2],
