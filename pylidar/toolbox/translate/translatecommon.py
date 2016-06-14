@@ -39,7 +39,7 @@ for key in PULSE_DEFAULT_SCALING.keys():
 POINT_DEFAULT_SCALING = {'X':[100.0, 0.0], 'Y':[100.0, 0.0], 
     'Z':[100.0, -100.0], 'HEIGHT':[100.0, -100.0], 'INTENSITY':[1.0, 0.0],
     'RANGE':[100.0, 0.0], 'AMPLITUDE_RETURN':[1.0, 0.0],
-    'WIDTH_RETURN':[1.0, 0.0]}
+    'WIDTH_RETURN':[1.0, 0.0], 'RHO_APP':[10000.0, 0.0]}
 # add in the spdv4 types
 for key in POINT_DEFAULT_SCALING.keys():
     dtype = spdv4.POINT_FIELDS[key]
