@@ -614,7 +614,7 @@ class LidarData(object):
                                         dtype=[(colName, data.dtype)])
             structdata[colName] = data
             if isMasked:
-                data = numpy.ma.MaskedArray(structdata, mask=data.mask)
+                structdata = numpy.ma.MaskedArray(structdata, mask=data.mask)
 
             data = structdata
 
