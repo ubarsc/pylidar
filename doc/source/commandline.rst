@@ -62,13 +62,14 @@ pylidar to build a pulse structure from the input. If this isn't specified then 
 --pulseindex allows to you to specify either FIRST_RETURN or LAST_RETURN and this dictates how the points are indexed
 to the pulses.
 
-^^^^^^^^^^^^^^^^^^^^^^
-Reigl Specific Options
-^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+RIEGL RXP Specific Options
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
---internalrotation tells pylidar to use the internal rotation information within the file to transform points. --externalrotationfn
-allows the user to specify the transfrom in a text file. --magneticdeclination allows the user to specify a number for
-the magnetic declination that needs to be corrected. 
+--internalrotation tells pylidar to use the internal instrument inclinometer and compass data within the file to transform 
+point and pulse coordinates. --externalrotationfn allows the user to specify the transform in a text file. --magneticdeclination 
+allows the user to specify a number for the magnetic declination that needs to be corrected when using the internal 
+instrument compass data. 
 
 ^^^^^^^^^^^^^^^^^^^^^^
 ASCII Specific Options

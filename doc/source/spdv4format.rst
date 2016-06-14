@@ -237,7 +237,7 @@ Fields marked with Scaling = Yes must have these attributes.
 Point Data
 ----------
 
-Pulse data live under the DATA/POINTS group. Each column is a separate dataset. These are the fields that
+Point data live under the DATA/POINTS group. Each column is a separate dataset. These are the fields that
 PyLidar recognises. Other optional fields can be created. If a field has 'GAIN' and 'OFFSET' attributes
 these will be applied to data transparently. Request unscaled versions by appending '_U' to field name.
 
@@ -281,9 +281,9 @@ Fields marked with Scaling = Yes must have these attributes.
 | NIR                  | uint16  |       | No        | No      | For display purposes. See RGB_FIELD file     |
 |                      |         |       |           |         | attribute                                    |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| RHO_APP              | float32 |       | No        | No      | Apparent reflectance                         |
+| RHO_APP              | uint32  |       | No        | Yes     | Apparent reflectance                         |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
-| DEVIATION            | float32 |       | No        | No      | Return deviation (defined by RIEGL)          |
+| DEVIATION            | uint16  |       | No        | No      | Return deviation (defined by RIEGL)          |
 +----------------------+---------+-------+-----------+---------+----------------------------------------------+
 | ECHO_TYPE            | uint16  |       | No        | No      | Useful for old datasets where first/last     |
 |                      |         |       |           |         | returns are provided independently, i.e.     |
