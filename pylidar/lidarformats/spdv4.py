@@ -96,7 +96,7 @@ POINT_FIELDS = {'RANGE' : numpy.uint32, 'RETURN_NUMBER' : numpy.uint8,
 'POINT_FLAGS' : numpy.uint8, 'INTENSITY' : numpy.uint16, 
 'AMPLITUDE_RETURN' : numpy.uint16, 'WIDTH_RETURN' : numpy.uint16, 
 'RED' : numpy.uint16, 'GREEN' : numpy.uint16, 'BLUE' : numpy.uint16, 
-'NIR' : numpy.uint16, 'RHO_APP' : numpy.uint16, 'DEVIATION' : numpy.uint16,
+'NIR' : numpy.uint16, 'RHO_APP' : numpy.uint32, 'DEVIATION' : numpy.uint16,
 'ECHO_TYPE' : numpy.uint16, 'POINT_WAVELENGTH_IDX' : numpy.uint8}
 
 # The following fields have defined type
