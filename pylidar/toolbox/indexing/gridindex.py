@@ -56,7 +56,7 @@ PULSE_INDEX_ORIGIN = spdv4.SPDV4_PULSE_INDEX_ORIGIN
 PULSE_INDEX_MAX_INTENSITY = spdv4.SPDV4_PULSE_INDEX_MAX_INTENSITY
 
 def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None, 
-        tempDir='.', extent=None, indexMethod=INDEX_CARTESIAN,
+        tempDir='.', extent=None, indexType=INDEX_CARTESIAN,
         pulseIndexMethod=PULSE_INDEX_FIRST_RETURN, wkt=None):
     """
     Creates a grid spatially indexed file from a non spatial input file.
@@ -66,9 +66,46 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     building a spatial index as it goes.
     If blockSize isn't set then it is picked using BLOCKSIZE_N_BLOCKS.
     binSize is the size of the bins to create the spatial index.
-    indexMethod is on of the INDEX_* constants.
+    indexType is one of the INDEX_* constants.
+    pulseIndexMethod is one of the PULSE_INDEX_* constants.
     wkt is the projection to use for the output. Copied from the input if
     not supplied.
+    """
+    header, extent, extentList = splitFileIntoTiles(infile, binSize=binSize, 
+                blockSize=blockSize, tempDir=tempDir, extent=extent, 
+                indexType=indexType, pulseIndexMethod=pulseIndexMethod)
+    
+    # update header
+    header['INDEX_TLX'] = extent.xMin
+    header['INDEX_TLY'] = extent.yMax
+    header['INDEX_TYPE'] = indexType
+    header['PULSE_INDEX_METHOD'] = pulseIndexMethod
+    header['BIN_SIZE'] = binSize
+
+    if wkt is None:
+        wkt = header['SPATIAL_REFERENCE'] 
+        if len(wkt) == 0:
+            wkt = getDefaultWKT()
+
+    indexAndMerge(extentList, extent, wkt, outfile, header)
+    
+    # delete the temp files
+    for fname, extent in extentList:
+        os.remove(fname)
+
+def splitFileIntoTiles(infile, binSize=1.0, blockSize=None, 
+        tempDir='.', extent=None, indexType=INDEX_CARTESIAN,
+        pulseIndexMethod=PULSE_INDEX_FIRST_RETURN):
+    """
+    Creates a tempfile for every block (using blockSize).
+    If blockSize isn't set then it is picked using BLOCKSIZE_N_BLOCKS.
+    binSize is the size of the bins to create the spatial index.
+    indexType is one of the INDEX_* constants.
+    pulseIndexMethod is one of the PULSE_INDEX_* constants.
+
+    returns the header of the input file, the extent used and a list
+    of (fname, extent) tuples that contain the information for 
+    each tempfile.
     """
     info = generic.getLidarFileInfo(infile)
     header = info.header
@@ -76,17 +113,17 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     if extent is None:
         # work out from header
         try:
-            if indexMethod == INDEX_CARTESIAN:
+            if indexType == INDEX_CARTESIAN:
                 xMax = header['X_MAX']
                 xMin = header['X_MIN']
                 yMax = header['Y_MAX']
                 yMin = header['Y_MIN']
-            elif indexMethod == INDEX_SPHERICAL:
+            elif indexType == INDEX_SPHERICAL:
                 xMax = header['AZIMUTH_MAX']
                 xMin = header['AZIMUTH_MIN']
                 yMax = header['ZENITH_MAX']
                 yMin = header['ZENITH_MIN']
-            elif indexMethod == INDEX_SCAN:
+            elif indexType == INDEX_SCAN:
                 xMax = header['SCANLINE_IDX_MAX']
                 xMin = header['SCANLINE_IDX_MIN']
                 yMax = header['SCANLINE_MAX']
@@ -104,11 +141,6 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
         # ensure that our binSize comes from their exent
         binSize = extent.binSize
     
-    if wkt is None:
-        wkt = header['SPATIAL_REFERENCE'] 
-        if len(wkt) == 0:
-            wkt = getDefaultWKT()
-
     if blockSize is None:
         minAxis = min(extent.xMax - extent.xMin, extent.yMax - extent.yMin)
         blockSize = min(minAxis / BLOCKSIZE_N_BLOCKS, 200.0)
@@ -120,7 +152,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
             extent.yMax - blockSize, extent.yMax, binSize)
     controls = lidarprocessor.Controls()
     controls.setSpatialProcessing(False)
-    
+
     bMoreToDo = True
     while bMoreToDo:
         fd, fname = tempfile.mkstemp(suffix='.spdv4', dir=tempDir)
@@ -158,39 +190,22 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     
     otherArgs = lidarprocessor.OtherArgs()
     otherArgs.outList = extentList
-    otherArgs.indexMethod = indexMethod
+    otherArgs.indexType = indexType
     otherArgs.pulseIndexMethod = pulseIndexMethod
     
     lidarprocessor.doProcessing(classifyFunc, dataFiles, controls=controls, 
                 otherArgs=otherArgs)
     
-    # close all the output files and re-open in read mode
+    # close all the output files and save their names to return
     newExtentList = []
     for subExtent, driver in extentList:
         fname = driver.fname
         driver.close()
-        userClass = lidarprocessor.LidarFile(fname, generic.READ)
-        driver = spdv4.SPDV4File(fname, generic.READ, controls, userClass)
-        
-        data = (subExtent, driver)
+
+        data = (fname, subExtent)
         newExtentList.append(data)
-                
-    # update header
-    header['INDEX_TLX'] = extent.xMin
-    header['INDEX_TLY'] = extent.yMax
-    header['INDEX_TYPE'] = indexMethod
-    header['PULSE_INDEX_METHOD'] = pulseIndexMethod
-    header['BIN_SIZE'] = binSize
-                
-    progress.reset()
-    progress.setLabelText('Merging...')
-    indexAndMerge(newExtentList, extent, wkt, outfile, header, progress)
-    
-    # close all inputs and delete
-    for extent, driver in newExtentList:
-        fname = driver.fname
-        driver.close()
-        os.remove(fname)
+
+    return header, extent, newExtentList
 
 def getDefaultWKT():
     """
@@ -262,15 +277,15 @@ def classifyFunc(data, otherArgs):
         # whatever index we are building?
         # No - as the values of these columns may have to change if the
         # properties of the spatial indexing method change   
-        if otherArgs.indexMethod == INDEX_CARTESIAN:
+        if otherArgs.indexType == INDEX_CARTESIAN:
             xIdxFieldName = 'X'
             yIdxFieldName = 'Y'
             xIdx, yIdx = indexPulses(pulses, points, recv, otherArgs.pulseIndexMethod)
-        elif otherArgs.indexMethod == INDEX_SPHERICAL:
+        elif otherArgs.indexType == INDEX_SPHERICAL:
             xIdxFieldName = 'AZIMUTH'
             yIdxFieldName = 'ZENITH'
             xIdx, yIdx = pulses[xIdxFieldName], pulses[yIdxFieldName]
-        elif otherArgs.indexMethod == INDEX_SCAN:
+        elif otherArgs.indexType == INDEX_SCAN:
             xIdxFieldName = 'SCANLINE_IDX'
             yIdxFieldName = 'SCANLINE'
             xIdx, yIdx = pulses[xIdxFieldName], pulses[yIdxFieldName]              
@@ -337,11 +352,24 @@ def indexPulses(pulses, points, recv, pulseIndexMethod):
 
     return xIdx, yIdx
 
-def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
+def indexAndMerge(extentList, extent, wkt, outfile, header):
     """
     Internal method to merge all the temporary files into the output
     spatially indexing as we go.
     """
+    controls = lidarprocessor.Controls()
+    controls.setSpatialProcessing(False)
+
+    # open in read mode
+    driverExtentList = []
+    for fname, subExtent in extentList:
+        userClass = lidarprocessor.LidarFile(fname, generic.READ)
+        driver = spdv4.SPDV4File(fname, generic.READ, controls, userClass)
+        
+        data = (subExtent, driver)
+        driverExtentList.append(data)
+
+
     # create output file    
     userClass = lidarprocessor.LidarFile(outfile, generic.CREATE)
     controls = lidarprocessor.Controls()
@@ -357,11 +385,13 @@ def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
     header['NUMBER_BINS_X'] = ncols
     header['NUMBER_BINS_Y'] = nrows
     
+    progress = cuiprogress.GDALProgressBar()
+    progress.setLabelText('Merging...')
     progress.setTotalSteps(len(extentList))
     progress.setProgress(0)
     nFilesProcessed = 0
     nFilesWritten = 0
-    for subExtent, driver in extentList:
+    for subExtent, driver in driverExtentList:
 
         # read in all the data
         npulses = driver.getTotalNumberPulses()
@@ -378,6 +408,9 @@ def indexAndMerge(extentList, extent, wkt, outfile, header, progress):
             if nFilesWritten == 0:
                 copyScaling(driver, outDriver)
                 outDriver.setHeader(header)
+
+            # close the driver while we are here
+            driver.close()
         
             # on create, a spatial index is created
             outDriver.writeData(pulses, points, trans, recv, 

@@ -269,18 +269,20 @@ def checkScaling(gain, offset, dtype, minVal, maxVal, varName):
     """
     if numpy.issubdtype(dtype, numpy.integer):
         info = numpy.iinfo(dtype)
-        scaledMin = (minVal - offset) * gain
-        scaledMax = (maxVal - offset) * gain
+        scaledMin = (minVal + offset) * gain
+        scaledMax = (maxVal + offset) * gain
 
         if scaledMin < info.min:
             msg = ("Scaling for %s gives values less than %d which is the "+
-                "minimum value allowed by the data type. Over-ride defaults " +
-                "on the command line.") % (varName, info.min)
+                "minimum value allowed by the data type. Minimum is %f. "+
+                "Over-ride defaults on the command line.") % (varName, 
+                    info.min, minVal)
             raise generic.LiDARInvalidSetting(msg)
         if scaledMax > info.max:
             msg = ("Scaling for %s gives values greater than %d which is the "+
-                "maximum value allowed by the data type. Over-ride defaults " +
-                "on the command line.") % (varName, info.max)
+                "maximum value allowed by the data type. Maximum is %f. " +
+                "Over-ride defaults on the command line.") % (varName, 
+                    info.max, maxVal)
             raise generic.LiDARInvalidSetting(msg)
 
 def overRideDefaultScalings(scaling):
