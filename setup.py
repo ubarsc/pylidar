@@ -30,9 +30,13 @@ try:
 except ImportError:
     from distutils.core import setup
     withExtensions = False
-    
 
 import pylidar
+
+# Are we installing the command line scripts?
+# this is an experimental option for users who are
+# using the Python entry point feature of setuptools and Conda instead
+NO_INSTALL_CMDLINE = int(os.getenv('PYLIDAR_NOCMDLINE', '0')) > 0
 
 def getExtraCXXFlags():
     """
@@ -153,6 +157,12 @@ if withExtensions:
     addRieglDriver(externalModules, cxxFlags)
     addLasDriver(externalModules, cxxFlags)
 
+if NO_INSTALL_CMDLINE:
+    scriptList = None
+else:
+    scriptList = ['bin/pylidar_translate', 'bin/pylidar_info', 
+            'bin/pylidar_index', 'bin/pylidar_tile']
+
 setup(name='pylidar',
       version=pylidar.PYLIDAR_VERSION,
       ext_modules=externalModules,
@@ -161,8 +171,7 @@ setup(name='pylidar',
                 'pylidar/toolbox/grdfilters', 'pylidar/toolbox/indexing',
                 'pylidar/toolbox/translate', 'pylidar.toolbox.cmdline', 
                 'pylidar/testing'],
-      scripts=['bin/pylidar_translate', 'bin/pylidar_info', 'bin/pylidar_index',
-            'bin/pylidar_tile'],
+      scripts=scriptList,
       license='LICENSE.txt', 
       url='http://pylidar.org/',
       classifiers=['Intended Audience :: Developers',
