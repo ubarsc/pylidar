@@ -92,7 +92,7 @@ def setDefaultDrivers():
     in which case an empty list of creation options is passed to the driver.
     
     If not otherwise supplied, the default is to use what RIOS is set to. 
-    This defaults to he HFA driver with compression. 
+    This defaults to the HFA driver with compression. 
         
     If PYLIDAR_DFLT_LIDARDRIVER is set, then is should be a LiDAR driver name
     If not otherwise supplied, the default is to use the SPDV4 driver.
