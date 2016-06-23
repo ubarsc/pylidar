@@ -50,7 +50,7 @@ def getCmdargs():
         help="Pulse index method: FIRST_RETURN | LAST_RETURN" +
             " (default: %(default)s)")
     p.add_argument("--extent", nargs=4, metavar=('xmin', 'ymin', 'xmax', 'ymax'),
-        help="Set extent of the output file")
+        help="Set extent of the input file to use")
     p.add_argument("--outdir", default='.', help="Output directory to use "+
             " (default: %(default)s)")
     p.add_argument("-q", "--quiet", default=False, action='store_true',

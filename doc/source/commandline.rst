@@ -116,3 +116,16 @@ Important options that you should consider overriding are:
     * The type of index (the --indextype flag). This controls what the spatial index is calculated on. CARTESIAN or SCAN is usual for airborne, but SPHERICAL for TLS.
     * The size of the blocks that the spatial indexing will use (the -b or --blocksize flag).This will determine the amount of memory used. The smaller the blocks the less memory will be used. The value will be in the units that the spatial index is being calculated in. By default pylidar_index uses 200.
     * The temporary directory to create the temprary files in. By default this is the current directory, but you may want to change this if you do not have enough space there.
+
+-----------------------------------------------
+Splitting a File into Tiles using pylidar_tiles
+-----------------------------------------------
+
+Once you have converted your data to SPV4 format, you can use this
+utility to split it into tiles so they can be processed independently.
+
+Run "pylidar_tile -h" to obtain full help. The basic usage is to specify a input file like this::
+
+    pylidar_tile --input data.spdv4
+
+Many of the flags are similar to "pylidar_index" so consult the help above for more information on these.
