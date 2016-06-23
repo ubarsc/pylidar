@@ -157,7 +157,7 @@ class RieglFile(generic.LiDARFile):
         
     def readPointsByPulse(self, colNames=None):
         """
-        Read a 3d structured masked array containing the points
+        Read a 2d structured masked array containing the points
         for each pulse.
         """
         pulses = self.readPulsesForRange()

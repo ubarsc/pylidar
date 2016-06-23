@@ -181,10 +181,19 @@ public:
     {
         if( getNumPulsesRead() > 0 )
         {
-            SRieglPulse *pPulse = m_Pulses.getElem(n);
-            if( pPulse != NULL )
+            Py_ssize_t nPoints = 0;
+            while(n > 0)
             {
-                Py_ssize_t nPoints = pPulse->pts_start_idx;
+                SRieglPulse *pPulse = m_Pulses.getElem(n - 1);
+                if( (pPulse != NULL ) && ( pPulse->pts_start_idx > 0 ) )
+                {
+                    nPoints = pPulse->pts_start_idx;
+                    break;
+                }
+                n--;
+            }
+            if( nPoints > 0 )
+            {
                 m_Points.removeFront(nPoints);
             }
             m_Pulses.removeFront(n);
@@ -195,10 +204,16 @@ public:
     npy_uint64 getFirstPointIdx()
     {
         npy_uint32 idx = 0;
-        SRieglPulse *p = m_Pulses.getFirstElement();
-        if( p != NULL )
+        npy_intp n = 0;
+        while( n < m_Pulses.getNumElems() )
         {
-            idx = p->pts_start_idx;
+            SRieglPulse *p = m_Pulses.getElem(n);
+            if( p->pts_start_idx > 0 )
+            {
+                idx = p->pts_start_idx;
+                break;
+            }
+            n++;
         }
         return idx;
     }
@@ -222,15 +237,21 @@ public:
     {
         pylidar::CVector<SRieglPulse> *lower = m_Pulses.splitLower(n);
         // record the index of the next point
-        SRieglPulse *pLastPulse = lower->getLastElement();
-        if( pLastPulse != NULL )
+        *pPointIdx = 0;
+        while( n > 0 )
         {
-            *pPointIdx = (pLastPulse->pts_start_idx + pLastPulse->number_of_returns);
+            if( n <= lower->getNumElems() )
+            {
+                SRieglPulse *pPulse = lower->getElem(n - 1);
+                if( pPulse->pts_start_idx > 0 )
+                {
+                    *pPointIdx = (pPulse->pts_start_idx + pPulse->number_of_returns);
+                    break;
+                }
+            }
+            n--;
         }
-        else
-        {
-            *pPointIdx = 0;
-        }
+
         PyArrayObject *p = lower->getNumpyArray(RieglPulseFields);
         delete lower; // linked mem now owned by numpy
         renumberPointIdxs();
