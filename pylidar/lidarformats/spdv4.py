@@ -299,6 +299,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         self.si_idx = None
         self.si_xPulseColName = 'X_IDX'
         self.si_yPulseColName = 'Y_IDX'
+        self.indexType = SPDV4_INDEX_CARTESIAN
         # for caching
         self.lastExtent = None
         self.lastPulseSpace = None
@@ -320,14 +321,14 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
                 self.si_idx = group['BIN_OFFSETS'][...]
                     
                 # define the pulse data columns to use for the spatial index
-                indexType = self.fileHandle.attrs['INDEX_TYPE']
-                if indexType == SPDV4_INDEX_CARTESIAN:
+                self.indexType = self.fileHandle.attrs['INDEX_TYPE']
+                if self.indexType == SPDV4_INDEX_CARTESIAN:
                     self.si_xPulseColName = 'X_IDX'
                     self.si_yPulseColName = 'Y_IDX'
-                elif indexType == SPDV4_INDEX_SPHERICAL:
+                elif self.indexType == SPDV4_INDEX_SPHERICAL:
                     self.si_xPulseColName = 'AZIMUTH'
                     self.si_yPulseColName = 'ZENITH'
-                elif indexType == SPDV4_INDEX_SCAN:
+                elif self.indexType == SPDV4_INDEX_SCAN:
                     self.si_xPulseColName = 'SCANLINE_IDX'
                     self.si_yPulseColName = 'SCANLINE'
                 else:
@@ -967,6 +968,7 @@ spatial index will be recomputed on the fly"""
         
         Pass indexByPulse=True to bin the points by the locations of the pulses
             (using X_IDX and Y_IDX rather than the locations of the points)
+            This is the default for non-cartesian indices.
         Pass returnPulseIndex=True to also return a masked 3d array of 
             the indices into the 1d pulse array (as returned by 
             readPulsesForExtent())
@@ -992,7 +994,7 @@ spatial index will be recomputed on the fly"""
         yMax = self.lastExtent.yMax + (self.controls.overlap * self.lastExtent.binSize)
         
         # create point spatial index
-        if indexByPulse:
+        if indexByPulse or self.si_handler.indexType != SPDV4_INDEX_CARTESIAN:
             # TODO: check if is there is a better way of going about this
             # in theory spatial index already exists but may be more work 
             # it is worth to use
