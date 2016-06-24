@@ -311,7 +311,7 @@ Fields marked with Scaling = Yes must have these attributes.
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | NUMBER_OF_WAVEFORM_TRANSMITTED_BINS | uint16  |       | Yes       | No      | Number of transmitted bins for this waveform |
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| RANGE_TO_WAVEFORM_START             | uint16  | m     | Yes       | Yes     | distance to the start of this waveform from  |
+| RANGE_TO_WAVEFORM_START             | uint32  | m     | Yes       | Yes     | distance to the start of this waveform from  |
 |                                     |         |       |           |         | the instrument                               |
 +-------------------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | RECEIVED_START_IDX                  | uint64  |       | Yes       | No      | Index into the RECEIVED dataset              |

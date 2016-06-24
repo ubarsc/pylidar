@@ -102,7 +102,7 @@ POINT_FIELDS = {'RANGE' : numpy.uint32, 'RETURN_NUMBER' : numpy.uint8,
 # The following fields have defined type
 WAVEFORM_FIELDS = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : numpy.uint16,
 'NUMBER_OF_WAVEFORM_TRANSMITTED_BINS' : numpy.uint16, 
-'RANGE_TO_WAVEFORM_START' : numpy.uint16, 'RECEIVED_START_IDX' : numpy.uint64,
+'RANGE_TO_WAVEFORM_START' : numpy.uint32, 'RECEIVED_START_IDX' : numpy.uint64,
 'TRANSMITTED_START_IDX' : numpy.uint64, 'CHANNEL' : numpy.uint8,
 'WAVEFORM_FLAGS' : numpy.uint8, 'WFM_WAVELENGTH_IDX' : numpy.uint8, 
 'RECEIVE_WAVE_GAIN' : numpy.float32, 'RECEIVE_WAVE_OFFSET' :  numpy.float32,
