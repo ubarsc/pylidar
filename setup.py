@@ -129,9 +129,6 @@ def addLasDriver(extModules, cxxFlags):
     Decides if the Las driver is to be built. If so
     adds the Extension class to extModules.
     """
-    libname = 'las'
-    if sys.platform == 'win32':
-        libname = 'laslib'
     if 'LASTOOLS_ROOT' in os.environ:
         print('Building Las Extension...')
         lastoolsRoot = os.environ['LASTOOLS_ROOT']
@@ -140,7 +137,7 @@ def addLasDriver(extModules, cxxFlags):
                 include_dirs=[os.path.join(lastoolsRoot, 'include')],
                 extra_compile_args=cxxFlags,
                 define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
-                libraries=[libname],
+                libraries=['laslib'],
                 library_dirs=[os.path.join(lastoolsRoot, 'lib')])
                 
         extModules.append(lasModule)
