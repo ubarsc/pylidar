@@ -61,7 +61,7 @@ typedef struct {
     double y_Idx;
     double x_Origin;
     double y_Origin;
-    float z_Origin;
+    double z_Origin;
     npy_uint32 pts_start_idx;
     npy_uint8 number_of_returns;
     npy_uint32 wfm_start_idx;
@@ -100,7 +100,7 @@ typedef struct {
     double amplitude_Return;
     double x;
     double y;
-    float z;
+    double z;
 } SRieglPoint;
 
 /* field info for pylidar_structArrayToNumpy */
@@ -291,17 +291,22 @@ protected:
 
         SRieglPulse pulse;
         pulse.pulse_ID = m_nTotalPulsesReadFile;
-        // TODO: where does 1e9 come from??
+        // convert from seconds to ns
         pulse.timestamp = time_sorg * 1e9 + 0.5;
         pulse.prism_facet = facet;
-
-        // Get spherical coordinates. TODO: matrix transform
-        double magnitude = std::sqrt(beam_direction[0] * beam_direction[0] + \
-                           beam_direction[1] * beam_direction[1] + \
-                           beam_direction[2] * beam_direction[2]);
-        double shot_zenith = std::acos(beam_direction[2]/magnitude) * 180.0 / pi;
-        double shot_azimuth = std::atan2(beam_direction[0],beam_direction[1]) * 180.0 / pi;      
-        if( beam_direction[0] < 0 )
+        
+        // do matrix transform and store rotated direction vector
+        double beam_direction_t[3];
+        applyTransformation(beam_direction[0], beam_direction[1], beam_direction[2], 0.0,
+                            &beam_direction_t[0], &beam_direction_t[1], &beam_direction_t[2]);        
+        
+        // Get spherical coordinates
+        double magnitude = std::sqrt(beam_direction_t[0] * beam_direction_t[0] + \
+                           beam_direction_t[1] * beam_direction_t[1] + \
+                           beam_direction_t[2] * beam_direction_t[2]);
+        double shot_zenith = std::acos(beam_direction_t[2]/magnitude) * 180.0 / pi;
+        double shot_azimuth = std::atan2(beam_direction_t[0],beam_direction_t[1]) * 180.0 / pi;      
+        if( beam_direction_t[0] < 0 )
         {
             shot_azimuth += 360.0;            
         }
@@ -312,7 +317,7 @@ protected:
         pulse.scanline_Idx = m_scanlineIdx;
         
         // do matrix transform and store result
-        applyTransformation(beam_origin[0], beam_origin[1], beam_origin[2],
+        applyTransformation(beam_origin[0], beam_origin[1], beam_origin[2], 1.0,
                             &pulse.x_Origin, &pulse.y_Origin, &pulse.z_Origin);
 
         // point idx - start with 0
@@ -383,7 +388,7 @@ protected:
         point.amplitude_Return = current_target.amplitude;
 
         // apply transform and store result
-        applyTransformation(current_target.vertex[0], current_target.vertex[1], current_target.vertex[2],
+        applyTransformation(current_target.vertex[0], current_target.vertex[1], current_target.vertex[2], 1.0,
                             &point.x, &point.y, &point.z);
 
         m_Points.push(&point);
@@ -405,31 +410,32 @@ protected:
         m_scanlineIdx = 0;
     }
 
-    void applyTransformation(double a, double b, double c, double *pX, double *pY, float *pZ)
+    void applyTransformation(double a, double b, double c, double d, double *pX, double *pY, double *pZ)
     {
+        // test
         if( m_pRotationMatrix != NULL )
         {
-            pylidar::CMatrix<float> input(4, 1);
+            pylidar::CMatrix<float> input(1, 4);
             input.set(0, 0, a);
-            input.set(1, 0, b);
-            input.set(2, 0, c);
-            input.set(3, 0, 1.0); // apply transformation (?)
+            input.set(0, 1, b);
+            input.set(0, 2, c);
+            input.set(0, 3, d); // apply transformation (1) or rotation only (0)
             pylidar::CMatrix<float> transOut = input.multiply(*m_pRotationMatrix);
             a = transOut.get(0, 0);
-            b = transOut.get(1, 0);
-            c = transOut.get(2, 0);
-        }
+            b = transOut.get(0, 1);
+            c = transOut.get(0, 2);
+        }       
         if( m_pMagneticMatrix != NULL )
         {
-            pylidar::CMatrix<float> input(4, 1);
+            pylidar::CMatrix<float> input(1, 4);
             input.set(0, 0, a);
-            input.set(1, 0, b);
-            input.set(2, 0, c);
-            input.set(3, 0, 1.0); // apply transformation (?)
+            input.set(0, 1, b);
+            input.set(0, 2, c);
+            input.set(0, 3, 1.0);
             pylidar::CMatrix<float> transOut = input.multiply(*m_pMagneticMatrix);
             a = transOut.get(0, 0);
-            b = transOut.get(1, 0);
-            c = transOut.get(2, 0);
+            b = transOut.get(0, 1);
+            c = transOut.get(0, 2);
         }
         *pX = a;
         *pY = b;
@@ -1326,18 +1332,28 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
         {
             if( psbl->channel == 3 ) // Reference time
             {
-                // TODO: don't understand this time stuff...
+                // the reference channel represents the emitted (reference)
+                // signal. This signal is not directly available for V-Line scanners.
+                // Instead, these scanners provide an accurate value of the timestamp 
+                // of laser pulse emission. For all other scanners tref has to be 
+                // determined from the reference channel waveform.
+                
                 time_ref = psbl->time_sosbl;
             }
-            else if( psbl->channel != 2) //  not the saturation channel (?)
+            else if( ( psbl->channel == 0 ) || ( psbl->channel == 1 ) )
             {
+                
+                // high power channel (0) and the more sensitive 
+                // low power channel (1) are read
+                // the saturation channel (2) is currently ignored
+                
                 // first the info
                 info.number_of_waveform_received_bins = psbl->sample_count;
                 info.range_to_waveform_start = (psbl->time_sosbl - time_ref) * 
                                                 (wave_v_group / 2.0);
                 info.received_start_idx = nRecStartIdx;
                 info.channel = psbl->channel;
-                // TODO: do we need these?
+                // Riegl gives no offset/scaling 
                 info.receive_wave_gain = 1.0;
                 info.receive_wave_offset = 0.0;
                 waveInfo.push(&info);
