@@ -55,6 +55,8 @@ DEFAULT_SCALING = {lidarprocessor.ARRAY_TYPE_PULSES : PULSE_DEFAULT_SCALING,
     lidarprocessor.ARRAY_TYPE_POINTS : POINT_DEFAULT_SCALING, 
     lidarprocessor.ARRAY_TYPE_WAVEFORMS : WAVEFORM_DEFAULT_SCALING}
 
+HEADER = 'header'
+
 POINT = 'POINT'
 PULSE = 'PULSE'
 WAVEFORM = 'WAVEFORM'
@@ -80,10 +82,10 @@ def rangeFunc(data, rangeDict):
     waveformInfo = data.input1.getWaveformInfo()
 
     if pulses.size > 0:
-        if 'NUMBER_OF_PULSES' not in rangeDict['header']:
-            rangeDict['header']['NUMBER_OF_PULSES'] = pulses.size
+        if 'NUMBER_OF_PULSES' not in rangeDict[HEADER]:
+            rangeDict[HEADER]['NUMBER_OF_PULSES'] = pulses.size
         else:
-            rangeDict['header']['NUMBER_OF_PULSES'] += pulses.size
+            rangeDict[HEADER]['NUMBER_OF_PULSES'] += pulses.size
         for field in pulses.dtype.names:
             minKey = field + '_MIN'
             maxKey = field + '_MAX'
@@ -94,19 +96,19 @@ def rangeFunc(data, rangeDict):
                 rangeDict[PULSE][minKey] = minVal
                 if minKey in spdv4.HEADER_FIELDS:
                     # update the header while we can
-                    rangeDict['header'][minKey] = minVal
+                    rangeDict[HEADER][minKey] = minVal
             if (maxKey not in rangeDict[PULSE] or 
                     maxVal > rangeDict[PULSE][maxKey]):
                 rangeDict[PULSE][maxKey] = maxVal
                 if maxKey in spdv4.HEADER_FIELDS:
                     # update the header while we can
-                    rangeDict['header'][maxKey] = maxVal
+                    rangeDict[HEADER][maxKey] = maxVal
     
     if points.size > 0:
-        if 'NUMBER_OF_POINTS' not in rangeDict['header']:
-            rangeDict['header']['NUMBER_OF_POINTS'] = points.size
+        if 'NUMBER_OF_POINTS' not in rangeDict[HEADER]:
+            rangeDict[HEADER]['NUMBER_OF_POINTS'] = points.size
         else:
-            rangeDict['header']['NUMBER_OF_POINTS'] += points.size
+            rangeDict[HEADER]['NUMBER_OF_POINTS'] += points.size
         for field in points.dtype.names:
             minKey = field + '_MIN'
             maxKey = field + '_MAX'
@@ -117,19 +119,19 @@ def rangeFunc(data, rangeDict):
                 rangeDict[POINT][minKey] = minVal
                 if minKey in spdv4.HEADER_FIELDS:
                     # update the header while we can
-                    rangeDict['header'][minKey] = minVal
+                    rangeDict[HEADER][minKey] = minVal
             if (maxKey not in rangeDict[POINT] or 
                     maxVal > rangeDict[POINT][maxKey]):
                 rangeDict[POINT][maxKey] = maxVal
                 if maxKey in spdv4.HEADER_FIELDS:
                     # update the header while we can
-                    rangeDict['header'][maxKey] = maxVal
+                    rangeDict[HEADER][maxKey] = maxVal
     
     if waveformInfo is not None and waveformInfo.size > 0:      
-        if 'NUMBER_OF_WAVEFORMS' not in rangeDict['header']:        
-            rangeDict['header']['NUMBER_OF_WAVEFORMS'] = waveformInfo.size
+        if 'NUMBER_OF_WAVEFORMS' not in rangeDict[HEADER]:        
+            rangeDict[HEADER]['NUMBER_OF_WAVEFORMS'] = waveformInfo.size
         else:
-            rangeDict['header']['NUMBER_OF_WAVEFORMS'] += waveformInfo.size        
+            rangeDict[HEADER]['NUMBER_OF_WAVEFORMS'] += waveformInfo.size        
         for field in waveformInfo.dtype.names:
             minKey = field + '_MIN'
             maxKey = field + '_MAX'
@@ -148,9 +150,9 @@ def getRange(infile, controls=None, expectRange=None):
     can set any driver options etc
 
     Determines the range of input data. Returns a dictionary
-    with 4 keys: PULSE, POINT, WAVEFORM and 'header'
+    with 4 keys: PULSE, POINT, WAVEFORM and HEADER
 
-    Each value is in turn a dictionary. 'header' contains the new
+    Each value is in turn a dictionary. HEADER contains the new
     SPDV4 header based on the range. The other dictionaries are keyed
     on the name of each column (with _MIN and _MAX appended) and
     contain either the minimum or maximum values.
@@ -174,7 +176,7 @@ def getRange(infile, controls=None, expectRange=None):
     dataFiles = lidarprocessor.DataFiles()
     dataFiles.input1 = infile
 
-    rangeDict = {PULSE:{}, POINT:{}, WAVEFORM:{}, 'header':{}}
+    rangeDict = {PULSE:{}, POINT:{}, WAVEFORM:{}, HEADER:{}}
     lidarprocessor.doProcessing(rangeFunc, dataFiles, controls=controls, 
                     otherArgs=rangeDict)
 
