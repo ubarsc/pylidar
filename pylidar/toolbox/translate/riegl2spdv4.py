@@ -104,40 +104,42 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
         
     dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
 
+    # first set the rotation matrix if asked for
+    if internalrotation:
+        if "ROTATION_MATRIX" in info.header:
+            dataFiles.input1.setLiDARDriverOption("ROTATION_MATRIX", 
+                    info.header["ROTATION_MATRIX"])
+        else:
+            msg = "Internal Rotation requested but no information found in input file"
+            raise generic.LiDARInvalidSetting(msg)
+    else:       
+        if externalrotationfn is not None:
+            externalrotation = numpy.loadtxt(externalrotationfn, ndmin=2, delimiter=" ", dtype=numpy.float32)            
+            dataFiles.input1.setLiDARDriverOption("ROTATION_MATRIX", 
+                    externalrotation)
+            
+    # set the magnetic declination if not 0 (the default)
+    if magneticdeclination != 0:
+        dataFiles.input1.setLiDARDriverOption("MAGNETIC_DECLINATION", 
+                magneticdeclination)    
+
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     controls.setSpatialProcessing(False)
-    
     rangeDict = translatecommon.getRange(dataFiles.input1, 
                 controls=controls, expectRange=expectRange)
 
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
-    # first get the rotation matrix out of the file if asked for
-    if internalrotation:
-        if "ROTATION_MATRIX" in info.header:
-            dataFiles.output1.setLiDARDriverOption("ROTATION_MATRIX", 
-                    info.header["ROTATION_MATRIX"])
-        else:
-            msg = "Internal Rotation requested but no information found in input file"
-            raise generic.LiDARInvalidSetting(msg)
-    else:
-        if externalrotationfn is not None:
-            externalrotation = numpy.loadtxt(externalrotationfn, ndmin=2, delimiter=" ")
-            dataFiles.output1.setLiDARDriverOption("ROTATION_MATRIX", 
-                    externalrotation)
-            # Add the external rotation matrix to otherArgs (in this case rangeDict)
-            # for updating the header
-            rangeDict["externalrotation"] = externalrotation
-            
-    # set the magnetic declination if not 0 (the default)
-    if magneticdeclination != 0:
-        dataFiles.output1.setLiDARDriverOption("MAGNETIC_DECLINATION", 
-                magneticdeclination)
     
     # also need the default/overriden scaling
     rangeDict['scaling'] = scalingsDict
+
+    # Add the external rotation matrix to otherArgs (in this case rangeDict)
+    # for updating the header
+    if not internalrotation and externalrotationfn is not None:
+        rangeDict["externalrotation"] = externalrotation
     
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
                     otherArgs=rangeDict)
