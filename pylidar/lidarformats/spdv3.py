@@ -105,6 +105,14 @@ SPDV3_INDEX_CYLINDRICAL = 3
 SPDV3_INDEX_POLAR = 4
 SPDV3_INDEX_SCAN = 5
 
+# for updating the header
+POINTS_HEADER_UPDATE_DICT = {'X' : ('X_MIN', 'X_MAX'), 'Y' : ('Y_MIN', 'Y_MAX'),
+        'Z' : ('Z_MIN', 'Z_MAX'), 'RANGE' : ('RANGE_MIN', 'RANGE_MAX')}
+PULSES_HEADER_UPDATE_DICT = {'ZENITH' : ('ZENITH_MIN', 'ZENITH_MAX'),
+        'AZIMUTH' : ('AZIMUTH_MIN', 'AZIMUTH_MAX'), 
+        'SCANLINE_IDX' : ('SCANLINE_IDX_MIN', 'SCANLINE_IDX_MAX'),
+        'SCANLINE' : ('SCANLINE_MIN', 'SCANLINE_MAX')}
+
 class SPDV3File(generic.LiDARFile):
     """
     Class to support reading and writing of SPD Version 3.x files.
@@ -159,7 +167,23 @@ class SPDV3File(generic.LiDARFile):
                 if key in HEADER_ARRAY_FIELDS:
                     self.headerDict[key] = numpy.array([cls()])
                 else:
-                    self.headerDict[key] = cls() 
+                    self.headerDict[key] = cls()
+
+            # set the MIN and MAX fields to the max and min values
+            # possible so we notice if they are not set and we can update
+            # appriately
+            for updateKey in POINTS_HEADER_UPDATE_DICT.keys():
+                minKey, maxKey = POINTS_HEADER_UPDATE_DICT[updateKey]
+                info = numpy.finfo(HEADER_FIELDS[minKey])
+                # note order
+                self.headerDict[maxKey] = info.min
+                self.headerDict[minKey] = info.max
+            for updateKey in PULSES_HEADER_UPDATE_DICT.keys():
+                minKey, maxKey = PULSES_HEADER_UPDATE_DICT[updateKey]
+                info = numpy.finfo(HEADER_FIELDS[minKey])
+                self.headerDict[maxKey] = info.min
+                self.headerDict[minKey] = info.max
+                        
             self.headerUpdated = False
                 
         # read in the bits I need for the spatial index
@@ -1163,9 +1187,43 @@ spatial index will be recomputed on the fly"""
             if received is not None:
                 ds = self.fileHandle['DATA']['RECEIVED']
                 self.lastRecvSpace.write(ds, received)
-        # TODO: now update the spatial index
-        pass
+
+        # we don't update the spatial index
+        # TODO: maybe we should?
+
+        # update the header with any info that has changed.
+        self.updateHeaderFromData(points, pulses)
         
+    def updateHeaderFromData(self, points, pulses):
+        """
+        Given some data, updates the _MIN, _MAX etc
+        """
+        if points is not None and points.size > 0:
+            for key in POINTS_HEADER_UPDATE_DICT.keys():
+                if key in points.dtype.names:
+                    minVal = points[key].min()
+                    maxVal = points[key].max()
+                    minKey, maxKey = POINTS_HEADER_UPDATE_DICT[key]
+                    if minVal < self.headerDict[minKey]:
+                        self.headerDict[minKey] = minVal
+                        self.headerUpdated = True
+                    if maxVal > self.headerDict[maxKey]:
+                        self.headerDict[maxKey] = maxVal
+                        self.headerUpdated = True
+
+        if pulses is not None and pulses.size > 0:
+            for key in PULSES_HEADER_UPDATE_DICT.keys():
+                if key in pulses.dtype.names:
+                    minVal = pulses[key].min()
+                    maxVal = pulses[key].max()
+                    minKey, maxKey = PULSES_HEADER_UPDATE_DICT[key]
+                    if minVal < self.headerDict[minKey]:
+                        self.headerDict[minKey] = minVal
+                        self.headerUpdated = True
+                    if maxVal > self.headerDict[maxKey]:
+                        self.headerDict[maxKey] = maxVal
+                        self.headerUpdated = True
+
     def hasSpatialIndex(self):
         """
         Return True if we have a spatial index.
