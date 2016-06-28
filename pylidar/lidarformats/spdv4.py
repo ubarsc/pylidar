@@ -1946,6 +1946,9 @@ spatial index will be recomputed on the fly"""
                         self.fileHandle.attrs[minKey] = minVal
                     if maxVal > self.fileHandle.attrs[maxKey]:
                         self.fileHandle.attrs[maxKey] = maxVal
+            # update the NUMBER_OF_POINTS field also
+            if self.mode == generic.CREATE:
+                self.fileHandle.attrs['NUMBER_OF_POINTS'] += points.size
 
         if pulses is not None and pulses.size > 0:
             for key in PULSES_HEADER_UPDATE_DICT.keys():
@@ -1957,6 +1960,9 @@ spatial index will be recomputed on the fly"""
                         self.fileHandle.attrs[minKey] = minVal
                     if maxVal > self.fileHandle.attrs[maxKey]:
                         self.fileHandle.attrs[maxKey] = maxVal
+            # update the NUMBER_OF_PULSES field also
+            if self.mode == generic.CREATE:
+                self.fileHandle.attrs['NUMBER_OF_PULSES'] += pulses.size
 
         if waveformInfo is not None and waveformInfo.size > 0:
             for key in WAVEFORMS_HEADER_UPDATE_DICT.keys():
@@ -1968,7 +1974,10 @@ spatial index will be recomputed on the fly"""
                         self.fileHandle.attrs[minKey] = minVal
                     if maxVal > self.fileHandle.attrs[maxKey]:
                         self.fileHandle.attrs[maxKey] = maxVal
-        
+            # update the NUMBER_OF_WAVEFORMS field also
+            if self.mode == generic.CREATE:
+                self.fileHandle.attrs['NUMBER_OF_WAVEFORMS'] += waveformInfo.size
+
     # The functions below are for when there is no spatial index.
     def setPulseRange(self, pulseRange):
         """

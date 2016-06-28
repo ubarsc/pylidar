@@ -30,24 +30,6 @@ from rios import cuiprogress
 
 from . import translatecommon
 
-def setHeaderValues(h, rieglInfo, output, rotationmatrix):
-    """
-    Set the header values in the output SPD V4 file using info gathered
-    by rangeFunc and the riegl driver. 
-    For this test case we assume a RIEGL VZ400
-    """  
-    h["PULSE_ANGULAR_SPACING_SCANLINE"] = rieglInfo["PHI_INC"]
-    h["PULSE_ANGULAR_SPACING_SCANLINE_IDX"] = rieglInfo["THETA_INC"]
-    h["SENSOR_BEAM_EXIT_DIAMETER"] = rieglInfo["BEAM_EXIT_DIAMETER"]
-    h["SENSOR_BEAM_DIVERGENCE"] = rieglInfo["BEAM_DIVERGENCE"]
-    meta = {'Transform': rotationmatrix.tolist(),
-            'Longitude': rieglInfo['LONGITUDE'],
-            'Latitude': rieglInfo['LATITUDE'],
-            'Height': rieglInfo['HEIGHT'],
-            'HMSL': rieglInfo['HMSL']}
-    h['USER_META_DATA'] = json.dumps(meta)
-    output.setHeader(h)
-
 def transFunc(data, rangeDict):
     """
     Called from translate(). Does the actual conversion to SPD V4
@@ -67,12 +49,26 @@ def transFunc(data, rangeDict):
     # set scaling and write header
     if data.info.isFirstBlock():
         translatecommon.setOutputScaling(rangeDict, data.output1)
-        rieglInfo = data.input1.getHeader()
+        rieglInfo = rangeDict['rieglInfo']
         if "externalrotation" in rangeDict.keys():
             rotationmatrix = rangeDict['externalrotation']
         else:
             rotationmatrix = rieglInfo['ROTATION_MATRIX']
-        setHeaderValues(rangeDict['header'], rieglInfo, data.output1, rotationmatrix)
+
+        data.output1.setHeaderValue("PULSE_ANGULAR_SPACING_SCANLINE", 
+                rieglInfo["PHI_INC"])
+        data.output1.setHeaderValue("PULSE_ANGULAR_SPACING_SCANLINE_IDX",
+                rieglInfo["THETA_INC"])
+        data.output1.setHeaderValue("SENSOR_BEAM_EXIT_DIAMETER",
+                rieglInfo["BEAM_EXIT_DIAMETER"])
+        data.output1.setHeaderValue("SENSOR_BEAM_DIVERGENCE",
+                rieglInfo["BEAM_DIVERGENCE"])
+        meta = {'Transform': rotationmatrix.tolist(),
+            'Longitude': rieglInfo['LONGITUDE'],
+            'Latitude': rieglInfo['LATITUDE'],
+            'Height': rieglInfo['HEIGHT'],
+            'HMSL': rieglInfo['HMSL']}
+        data.output1.setHeaderValue('USER_META_DATA', json.dumps(meta))
 
     data.output1.setPulses(pulses)
     if points is not None:
@@ -135,6 +131,9 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
     
     # also need the default/overriden scaling
     rangeDict['scaling'] = scalingsDict
+
+    # and the header so we don't collect it again
+    rangeDict['rieglInfo'] = info.header
 
     # Add the external rotation matrix to otherArgs (in this case rangeDict)
     # for updating the header

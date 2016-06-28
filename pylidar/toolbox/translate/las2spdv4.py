@@ -31,20 +31,6 @@ from osgeo import osr
 
 from . import translatecommon
 
-def setHeaderValues(rangeDict, lasInfo, output):
-    """
-    Set the header values in the output SPD V4 file using info gathered
-    by rangeFunc
-    """
-    h = rangeDict['header']
-    if rangeDict['epsg'] is not None:
-        sr = osr.SpatialReference()
-        sr.ImportFromEPSG(rangeDict['epsg'])
-        h['SPATIAL_REFERENCE'] = sr.ExportToWkt()    
-    else:
-        h['SPATIAL_REFERENCE'] = lasInfo.wkt
-    output.setHeader(h)
-
 def transFunc(data, otherDict):
     """
     Called from lidarprocessor. Does the actual conversion to SPD V4
@@ -58,8 +44,17 @@ def transFunc(data, otherDict):
     if data.info.isFirstBlock():
         translatecommon.setOutputScaling(otherDict, data.output1)
         lasInfo = data.input1.getHeader()
-        setHeaderValues(otherDict, lasInfo, data.output1)
-        
+        if otherDict['epsg'] is not None:
+            sr = osr.SpatialReference()
+            sr.ImportFromEPSG(otherDict['epsg'])
+            data.output1.setHeaderValue('SPATIAL_REFERENCE', sr.ExportToWkt())
+        else:
+            data.output1.setHeaderValue('SPATIAL_REFERENCE', lasInfo.wkt)
+
+        if data.info.getControls().spatialProcessing:
+            # set index type if spatial - always cartesian for LAS (??)
+            data.output1.setHeaderValue('INDEX_TYPE', spdv4.SPDV4_INDEX_CARTESIAN)
+
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
     if waveformInfo is not None and waveformInfo.size > 0:
@@ -136,13 +131,11 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
 
+    # TODO: tidy this dictionary stuff up...
     # also need the default/overriden scaling
     otherDict['scaling'] = scalingsDict
     # and epsg
     otherDict['epsg'] = epsg 
-    # set index type if spatial - always cartesian for LAS (??)
-    if spatial:
-        otherDict['header']['INDEX_TYPE'] = spdv4.SPDV4_INDEX_CARTESIAN
 
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
                     otherArgs=otherDict)

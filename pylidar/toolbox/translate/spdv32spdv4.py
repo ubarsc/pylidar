@@ -97,8 +97,11 @@ def transFunc(data, otherArgs):
     if data.info.isFirstBlock():
         header = data.input1.getHeader()
         setOutputScaling(header, data.output1, otherArgs.scalingsDict)
-        # write header while we are at it
-        data.output1.setHeader(header)
+
+        # copy the index type accross - we can assume these values
+        # are the same (at the moment)
+        indexType = data.input1.getHeaderValue('INDEX_TYPE')
+        data.output1.setHeaderValue('INDEX_TYPE', indexType)
     
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
