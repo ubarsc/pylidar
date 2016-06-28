@@ -121,6 +121,12 @@ class SPDV3File(generic.LiDARFile):
     """
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
+
+        # TODO: disable the creation of SPDV3 files until 
+        # more testing is done
+        if mode == generic.CREATE:
+            msg = 'Cannot create SPDV3 files'
+            raise ValueError(msg)
     
         # convert mode into h5py mode string
         if mode == generic.READ:
