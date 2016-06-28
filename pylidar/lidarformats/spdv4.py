@@ -168,6 +168,15 @@ SPDV4_WAVEFORM_FLAGS_BASELINE_FIXED = 4
 SPDV4_VERSION_MAJOR = 4
 SPDV4_VERSION_MINOR = 0
 
+# for updating the header
+POINTS_HEADER_UPDATE_DICT = {'X' : ('X_MIN', 'X_MAX'), 'Y' : ('Y_MIN', 'Y_MAX'),
+        'Z' : ('Z_MIN', 'Z_MAX'), 'HEIGHT' : ('HEIGHT_MIN', 'HEIGHT_MAX')}
+PULSES_HEADER_UPDATE_DICT = {'ZENITH' : ('ZENITH_MIN', 'ZENITH_MAX'),
+        'AZIMUTH' : ('AZIMUTH_MIN', 'AZIMUTH_MAX'), 
+        'SCANLINE_IDX' : ('SCANLINE_IDX_MIN', 'SCANLINE_IDX_MAX'),
+        'SCANLINE' : ('SCANLINE_MIN', 'SCANLINE_MAX')}
+WAVEFORMS_HEADER_UPDATE_DICT = {'RANGE' : ('RANGE_MIN', 'RANGE_MAX')}
+
 @jit
 def flatten3dWaveformData(wavedata, inmask, nrecv, flattened):
     """
@@ -1919,6 +1928,46 @@ spatial index will be recomputed on the fly"""
             if received is not None:
                 self.lastRecvSpace.write(self.fileHandle['DATA']['RECEIVED'], 
                                 received)
+
+        # update the header info
+        self.updateHeaderFromData(points, pulses, waveformInfo)
+
+    def updateHeaderFromData(self, points, pulses, waveformInfo):
+        """
+        Given some data, updates the _MIN, _MAX etc
+        """
+        if points is not None and points.size > 0:
+            for key in POINTS_HEADER_UPDATE_DICT.keys():
+                if key in points.dtype.names:
+                    minVal = points[key].min()
+                    maxVal = points[key].max()
+                    minKey, maxKey = POINTS_HEADER_UPDATE_DICT[key]
+                    if minVal < self.fileHandle.attrs[minKey]:
+                        self.fileHandle.attrs[minKey] = minVal
+                    if maxVal > self.fileHandle.attrs[maxKey]:
+                        self.fileHandle.attrs[maxKey] = maxVal
+
+        if pulses is not None and pulses.size > 0:
+            for key in PULSES_HEADER_UPDATE_DICT.keys():
+                if key in pulses.dtype.names:
+                    minVal = pulses[key].min()
+                    maxVal = pulses[key].max()
+                    minKey, maxKey = PULSES_HEADER_UPDATE_DICT[key]
+                    if minVal < self.fileHandle.attrs[minKey]:
+                        self.fileHandle.attrs[minKey] = minVal
+                    if maxVal > self.fileHandle.attrs[maxKey]:
+                        self.fileHandle.attrs[maxKey] = maxVal
+
+        if waveformInfo is not None and waveformInfo.size > 0:
+            for key in WAVEFORMS_HEADER_UPDATE_DICT.keys():
+                if key in waveformInfo.dtype.names:
+                    minVal = wavefromInfo[key].min()
+                    maxVal = wavefromInfo[key].max()
+                    minKey, maxKey = WAVEFORMS_HEADER_UPDATE_DICT[key]
+                    if minVal < self.fileHandle.attrs[minKey]:
+                        self.fileHandle.attrs[minKey] = minVal
+                    if maxVal > self.fileHandle.attrs[maxKey]:
+                        self.fileHandle.attrs[maxKey] = maxVal
         
     # The functions below are for when there is no spatial index.
     def setPulseRange(self, pulseRange):
