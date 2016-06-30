@@ -52,8 +52,9 @@ def getCmdargs():
             " (default: %(default)s)")
     p.add_argument("--extent", nargs=4, metavar=('xmin', 'ymin', 'xmax', 'ymax'),
         help="Set extent of the output file")
-    p.add_argument("--tempdir", default='.', help="Temporary directory to use "+
-            " (default: %(default)s)")
+    p.add_argument("--tempdir", help="Temporary directory to use. "+
+            " If not specified, a temporary directory will be created and " +
+            "removed at the end of processing.")
     p.add_argument("--wkt", help="projection to use for output in WKT format")
 
     cmdargs = p.parse_args()

@@ -56,7 +56,7 @@ PULSE_INDEX_ORIGIN = spdv4.SPDV4_PULSE_INDEX_ORIGIN
 PULSE_INDEX_MAX_INTENSITY = spdv4.SPDV4_PULSE_INDEX_MAX_INTENSITY
 
 def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None, 
-        tempDir='.', extent=None, indexType=INDEX_CARTESIAN,
+        tempDir=None, extent=None, indexType=INDEX_CARTESIAN,
         pulseIndexMethod=PULSE_INDEX_FIRST_RETURN, wkt=None):
     """
     Creates a grid spatially indexed file from a non spatial input file.
@@ -66,11 +66,19 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     building a spatial index as it goes.
     If blockSize isn't set then it is picked using BLOCKSIZE_N_BLOCKS.
     binSize is the size of the bins to create the spatial index.
+    if tempDir is none a temporary directory will be created with tempfile.mkdtemp
+        and removed at the end of processing.
+    extent is an Extent object specifying the extent to work within.
     indexType is one of the INDEX_* constants.
     pulseIndexMethod is one of the PULSE_INDEX_* constants.
     wkt is the projection to use for the output. Copied from the input if
     not supplied.
     """
+    removeTempDir = False
+    if tempDir is None:
+        tempDir = tempfile.mkdtemp()
+        removeTempDir = True
+
     header, extent, extentList = splitFileIntoTiles(infile, binSize=binSize, 
                 blockSize=blockSize, tempDir=tempDir, extent=extent, 
                 indexType=indexType, pulseIndexMethod=pulseIndexMethod)
@@ -92,6 +100,10 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     # delete the temp files
     for fname, extent in extentList:
         os.remove(fname)
+
+    # we must have created this directory - remove it
+    if removeTempDir:
+        os.rmdir(tempDir)
 
 def splitFileIntoTiles(infile, binSize=1.0, blockSize=None, 
         tempDir='.', extent=None, indexType=INDEX_CARTESIAN,
