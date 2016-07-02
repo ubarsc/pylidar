@@ -78,6 +78,9 @@ class LiDARPulseIndexUnsupported(LiDARFileException):
     
 class LiDARWritingNotSupported(LiDARFunctionUnsupported):
     "driver does not support writing"
+
+class LiDARScalingError(LiDARInvalidData):
+    "scaled data is outside the bounds of the data type"
     
 class PulseRange(object):
     """

@@ -29,16 +29,19 @@ from osgeo import osr
 
 from . import translatecommon
 
-def transFunc(data, rangeDict):
+def transFunc(data, otherArgs):
     """
     Called from lidarprocessor. Does the actual conversion to SPD V4
     """
     pulses = data.input1.getPulses()
     points = data.input1.getPointsByPulse()
     
-    # set scaling and write header
+    # set scaling 
     if data.info.isFirstBlock():
-        translatecommon.setOutputScaling(rangeDict, data.output1)
+        translatecommon.setOutputScaling(otherArgs.scaling, data.output1)
+
+    # check the range
+    translatecommon.checkRange(otherArgs.expectRange, points, pulses)
         
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
@@ -73,17 +76,14 @@ def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols):
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     controls.setSpatialProcessing(False)
-    
-    # now read through the file and get the range of values for fields 
-    # that need scaling.
-    rangeDict = translatecommon.getRange(dataFiles.input1, 
-                        controls=controls, expectRange=expectRange)
 
-    print('Converting %s to SPD V4...' % infile)
+    otherArgs = lidarprocessor.OtherArgs()
+    otherArgs.scaling = scalingsDict
+    otherArgs.expectRange = expectRange
+    
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
 
-    rangeDict['scaling'] = scalingsDict
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
-                    otherArgs=rangeDict)
+                    otherArgs=otherArgs)
 

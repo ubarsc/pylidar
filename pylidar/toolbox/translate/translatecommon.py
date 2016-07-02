@@ -72,220 +72,83 @@ STRING_TO_DTYPE = {'INT8':numpy.int8, 'UINT8':numpy.uint8, 'INT16':numpy.int16,
 "Code that means: use the default type"
 DEFAULT_DTYPE_STR = 'DFLT'
 
-def rangeFunc(data, rangeDict):
+def checkRange(expectRange, points, pulses, waveforms=None):
     """
-    Called by lidaprocessor() via getRange() and used to determine range for 
-    fields required by SPD V4 scaling and header fields.
-    """
-    pulses = data.input1.getPulses()
-    points = data.input1.getPoints()
-    waveformInfo = data.input1.getWaveformInfo()
+    Checks the expected range against the data that has been
+    passed. Raises an exception if data is outside of range
 
-    if pulses.size > 0:
-        if 'NUMBER_OF_PULSES' not in rangeDict[HEADER]:
-            rangeDict[HEADER]['NUMBER_OF_PULSES'] = pulses.size
+    * expectRange is a list of tuples with (type, varname, min, max).
+    * points, pulses and waveforms are the arrays to check
+    """
+    if expectRange is None:
+        return
+
+    for dataType, varName, minVal, maxVal in expectRange:
+        if dataType == POINT:
+            arr = points
+        elif dataType == PULSE:
+            arr = pulses
+        elif dataType == WAVEFORM:
+            arr = waveforms
         else:
-            rangeDict[HEADER]['NUMBER_OF_PULSES'] += pulses.size
-        for field in pulses.dtype.names:
-            minKey = field + '_MIN'
-            maxKey = field + '_MAX'
-            minVal = pulses[field].min()
-            maxVal = pulses[field].max()
-            if (minKey not in rangeDict[PULSE] or 
-                    minVal < rangeDict[PULSE][minKey]):
-                rangeDict[PULSE][minKey] = minVal
-                if minKey in spdv4.HEADER_FIELDS:
-                    # update the header while we can
-                    rangeDict[HEADER][minKey] = minVal
-            if (maxKey not in rangeDict[PULSE] or 
-                    maxVal > rangeDict[PULSE][maxKey]):
-                rangeDict[PULSE][maxKey] = maxVal
-                if maxKey in spdv4.HEADER_FIELDS:
-                    # update the header while we can
-                    rangeDict[HEADER][maxKey] = maxVal
-    
-    if points.size > 0:
-        if 'NUMBER_OF_POINTS' not in rangeDict[HEADER]:
-            rangeDict[HEADER]['NUMBER_OF_POINTS'] = points.size
-        else:
-            rangeDict[HEADER]['NUMBER_OF_POINTS'] += points.size
-        for field in points.dtype.names:
-            minKey = field + '_MIN'
-            maxKey = field + '_MAX'
-            minVal = points[field].min()
-            maxVal = points[field].max()
-            if (minKey not in rangeDict[POINT] or 
-                    minVal < rangeDict[POINT][minKey]):
-                rangeDict[POINT][minKey] = minVal
-                if minKey in spdv4.HEADER_FIELDS:
-                    # update the header while we can
-                    rangeDict[HEADER][minKey] = minVal
-            if (maxKey not in rangeDict[POINT] or 
-                    maxVal > rangeDict[POINT][maxKey]):
-                rangeDict[POINT][maxKey] = maxVal
-                if maxKey in spdv4.HEADER_FIELDS:
-                    # update the header while we can
-                    rangeDict[HEADER][maxKey] = maxVal
-    
-    if waveformInfo is not None and waveformInfo.size > 0:      
-        if 'NUMBER_OF_WAVEFORMS' not in rangeDict[HEADER]:        
-            rangeDict[HEADER]['NUMBER_OF_WAVEFORMS'] = waveformInfo.size
-        else:
-            rangeDict[HEADER]['NUMBER_OF_WAVEFORMS'] += waveformInfo.size        
-        for field in waveformInfo.dtype.names:
-            minKey = field + '_MIN'
-            maxKey = field + '_MAX'
-            minVal = waveformInfo[field].min()
-            maxVal = waveformInfo[field].max()
-            if (minKey not in rangeDict[WAVEFORM] or 
-                    minVal < rangeDict[WAVEFORM][minKey]):
-                rangeDict[WAVEFORM][minKey] = minVal
-            if (maxKey not in rangeDict[WAVEFORM] or 
-                    maxVal > rangeDict[WAVEFORM][maxKey]):
-                rangeDict[WAVEFORM][maxKey] = maxVal
+            msg = 'Unknown data type %s' % dataType
+            raise generic.LiDARInvalidSetting(msg)
 
-def getRange(infile, controls=None, expectRange=None):
+        if arr is None:
+            continue
+
+        if varName not in arr.dtype.fields:
+            msg = 'Could not find field %s in input data' % varName
+            raise generic.LiDARInvalidData(msg)
+
+        dataMin = arr[varName].min()
+        if dataMin < float(minVal):
+            msg = 'Minimum value found (%f) less than range minimum (%s)'
+            msg = msg % (dataMin, minVal)
+            raise generic.LiDARInvalidData(msg)
+
+        dataMax = arr[varName].max()
+        if dataMax > float(maxVal):
+            msg = 'Maximum value found (%f) greater than range minimum (%s)'
+            msg = msg % (dataMax, maxVal)
+            raise generic.LiDARInvalidData(msg)
+        
+def setOutputScaling(scalingDict, output):
     """
-    infile should be lidarprocessor.LidarFile so the user
-    can set any driver options etc
-
-    Determines the range of input data. Returns a dictionary
-    with 4 keys: PULSE, POINT, WAVEFORM and HEADER
-
-    Each value is in turn a dictionary. HEADER contains the new
-    SPDV4 header based on the range. The other dictionaries are keyed
-    on the name of each column (with _MIN and _MAX appended) and
-    contain either the minimum or maximum values.
-
-    If controls is not None then is should be a reference to a 
-    lidarprocessor.Controls object. This will ensure that the file
-    is processed in the same way as the translation. In theory
-    it shouldn't matter, but spatial processing may not read all the 
-    points/pulses in the file because of the way the spatial index
-    is calculated so we allow this to be set in the same way the
-    file will be translated.
-
-    If expectRange is not None it is interpreted as a list of tuples.
-    Each tuple should be (type, varName, min, max). type should be 
-    one of 'POINT', 'PULSE', 'WAVEFORM', varName will be the variable
-    name and min and max are interpreted to me the minimum and maximum
-    values to be expected in the data. If values are found outside of 
-    this then an error is raised.
-    """
-    print('Determining input data range...')
-    dataFiles = lidarprocessor.DataFiles()
-    dataFiles.input1 = infile
-
-    rangeDict = {PULSE:{}, POINT:{}, WAVEFORM:{}, HEADER:{}}
-    lidarprocessor.doProcessing(rangeFunc, dataFiles, controls=controls, 
-                    otherArgs=rangeDict)
-
-    if expectRange is not None:
-        for (typeName, varName, minStr, maxStr) in expectRange:
-            minVal = float(minStr)
-            maxVal = float(maxStr)
-            typeName = typeName.upper()
-            if typeName not in NAME_TO_CODE_DICT.keys():
-                msg = 'unrecognised type %s' % typeName
-                raise generic.LiDARInvalidSetting(msg)
-
-            minKey = varName + '_MIN'
-            maxKey = varName + '_MAX'
-            typeRange = rangeDict[typeName]
-            if minKey not in typeRange or maxKey not in typeRange:
-                msg = 'variable %s not found in file' % varName
-                raise generic.LiDARInvalidSetting(msg)
-
-            if typeRange[minKey] < minVal or typeRange[maxKey] > maxVal:
-                msg = 'data for %s outside of expected range' % varName
-                raise generic.LiDARInvalidData(msg)
-
-    return rangeDict
-
-def setOutputScaling(rangeDict, output):
-    """
-    Set the scaling on the output SPD V4 file using info gathered
-    by rangeFunc. Takes into account default/overridden scaling also.
+    Set the scaling on the output SPD V4 file.
 
     Designed to be called from inside a lidarprocessor function so 
     output should be an instance of :class:`pylidar.userclasses.LidarData`.
 
-    rangeDict should be what was returned by getRange() with an extra
-    key 'scaling' which should be what was returned from 
+    scalingDict should be what was returned by  
     overRideDefaultScalings().
     """
-    scalingDict = rangeDict['scaling']
-
     # pulses
-    for key in rangeDict[PULSE].keys():
-        pulseScalingDict = scalingDict[lidarprocessor.ARRAY_TYPE_PULSES]
-        if key.endswith('_MIN'):
-            field = key[0:-4]
-            if field in pulseScalingDict:
-                gain, offset, dtype = pulseScalingDict[field]
-                minVal = rangeDict[PULSE][key]
-                maxVal = rangeDict[PULSE][key.replace('_MIN','_MAX')]
-                name = key.replace('_MIN','')
-                checkScaling(gain, offset, dtype, minVal, maxVal, name)
-                output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, 
-                        gain, offset)
-                output.setNativeDataType(field, 
-                        lidarprocessor.ARRAY_TYPE_PULSES, dtype)
+    pulseScalingDict = scalingDict[lidarprocessor.ARRAY_TYPE_PULSES]
+    for field in pulseScalingDict:
+        gain, offset, dtype = pulseScalingDict[field]
+        output.setScaling(field, lidarprocessor.ARRAY_TYPE_PULSES, 
+                gain, offset)
+        output.setNativeDataType(field, 
+                lidarprocessor.ARRAY_TYPE_PULSES, dtype)
 
     # points
-    for key in rangeDict[POINT].keys():
-        pointScalingDict = scalingDict[lidarprocessor.ARRAY_TYPE_POINTS]
-        if key.endswith('_MIN'):
-            field = key[0:-4]            
-            if field in pointScalingDict:
-                gain, offset, dtype = pointScalingDict[field]
-                minVal = rangeDict[POINT][key]
-                maxVal = rangeDict[POINT][key.replace('_MIN','_MAX')]
-                name = key.replace('_MIN','')
-                checkScaling(gain, offset, dtype, minVal, maxVal, name)
-                output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, 
-                        gain, offset)
-                output.setNativeDataType(field, 
-                        lidarprocessor.ARRAY_TYPE_POINTS, dtype)
+    pointScalingDict = scalingDict[lidarprocessor.ARRAY_TYPE_POINTS]
+    for field in pointScalingDict:
+        gain, offset, dtype = pointScalingDict[field]
+        output.setScaling(field, lidarprocessor.ARRAY_TYPE_POINTS, 
+                gain, offset)
+        output.setNativeDataType(field, 
+                lidarprocessor.ARRAY_TYPE_POINTS, dtype)
 
     # waveforms
-    for key in rangeDict[WAVEFORM].keys():
-        waveformScalingDict = scalingDict[lidarprocessor.ARRAY_TYPE_WAVEFORMS]
-        if key.endswith('_MIN'):
-            field = key[0:-4]
-            if field in waveformScalingDict:
-                gain, offset, dtype = waveformScalingDict[field]
-                minVal = rangeDict[WAVEFORM][key]
-                maxVal = rangeDict[WAVEFORM][key.replace('_MIN','_MAX')]
-                name = key.replace('_MIN','')
-                checkScaling(gain, offset, dtype, minVal, maxVal, name)
-                output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, 
-                        gain, offset)
-                output.setNativeDataType(field, 
-                        lidarprocessor.ARRAY_TYPE_WAVEFORMS, dtype)
-
-def checkScaling(gain, offset, dtype, minVal, maxVal, varName):
-    """
-    Check that the given gain and offset will not overflow or underflow
-    the given datatype
-    """
-    if numpy.issubdtype(dtype, numpy.integer):
-        info = numpy.iinfo(dtype)
-        scaledMin = (minVal + offset) * gain
-        scaledMax = (maxVal + offset) * gain
-
-        if scaledMin < info.min:
-            msg = ("Scaling for %s gives values less than %d which is the "+
-                "minimum value allowed by the data type. Minimum is %f. "+
-                "Over-ride defaults on the command line.") % (varName, 
-                    info.min, minVal)
-            raise generic.LiDARInvalidSetting(msg)
-        if scaledMax > info.max:
-            msg = ("Scaling for %s gives values greater than %d which is the "+
-                "maximum value allowed by the data type. Maximum is %f. " +
-                "Over-ride defaults on the command line.") % (varName, 
-                    info.max, maxVal)
-            raise generic.LiDARInvalidSetting(msg)
+    waveformScalingDict = scalingDict[lidarprocessor.ARRAY_TYPE_WAVEFORMS]
+    for field in waveformScalingDict:
+        gain, offset, dtype = waveformScalingDict[field]
+        output.setScaling(field, lidarprocessor.ARRAY_TYPE_WAVEFORMS, 
+                gain, offset)
+        output.setNativeDataType(field, 
+                lidarprocessor.ARRAY_TYPE_WAVEFORMS, dtype)
 
 def overRideDefaultScalings(scaling):
     """

@@ -126,7 +126,7 @@ class SPDV3File(generic.LiDARFile):
         # more testing is done
         if mode == generic.CREATE:
             msg = 'Cannot create SPDV3 files'
-            raise ValueError(msg)
+            raise generic.LiDARWritingNotSupported(msg)
     
         # convert mode into h5py mode string
         if mode == generic.READ:

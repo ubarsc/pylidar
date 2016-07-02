@@ -1648,6 +1648,22 @@ spatial index will be recomputed on the fly"""
             
         # cast to datatype if it has one
         if dataType is not None:
+            # check range
+            info = numpy.iinfo(dataType)
+            dataMin = data.min()
+            if dataMin < info.min:
+                msg = ('The data for field %s when scaled (%f) is less than ' +
+                    'the minimum for the data type (%d)') % (name, dataMin, 
+                    info.min)
+                raise generic.LiDARScalingError(msg)
+
+            dataMax = data.max()
+            if dataMax > info.max:
+                msg = ('The data for field %s when scaled (%f) is greater than ' +
+                    'the maximum for the data type (%d)') % (name, dataMax,
+                    info.max)
+                raise generic.LiDARScalingError(msg)
+
             data = data.astype(dataType)
             
         return data, hdfname

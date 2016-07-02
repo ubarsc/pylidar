@@ -75,7 +75,9 @@ def transFunc(data):
     waveformInfo = data.input1.getWaveformInfo()
     revc = data.input1.getReceived()
     
-    # DO we need this??
+    # TODO: this does not appear to be implemented for writing LAS
+    # not sure if it should be. LAS driver seems to know the SPDV4 names
+    # of things, so perhaps not relevant.
     #if points is not None:
     #    data.output1.translateFieldNames(data.input1, points, 
     #        lidarprocessor.ARRAY_TYPE_POINTS)
@@ -85,6 +87,7 @@ def transFunc(data):
             
     # set scaling
     if data.info.isFirstBlock():
+        # scaling only appears to relevant for points. I think.
         setOutputScaling(points, data.input1, data.output1)
 
     data.output1.setPoints(points)

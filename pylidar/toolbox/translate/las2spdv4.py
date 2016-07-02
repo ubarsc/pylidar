@@ -31,7 +31,7 @@ from osgeo import osr
 
 from . import translatecommon
 
-def transFunc(data, otherDict):
+def transFunc(data, otherArgs):
     """
     Called from lidarprocessor. Does the actual conversion to SPD V4
     """
@@ -42,18 +42,22 @@ def transFunc(data, otherDict):
     
     # set scaling and write header
     if data.info.isFirstBlock():
-        translatecommon.setOutputScaling(otherDict, data.output1)
-        lasInfo = data.input1.getHeader()
-        if otherDict['epsg'] is not None:
+        translatecommon.setOutputScaling(otherArgs.scaling, data.output1)
+        if otherArgs.epsg is not None:
             sr = osr.SpatialReference()
-            sr.ImportFromEPSG(otherDict['epsg'])
+            sr.ImportFromEPSG(otherArgs.epsg)
             data.output1.setHeaderValue('SPATIAL_REFERENCE', sr.ExportToWkt())
         else:
-            data.output1.setHeaderValue('SPATIAL_REFERENCE', lasInfo.wkt)
+            data.output1.setHeaderValue('SPATIAL_REFERENCE', 
+                    otherArgs.lasInfo.wkt)
 
         if data.info.getControls().spatialProcessing:
             # set index type if spatial - always cartesian for LAS (??)
             data.output1.setHeaderValue('INDEX_TYPE', spdv4.SPDV4_INDEX_CARTESIAN)
+
+    # check the range
+    translatecommon.checkRange(otherArgs.expectRange, points, pulses, 
+            waveformInfo)
 
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
@@ -95,6 +99,10 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
         msg = "For spatial processing, the bin size must be set"
         raise generic.LiDARInvalidSetting(msg)
 
+    if extent is not None and not spatial:
+        msg = 'Extent can only be set when processing spatially'
+        raise generic.LiDARInvalidSetting(msg)
+
     # set up the variables
     dataFiles = lidarprocessor.DataFiles()
     
@@ -116,6 +124,12 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
     controls.setProgress(progress)
     controls.setSpatialProcessing(spatial)
 
+    otherArgs = lidarprocessor.OtherArgs()
+    otherArgs.scaling = scalingsDict
+    otherArgs.epsg = epsg
+    otherArgs.expectRange = expectRange
+    otherArgs.lasInfo = info
+
     if extent is not None:
         extent = [float(x) for x in extent]
         pixgrid = pixelgrid.PixelGridDefn(xMin=extent[0], yMin=extent[1], 
@@ -123,20 +137,9 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
         controls.setReferencePixgrid(pixgrid)
         controls.setFootprint(lidarprocessor.BOUNDS_FROM_REFERENCE)
     
-    # now read through the file and get the range of values for fields 
-    # that need scaling.
-    otherDict = translatecommon.getRange(dataFiles.input1, controls, expectRange)
-
-    print('Converting %s to SPD V4...' % infile)
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
 
-    # TODO: tidy this dictionary stuff up...
-    # also need the default/overriden scaling
-    otherDict['scaling'] = scalingsDict
-    # and epsg
-    otherDict['epsg'] = epsg 
-
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
-                    otherArgs=otherDict)
+                    otherArgs=otherArgs)
 
