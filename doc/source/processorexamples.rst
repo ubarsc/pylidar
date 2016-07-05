@@ -275,4 +275,4 @@ BIN_SIZE option for LAS files which need this set before they can read data spat
 
     dataFiles = lidarprocessor.DataFiles()
     dataFiles.input = lidarprocessor.LidarFile('file.spd', lidarprocessor.UPDATE)
-    dataFiles.input.setLiDARDriverOption('BIN_SIZE, 1.0)
+    dataFiles.input.setLiDARDriverOption('BIN_SIZE', 1.0)
