@@ -146,6 +146,12 @@ def splitFileIntoTiles(infile, binSize=1.0, blockSize=None,
         except KeyError:
             msg = 'info for creating bounding box not available'
             raise generic.LiDARFunctionUnsupported(msg)
+
+        # round the coords to the nearest multiple
+        xMin = numpy.floor(xMin / binSize) * binSize
+        yMin = numpy.floor(yMin / binSize) * binSize
+        xMax = numpy.ceil(xMax / binSize) * binSize
+        yMax = numpy.ceil(yMax / binSize) * binSize
             
         extent = Extent(xMin, xMax, yMin, yMax, binSize)
         
