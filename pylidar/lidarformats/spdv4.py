@@ -1,6 +1,19 @@
 
 """
 SPD V4 format driver and support functions
+
+Write Driver Options
+--------------------
+
+These are contained in the WRITESUPPORTEDOPTIONS module level variable.
+
++-----------------------------+-------------------------------------------+
+| Name                        | Use                                       |
++=============================+===========================================+
+| SCALING_BUT_NO_DATA_WARNING | Warn when scaling set for a column that   |
+|                             | doesn't get created. Defaults to True     |
++-----------------------------+-------------------------------------------+
+
 """
 # This file is part of PyLidar
 # Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
@@ -28,6 +41,10 @@ from rios import pixelgrid
 from . import generic
 from . import gridindexutils
 from . import h5space
+
+# driver options
+WRITESUPPORTEDOPTIONS = ('SCALING_BUT_NO_DATA_WARNING',)
+READSUPPORTEDOPTIONS = ()
 
 # Header fields have defined type in SPDV4
 HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
@@ -524,7 +541,23 @@ class SPDV4File(generic.LiDARFile):
             h5py_mode = 'w'
         else:
             raise ValueError('Unknown value for mode parameter')
-    
+
+        # check driver options    
+        if mode == generic.READ:
+            options = READSUPPORTEDOPTIONS
+        else:
+            options = WRITESUPPORTEDOPTIONS
+        for key in userClass.lidarDriverOptions:
+            if key not in options:
+                msg = '%s not a supported SPDV4 option' % repr(key)
+                raise generic.LiDARInvalidSetting(msg)
+
+        # warn on scaling, but no data
+        self.scalingButNoDataWarning = True
+        if 'SCALING_BUT_NO_DATA_WARNING' in userClass.lidarDriverOptions:
+            self.scalingButNoDataWarning = (
+                userClass.lidarDriverOptions['SCALING_BUT_NO_DATA_WARNING'])
+
         # attempt to open the file
         try:
             self.fileHandle = h5py.File(fname, h5py_mode)
@@ -710,8 +743,11 @@ spatial index will be recomputed on the fly"""
             for colName in self.pulseScalingValues.keys():
                 gain, offset = self.pulseScalingValues[colName]
                 if colName not in pulsesHandle:
-                    msg = 'scaling set for column %s but no data written' % colName
-                    self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+                    if self.scalingButNoDataWarning:
+                        msg = 'scaling set for column %s but no data written'
+                        msg = msg % colName
+                        self.controls.messageHandler(msg, 
+                            generic.MESSAGE_INFORMATION)
                 else:    
                     attrs = pulsesHandle[colName].attrs
                     attrs[GAIN_NAME] = gain
@@ -721,8 +757,11 @@ spatial index will be recomputed on the fly"""
             for colName in self.pointScalingValues.keys():
                 gain, offset = self.pointScalingValues[colName]
                 if colName not in pointsHandle:
-                    msg = 'scaling set for column %s but no data written' % colName
-                    self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+                    if self.scalingButNoDataWarning:
+                        msg = 'scaling set for column %s but no data written'
+                        msg = msg % colName
+                        self.controls.messageHandler(msg, 
+                            generic.MESSAGE_INFORMATION)
                 else:
                     attrs = pointsHandle[colName].attrs
                     attrs[GAIN_NAME] = gain
@@ -732,8 +771,11 @@ spatial index will be recomputed on the fly"""
             for colName in self.waveFormScalingValues.keys():
                 gain, offset = self.waveFormScalingValues[colName]
                 if colName not in waveHandle:
-                    msg = 'scaling set for column %s but no data written' % colName
-                    self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+                    if self.scalingButNoDataWarning:
+                        msg = 'scaling set for column %s but no data written'
+                        msg = msg % colName
+                        self.controls.messageHandler(msg, 
+                            generic.MESSAGE_INFORMATION)
                 else:                
                     attrs = waveHandle[colName].attrs
                     attrs[GAIN_NAME] = gain
@@ -991,10 +1033,10 @@ spatial index will be recomputed on the fly"""
         # since SPDV4 files have only a spatial index on pulses currently.
         points = self.readPointsForExtent(colNames)
         
-        nrows = int((self.lastExtent.yMax - self.lastExtent.yMin) / 
-                        self.lastExtent.binSize)
-        ncols = int((self.lastExtent.xMax - self.lastExtent.xMin) / 
-                        self.lastExtent.binSize)
+        nrows = int(numpy.ceil((self.lastExtent.yMax - self.lastExtent.yMin) / 
+                        self.lastExtent.binSize))
+        ncols = int(numpy.ceil((self.lastExtent.xMax - self.lastExtent.xMin) / 
+                        self.lastExtent.binSize))
                         
         # add overlap
         nrows += (self.controls.overlap * 2)
@@ -1155,7 +1197,7 @@ spatial index will be recomputed on the fly"""
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
             gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
-            trans[...,waveform,...] = (trans[...,waveform,...] / gain) + offset
+            trans[:,waveform] = (trans[:,waveform] / gain) + offset
             
         self.lastTransSpace = trans_shape
         self.lastTrans_Idx = trans_idx
@@ -1199,7 +1241,7 @@ spatial index will be recomputed on the fly"""
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
             gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
-            recv[...,waveform,...] = (recv[...,waveform,...] / gain) + offset
+            recv[:,waveform] = (recv[:,waveform] / gain) + offset
 
         self.lastRecvSpace = recv_shape
         self.lastRecv_Idx = recv_idx
@@ -1425,13 +1467,13 @@ spatial index will be recomputed on the fly"""
         ntrans = None
 
         # un scale back to DN
+        dntransmitted = numpy.empty(transmitted.shape, TRANSMITTED_DTYPE)
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
             gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
-            transmitted[waveform] = (transmitted[waveform] - offset) * gain
-            
-        # cast to type to write to file
-        transmitted = transmitted.astype(TRANSMITTED_DTYPE)
+            dntransmitted[:,waveform] = (transmitted[:,waveform] - offset) * gain
+
+        transmitted = numpy.ma.MaskedArray(dntransmitted, mask=transmitted.mask)
 
         if self.mode == generic.UPDATE:
 
@@ -1483,13 +1525,13 @@ spatial index will be recomputed on the fly"""
         nrecv = None
 
         # un scale back to DN
+        dnreceived = numpy.empty(received.shape, RECEIVED_DTYPE)
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
             gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
-            received[waveform] = (received[waveform] - offset) * gain
+            dnreceived[:,waveform] = (received[:,waveform] - offset) * gain
             
-        # cast to type to write to file
-        received = received.astype(RECEIVED_DTYPE)
+        received = numpy.ma.MaskedArray(dnreceived, mask=received.mask)
 
         if self.mode == generic.UPDATE:
 
@@ -1647,7 +1689,7 @@ spatial index will be recomputed on the fly"""
             data = (data - offset) * gain
             
         # cast to datatype if it has one
-        if dataType is not None:
+        if dataType is not None and numpy.issubdtype(dataType, numpy.integer):
             # check range
             info = numpy.iinfo(dataType)
             dataMin = data.min()
@@ -1789,13 +1831,13 @@ spatial index will be recomputed on the fly"""
                 if binidx is not None:
                     waveformInfo = waveformInfo[...,binidx]
             if received is not None:
-                received = received[...,...,mask]
+                received = received[:,:,mask]
                 if binidx is not None:
-                    received = received[...,...,binidx]
+                    received = received[:,:,binidx]
             if transmitted is not None:
-                transmitted = transmitted[...,...,mask]
+                transmitted = transmitted[:,:,mask]
                 if binidx is not None:
-                    transmitted = transmitted[...,...,binidx]
+                    transmitted = transmitted[:,:,binidx]
         
         if points is not None:
             points, pts_start, nreturns, returnNumber = (

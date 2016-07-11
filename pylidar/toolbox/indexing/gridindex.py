@@ -146,6 +146,12 @@ def splitFileIntoTiles(infile, binSize=1.0, blockSize=None,
         except KeyError:
             msg = 'info for creating bounding box not available'
             raise generic.LiDARFunctionUnsupported(msg)
+
+        # round the coords to the nearest multiple
+        xMin = numpy.floor(xMin / binSize) * binSize
+        yMin = numpy.floor(yMin / binSize) * binSize
+        xMax = numpy.ceil(xMax / binSize) * binSize
+        yMax = numpy.ceil(yMax / binSize) * binSize
             
         extent = Extent(xMin, xMax, yMin, yMax, binSize)
         
@@ -171,6 +177,7 @@ def splitFileIntoTiles(infile, binSize=1.0, blockSize=None,
         os.close(fd)
         
         userClass = lidarprocessor.LidarFile(fname, generic.CREATE)
+        userClass.setLiDARDriverOption('SCALING_BUT_NO_DATA_WARNING', False)
         driver = spdv4.SPDV4File(fname, generic.CREATE, controls, userClass)
         data = (copy.copy(subExtent), driver)
         extentList.append(data)
@@ -329,9 +336,9 @@ def classifyFunc(data, otherArgs):
         if waveformInfo is not None and waveformInfo.size > 0:
             waveformInfoSub = waveformInfo[...,mask]
         if recv is not None and recv.size > 0:
-            recvSub = recv[...,...,mask]
+            recvSub = recv[:,:,mask]
         if trans is not None and trans.size > 0:
-            transSub = trans[...,...,mask]
+            transSub = trans[:,:,mask]
            
         driver.writeData(pulsesSub, pointsSub, transSub, recvSub, 
                     waveformInfoSub)
@@ -384,6 +391,7 @@ def indexAndMerge(extentList, extent, wkt, outfile, header):
 
     # create output file    
     userClass = lidarprocessor.LidarFile(outfile, generic.CREATE)
+    userClass.setLiDARDriverOption('SCALING_BUT_NO_DATA_WARNING', False)
     controls = lidarprocessor.Controls()
     controls.setSpatialProcessing(True)
     outDriver = spdv4.SPDV4File(outfile, generic.CREATE, controls, userClass)
