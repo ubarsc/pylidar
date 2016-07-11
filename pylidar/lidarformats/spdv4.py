@@ -991,10 +991,10 @@ spatial index will be recomputed on the fly"""
         # since SPDV4 files have only a spatial index on pulses currently.
         points = self.readPointsForExtent(colNames)
         
-        nrows = int((self.lastExtent.yMax - self.lastExtent.yMin) / 
-                        self.lastExtent.binSize)
-        ncols = int((self.lastExtent.xMax - self.lastExtent.xMin) / 
-                        self.lastExtent.binSize)
+        nrows = int(numpy.ceil((self.lastExtent.yMax - self.lastExtent.yMin) / 
+                        self.lastExtent.binSize))
+        ncols = int(numpy.ceil((self.lastExtent.xMax - self.lastExtent.xMin) / 
+                        self.lastExtent.binSize))
                         
         # add overlap
         nrows += (self.controls.overlap * 2)
