@@ -92,6 +92,7 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling):
     dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
+    dataFiles.output1.setLiDARDriverOption('SCALING_BUT_NO_DATA_WARNING', False)
 
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()

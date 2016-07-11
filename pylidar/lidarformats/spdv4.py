@@ -1,6 +1,19 @@
 
 """
 SPD V4 format driver and support functions
+
+Write Driver Options
+--------------------
+
+These are contained in the WRITESUPPORTEDOPTIONS module level variable.
+
++-----------------------------+-------------------------------------------+
+| Name                        | Use                                       |
++=============================+===========================================+
+| SCALING_BUT_NO_DATA_WARNING | Warn when scaling set for a column that   |
+|                             | doesn't get created. Defaults to True     |
++-----------------------------+-------------------------------------------+
+
 """
 # This file is part of PyLidar
 # Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham
@@ -28,6 +41,10 @@ from rios import pixelgrid
 from . import generic
 from . import gridindexutils
 from . import h5space
+
+# driver options
+WRITESUPPORTEDOPTIONS = ('SCALING_BUT_NO_DATA_WARNING',)
+READSUPPORTEDOPTIONS = ()
 
 # Header fields have defined type in SPDV4
 HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
@@ -524,7 +541,23 @@ class SPDV4File(generic.LiDARFile):
             h5py_mode = 'w'
         else:
             raise ValueError('Unknown value for mode parameter')
-    
+
+        # check driver options    
+        if mode == generic.READ:
+            options = READSUPPORTEDOPTIONS
+        else:
+            options = WRITESUPPORTEDOPTIONS
+        for key in userClass.lidarDriverOptions:
+            if key not in options:
+                msg = '%s not a supported SPDV4 option' % repr(key)
+                raise generic.LiDARInvalidSetting(msg)
+
+        # warn on scaling, but no data
+        self.scalingButNoDataWarning = True
+        if 'SCALING_BUT_NO_DATA_WARNING' in userClass.lidarDriverOptions:
+            self.scalingButNoDataWarning = (
+                userClass.lidarDriverOptions['SCALING_BUT_NO_DATA_WARNING'])
+
         # attempt to open the file
         try:
             self.fileHandle = h5py.File(fname, h5py_mode)
@@ -710,8 +743,11 @@ spatial index will be recomputed on the fly"""
             for colName in self.pulseScalingValues.keys():
                 gain, offset = self.pulseScalingValues[colName]
                 if colName not in pulsesHandle:
-                    msg = 'scaling set for column %s but no data written' % colName
-                    self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+                    if self.scalingButNoDataWarning:
+                        msg = 'scaling set for column %s but no data written'
+                        msg = msg % colName
+                        self.controls.messageHandler(msg, 
+                            generic.MESSAGE_INFORMATION)
                 else:    
                     attrs = pulsesHandle[colName].attrs
                     attrs[GAIN_NAME] = gain
@@ -721,8 +757,11 @@ spatial index will be recomputed on the fly"""
             for colName in self.pointScalingValues.keys():
                 gain, offset = self.pointScalingValues[colName]
                 if colName not in pointsHandle:
-                    msg = 'scaling set for column %s but no data written' % colName
-                    self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+                    if self.scalingButNoDataWarning:
+                        msg = 'scaling set for column %s but no data written'
+                        msg = msg % colName
+                        self.controls.messageHandler(msg, 
+                            generic.MESSAGE_INFORMATION)
                 else:
                     attrs = pointsHandle[colName].attrs
                     attrs[GAIN_NAME] = gain
@@ -732,8 +771,11 @@ spatial index will be recomputed on the fly"""
             for colName in self.waveFormScalingValues.keys():
                 gain, offset = self.waveFormScalingValues[colName]
                 if colName not in waveHandle:
-                    msg = 'scaling set for column %s but no data written' % colName
-                    self.controls.messageHandler(msg, generic.MESSAGE_INFORMATION)
+                    if self.scalingButNoDataWarning:
+                        msg = 'scaling set for column %s but no data written'
+                        msg = msg % colName
+                        self.controls.messageHandler(msg, 
+                            generic.MESSAGE_INFORMATION)
                 else:                
                     attrs = waveHandle[colName].attrs
                     attrs[GAIN_NAME] = gain
@@ -1647,7 +1689,7 @@ spatial index will be recomputed on the fly"""
             data = (data - offset) * gain
             
         # cast to datatype if it has one
-        if dataType is not None:
+        if dataType is not None and numpy.issubdtype(dataType, numpy.integer):
             # check range
             info = numpy.iinfo(dataType)
             dataMin = data.min()

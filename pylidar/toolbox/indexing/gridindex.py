@@ -177,6 +177,7 @@ def splitFileIntoTiles(infile, binSize=1.0, blockSize=None,
         os.close(fd)
         
         userClass = lidarprocessor.LidarFile(fname, generic.CREATE)
+        userClass.setLiDARDriverOption('SCALING_BUT_NO_DATA_WARNING', False)
         driver = spdv4.SPDV4File(fname, generic.CREATE, controls, userClass)
         data = (copy.copy(subExtent), driver)
         extentList.append(data)
@@ -390,6 +391,7 @@ def indexAndMerge(extentList, extent, wkt, outfile, header):
 
     # create output file    
     userClass = lidarprocessor.LidarFile(outfile, generic.CREATE)
+    userClass.setLiDARDriverOption('SCALING_BUT_NO_DATA_WARNING', False)
     controls = lidarprocessor.Controls()
     controls.setSpatialProcessing(True)
     outDriver = spdv4.SPDV4File(outfile, generic.CREATE, controls, userClass)

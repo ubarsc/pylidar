@@ -139,6 +139,7 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
     
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
+    dataFiles.output1.setLiDARDriverOption('SCALING_BUT_NO_DATA_WARNING', False)
 
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
                     otherArgs=otherArgs)
