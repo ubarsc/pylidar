@@ -336,9 +336,9 @@ def classifyFunc(data, otherArgs):
         if waveformInfo is not None and waveformInfo.size > 0:
             waveformInfoSub = waveformInfo[...,mask]
         if recv is not None and recv.size > 0:
-            recvSub = recv[...,...,mask]
+            recvSub = recv[:,:,mask]
         if trans is not None and trans.size > 0:
-            transSub = trans[...,...,mask]
+            transSub = trans[:,:,mask]
            
         driver.writeData(pulsesSub, pointsSub, transSub, recvSub, 
                     waveformInfoSub)

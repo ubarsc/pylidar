@@ -1197,7 +1197,7 @@ spatial index will be recomputed on the fly"""
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
             gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
-            trans[...,waveform,...] = (trans[...,waveform,...] / gain) + offset
+            trans[:,waveform] = (trans[:,waveform] / gain) + offset
             
         self.lastTransSpace = trans_shape
         self.lastTrans_Idx = trans_idx
@@ -1241,7 +1241,7 @@ spatial index will be recomputed on the fly"""
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
             gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
-            recv[...,waveform,...] = (recv[...,waveform,...] / gain) + offset
+            recv[:,waveform] = (recv[:,waveform] / gain) + offset
 
         self.lastRecvSpace = recv_shape
         self.lastRecv_Idx = recv_idx
@@ -1467,13 +1467,13 @@ spatial index will be recomputed on the fly"""
         ntrans = None
 
         # un scale back to DN
+        dntransmitted = numpy.empty(transmitted.shape, TRANSMITTED_DTYPE)
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
             gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
-            transmitted[waveform] = (transmitted[waveform] - offset) * gain
-            
-        # cast to type to write to file
-        transmitted = transmitted.astype(TRANSMITTED_DTYPE)
+            dntransmitted[:,waveform] = (transmitted[:,waveform] - offset) * gain
+
+        transmitted = numpy.ma.MaskedArray(dntransmitted, mask=transmitted.mask)
 
         if self.mode == generic.UPDATE:
 
@@ -1525,13 +1525,13 @@ spatial index will be recomputed on the fly"""
         nrecv = None
 
         # un scale back to DN
+        dnreceived = numpy.empty(received.shape, RECEIVED_DTYPE)
         for waveform in range(waveformInfo.shape[0]):
             offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
             gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
-            received[waveform] = (received[waveform] - offset) * gain
+            dnreceived[:,waveform] = (received[:,waveform] - offset) * gain
             
-        # cast to type to write to file
-        received = received.astype(RECEIVED_DTYPE)
+        received = numpy.ma.MaskedArray(dnreceived, mask=received.mask)
 
         if self.mode == generic.UPDATE:
 
@@ -1831,13 +1831,13 @@ spatial index will be recomputed on the fly"""
                 if binidx is not None:
                     waveformInfo = waveformInfo[...,binidx]
             if received is not None:
-                received = received[...,...,mask]
+                received = received[:,:,mask]
                 if binidx is not None:
-                    received = received[...,...,binidx]
+                    received = received[:,:,binidx]
             if transmitted is not None:
-                transmitted = transmitted[...,...,mask]
+                transmitted = transmitted[:,:,mask]
                 if binidx is not None:
-                    transmitted = transmitted[...,...,binidx]
+                    transmitted = transmitted[:,:,binidx]
         
         if points is not None:
             points, pts_start, nreturns, returnNumber = (
