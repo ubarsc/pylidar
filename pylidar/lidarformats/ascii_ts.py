@@ -20,6 +20,14 @@ These are contained in the SUPPORTEDOPTIONS module level variable.
 |                       | one pulse and the other values into the   |
 |                       | points for that pulse.                    |
 +-----------------------+-------------------------------------------+
+| CLASSIFICATION_CODES  | A list of tuples to translate the codes   |
+|                       | used within the file to the               |
+|                       | lidarprocessor.CLASSIFICATION_* ones.     |
+|                       | Each tuple should have the internalCode   |
+|                       | first, then the lidarprocessor code       |
+|                       | Codes without a translation will be       |
+|                       | through without change.                   |
++-----------------------+-------------------------------------------+
 
 """
 
@@ -48,7 +56,8 @@ import numpy
 from . import generic
 from . import gridindexutils
 
-SUPPORTEDOPTIONS = ('COL_TYPES', 'PULSE_COLS')
+SUPPORTEDOPTIONS = ('COL_TYPES', 'PULSE_COLS', 'CLASSIFICATION_CODES')
+COMPULSARYOPTIONS = ('COL_TYPES', 'PULSE_COLS')
 SEPARATOR = ','
 
 class ASCIITSFile(generic.LiDARFile):
@@ -76,7 +85,7 @@ class ASCIITSFile(generic.LiDARFile):
                 raise generic.LiDARInvalidSetting(msg)
 
         # also check they are all present - we can't read the file otherwise
-        for key in SUPPORTEDOPTIONS:
+        for key in COMPULSARYOPTIONS:
             if key not in userClass.lidarDriverOptions:
                 msg = 'must provide %s driver option' % key
                 print(msg)
@@ -129,6 +138,12 @@ class ASCIITSFile(generic.LiDARFile):
         self.lastPoints = None
         self.lastPulses = None
         self.finished = False
+
+        # set our translation codes
+        if 'CLASSIFICATION_CODES' in userClass.lidarDriverOptions:
+            codes = userClass.lidarDriverOptions['CLASSIFICATION_CODES']
+            for trans in codes:
+                self.classificationTranslation.append(trans)
             
     @staticmethod        
     def getDriverName():
@@ -225,6 +240,9 @@ class ASCIITSFile(generic.LiDARFile):
             pulses[pulseCount-1]['NUMBER_OF_RETURNS'] += 1
 
             pointCount += 1
+
+        # translate any classifications
+        self.recodeClassification(points, generic.RECODE_TO_LAS)
 
         return pulses, points
 

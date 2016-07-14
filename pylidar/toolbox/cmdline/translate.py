@@ -86,6 +86,13 @@ def getCmdargs():
     p.add_argument("--pulsecols", help="Comma seperated list of column names "+
             " that are the pulse columns. Names must be defined by --coltype"+
             " (only for ASCII inputs)")
+    p.add_argument("--classtrans", nargs=2, metavar=('internal', 'class'),
+            action='append', help="Set translation between internal codes and" +
+            " standard codes for CLASSIFICATION column. internal should be " +
+            "an integer and class should be one of [CREATED,UNCLASSIFIED," +
+            "GROUND,LOWVEGE,MEDVEGE,HIGHVEGE,BUILDING,LOWPOINT,HIGHPOINT," +
+            "WATER,RAIL,ROAD,BRIDGE,WIREGUARD,WIRECOND,TRANSTOWER,INSULATOR]" +
+            " (only for ASCII inputs)")
 
     cmdargs = p.parse_args()
 
@@ -151,8 +158,25 @@ def run():
 
         pulsecols = cmdargs.pulsecols.split(',')
 
+        classtrans = None
+        if cmdargs.classtrans is not None:
+            # translate strings to codes
+            for internalCode, strLasCode in cmdargs.classtrans:
+                internalCode = int(internalCode)
+                strLasCodeFull = "CLASSIFICATION_%s" % strLasCode
+                try:
+                    lasCode = getattr(lidarprocessor, strLasCodeFull)
+                except AttributeError:
+                    msg = 'class %s not understood' % strLasCode
+                    raise generic.LiDARInvalidSetting(msg)
+
+                if classtrans is None:
+                    classtrans = []
+                classtrans.append((internalCode, lasCode))
+
         ascii2spdv4.translate(info, cmdargs.input, cmdargs.output,
-                cmdargs.range, cmdargs.scaling, cmdargs.coltype, pulsecols)
+                cmdargs.range, cmdargs.scaling, cmdargs.coltype, pulsecols,
+                classtrans)
 
     else:
         msg = 'Cannot convert between formats %s and %s' 

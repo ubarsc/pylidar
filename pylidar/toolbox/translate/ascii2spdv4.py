@@ -46,7 +46,8 @@ def transFunc(data, otherArgs):
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
 
-def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols):
+def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols,
+        classificationTranslation=None):
     """
     Main function which does the work.
 
@@ -56,6 +57,10 @@ def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols):
     * scaling is a list of tuples with (type, varname, gain, offset).
     * colTypes is a list of name and data type tuples for every column
     * pulseCols is a list of strings defining the pulse columns
+    * classificationTranslation is a list of tuples specifying how to translate
+        between the codes within the files and the 
+        lidarprocessor.CLASSIFICATION_* ones. First element of tuple is file 
+        number, second the lidarprocessor code.
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scaling)
 
@@ -71,6 +76,10 @@ def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols):
 
     dataFiles.input1.setLiDARDriverOption('COL_TYPES', numpyColTypes)
     dataFiles.input1.setLiDARDriverOption('PULSE_COLS', pulseCols)
+
+    if classificationTranslation is not None:
+        dataFiles.input1.setLiDARDriverOption('CLASSIFICATION_CODES', 
+                classificationTranslation)
 
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()

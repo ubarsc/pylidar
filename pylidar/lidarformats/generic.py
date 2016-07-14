@@ -420,11 +420,21 @@ class LiDARFile(basedriver.Driver):
 
         classification = array[CLASSIFICATION_COLNAME]
 
+        maskList = []
+        # we have to do this in 2 steps since we are changing
+        # the data as we go which can lead to unexpected resuls
+        # so we calculate all the masks before changing anything,
+        # then apply them
         for internalCode, lasCode in self.classificationTranslation:
             if direction == RECODE_TO_DRIVER:
-                classification[classification == lasCode] = internalCode
+                mask = (classification == lasCode)
+                maskList.append((mask, internalCode))
             else:
-                classification[classification == internalCode] = lasCode
+                mask = (classification == internalCode)
+                maskList.append((mask, lasCode))
+
+        for mask, code in maskList:
+            classification[mask] = code
 
     @staticmethod
     def subsetColumns(array, colNames):
