@@ -82,11 +82,16 @@ You also need to specify with columns are pulse columns with the --pulsecols. Th
 list of column names that are to be treated as pulses. Here is an example::
 
     pylidar_translate --input data.dat.gz --output data.spdv4 --format SPDV4 \
-        --coltype GPS_TIME FLOAT64 --coltype X_IDX FLOAT64 --coltype Y_IDX FLOAT64 
+        --coltype GPS_TIME FLOAT64 --coltype X_IDX FLOAT64 --coltype Y_IDX FLOAT64 \
         --coltype Z_IDX FLOAT64 --coltype X FLOAT64 --coltype Y FLOAT64 --coltype Z FLOAT64 \
         --coltype CLASSIFICATION UINT8 --coltype ORIG_RETURN_NUMBER UINT8 \
         --coltype ORIG_NUMBER_OF_RETURNS UINT8 --coltype AMPLITUDE FLOAT64 \
         --coltype FWHM FLOAT64 --coltype RANGE FLOAT64 --pulsecols GPS_TIME,X_IDX,Y_IDX,Z_IDX
+
+You may also need to translate from internal codes used the CLASSIFICATION column to standard codes.
+Use the --classtrans option for this (see "pylidar_translate -h" for more information)::
+
+    --classtrans 5 INSULATOR --classtrans 6 HIGHVEGE
     
 -----------------------------------------------
 Getting Information on a File with pylidar_info

@@ -73,7 +73,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     If blockSize isn't set then it is picked using BLOCKSIZE_N_BLOCKS.
     binSize is the size of the bins to create the spatial index.
     if tempDir is none a temporary directory will be created with tempfile.mkdtemp
-        and removed at the end of processing.
+    and removed at the end of processing.
     extent is an Extent object specifying the extent to work within.
     indexType is one of the INDEX_* constants.
     pulseIndexMethod is one of the PULSE_INDEX_* constants.
@@ -81,6 +81,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     not supplied.
     nPulsesPerChunkMerge is the number of pulses to process at a time
     when merging.
+
     """
     removeTempDir = False
     if tempDir is None:
