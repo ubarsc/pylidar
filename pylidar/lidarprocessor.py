@@ -47,28 +47,57 @@ except ImportError:
     
 from . import userclasses
 
-# to be passed to ImageData and LidarData class constructors
+"to be passed to ImageData and LidarData class constructors"
 READ = generic.READ
 UPDATE = generic.UPDATE
 CREATE = generic.CREATE
 
-# to be passed to Controls.setFootprint()
+"to be passed to Controls.setFootprint()"
 INTERSECTION = imageio.INTERSECTION
 UNION = imageio.UNION
 BOUNDS_FROM_REFERENCE = imageio.BOUNDS_FROM_REFERENCE
 
-# to be passed to message handler function set with
-# Controls.setMessageHandler
+"""
+to be passed to message handler function set with
+Controls.setMessageHandler
+"""
 MESSAGE_WARNING = generic.MESSAGE_WARNING
 MESSAGE_INFORMATION = generic.MESSAGE_INFORMATION
 MESSAGE_DEBUG = generic.MESSAGE_DEBUG
 
+"Size of the default window size in bins"
 DEFAULT_WINDOW_SIZE = 200 # bins
 
-# For use in userclass.LidarData.translateFieldNames() and LiDARFile.getTranslationDict()
+"""
+For use in userclass.LidarData.translateFieldNames() and 
+LiDARFile.getTranslationDict()
+"""
 ARRAY_TYPE_POINTS = generic.ARRAY_TYPE_POINTS
 ARRAY_TYPE_PULSES = generic.ARRAY_TYPE_PULSES
 ARRAY_TYPE_WAVEFORMS = generic.ARRAY_TYPE_WAVEFORMS
+
+"""
+Classification codes from the LAS spec. Drivers perform
+automatic translation to/from their internal codes for
+recognised values.
+"""
+CLASSIFICATION_CREATED = generic.CLASSIFICATION_CREATED
+CLASSIFICATION_UNCLASSIFIED = generic.CLASSIFICATION_UNCLASSIFIED
+CLASSIFICATION_GROUND = generic.CLASSIFICATION_GROUND
+CLASSIFICATION_LOWVEGE = generic.CLASSIFICATION_LOWVEGE
+CLASSIFICATION_MEDVEGE = generic.CLASSIFICATION_MEDVEGE
+CLASSIFICATION_HIGHVEGE = generic.CLASSIFICATION_HIGHVEGE
+CLASSIFICATION_BUILDING = generic.CLASSIFICATION_BUILDING
+CLASSIFICATION_LOWPOINT = generic.CLASSIFICATION_LOWPOINT
+CLASSIFICATION_HIGHPOINT = generic.CLASSIFICATION_HIGHPOINT
+CLASSIFICATION_WATER = generic.CLASSIFICATION_WATER
+CLASSIFICATION_RAIL = generic.CLASSIFICATION_RAIL
+CLASSIFICATION_ROAD = generic.CLASSIFICATION_ROAD
+CLASSIFICATION_BRIDGE = generic.CLASSIFICATION_BRIDGE
+CLASSIFICATION_WIREGUARD = generic.CLASSIFICATION_WIREGUARD
+CLASSIFICATION_WIRECOND = generic.CLASSIFICATION_WIRECOND
+CLASSIFICATION_TRANSTOWER = generic.CLASSIFICATION_TRANSTOWER
+CLASSIFICATION_INSULATOR = generic.CLASSIFICATION_INSULATOR
 
 def setDefaultDrivers():
     """

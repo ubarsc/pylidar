@@ -29,7 +29,7 @@ from . import generic
 from . import gridindexutils
 from . import h5space
 
-# so we can check the user has passed in expected array type
+"so we can check the user has passed in expected array type"
 PULSE_DTYPE = numpy.dtype([('GPS_TIME', 'u8'), ('PULSE_ID', 'u8'), 
 ('X_ORIGIN', 'f8'), ('Y_ORIGIN', 'f8'), ('Z_ORIGIN', 'f4'), 
 ('H_ORIGIN', 'f4'), ('X_IDX', 'f8'), ('Y_IDX', 'f8'), ('AZIMUTH', 'f4'), 
@@ -92,18 +92,40 @@ HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'Y_MIN' : numpy.float64, 'ZENITH_MAX' : numpy.float64, 
 'ZENITH_MIN' : numpy.float64, 'Z_MAX' : numpy.float64, 'Z_MIN' : numpy.float64}
 
+"header fields that are actually arrays"
 HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS')
 
-# types for the spatial index
+"types for the spatial index"
 SPDV3_SI_COUNT_DTYPE = numpy.uint32
 SPDV3_SI_INDEX_DTYPE = numpy.uint64
 
-# types of indexing in the file
+"types of indexing in the file"
 SPDV3_INDEX_CARTESIAN = 1
 SPDV3_INDEX_SPHERICAL = 2
 SPDV3_INDEX_CYLINDRICAL = 3
 SPDV3_INDEX_POLAR = 4
 SPDV3_INDEX_SCAN = 5
+
+"classification codes"
+SPDV3_CLASSIFICATION_UNDEFINED = 0
+SPDV3_CLASSIFICATION_UNCLASSIFIED = 1
+SPDV3_CLASSIFICATION_CREATED = 2
+SPDV3_CLASSIFICATION_GROUND = 3
+SPDV3_CLASSIFICATION_LOWVEGE = 4
+SPDV3_CLASSIFICATION_MEDVEGE = 5
+SPDV3_CLASSIFICATION_HIGHVEGE = 6
+SPDV3_CLASSIFICATION_BUILDING = 7
+SPDV3_CLASSIFICATION_WATER = 8
+SPDV3_CLASSIFICATION_TRUNK = 9
+SPDV3_CLASSIFICATION_FOLIAGE = 10
+SPDV3_CLASSIFICATION_BRANCH = 11
+SPDV3_CLASSIFICATION_WALL = 12
+SPDV3_CLASSIFICATION_ALLCLASSES = 100
+SPDV3_CLASSIFICATION_ALLCLASSES_TOP = 101
+SPDV3_CLASSIFICATION_VEGETOP = 102
+SPDV3_CLASSIFICATION_VEGE = 103
+SPDV3_CLASSIFICATION_NOTGROUND = 104
+SPDV3_CLASSIFICATION_KEYGRDPTS = 105
 
 # for updating the header
 POINTS_HEADER_UPDATE_DICT = {'X' : ('X_MIN', 'X_MAX'), 'Y' : ('Y_MIN', 'Y_MAX'),
@@ -322,7 +344,23 @@ class SPDV3File(generic.LiDARFile):
         
         self.extentAlignedWithSpatialIndex = True
         self.unalignedWarningGiven = False
-        
+
+        # set up list for conversion of CLASSIFICATION column
+        self.classificationTranslation.append((SPDV3_CLASSIFICATION_CREATED,
+                                generic.CLASSIFICATION_CREATED))
+        self.classificationTranslation.append((SPDV3_CLASSIFICATION_GROUND,
+                                generic.CLASSIFICATION_GROUND))
+        self.classificationTranslation.append((SPDV3_CLASSIFICATION_LOWVEGE,
+                                generic.CLASSIFICATION_LOWVEGE))
+        self.classificationTranslation.append((SPDV3_CLASSIFICATION_MEDVEGE,
+                                generic.CLASSIFICATION_MEDVEGE))
+        self.classificationTranslation.append((SPDV3_CLASSIFICATION_HIGHVEGE,
+                                generic.CLASSIFICATION_HIGHVEGE))
+        self.classificationTranslation.append((SPDV3_CLASSIFICATION_BUILDING,
+                                generic.CLASSIFICATION_BUILDING))
+        self.classificationTranslation.append((SPDV3_CLASSIFICATION_WATER,
+                                generic.CLASSIFICATION_WATER))
+
     @staticmethod
     def convertHeaderToDictionary(header):
         """
@@ -451,6 +489,9 @@ spatial index will be recomputed on the fly"""
                         startIdxs, nReturns, nOut)
         
         points = point_space.read(self.fileHandle['DATA']['POINTS'])
+
+        # translate any classifications
+        self.recodeClassification(points, generic.RECODE_TO_LAS)
         
         # self.lastExtent updated in readPulsesForExtent()
         # keep these indices from pulses to points - handy for the indexing 
@@ -976,6 +1017,9 @@ spatial index will be recomputed on the fly"""
                         (y_idx <= self.extent.yMax))
                         
                 points = points[mask]
+
+        # translate any classifications
+        self.recodeClassification(points, generic.RECODE_TO_DRIVER)
         
         return points
 
@@ -1278,6 +1322,9 @@ spatial index will be recomputed on the fly"""
                     startIdxs, nReturns, nOut)
                 
         points = point_space.read(self.fileHandle['DATA']['POINTS'])
+
+        # translate any classifications
+        self.recodeClassification(points, generic.RECODE_TO_LAS)
         
         # keep these indices from pulses to points - handy for the indexing 
         # functions.

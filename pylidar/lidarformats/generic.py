@@ -23,25 +23,62 @@ import numpy
 from .. import basedriver
 from .. import __version__
 
-# access modes passed to driver constructor
+"access modes passed to driver constructor"
 READ = basedriver.READ
 UPDATE = basedriver.UPDATE
 CREATE = basedriver.CREATE
 
-# to be passed to message handler function 
-# controls.messageHandler
+"""
+to be passed to message handler function 
+controls.messageHandler
+"""
 MESSAGE_WARNING = 0
 MESSAGE_INFORMATION = 1
 MESSAGE_DEBUG = 2
 
-# 'standard' fields that have different names for different formats
+"'standard' fields that have different names for different formats"
 FIELD_POINTS_RETURN_NUMBER = 1
 FIELD_PULSES_TIMESTAMP = 2
 
-# For use in userclass.LidarData.translateFieldNames() and LiDARFile.getTranslationDict()
+"""
+For use in userclass.LidarData.translateFieldNames() and 
+LiDARFile.getTranslationDict()
+"""
 ARRAY_TYPE_POINTS = 0
 ARRAY_TYPE_PULSES = 1
 ARRAY_TYPE_WAVEFORMS = 2
+
+"""
+Classifications from the LAS spec. See LiDARFile.recodeClassification
+"""
+CLASSIFICATION_CREATED = 0
+CLASSIFICATION_UNCLASSIFIED = 1
+CLASSIFICATION_GROUND = 2
+CLASSIFICATION_LOWVEGE = 3
+CLASSIFICATION_MEDVEGE = 4
+CLASSIFICATION_HIGHVEGE = 5
+CLASSIFICATION_BUILDING = 6
+CLASSIFICATION_LOWPOINT = 7
+CLASSIFICATION_HIGHPOINT = 8
+CLASSIFICATION_WATER = 9
+CLASSIFICATION_RAIL = 10
+CLASSIFICATION_ROAD = 11
+CLASSIFICATION_BRIDGE = 12
+CLASSIFICATION_WIREGUARD = 13
+CLASSIFICATION_WIRECOND = 14
+CLASSIFICATION_TRANSTOWER = 15
+CLASSIFICATION_INSULATOR = 16
+
+"""
+Codes to pass to LiDARFile.recodeClassification
+"""
+RECODE_TO_DRIVER = 0
+RECODE_TO_LAS = 1
+
+"""
+Name of column to treat as classification
+"""
+CLASSIFICATION_COLNAME = "CLASSIFICATION"
 
 # For writing to files when needed
 SOFTWARE_NAME = 'PyLidar %s' % __version__
@@ -120,6 +157,14 @@ class LiDARFile(basedriver.Driver):
         successfully.
         """
         basedriver.Driver.__init__(self, fname, mode, controls, userClass)
+
+        # a list that holds the translation between internal codes
+        # and the LAS spec ones (above)
+        # each item of the list should be a tuple with 
+        # (internalCode, lasCode)
+        # derived classes should update this list with codes
+        # if they differ from the LAS spec
+        self.classificationTranslation = []
 
     @staticmethod        
     def getDriverName():
@@ -364,6 +409,22 @@ class LiDARFile(basedriver.Driver):
         Write any updated spatial index and close any file handles.
         """
         raise NotImplementedError()
+
+    def recodeClassification(self, array, direction):
+        """
+        Recode classification column (if it exists in array)
+        in the specified direction. 
+        """
+        if CLASSIFICATION_COLNAME not in array.dtype.fields:
+            return
+
+        classification = array[CLASSIFICATION_COLNAME]
+
+        for internalCode, lasCode in self.classificationTranslation:
+            if direction == RECODE_TO_DRIVER:
+                classification[classification == lasCode] = internalCode
+            else:
+                classification[classification == internalCode] = lasCode
 
     @staticmethod
     def subsetColumns(array, colNames):
