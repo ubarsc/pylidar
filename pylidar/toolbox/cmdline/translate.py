@@ -91,8 +91,8 @@ def getCmdargs():
             " standard codes for CLASSIFICATION column. internal should be " +
             "an integer and class should be one of [CREATED,UNCLASSIFIED," +
             "GROUND,LOWVEGE,MEDVEGE,HIGHVEGE,BUILDING,LOWPOINT,HIGHPOINT," +
-            "WATER,RAIL,ROAD,BRIDGE,WIREGUARD,WIRECOND,TRANSTOWER,INSULATOR]" +
-            " (only for ASCII inputs)")
+            "WATER,RAIL,ROAD,BRIDGE,WIREGUARD,WIRECOND,TRANSTOWER,INSULATOR," +
+            "TRUNK,FOLIAGE,BRANCH] (only for ASCII inputs)")
 
     cmdargs = p.parse_args()
 

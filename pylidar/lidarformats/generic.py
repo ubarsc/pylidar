@@ -92,6 +92,12 @@ CLASSIFICATION_TRANSTOWER = 15
 "Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_INSULATOR = 16
 "Classifications from the LAS spec. See LiDARFile.recodeClassification"
+CLASSIFICATION_TRUNK = 100
+"Extended classifications"
+CLASSIFICATION_FOLIAGE = 101
+"Extended classifications"
+CLASSIFICATION_BRANCH = 102
+"Extended classifications"
 
 RECODE_TO_DRIVER = 0
 "Codes to pass to LiDARFile.recodeClassification"

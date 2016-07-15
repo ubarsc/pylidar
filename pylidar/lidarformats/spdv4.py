@@ -722,6 +722,12 @@ class SPDV4File(generic.LiDARFile):
                                 generic.CLASSIFICATION_BUILDING))
         self.classificationTranslation.append((SPDV4_CLASSIFICATION_WATER,
                                 generic.CLASSIFICATION_WATER))
+        self.classificationTranslation.append((SPDV4_CLASSIFICATION_TRUNK,
+                                generic.CLASSIFICATION_TRUNK))
+        self.classificationTranslation.append((SPDV4_CLASSIFICATION_FOLIAGE,
+                                generic.CLASSIFICATION_FOLIAGE))
+        self.classificationTranslation.append((SPDV4_CLASSIFICATION_BRANCH,
+                                generic.CLASSIFICATION_BRANCH))
 
         
     @staticmethod 

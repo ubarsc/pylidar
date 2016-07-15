@@ -134,6 +134,12 @@ CLASSIFICATION_TRANSTOWER = generic.CLASSIFICATION_TRANSTOWER
 "Classification codes from the LAS spec."
 CLASSIFICATION_INSULATOR = generic.CLASSIFICATION_INSULATOR
 "Classification codes from the LAS spec."
+CLASSIFICATION_TRUNK = generic.CLASSIFICATION_TRUNK
+"Extended classification codes"
+CLASSIFICATION_FOLIAGE = generic.CLASSIFICATION_FOLIAGE
+"Extended classification codes"
+CLASSIFICATION_BRANCH = generic.CLASSIFICATION_BRANCH
+"Extended classification codes"
 
 def setDefaultDrivers():
     """
