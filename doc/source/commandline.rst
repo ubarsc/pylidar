@@ -25,6 +25,18 @@ of the recognised ones from :doc:`spdv4format`. The fourth and fifth arguments a
 and are interpreted as floats. Here is an example or overridding the scaling on the 'Z' column::
 
     pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --scaling POINT Z UINT32 1 -500
+
+^^^^^^^^^^^^^^^^^^^^^^
+Setting the null value
+^^^^^^^^^^^^^^^^^^^^^^
+
+When writing to SPDV4 files, the null value can be set on the output columns with the --null option. This
+can be specified multiple times, once for each column that you need to set the scaling on. The --null
+option takes 4 parameters. The first describes the sort of column (POINT, PULSE or WAVEFORM). The
+second is the column name and the third is the actual null value. Note that scaling values (if set)
+will be applied to this value. Here is an example of setting the null value for the 'Z' column to 0::
+
+    pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --null POINT Z 0
     
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Checking the expected range

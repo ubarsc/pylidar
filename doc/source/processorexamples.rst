@@ -276,3 +276,13 @@ BIN_SIZE option for LAS files which need this set before they can read data spat
     dataFiles = lidarprocessor.DataFiles()
     dataFiles.input = lidarprocessor.LidarFile('file.spd', lidarprocessor.UPDATE)
     dataFiles.input.setLiDARDriverOption('BIN_SIZE', 1.0)
+
+------------------------
+Accessing SPDV4 features
+------------------------
+
+When using SPDV4, it might be useful to use these features:
+
+* Getting and setting scaling for columns - see :func:`pylidar.userclasses.LidarData.getScaling` and :func:`pylidar.userclasses.LidarData.setScaling`.
+* Getting and setting the native data type for columns - see :func:`pylidar.userclasses.LidarData.getNativeDataType` and :func:`pylidar.userclasses.LidarData.setNativeDataType`.
+* Getting and setting the null value for columns - see :func:`pylidar.userclasses.LidarData.getNullValue` and :func:`pylidar.userclasses.LidarData.setNullValue`.
