@@ -563,6 +563,33 @@ class LidarData(object):
         """
         return self.driver.getNativeDataType(colName, arrayType)
 
+    def setNullValue(self, colName, arrayType, value, scaled=True):
+        """
+        Set the 'null' value for the given column.
+
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+
+        By default the value is treated as the scaled value, but this can
+        be changed with the 'scaled' parameter.
+
+        generic.LiDARArrayColumnError is raised if this cannot be set for the column.
+        """
+        self.driver.setNullValue(colName, arrayType, value, scaled)
+
+    def getNullValue(self, colName, arrayType, scaled=True):
+        """
+        Get the 'null' value for the given column.
+
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+
+        By default the returned value is scaled, change this with the 'scaled'
+        parameter.
+
+        Raises generic.LiDARArrayColumnError if information cannot be
+        found for the column.
+        """
+        return self.driver.getNullValue(colName, arrayType, scaled)    
+
     def getScalingColumns(self, arrayType):
         """
         Return a list of column names that require scaling to be 

@@ -39,6 +39,7 @@ def transFunc(data, otherArgs):
     # set scaling 
     if data.info.isFirstBlock():
         translatecommon.setOutputScaling(otherArgs.scaling, data.output1)
+        translatecommon.setOutputNull(otherArgs.nullVals, data.output1)
 
     # check the range
     translatecommon.checkRange(otherArgs.expectRange, points, pulses)
@@ -47,7 +48,7 @@ def transFunc(data, otherArgs):
     data.output1.setPulses(pulses)
 
 def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols,
-        classificationTranslation=None):
+        classificationTranslation=None, nullVals=None):
     """
     Main function which does the work.
 
@@ -61,6 +62,7 @@ def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols,
         between the codes within the files and the 
         lidarprocessor.CLASSIFICATION_* ones. First element of tuple is file 
         number, second the lidarprocessor code.
+    * nullVals is a list of tuples with (type, varname, value)
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scaling)
 
@@ -89,6 +91,7 @@ def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols,
     otherArgs = lidarprocessor.OtherArgs()
     otherArgs.scaling = scalingsDict
     otherArgs.expectRange = expectRange
+    otherArgs.nullVals = nullVals
     
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')

@@ -386,12 +386,12 @@ class LiDARFile(basedriver.Driver):
         
     def setNativeDataType(self, colName, arrayType, dtype):
         """
-        Set the native dtype (numpy.int16 etc)that a column is stored
+        Set the native dtype (numpy.int16 etc) that a column is stored
         as internally after scaling (if any) is applied.
         
         arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
         
-        generic.LiDARArrayColumnError is raised if this cannot be set for the format.
+        generic.LiDARArrayColumnError is raised if this cannot be set for the column.
         
         The default behaviour is to create new columns in the correct type for 
         the format, or if they are optional, in the same type as the input array.
@@ -400,7 +400,7 @@ class LiDARFile(basedriver.Driver):
         
     def getNativeDataType(self, colName, arrayType):
         """
-        Return the native dtype (numpy.int16 etc)that a column is stored
+        Return the native dtype (numpy.int16 etc) that a column is stored
         as internally after scaling (if any) is applied. Provided so scaling
         can be adjusted when translating between formats.
         
@@ -409,7 +409,34 @@ class LiDARFile(basedriver.Driver):
         Raises generic.LiDARArrayColumnError if information cannot be
         found for the column.
         """
-        return NotImplementedError()
+        raise NotImplementedError()
+
+    def setNullValue(self, colName, arrayType, value, scaled=True):
+        """
+        Set the 'null' value for the given column.
+
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+
+        By default the value is treated as the scaled value, but this can
+        be changed with the 'scaled' parameter.
+
+        generic.LiDARArrayColumnError is raised if this cannot be set for the column.
+        """
+        raise NotImplementedError()
+
+    def getNullValue(self, colName, arrayType, scaled=True):
+        """
+        Get the 'null' value for the given column.
+
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+
+        By default the returned value is scaled, change this with the 'scaled'
+        parameter.
+
+        Raises generic.LiDARArrayColumnError if information cannot be
+        found for the column.
+        """
+        raise NotImplementedError()
 
     def getScalingColumns(self, arrayType):
         """

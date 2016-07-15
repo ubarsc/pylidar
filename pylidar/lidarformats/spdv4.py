@@ -143,7 +143,11 @@ RECEIVED_DTYPE = numpy.uint32
 "dtype for received array"
 
 GAIN_NAME = 'GAIN'
+"For storing in hdf5 attributes"
 OFFSET_NAME = 'OFFSET'
+"For storing in hdf5 attributes"
+NULL_NAME = 'NULL'
+"For storing in hdf5 attributes"
 
 SPDV4_INDEX_CARTESIAN = 1
 "types of indexing in the file"
@@ -690,6 +694,9 @@ class SPDV4File(generic.LiDARFile):
         self.pulseScalingValues = {}
         self.pointScalingValues = {}
         self.waveFormScalingValues = {}
+        self.pulseNullValues = {}
+        self.pointNullValues = {}
+        self.waveFormNullValues = {}
         # handle dtypes for optional fields
         self.pulseDtypes = {}
         self.pointDtypes = {}
@@ -858,6 +865,58 @@ spatial index will be recomputed on the fly"""
                     attrs = waveHandle[colName].attrs
                     attrs[GAIN_NAME] = gain
                     attrs[OFFSET_NAME] = offset
+
+            # and the null values
+            for colName in self.pulseNullValues.keys():
+                value, scaled = self.pulseNullValues[colName]
+                if scaled:
+                    gain, offset = self.getScaling(colName, 
+                            generic.ARRAY_TYPE_PULSES)
+                    value = (value - offset) * gain
+                handle = self.fileHandle['DATA']['PULSES']
+                if colName not in handle:
+                    if self.scalingButNoDataWarning:
+                        msg = 'null set for column %s but no data written'
+                        msg = msg % colName
+                        self.controls.messageHandler(msg, 
+                            generic.MESSAGE_INFORMATION)
+                else:
+                    attrs = handle[colName].attrs
+                    attrs[NULL_NAME] = value
+
+            for colName in self.pointNullValues.keys():
+                value, scaled = self.pointNullValues[colName]
+                if scaled:
+                    gain, offset = self.getScaling(colName, 
+                            generic.ARRAY_TYPE_POINTS)
+                    value = (value - offset) * gain
+                handle = self.fileHandle['DATA']['POINTS']
+                if colName not in handle:
+                    if self.scalingButNoDataWarning:
+                        msg = 'null set for column %s but no data written'
+                        msg = msg % colName
+                        self.controls.messageHandler(msg, 
+                            generic.MESSAGE_INFORMATION)
+                else:
+                    attrs = handle[colName].attrs
+                    attrs[NULL_NAME] = value
+
+            for colName in self.waveFormNullValues.keys():
+                value, scaled = self.waveFormNullValues[colName]
+                if scaled:
+                    gain, offset = self.getScaling(colName, 
+                            generic.ARRAY_TYPE_WAVEFORMS)
+                    value = (value - offset) * gain
+                handle = self.fileHandle['DATA']['WAVEFORMS']
+                if colName not in handle:
+                    if self.scalingButNoDataWarning:
+                        msg = 'null set for column %s but no data written'
+                        msg = msg % colName
+                        self.controls.messageHandler(msg, 
+                            generic.MESSAGE_INFORMATION)
+                else:
+                    attrs = handle[colName].attrs
+                    attrs[NULL_NAME] = value
         
             # write the version information
             headerArray = numpy.array([SPDV4_VERSION_MAJOR, SPDV4_VERSION_MINOR], 
@@ -2390,6 +2449,79 @@ spatial index will be recomputed on the fly"""
         else:
             msg = 'Cannot find column %s' % colName
             raise generic.LiDARArrayColumnError(msg)
+
+    def setNullValue(self, colName, arrayType, value, scaled=True):
+        """
+        Sets the 'null' value for the given column. 
+
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+
+        We don't write anything out at this stage as the scaling, if
+        needed, mightn't be set at this stage. The work is done when the 
+        file is closed.
+        """
+        if arrayType == generic.ARRAY_TYPE_PULSES:
+            self.pulseNullValues[colName] = (value, scaled)
+        elif arrayType == generic.ARRAY_TYPE_POINTS:
+            self.pointNullValues[colName] = (value, scaled)
+        elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
+            self.waveFormNullValues[colName] = (value, scaled)
+        else:
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+
+    def getNullValue(self, colName, arrayType, scaled=True):
+        """
+        Get the 'null' value for the given column.
+
+        arrayType is one of the lidarprocessor.ARRAY_TYPE_* constants
+        """
+        handle = None
+        if arrayType == generic.ARRAY_TYPE_PULSES:
+            if colName in self.pulseNullValues:
+                value, scaledStored = self.pulseNullValues[colName]
+            else:
+                handle = self.fileHandle['DATA']['PULSES']
+        elif arrayType == generic.ARRAY_TYPE_POINTS:
+            if colName in self.pointNullValues:
+                value, scaledStored = self.pointNullValues[colName]
+            else:            
+                handle = self.fileHandle['DATA']['POINTS']
+        elif arrayType == generic.ARRAY_TYPE_WAVEFORMS:
+            if colName in self.waveFormNullValues:
+                value, scaledStored = self.waveFormNullValues[colName]
+            else:            
+                handle = self.fileHandle['DATA']['WAVEFORMS']
+        else:
+            raise generic.LiDARInvalidSetting('Unsupported array type')
+
+        if handle is None:
+            # value and scaledStored should be set
+            if scaled == scaledStored:
+                return value
+            else:
+                gain, offset = self.getScaling(colName, arrayType)
+                if scaled:
+                    # they requested scaled, but we stored unscaled
+                    return (value / gain) + offset
+                else:
+                    # they requested unscaled, but we stored scaled
+                    return (value - offset) * gain
+
+        else:
+            if colName in handle:
+                attrs = handle[colName].attrs
+                if NULL_NAME not in attrs:
+                    msg = 'Null value not set for column %s' % colName
+                    raise generic.LiDARArrayColumnError(msg)
+
+                if scaled:
+                    gain, offset = self.getScaling(colName, arrayType)
+                    return (attrs[NULL_NAME] / gain) + offset
+                else:
+                    return attrs[NULL_NAME]
+            else:
+                msg = 'Cannot find column %s' % colName
+                raise generic.LiDARArrayColumnError(msg)
             
     def getScalingColumns(self, arrayType):
         """

@@ -63,21 +63,27 @@ def getCmdargs():
             'max'), action='append', help="expected range for variables. " +
             "Will fail with an error if variables outside specified limit "+
             " or do not exist. (only for SPDV4 outputs)")
+    p.add_argument("--null", nargs=3, metavar=('type', 'varName', 'value'),
+            action='append', help="Set null value for named variable." +
+            " Can be given multiple times for different variables." +
+            " type should be one of [POINT|PULSE|WAVEFORM]. value is scaled."+
+            " (only for SPDV4 outputs)")
     p.add_argument("--binsize", "-b", type=float,
-        help="Bin size to use when processing spatially (only for LAS inputs)")
+            help="Bin size to use when processing spatially (only for LAS inputs)")
     p.add_argument("--buildpulses", default=False, action="store_true",
-        help="Build pulse data structure. Default is False (only for LAS inputs)")
+            help="Build pulse data structure. Default is False (only for LAS inputs)")
     p.add_argument("--pulseindex", default="FIRST_RETURN",
-        help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. " + 
+            help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. " + 
             "Default is FIRST_RETURN. (only for LAS inputs)")
     p.add_argument("--internalrotation", dest="internalrotation",
-        default=False, action="store_true", help="Use internal rotation data" +
-            " when processing .rxp files. Overrides --externalrotationfn (only for RIEGL inputs)")
+            default=False, action="store_true", help="Use internal rotation data" +
+            " when processing .rxp files. Overrides --externalrotationfn " + 
+            "(only for RIEGL inputs)")
     p.add_argument("--externalrotationfn", dest="externalrotationfn",
-        help="Input space delimited text file with external 4x4 rotation matrix" +
+            help="Input space delimited text file with external 4x4 rotation matrix" +
             " (only for RIEGL inputs)")
     p.add_argument("--magneticdeclination", dest="magneticdeclination",
-        default=0.0, type=float, help="Use given magnetic declination when" +
+            default=0.0, type=float, help="Use given magnetic declination when" +
             " processing .rxp files (only for RIEGL inputs)")
     p.add_argument("--coltype", nargs=2, metavar=('varName', 'dtype'),
             action='append', help="Set column name and types. Can be given"+
@@ -132,16 +138,18 @@ def run():
         las2spdv4.translate(info, cmdargs.input, cmdargs.output, 
                 cmdargs.range, cmdargs.spatial, cmdargs.extent, cmdargs.scaling, 
                 cmdargs.epsg, cmdargs.binsize, cmdargs.buildpulses, 
-                cmdargs.pulseindex)
+                cmdargs.pulseindex, cmdargs.null)
 
     elif inFormat == 'SPDV3' and cmdargs.format == 'SPDV4':
         spdv32spdv4.translate(info, cmdargs.input, cmdargs.output,
-                cmdargs.range, cmdargs.spatial, cmdargs.extent, cmdargs.scaling)
+                cmdargs.range, cmdargs.spatial, cmdargs.extent, cmdargs.scaling,
+                cmdargs.null)
 
     elif inFormat == 'riegl' and cmdargs.format == 'SPDV4':
         riegl2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.scaling, cmdargs.internalrotation, 
-                cmdargs.magneticdeclination, cmdargs.externalrotationfn)
+                cmdargs.magneticdeclination, cmdargs.externalrotationfn,
+                cmdargs.null)
 
     elif inFormat == 'SPDV4' and cmdargs.format == 'LAS':
         spdv42las.translate(info, cmdargs.input, cmdargs.output, 
@@ -176,7 +184,7 @@ def run():
 
         ascii2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.scaling, cmdargs.coltype, pulsecols,
-                classtrans)
+                classtrans, cmdargs.null)
 
     else:
         msg = 'Cannot convert between formats %s and %s' 

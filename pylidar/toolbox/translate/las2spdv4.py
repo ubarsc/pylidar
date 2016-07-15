@@ -43,6 +43,7 @@ def transFunc(data, otherArgs):
     # set scaling and write header
     if data.info.isFirstBlock():
         translatecommon.setOutputScaling(otherArgs.scaling, data.output1)
+        translatecommon.setOutputNull(otherArgs.nullVals, data.output1)
         if otherArgs.epsg is not None:
             sr = osr.SpatialReference()
             sr.ImportFromEPSG(otherArgs.epsg)
@@ -67,7 +68,7 @@ def transFunc(data, otherArgs):
         data.output1.setReceived(revc)
 
 def translate(info, infile, outfile, expectRange, spatial, extent, scaling, 
-        epsg, binSize, buildPulses, pulseIndex):
+        epsg, binSize, buildPulses, pulseIndex, nullVals):
     """
     Main function which does the work.
 
@@ -84,6 +85,7 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
     * buildPulses dictates whether to attempt to build the pulse structure
     * pulseIndex should be 'FIRST_RETURN' or 'LAST_RETURN' and determines how the
         pulses are indexed.
+    * nullVals is a list of tuples with (type, varname, value)
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scaling)
 
@@ -129,6 +131,7 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
     otherArgs.epsg = epsg
     otherArgs.expectRange = expectRange
     otherArgs.lasInfo = info
+    otherArgs.nullVals = nullVals
 
     if extent is not None:
         extent = [float(x) for x in extent]

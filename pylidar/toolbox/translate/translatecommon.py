@@ -31,6 +31,7 @@ PULSE_DEFAULT_SCALING = {'X_ORIGIN':[100.0, 0.0], 'Y_ORIGIN':[100.0, 0.0],
     'Z_ORIGIN':[100.0, 0.0], 'H_ORIGIN':[100.0, 0.0], 'AZIMUTH':[100.0, 0.0], 
     'ZENITH':[100.0, 0.0], 'X_IDX':[100.0, 0.0], 'Y_IDX':[100.0, 0.0],
     'AMPLITUDE_PULSE':[100.0, 0.0], 'WIDTH_PULSE':[100.0, 0.0]}
+"Default scaling for pulses"
 # add in the spdv4 types
 for key in PULSE_DEFAULT_SCALING.keys():
     dtype = spdv4.PULSE_FIELDS[key]
@@ -40,12 +41,14 @@ POINT_DEFAULT_SCALING = {'X':[100.0, 0.0], 'Y':[100.0, 0.0],
     'Z':[100.0, -100.0], 'HEIGHT':[100.0, -100.0], 'INTENSITY':[1.0, 0.0],
     'RANGE':[100.0, 0.0], 'AMPLITUDE_RETURN':[1.0, 0.0],
     'WIDTH_RETURN':[1.0, 0.0], 'RHO_APP':[10000.0, 0.0]}
+"default scaling for points"
 # add in the spdv4 types
 for key in POINT_DEFAULT_SCALING.keys():
     dtype = spdv4.POINT_FIELDS[key]
     POINT_DEFAULT_SCALING[key].append(dtype)
 
 WAVEFORM_DEFAULT_SCALING = {'RANGE_TO_WAVEFORM_START':[100.0, 0.0]}
+"default scaling for waveforms"
 # add in the spdv4 types
 for key in WAVEFORM_DEFAULT_SCALING.keys():
     dtype = spdv4.WAVEFORM_FIELDS[key]
@@ -54,6 +57,7 @@ for key in WAVEFORM_DEFAULT_SCALING.keys():
 DEFAULT_SCALING = {lidarprocessor.ARRAY_TYPE_PULSES : PULSE_DEFAULT_SCALING, 
     lidarprocessor.ARRAY_TYPE_POINTS : POINT_DEFAULT_SCALING, 
     lidarprocessor.ARRAY_TYPE_WAVEFORMS : WAVEFORM_DEFAULT_SCALING}
+"all the default scalings as a dictionary"
 
 HEADER = 'header'
 
@@ -64,13 +68,13 @@ NAME_TO_CODE_DICT = {POINT:lidarprocessor.ARRAY_TYPE_POINTS,
             PULSE:lidarprocessor.ARRAY_TYPE_PULSES,
             WAVEFORM:lidarprocessor.ARRAY_TYPE_WAVEFORMS}
 
-"String to numpy dtype dictionary"
 STRING_TO_DTYPE = {'INT8':numpy.int8, 'UINT8':numpy.uint8, 'INT16':numpy.int16,
     'UINT16':numpy.uint16, 'INT32':numpy.int32, 'UINT32':numpy.uint32,
     'INT64':numpy.int64, 'UINT64':numpy.uint64, 'FLOAT32':numpy.float32,
     'FLOAT64':numpy.float64}
-"Code that means: use the default type"
+"String to numpy dtype dictionary"
 DEFAULT_DTYPE_STR = 'DFLT'
+"Code that means: use the default type"
 
 def checkRange(expectRange, points, pulses, waveforms=None):
     """
@@ -149,6 +153,28 @@ def setOutputScaling(scalingDict, output):
                 gain, offset)
         output.setNativeDataType(field, 
                 lidarprocessor.ARRAY_TYPE_WAVEFORMS, dtype)
+
+def setOutputNull(nullVals, output):
+    """
+    Set the null values.
+
+    nullVals should be a list of (type, varname, value) tuples
+
+    Designed to be called from inside a lidarprocessor function so 
+    output should be an instance of :class:`pylidar.userclasses.LidarData`.
+    """
+    if nullVals is None:
+        return
+
+    for typeName, varName, value in nullVals:
+        value = float(value)
+
+        if typeName not in NAME_TO_CODE_DICT:
+            msg = 'unrecognised type %s' % typeName
+            raise generic.LiDARInvalidSetting(msg)
+        code = NAME_TO_CODE_DICT[typeName]
+
+        output.setNullValue(varName, code, value)
 
 def overRideDefaultScalings(scaling):
     """

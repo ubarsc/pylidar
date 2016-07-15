@@ -47,6 +47,7 @@ def transFunc(data, otherArgs):
     # work out scaling 
     if data.info.isFirstBlock():
         translatecommon.setOutputScaling(otherArgs.scaling, data.output1)
+        translatecommon.setOutputNull(otherArgs.nullVals, data.output1)
 
         # copy the index type accross - we can assume these values
         # are the same (at the moment)
@@ -63,7 +64,8 @@ def transFunc(data, otherArgs):
     data.output1.setReceived(revc)
     data.output1.setTransmitted(trans)
 
-def translate(info, infile, outfile, expectRange, spatial, extent, scaling):
+def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
+            nullVals):
     """
     Main function which does the work.
 
@@ -75,6 +77,7 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling):
     * extent is a tuple of values specifying the extent to work with. 
         xmin ymin xmax ymax
     * scaling is a list of tuples with (type, varname, gain, offset).
+    * nullVals is a list of tuples with (type, varname, value)
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scaling)
 
@@ -110,6 +113,7 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling):
     otherArgs = lidarprocessor.OtherArgs()
     otherArgs.scaling = scalingsDict
     otherArgs.expectRange = expectRange
+    otherArgs.nullVals = nullVals
     
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
             otherArgs=otherArgs)

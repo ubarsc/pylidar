@@ -49,6 +49,7 @@ def transFunc(data, otherArgs):
     # set scaling and write header
     if data.info.isFirstBlock():
         translatecommon.setOutputScaling(otherArgs.scaling, data.output1)
+        translatecommon.setOutputNull(otherArgs.nullVals, data.output1)
         rieglInfo = otherArgs.rieglInfo
 
         data.output1.setHeaderValue("PULSE_ANGULAR_SPACING_SCANLINE", 
@@ -86,7 +87,7 @@ def transFunc(data, otherArgs):
         data.output1.setReceived(recv)
 
 def translate(info, infile, outfile, expectRange, scalings, internalrotation, 
-        magneticdeclination, externalrotationfn):
+        magneticdeclination, externalrotationfn, nullVals):
     """
     Main function which does the work.
 
@@ -99,6 +100,7 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
     * if externalrotationfn is not None then then the external rotation matrix
         will be read from this file and applied to the data
     * magneticdeclination. If not 0, then this will be applied to the data
+    * nullVals is a list of tuples with (type, varname, value)
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scalings)
 
@@ -148,6 +150,8 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
     otherArgs.rotationMatrix = rotationMatrix
     # expected range of the data
     otherArgs.expectRange = expectRange
+    # null values
+    otherArgs.nullVals = nullVals
 
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')
