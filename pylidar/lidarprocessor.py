@@ -47,57 +47,93 @@ except ImportError:
     
 from . import userclasses
 
-"to be passed to ImageData and LidarData class constructors"
 READ = generic.READ
+"to be passed to ImageData and LidarData class constructors"
 UPDATE = generic.UPDATE
+"to be passed to ImageData and LidarData class constructors"
 CREATE = generic.CREATE
+"to be passed to ImageData and LidarData class constructors"
 
-"to be passed to Controls.setFootprint()"
 INTERSECTION = imageio.INTERSECTION
+"to be passed to Controls.setFootprint()"
 UNION = imageio.UNION
+"to be passed to Controls.setFootprint()"
 BOUNDS_FROM_REFERENCE = imageio.BOUNDS_FROM_REFERENCE
+"to be passed to Controls.setFootprint()"
 
+MESSAGE_WARNING = generic.MESSAGE_WARNING
 """
 to be passed to message handler function set with
 Controls.setMessageHandler
 """
-MESSAGE_WARNING = generic.MESSAGE_WARNING
 MESSAGE_INFORMATION = generic.MESSAGE_INFORMATION
+"""
+to be passed to message handler function set with
+Controls.setMessageHandler
+"""
 MESSAGE_DEBUG = generic.MESSAGE_DEBUG
+"""
+to be passed to message handler function set with
+Controls.setMessageHandler
+"""
 
-"Size of the default window size in bins"
 DEFAULT_WINDOW_SIZE = 200 # bins
+"Size of the default window size in bins"
 
+ARRAY_TYPE_POINTS = generic.ARRAY_TYPE_POINTS
 """
 For use in userclass.LidarData.translateFieldNames() and 
 LiDARFile.getTranslationDict()
 """
-ARRAY_TYPE_POINTS = generic.ARRAY_TYPE_POINTS
 ARRAY_TYPE_PULSES = generic.ARRAY_TYPE_PULSES
+"""
+For use in userclass.LidarData.translateFieldNames() and 
+LiDARFile.getTranslationDict()
+"""
 ARRAY_TYPE_WAVEFORMS = generic.ARRAY_TYPE_WAVEFORMS
+"""
+For use in userclass.LidarData.translateFieldNames() and 
+LiDARFile.getTranslationDict()
+"""
 
+CLASSIFICATION_CREATED = generic.CLASSIFICATION_CREATED
 """
 Classification codes from the LAS spec. Drivers perform
 automatic translation to/from their internal codes for
 recognised values.
 """
-CLASSIFICATION_CREATED = generic.CLASSIFICATION_CREATED
 CLASSIFICATION_UNCLASSIFIED = generic.CLASSIFICATION_UNCLASSIFIED
+"Classification codes from the LAS spec."
 CLASSIFICATION_GROUND = generic.CLASSIFICATION_GROUND
+"Classification codes from the LAS spec."
 CLASSIFICATION_LOWVEGE = generic.CLASSIFICATION_LOWVEGE
+"Classification codes from the LAS spec."
 CLASSIFICATION_MEDVEGE = generic.CLASSIFICATION_MEDVEGE
+"Classification codes from the LAS spec."
 CLASSIFICATION_HIGHVEGE = generic.CLASSIFICATION_HIGHVEGE
+"Classification codes from the LAS spec."
 CLASSIFICATION_BUILDING = generic.CLASSIFICATION_BUILDING
+"Classification codes from the LAS spec."
 CLASSIFICATION_LOWPOINT = generic.CLASSIFICATION_LOWPOINT
+"Classification codes from the LAS spec."
 CLASSIFICATION_HIGHPOINT = generic.CLASSIFICATION_HIGHPOINT
+"Classification codes from the LAS spec."
 CLASSIFICATION_WATER = generic.CLASSIFICATION_WATER
+"Classification codes from the LAS spec."
 CLASSIFICATION_RAIL = generic.CLASSIFICATION_RAIL
+"Classification codes from the LAS spec."
 CLASSIFICATION_ROAD = generic.CLASSIFICATION_ROAD
+"Classification codes from the LAS spec."
 CLASSIFICATION_BRIDGE = generic.CLASSIFICATION_BRIDGE
+"Classification codes from the LAS spec."
 CLASSIFICATION_WIREGUARD = generic.CLASSIFICATION_WIREGUARD
+"Classification codes from the LAS spec."
 CLASSIFICATION_WIRECOND = generic.CLASSIFICATION_WIRECOND
+"Classification codes from the LAS spec."
 CLASSIFICATION_TRANSTOWER = generic.CLASSIFICATION_TRANSTOWER
+"Classification codes from the LAS spec."
 CLASSIFICATION_INSULATOR = generic.CLASSIFICATION_INSULATOR
+"Classification codes from the LAS spec."
 
 def setDefaultDrivers():
     """

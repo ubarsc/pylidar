@@ -42,11 +42,11 @@ from . import generic
 from . import gridindexutils
 from . import h5space
 
-"driver options"
 WRITESUPPORTEDOPTIONS = ('SCALING_BUT_NO_DATA_WARNING',)
+"driver options"
 READSUPPORTEDOPTIONS = ()
+"driver options"
 
-"Header fields have defined type in SPDV4"
 HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'BANDWIDTHS' : numpy.float32, 'BIN_SIZE' : numpy.float32,
 'BLOCK_SIZE_POINT' : numpy.uint16, 'BLOCK_SIZE_PULSE' : numpy.uint16,
@@ -84,17 +84,18 @@ HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'HEIGHT_MIN' : numpy.float32, 'HEIGHT_MAX' : numpy.float32, 
 'ZENITH_MAX' : numpy.float64, 'ZENITH_MIN' : numpy.float64,
 'RGB_FIELD' : bytes}
+"Header fields have defined type in SPDV4"
 
 HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS', 'VERSION_SPD', 'VERSION_DATA', 'RGB_FIELD')
+"fields in the header that are actually arrays"
 
-"Note: PULSE_ID, NUMBER_OF_RETURNS and PTS_START_IDX always created by pylidar"
 PULSES_ESSENTIAL_FIELDS = ('X_IDX', 'Y_IDX')
-"RETURN_NUMBER always created by pylidar"
+"Note: PULSE_ID, NUMBER_OF_RETURNS and PTS_START_IDX always created by pylidar"
 POINTS_ESSENTIAL_FIELDS = ('X', 'Y', 'Z', 'CLASSIFICATION')
-"VERSION_SPD always created by pylidar"
+"RETURN_NUMBER always created by pylidar"
 HEADER_ESSENTIAL_FIELDS = ('SPATIAL_REFERENCE', 'VERSION_DATA')
+"VERSION_SPD always created by pylidar"
 
-"The following fields have defined type"
 PULSE_FIELDS = {'PULSE_ID' : numpy.uint64, 'TIMESTAMP' : numpy.uint64,
 'NUMBER_OF_RETURNS' : numpy.uint8, 'AZIMUTH' : numpy.uint32, 
 'ZENITH' : numpy.uint32, 'SOURCE_ID' : numpy.uint16, 
@@ -105,8 +106,8 @@ PULSE_FIELDS = {'PULSE_ID' : numpy.uint64, 'TIMESTAMP' : numpy.uint64,
 'Z_ORIGIN' : numpy.uint32, 'H_ORIGIN' : numpy.uint32, 'PULSE_FLAGS' : numpy.uint8,
 'AMPLITUDE_PULSE' : numpy.uint16, 'WIDTH_PULSE' : numpy.uint16, 
 'SCAN_ANGLE_RANK' : numpy.int16, 'PRISM_FACET' : numpy.uint8}
+"Thes fields have defined type"
 
-"The following fields have defined type"
 POINT_FIELDS = {'RANGE' : numpy.uint32, 'RETURN_NUMBER' : numpy.uint8,
 'X' : numpy.uint32, 'Y' : numpy.uint32, 'Z' : numpy.uint32, 
 'HEIGHT' : numpy.uint16, 'CLASSIFICATION' : numpy.uint8, 
@@ -115,8 +116,8 @@ POINT_FIELDS = {'RANGE' : numpy.uint32, 'RETURN_NUMBER' : numpy.uint8,
 'RED' : numpy.uint16, 'GREEN' : numpy.uint16, 'BLUE' : numpy.uint16, 
 'NIR' : numpy.uint16, 'RHO_APP' : numpy.uint32, 'DEVIATION' : numpy.uint16,
 'ECHO_TYPE' : numpy.uint16, 'POINT_WAVELENGTH_IDX' : numpy.uint8}
+"Thes fields have defined type"
 
-"The following fields have defined type"
 WAVEFORM_FIELDS = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : numpy.uint16,
 'NUMBER_OF_WAVEFORM_TRANSMITTED_BINS' : numpy.uint16, 
 'RANGE_TO_WAVEFORM_START' : numpy.uint32, 'RECEIVED_START_IDX' : numpy.uint64,
@@ -124,68 +125,94 @@ WAVEFORM_FIELDS = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : numpy.uint16,
 'WAVEFORM_FLAGS' : numpy.uint8, 'WFM_WAVELENGTH_IDX' : numpy.uint8, 
 'RECEIVE_WAVE_GAIN' : numpy.float32, 'RECEIVE_WAVE_OFFSET' :  numpy.float32,
 'TRANS_WAVE_GAIN' : numpy.float32, 'TRANS_WAVE_OFFSET' : numpy.float32}
+"Thes fields have defined type"
 
-"need scaling applied"
 PULSE_SCALED_FIELDS = ('AZIMUTH', 'ZENITH', 'X_IDX', 'Y_IDX', 
 'X_ORIGIN', 'Y_ORIGIN', 'Z_ORIGIN', 'H_ORIGIN', 'AMPLITUDE_PULSE', 
 'WIDTH_PULSE')
+"need scaling applied"
 POINT_SCALED_FIELDS = ('X', 'Y', 'Z', 'HEIGHT', 'RANGE', 'INTENSITY', 
 'AMPLITUDE_RETURN', 'WIDTH_RETURN')
+"need scaling applied"
 WAVEFORM_SCALED_FIELDS = ('RANGE_TO_WAVEFORM_START',)
+"need scaling applied"
 
 TRANSMITTED_DTYPE = numpy.uint32
+"dtype for transmitted array"
 RECEIVED_DTYPE = numpy.uint32
+"dtype for received array"
 
 GAIN_NAME = 'GAIN'
 OFFSET_NAME = 'OFFSET'
 
-"types of indexing in the file"
 SPDV4_INDEX_CARTESIAN = 1
+"types of indexing in the file"
 SPDV4_INDEX_SPHERICAL = 2
+"types of indexing in the file"
 SPDV4_INDEX_CYLINDRICAL = 3
+"types of indexing in the file"
 SPDV4_INDEX_POLAR = 4
+"types of indexing in the file"
 SPDV4_INDEX_SCAN = 5
+"types of indexing in the file"
 
-"pulse indexing methods"
 SPDV4_PULSE_INDEX_FIRST_RETURN = 0
+"pulse indexing methods"
 SPDV4_PULSE_INDEX_LAST_RETURN = 1
+"pulse indexing methods"
 SPDV4_PULSE_INDEX_START_WAVEFORM = 2
+"pulse indexing methods"
 SPDV4_PULSE_INDEX_END_WAVEFORM = 3
+"pulse indexing methods"
 SPDV4_PULSE_INDEX_ORIGIN = 4
+"pulse indexing methods"
 SPDV4_PULSE_INDEX_MAX_INTENSITY = 5
+"pulse indexing methods"
 SPDV4_PULSE_INDEX_GROUND = 6 # Reserved
+"pulse indexing methods"
 SPDV4_PULSE_INDEX_ZPLANE = 7 # Reserved
+"pulse indexing methods"
 
-"types of spatial indices"
 SPDV4_INDEXTYPE_SIMPLEGRID = 0
+"types of spatial indices"
 
-"types for the spatial index"
 SPDV4_SIMPLEGRID_COUNT_DTYPE = numpy.uint32
+"types for the spatial index"
 SPDV4_SIMPLEGRID_INDEX_DTYPE = numpy.uint64
+"types for the spatial index"
 
-"flags for POINT_FLAGS"
 SPDV4_POINT_FLAGS_IGNORE = 1
+"flags for POINT_FLAGS"
 SPDV4_POINT_FLAGS_OVERLAP = 2
+"flags for POINT_FLAGS"
 SPDV4_POINT_FLAGS_SYNTHETIC = 4
+"flags for POINT_FLAGS"
 SPDV4_POINT_FLAGS_KEY_POINT = 8
+"flags for POINT_FLAGS"
 SPDV4_POINT_FLAGS_WAVEFORM = 16
+"flags for POINT_FLAGS"
 
-"flags for PULSE_FLAGS"
 SPDV4_PULSE_FLAGS_IGNORE = 1
+"flags for PULSE_FLAGS"
 SPDV4_PULSE_FLAGS_OVERLAP = 2
+"flags for PULSE_FLAGS"
 SPDV4_PULSE_FLAGS_SCANLINE_DIRECTION = 4
+"flags for PULSE_FLAGS"
 SPDV4_PULSE_FLAGS_SCANLINE_EDGE = 8
+"flags for PULSE_FLAGS"
 
-"flags for WAVEFORM_FLAGS"
 SPDV4_WAVEFORM_FLAGS_IGNORE = 1
+"flags for WAVEFORM_FLAGS"
 SPDV4_WAVEFORM_FLAGS_SATURATION_FIXED = 2
+"flags for WAVEFORM_FLAGS"
 SPDV4_WAVEFORM_FLAGS_BASELINE_FIXED = 4
+"flags for WAVEFORM_FLAGS"
 
-"version"
 SPDV4_VERSION_MAJOR = 4
+"version - major"
 SPDV4_VERSION_MINOR = 0
+"version - minor"
 
-"for updating the header"
 POINTS_HEADER_UPDATE_DICT = {'X' : ('X_MIN', 'X_MAX'), 'Y' : ('Y_MIN', 'Y_MAX'),
         'Z' : ('Z_MIN', 'Z_MAX'), 'HEIGHT' : ('HEIGHT_MIN', 'HEIGHT_MAX')}
 PULSES_HEADER_UPDATE_DICT = {'ZENITH' : ('ZENITH_MIN', 'ZENITH_MAX'),
@@ -193,21 +220,34 @@ PULSES_HEADER_UPDATE_DICT = {'ZENITH' : ('ZENITH_MIN', 'ZENITH_MAX'),
         'SCANLINE_IDX' : ('SCANLINE_IDX_MIN', 'SCANLINE_IDX_MAX'),
         'SCANLINE' : ('SCANLINE_MIN', 'SCANLINE_MAX')}
 WAVEFORMS_HEADER_UPDATE_DICT = {'RANGE' : ('RANGE_MIN', 'RANGE_MAX')}
+"for updating the header"
 
-"classification codes"
 SPDV4_CLASSIFICATION_UNDEFINED = 0
+"classification codes"
 SPDV4_CLASSIFICATION_UNCLASSIFIED = 1
+"classification codes"
 SPDV4_CLASSIFICATION_CREATED = 2
+"classification codes"
 SPDV4_CLASSIFICATION_GROUND = 3
+"classification codes"
 SPDV4_CLASSIFICATION_LOWVEGE = 4
+"classification codes"
 SPDV4_CLASSIFICATION_MEDVEGE = 5
+"classification codes"
 SPDV4_CLASSIFICATION_HIGHVEGE = 6
+"classification codes"
 SPDV4_CLASSIFICATION_BUILDING = 7
+"classification codes"
 SPDV4_CLASSIFICATION_WATER = 8
+"classification codes"
 SPDV4_CLASSIFICATION_TRUNK = 9
+"classification codes"
 SPDV4_CLASSIFICATION_FOLIAGE = 10
+"classification codes"
 SPDV4_CLASSIFICATION_BRANCH = 11
+"classification codes"
 SPDV4_CLASSIFICATION_WALL = 12
+"classification codes"
 
 @jit
 def flatten3dWaveformData(wavedata, inmask, nrecv, flattened):

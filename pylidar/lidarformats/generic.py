@@ -23,62 +23,83 @@ import numpy
 from .. import basedriver
 from .. import __version__
 
-"access modes passed to driver constructor"
 READ = basedriver.READ
+"access modes passed to driver constructor"
 UPDATE = basedriver.UPDATE
+"access modes passed to driver constructor"
 CREATE = basedriver.CREATE
+"access modes passed to driver constructor"
 
-"""
-to be passed to message handler function 
-controls.messageHandler
-"""
 MESSAGE_WARNING = 0
+"to be passed to message handler function controls.messageHandler"
 MESSAGE_INFORMATION = 1
+"to be passed to message handler function controls.messageHandler"
 MESSAGE_DEBUG = 2
+"to be passed to message handler function controls.messageHandler"
 
-"'standard' fields that have different names for different formats"
 FIELD_POINTS_RETURN_NUMBER = 1
+"'standard' fields that have different names for different formats"
 FIELD_PULSES_TIMESTAMP = 2
+"'standard' fields that have different names for different formats"
 
+ARRAY_TYPE_POINTS = 0
 """
 For use in userclass.LidarData.translateFieldNames() and 
 LiDARFile.getTranslationDict()
 """
-ARRAY_TYPE_POINTS = 0
 ARRAY_TYPE_PULSES = 1
+"""
+For use in userclass.LidarData.translateFieldNames() and 
+LiDARFile.getTranslationDict()
+"""
 ARRAY_TYPE_WAVEFORMS = 2
+"""
+For use in userclass.LidarData.translateFieldNames() and 
+LiDARFile.getTranslationDict()
+"""
 
-"""
-Classifications from the LAS spec. See LiDARFile.recodeClassification
-"""
 CLASSIFICATION_CREATED = 0
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_UNCLASSIFIED = 1
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_GROUND = 2
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_LOWVEGE = 3
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_MEDVEGE = 4
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_HIGHVEGE = 5
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_BUILDING = 6
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_LOWPOINT = 7
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_HIGHPOINT = 8
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_WATER = 9
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_RAIL = 10
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_ROAD = 11
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_BRIDGE = 12
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_WIREGUARD = 13
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_WIRECOND = 14
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_TRANSTOWER = 15
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 CLASSIFICATION_INSULATOR = 16
+"Classifications from the LAS spec. See LiDARFile.recodeClassification"
 
-"""
-Codes to pass to LiDARFile.recodeClassification
-"""
 RECODE_TO_DRIVER = 0
+"Codes to pass to LiDARFile.recodeClassification"
 RECODE_TO_LAS = 1
+"Codes to pass to LiDARFile.recodeClassification"
 
-"""
-Name of column to treat as classification
-"""
 CLASSIFICATION_COLNAME = "CLASSIFICATION"
+"Name of column to treat as classification"
 
 # For writing to files when needed
 SOFTWARE_NAME = 'PyLidar %s' % __version__

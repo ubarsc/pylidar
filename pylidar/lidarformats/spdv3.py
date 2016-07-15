@@ -29,7 +29,6 @@ from . import generic
 from . import gridindexutils
 from . import h5space
 
-"so we can check the user has passed in expected array type"
 PULSE_DTYPE = numpy.dtype([('GPS_TIME', 'u8'), ('PULSE_ID', 'u8'), 
 ('X_ORIGIN', 'f8'), ('Y_ORIGIN', 'f8'), ('Z_ORIGIN', 'f4'), 
 ('H_ORIGIN', 'f4'), ('X_IDX', 'f8'), ('Y_IDX', 'f8'), ('AZIMUTH', 'f4'), 
@@ -43,6 +42,7 @@ PULSE_DTYPE = numpy.dtype([('GPS_TIME', 'u8'), ('PULSE_ID', 'u8'),
 ('RECEIVE_WAVE_OFFSET', 'f4'), ('TRANS_WAVE_GAIN', 'f4'), 
 ('TRANS_WAVE_OFFSET', 'f4'), ('PTS_START_IDX', 'u8'), 
 ('TRANSMITTED_START_IDX', 'u8'), ('RECEIVED_START_IDX', 'u8')])
+"so we can check the user has passed in expected array type"
 
 POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', 'f8'), 
 ('X', 'f8'), ('Y', 'f8'), ('Z', 'f4'), ('HEIGHT', 'f4'), ('RANGE', 'f4'), 
@@ -50,6 +50,7 @@ POINT_DTYPE = numpy.dtype([('RETURN_ID', 'u1'), ('GPS_TIME', 'f8'),
 ('GREEN', 'u2'), ('BLUE', 'u2'), ('CLASSIFICATION', 'u1'), 
 ('USER_FIELD', 'u4'), ('IGNORE', 'u1'), ('WAVE_PACKET_DESC_IDX', 'i2'), 
 ('WAVEFORM_OFFSET', 'u4')])
+"so we can check the user has passed in expected array type"
 
 HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'BANDWIDTHS' : numpy.float32, 'BIN_SIZE' : numpy.float32,
@@ -91,49 +92,74 @@ HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'X_MAX' : numpy.float64, 'X_MIN' : numpy.float64, 'Y_MAX' : numpy.float64,
 'Y_MIN' : numpy.float64, 'ZENITH_MAX' : numpy.float64, 
 'ZENITH_MIN' : numpy.float64, 'Z_MAX' : numpy.float64, 'Z_MIN' : numpy.float64}
+"Header fields and their types"
 
-"header fields that are actually arrays"
 HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS')
+"header fields that are actually arrays"
 
-"types for the spatial index"
 SPDV3_SI_COUNT_DTYPE = numpy.uint32
+"types for the spatial index"
 SPDV3_SI_INDEX_DTYPE = numpy.uint64
+"types for the spatial index"
 
-"types of indexing in the file"
 SPDV3_INDEX_CARTESIAN = 1
+"types of indexing in the file"
 SPDV3_INDEX_SPHERICAL = 2
+"types of indexing in the file"
 SPDV3_INDEX_CYLINDRICAL = 3
+"types of indexing in the file"
 SPDV3_INDEX_POLAR = 4
+"types of indexing in the file"
 SPDV3_INDEX_SCAN = 5
+"types of indexing in the file"
 
-"classification codes"
 SPDV3_CLASSIFICATION_UNDEFINED = 0
+"classification codes"
 SPDV3_CLASSIFICATION_UNCLASSIFIED = 1
+"classification codes"
 SPDV3_CLASSIFICATION_CREATED = 2
+"classification codes"
 SPDV3_CLASSIFICATION_GROUND = 3
+"classification codes"
 SPDV3_CLASSIFICATION_LOWVEGE = 4
+"classification codes"
 SPDV3_CLASSIFICATION_MEDVEGE = 5
+"classification codes"
 SPDV3_CLASSIFICATION_HIGHVEGE = 6
+"classification codes"
 SPDV3_CLASSIFICATION_BUILDING = 7
+"classification codes"
 SPDV3_CLASSIFICATION_WATER = 8
+"classification codes"
 SPDV3_CLASSIFICATION_TRUNK = 9
+"classification codes"
 SPDV3_CLASSIFICATION_FOLIAGE = 10
+"classification codes"
 SPDV3_CLASSIFICATION_BRANCH = 11
+"classification codes"
 SPDV3_CLASSIFICATION_WALL = 12
+"classification codes"
 SPDV3_CLASSIFICATION_ALLCLASSES = 100
+"classification codes"
 SPDV3_CLASSIFICATION_ALLCLASSES_TOP = 101
+"classification codes"
 SPDV3_CLASSIFICATION_VEGETOP = 102
+"classification codes"
 SPDV3_CLASSIFICATION_VEGE = 103
+"classification codes"
 SPDV3_CLASSIFICATION_NOTGROUND = 104
+"classification codes"
 SPDV3_CLASSIFICATION_KEYGRDPTS = 105
+"classification codes"
 
-# for updating the header
 POINTS_HEADER_UPDATE_DICT = {'X' : ('X_MIN', 'X_MAX'), 'Y' : ('Y_MIN', 'Y_MAX'),
         'Z' : ('Z_MIN', 'Z_MAX'), 'RANGE' : ('RANGE_MIN', 'RANGE_MAX')}
+"for updating the header"
 PULSES_HEADER_UPDATE_DICT = {'ZENITH' : ('ZENITH_MIN', 'ZENITH_MAX'),
         'AZIMUTH' : ('AZIMUTH_MIN', 'AZIMUTH_MAX'), 
         'SCANLINE_IDX' : ('SCANLINE_IDX_MIN', 'SCANLINE_IDX_MAX'),
         'SCANLINE' : ('SCANLINE_MIN', 'SCANLINE_MAX')}
+"for updating the header"
 
 class SPDV3File(generic.LiDARFile):
     """

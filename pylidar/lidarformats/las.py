@@ -112,24 +112,28 @@ try:
     LAS_WAVEFORM_TABLE_FIELDS = list(_las.getExpectedWaveformFieldsForDescr())
 except ImportError:
     READSUPPORTEDOPTIONS = None
+    "driver options"
     WRITESUPPORTEDOPTIONS = None
+    "driver options"
     FIRST_RETURN = None
+    "for indexing pulses"
     LAST_RETURN = None
+    "for indexing pulses"
     LAS_WAVEFORM_TABLE_FIELDS = []
+    "for building waveforms - need to build unique table of these"
     
 from . import gridindexutils
 
-
-
-# types for the spatial index
 LAS_SIMPLEGRID_COUNT_DTYPE = numpy.uint32
+"types for the spatial index"
 LAS_SIMPLEGRID_INDEX_DTYPE = numpy.uint64
+"types for the spatial index"
 
-# for new files
 today = datetime.date.today()
 DEFAULT_HEADER = {"GENERATING_SOFTWARE" : generic.SOFTWARE_NAME, 
 "FILE_CREATION_DAY" : today.toordinal() - datetime.date(today.year, 1, 1).toordinal(), 
 "FILE_CREATION_YEAR" : today.year}
+"for new files"
 
 def isLasFile(fname):
     """

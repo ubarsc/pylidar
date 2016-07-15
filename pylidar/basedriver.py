@@ -24,10 +24,12 @@ to use for reading or writing the current block.
 
 from __future__ import print_function, division
 
-# access modes passed to driver constructor
 READ = 0
+"access modes passed to driver constructor"
 UPDATE = 1
+"access modes passed to driver constructor"
 CREATE = 2
+"access modes passed to driver constructor"
 
 class Extent(object):
     """

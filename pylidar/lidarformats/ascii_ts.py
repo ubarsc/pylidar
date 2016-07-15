@@ -57,8 +57,11 @@ from . import generic
 from . import gridindexutils
 
 SUPPORTEDOPTIONS = ('COL_TYPES', 'PULSE_COLS', 'CLASSIFICATION_CODES')
+"driver options"
 COMPULSARYOPTIONS = ('COL_TYPES', 'PULSE_COLS')
+"necessary driver options"
 SEPARATOR = ','
+"file seperator"
 
 class ASCIITSFile(generic.LiDARFile):
     """
