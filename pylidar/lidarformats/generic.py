@@ -513,7 +513,7 @@ class LiDARFile(basedriver.Driver):
                 for col in colNames:
                     if col not in existingNames:
                         msg = 'column %s does not exist for this format' % col
-                        raise generic.LiDARArrayColumnError(msg)
+                        raise LiDARArrayColumnError(msg)
                 
                 # have to do a copy to avoid numpy warning
                 # that updating returned array will break in future
