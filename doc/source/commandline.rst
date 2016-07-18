@@ -104,6 +104,32 @@ You may also need to translate from internal codes used the CLASSIFICATION colum
 Use the --classtrans option for this (see "pylidar_translate -h" for more information)::
 
     --classtrans 5 INSULATOR --classtrans 6 HIGHVEGE
+
+--------------------------------------------------------
+Creating a raster from LiDAR data with pylidar_rasterize
+--------------------------------------------------------
+
+The pylidar_rasterize command takes one or more input LiDAR files and creates a raster
+from it. You need to specify the attribute name(s) to use. An output layer is created for 
+each attribute. My default a minimum function is used to turn the data for a bin into a raster
+value, but other functions can be used as long as they accept a 
+`Masked Array <http://docs.scipy.org/doc/numpy/reference/maskedarray.html>`_ as the first
+parameter and the "axis" and "fill_value" parameters. Functions in the "numpy.ma" module
+are a good starting point.
+
+This example creates a raster using the minimum 'Z'
+values in a raster::
+
+    pylidar_rasterize -i data.spd -o minz.img -a Z
+
+Multiple attributes can be specified, or another function::
+
+    pylidar_rasterize -i data.spd -o maxz.img -a Z X -f numpy.ma.max
+
+By default, point data is processed, but this can be changed to pulses with the --type
+option::
+
+    pylidar_rasterize -i data.spd -o minx.img -a X_IDX -t PULSE
     
 -----------------------------------------------
 Getting Information on a File with pylidar_info
