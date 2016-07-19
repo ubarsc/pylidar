@@ -145,6 +145,28 @@ def addLasDriver(extModules, cxxFlags):
         print('Las library not found.')
         print('If installed set $LASTOOLS_ROOT to the install location of lastools https://github.com/LAStools/LAStools')
 
+
+def addASCIIDriver(extModules, cxxFlags):
+    """
+    Decides if the ASCII driver is to be build. If so
+    adds the Extension class to extModules.
+    """
+    if 'ZLIB_ROOT' in os.environ:
+        print('Building ASCII Extension...')
+        zlibRoot = os.environ['ZLIB_ROOT']
+        asciiModule = Extension(name='pylidar.lidarformats._ascii',
+            sources=['src/ascii.cpp', 'src/pylidar.c'],
+            include_dirs=[os.path.join(zlibRoot, 'include')],
+            extra_compile_args=cxxFlags,
+            define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
+            libraries=['z'],
+            library_dirs=[os.path.join(zlibRoot, 'lib')])
+
+        extModules.append(asciiModule)
+    else:
+        print('zlib library not found.')
+        print('If installed set $ZLIB_ROOT to the install location of zlib')
+
 # get any C++ flags
 cxxFlags = getExtraCXXFlags()
 # work out if we need to build any of the C/C++ extension
@@ -153,6 +175,7 @@ externalModules = []
 if withExtensions:
     addRieglDriver(externalModules, cxxFlags)
     addLasDriver(externalModules, cxxFlags)
+    addASCIIDriver(externalModules, cxxFlags)
 
 if NO_INSTALL_CMDLINE:
     scriptList = None
