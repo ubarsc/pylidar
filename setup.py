@@ -33,6 +33,9 @@ except ImportError:
 
 import pylidar
 
+# use the latest numpy API
+NUMPY_MACROS = ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')
+
 # Are we installing the command line scripts?
 # this is an experimental option for users who are
 # using the Python entry point feature of setuptools and Conda instead
@@ -75,7 +78,7 @@ def addRieglDriver(extModules, cxxFlags):
         libs = rivlibs + riwavelibs
         
         defines = getRieglWaveLibVersion(riwavelibRoot, riwavelibs[0])
-        defines.extend([('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')])
+        defines.extend([NUMPY_MACROS])
         
         rieglModule = Extension(name='pylidar.lidarformats._riegl', 
                 define_macros=defines,
@@ -136,7 +139,7 @@ def addLasDriver(extModules, cxxFlags):
                 sources=['src/las.cpp', 'src/pylidar.c'],
                 include_dirs=[os.path.join(lastoolsRoot, 'include')],
                 extra_compile_args=cxxFlags,
-                define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
+                define_macros = [NUMPY_MACROS],
                 libraries=['laslib'],
                 library_dirs=[os.path.join(lastoolsRoot, 'lib')])
                 
@@ -151,21 +154,32 @@ def addASCIIDriver(extModules, cxxFlags):
     Decides if the ASCII driver is to be build. If so
     adds the Extension class to extModules.
     """
+    print('Building ASCII Extension...')
+    includeDirs = None
+    libs = None
+    libraryDirs = None
+    defineMacros = [NUMPY_MACROS]
     if 'ZLIB_ROOT' in os.environ:
-        print('Building ASCII Extension...')
+        # build for zlib
         zlibRoot = os.environ['ZLIB_ROOT']
-        asciiModule = Extension(name='pylidar.lidarformats._ascii',
-            sources=['src/ascii.cpp', 'src/pylidar.c'],
-            include_dirs=[os.path.join(zlibRoot, 'include')],
-            extra_compile_args=cxxFlags,
-            define_macros = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
-            libraries=['z'],
-            library_dirs=[os.path.join(zlibRoot, 'lib')])
-
-        extModules.append(asciiModule)
+        includeDirs = [os.path.join(zlibRoot, 'include')]
+        libs = ['z']
+        libraryDirs = [os.path.join(zlibRoot, 'lib')]
+        defineMacros.append(("HAVE_ZLIB", "1"))
     else:
         print('zlib library not found.')
         print('If installed set $ZLIB_ROOT to the install location of zlib')
+        print("gzip compressed files won't be read")
+
+    asciiModule = Extension(name='pylidar.lidarformats._ascii',
+        sources=['src/ascii.cpp', 'src/pylidar.c'],
+        include_dirs=includeDirs,
+        extra_compile_args=cxxFlags,
+        define_macros=defineMacros,
+        libraries=libs,
+        library_dirs=libraryDirs)
+
+    extModules.append(asciiModule)
 
 # get any C++ flags
 cxxFlags = getExtraCXXFlags()

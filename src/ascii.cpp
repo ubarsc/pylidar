@@ -21,15 +21,21 @@
  */
 
 #include <stdio.h>
+#include <ctype.h>
+#include <new>
 #include <Python.h>
 #include "numpy/arrayobject.h"
 #include "pylvector.h"
 
-#include "zlib.h"
+#ifdef HAVE_ZLIB
+    #include "zlib.h"
+#endif
 
 // for CVector
 static const int nGrowBy = 1000;
 static const int nInitSize = 40000;
+
+static const int nMaxLineSize = 8192;
 
 /* An exception object for this module */
 /* created in the init function */
@@ -45,9 +51,10 @@ struct ASCIIState
 static struct ASCIIState _state;
 #endif
 
-// file compression types - currently only gzip
+// file compression types
 #define ASCII_UNKNOWN 0
-#define ASCII_GZIP 1
+#define ASCII_UNCOMPRESSED 1
+#define ASCII_GZIP 2
 
 static PyObject *ascii_getFileType(PyObject *self, PyObject *args)
 {
@@ -56,6 +63,16 @@ static PyObject *ascii_getFileType(PyObject *self, PyObject *args)
         return NULL;
 
     int nLen = strlen(pszFileName);
+    int i = nLen - 1;
+    while( ( i >= 0) && (pszFileName[i] != '.' ) )
+        i--;
+
+    // no ext
+    if( i < 0 )
+        i = nLen;
+
+    const char *pszLastExt = &pszFileName[i];
+
     int nType = ASCII_UNKNOWN;
     FILE *pFH = fopen(pszFileName, "rb");
     if( pFH == NULL )
@@ -64,25 +81,38 @@ static PyObject *ascii_getFileType(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    if( ( nLen >= 3 ) && (pszFileName[nLen-1] == 'z') && (pszFileName[nLen-2] == 'g') &&
-            (pszFileName[nLen-3] == '.') )
+    unsigned char aData[2];
+    // read the first 2 bytes and confirm gzip header
+    if( fread(aData, 1, sizeof(aData), pFH) != sizeof(aData) )
     {
-        unsigned char aData[2];
-        // read the first 2 bytes and confirm gzip header
-        if( fread(aData, 1, sizeof(aData), pFH) != sizeof(aData) )
-        {
-            PyErr_Format(GETSTATE(self)->error, "Cannot read file: %s", pszFileName);
-            fclose(pFH);
-            return NULL;
-        }
+        PyErr_Format(GETSTATE(self)->error, "Cannot read file: %s", pszFileName);
+        fclose(pFH);
+        return NULL;
+    }
+    fclose(pFH);
 
+    // gzip?
+    if( ( nLen >= 3 ) && (strcmp(pszLastExt, ".gz") == 0) )
+    {
+        // check for gzip header
         if( ( aData[0] == 0x1f ) && ( aData[1] == 0x8b ) )
         {
             nType = ASCII_GZIP;
         }
     }
 
-    fclose(pFH);
+    // not gzip. Try uncompressed
+    if( (nType == ASCII_UNKNOWN ) && ( nLen >= 4 ) && ((strcmp(pszLastExt, ".dat") == 0 ) ||
+            (strcmp(pszLastExt, ".csv") == 0 ) ) )
+    {
+        // just check first char is a digit
+        if( isdigit(aData[0]) )
+        {
+            nType = ASCII_UNCOMPRESSED;
+        }
+    }
+
+    // insert other tests here
 
     if( nType == ASCII_UNKNOWN )
     {
@@ -99,7 +129,6 @@ static PyMethodDef module_methods[] = {
         "Determine the file type, raises exception if not understood"},
     {NULL}  /* Sentinel */
 };
-
 
 #if PY_MAJOR_VERSION >= 3
 static int ascii_traverse(PyObject *m, visitproc visit, void *arg) 
@@ -131,51 +160,210 @@ static struct PyModuleDef moduledef = {
 typedef struct 
 {
     PyObject_HEAD
+
+    // one of these will be non-null
+#ifdef HAVE_ZLIB
     gzFile  gz_file;
+#endif
+    FILE    *unc_file; // uncompressed
+
     uint64_t nPulsesRead;
+
+    int nPulseFields;
+    SpylidarFieldDefn *pPulseDefn;
+    int *pPulseLineIdxs;
+
+    int nPointFields;
+    SpylidarFieldDefn *pPointDefn;
+    int *pPointLineIdxs;
+
 } PyASCIIReader;
+
+void FreeDefn(SpylidarFieldDefn *pDefn, int nFields)
+{
+    for( int i = 0; i < nFields; i++ )
+    {
+        if( pDefn[i].pszName != NULL )
+            free((void*)pDefn[i].pszName);
+    }
+    free(pDefn);
+}
+
+// pList is a list of (name, dtype, idx) tuples
+// pnFields will be set to the count of fields (nPulseFields/nPointFields)
+// ppnIdxs will be set to an array of idxs (pPulseLineIdxs/pPointLineIdxs)
+SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppnIdxs,
+        PyObject *error)
+{
+    if( !PySequence_Check(pList) )
+    {
+        PyErr_SetString(error, "Parameter is not a sequence");
+        return NULL;
+    }
+
+    Py_ssize_t nSize = PySequence_Size(pList);
+    // create Defn
+    SpylidarFieldDefn *pDefn = (SpylidarFieldDefn*)calloc(nSize, sizeof(SpylidarFieldDefn));
+    // idxs
+    *ppnIdxs = (int*)calloc(nSize, sizeof(int));
+
+    int nOffset = 0;
+    for( Py_ssize_t i = 0; i < nSize; i++ )
+    {
+        PyObject *pElem = PySequence_GetItem(pList, i);
+        if( !PySequence_Check(pElem) || ( PySequence_Size(pElem) != 3 ) )
+        {
+            PyErr_SetString(error, "Each element must be a 3 element sequence");
+            FreeDefn(pDefn, nSize);
+            free(*ppnIdxs);
+            *ppnIdxs = NULL;
+            return NULL;
+        }
+
+        PyObject *pName = PySequence_GetItem(pElem, 0);
+#if PY_MAJOR_VERSION >= 3
+        if( !PyUnicode_Check(pName) )
+#else
+        if( !PyString_Check(pName ) )
+#endif
+        {
+            PyErr_SetString(error, "First element must be string");
+            FreeDefn(pDefn, nSize);
+            free(*ppnIdxs);
+            *ppnIdxs = NULL;
+            return NULL;
+        }
+
+#if PY_MAJOR_VERSION >= 3
+        PyObject *bytesKey = PyUnicode_AsEncodedString(pName, NULL, NULL);
+        pDefn[i].pszName = strdup(PyBytes_AsString(bytesKey));
+        Py_DECREF(bytesKey);
+#else
+        pDefn[i].pszName = strdup(PyString_AsString(pName));
+#endif
+
+        PyObject *pNumpyDType = PySequence_GetItem(pElem, 1);
+        // we can't actually do much with numpy.uint16 etc
+        // which is what is passed in. Turn into numpy descr for more info
+        PyArray_Descr *pDescr = NULL;
+        if( !PyArray_DescrConverter(pNumpyDType, &pDescr) )
+        {
+            PyErr_SetString(error, "Couldn't convert 2nd element type to numpy Descr");
+            FreeDefn(pDefn, nSize);
+            free(*ppnIdxs);
+            *ppnIdxs = NULL;
+            return NULL;
+        }
+
+        pDefn[i].cKind = pDescr->kind;
+        pDefn[i].nSize = pDescr->elsize;
+        pDefn[i].nOffset = nOffset;
+        nOffset += pDescr->elsize;
+        // do nStructTotalSize last once we have all the sizes
+
+        Py_DECREF(pDescr);
+
+        // now for the idxs
+        PyObject *pIdx = PySequence_GetItem(pElem, 2);
+        if( !PyLong_Check(pIdx) )
+        {
+            PyErr_SetString(error, "3rd element must be int");
+            FreeDefn(pDefn, nSize);
+            free(*ppnIdxs);
+            *ppnIdxs = NULL;
+            return NULL;
+        }
+
+        (*ppnIdxs)[i] = PyLong_AsLong(pIdx);
+    }
+
+    // now do nStructTotalSize
+    for( Py_ssize_t i = 0; i < nSize; i++ )
+    {
+        pDefn[i].nStructTotalSize = nOffset;
+    }
+
+    *pnFields = nSize;
+    return pDefn;
+}
 
 /* init method - open file */
 static int 
 PyASCIIReader_init(PyASCIIReader *self, PyObject *args, PyObject *kwds)
 {
-const char *pszFname = NULL;
-int nType;
+    const char *pszFname = NULL;
+    int nType;
+    PyObject *pPulseDTypeList, *pPointDTypeList;
 
-    if( !PyArg_ParseTuple(args, "si", &pszFname, &nType ) )
+    if( !PyArg_ParseTuple(args, "siOO", &pszFname, &nType, &pPulseDTypeList,
+                &pPointDTypeList ) )
     {
         return -1;
     }
+
+    PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+    // best way I could find for obtaining module reference
+    // from inside a class method. Not needed for Python < 3.
+    m = PyState_FindModule(&moduledef);
+#endif
+    PyObject *error = GETSTATE(m)->error;
 
     // nType should come from getFileType()
-    if( nType != ASCII_GZIP )
-    {
-        // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
+#ifdef HAVE_ZLIB
+    self->gz_file = NULL;
 #endif
-        PyErr_SetString(GETSTATE(m)->error, "ASCII Compression type not supported");
-        return -1;
-    }
+    self->unc_file = NULL;
 
-    self->gz_file = gzopen(pszFname, "rb");
-    if( self->gz_file == NULL )
+    if( nType == ASCII_GZIP )
     {
-        // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
+#ifdef HAVE_ZLIB
+        self->gz_file = gzopen(pszFname, "rb");
+        if( self->gz_file == NULL )
+        {
+            PyErr_SetString(error, "Unable to open file");
+            return -1;
+        }
+#else
+        PyErr_SetString(error, "GZIP files need zlib library. ZLIB_ROOT environment variable should be set when building pylidar\n");
+        return -1;
 #endif
-        PyErr_SetString(GETSTATE(m)->error, "Unable to open file");
+    }
+    else if( nType == ASCII_UNCOMPRESSED )
+    {
+        self->unc_file = fopen(pszFname, "r");
+        if( self->unc_file == NULL )
+        {
+            PyErr_SetString(error, "Unable to open file");
+            return -1;
+        }
+    }
+    else
+    {
+        PyErr_SetString(error, "type parameter not understood. Should be that returned from getFileType()");
         return -1;
     }
 
     self->nPulsesRead = 0;
+    self->pPulseLineIdxs = NULL;
+    self->pPointLineIdxs = NULL;
+
+    // create our definitions
+    self->pPulseDefn = DTypeListToFieldDef(pPulseDTypeList, &self->nPulseFields, 
+            &self->pPulseLineIdxs, error);
+    if( self->pPulseDefn == NULL )
+    {
+        // error should be set
+        return -1;
+    }
+
+    self->pPointDefn = DTypeListToFieldDef(pPointDTypeList, &self->nPointFields, 
+            &self->pPointLineIdxs, error);
+    if( self->pPointDefn == NULL )
+    {
+        // error should be set
+        return -1;
+    }
 
     return 0;
 }
@@ -184,11 +372,90 @@ int nType;
 static void 
 PyASCIIReader_dealloc(PyASCIIReader *self)
 {
+#ifdef HAVE_ZLIB
     if( self->gz_file != NULL )
     {
         gzclose(self->gz_file);
     }
+#endif
+    if( self->unc_file != NULL )
+    {
+        fclose(self->unc_file);
+    }
+    if( self->pPulseDefn != NULL )
+    {
+        FreeDefn( self->pPulseDefn, self->nPulseFields);
+    }
+    if( self->pPointDefn != NULL )
+    {
+        FreeDefn( self->pPointDefn, self->nPointFields);
+    }
+    if( self->pPulseLineIdxs != NULL )
+    {
+        free(self->pPulseLineIdxs);
+    }
+    if( self->pPointLineIdxs != NULL )
+    {
+        free(self->pPointLineIdxs);
+    }
 }
+
+class CReadState
+{
+public:
+    CReadState()
+    {
+        m_pszBuffer1 = (char*)malloc(nMaxLineSize * sizeof(char));
+        if( m_pszBuffer1 == NULL )
+        {
+            throw std::bad_alloc();
+        }
+        m_pszBuffer2 = (char*)malloc(nMaxLineSize * sizeof(char));
+        if( m_pszBuffer2 == NULL )
+        {
+            free(m_pszBuffer1);
+            throw std::bad_alloc();
+        }
+        m_pszCurrentLine = m_pszBuffer1;
+        m_pszLastLine = m_pszBuffer2;
+    }
+    ~CReadState()
+    {
+        free(m_pszBuffer1);
+        free(m_pszBuffer2);
+    }
+
+    bool getNewLine(PyASCIIReader *self)
+    {
+        // read into last line then clobber
+#ifdef HAVE_ZLIB
+        if( self->gz_file != NULL )
+        {
+            if( gzgets(self->gz_file, m_pszLastLine, nMaxLineSize) == NULL)
+            {
+                return false;
+            }
+        }
+#endif
+        if( self->unc_file != NULL )
+        {
+            if( fgets(m_pszLastLine, nMaxLineSize, self->unc_file) == NULL)
+            {
+                return false;
+            }
+        }
+
+        char *pszOldCurrent = m_pszCurrentLine;
+        m_pszCurrentLine = m_pszLastLine;
+        m_pszLastLine = pszOldCurrent;
+    }
+
+private:
+    char *m_pszBuffer1;
+    char *m_pszBuffer2;
+    char *m_pszCurrentLine;
+    char *m_pszLastLine;
+};
 
 static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
 {
@@ -299,7 +566,7 @@ init_ascii(void)
 #endif
 
     Py_INCREF(&PyASCIIReaderType);
-    PyModule_AddObject(pModule, "ASCIIFileRead", (PyObject *)&PyASCIIReaderType);
+    PyModule_AddObject(pModule, "Reader", (PyObject *)&PyASCIIReaderType);
 
 #if PY_MAJOR_VERSION >= 3
     return pModule;
