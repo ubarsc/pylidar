@@ -21,6 +21,8 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
 #include <new>
 #include <Python.h>
@@ -105,8 +107,8 @@ static PyObject *ascii_getFileType(PyObject *self, PyObject *args)
     if( (nType == ASCII_UNKNOWN ) && ( nLen >= 4 ) && ((strcmp(pszLastExt, ".dat") == 0 ) ||
             (strcmp(pszLastExt, ".csv") == 0 ) ) )
     {
-        // just check first char is a digit
-        if( isdigit(aData[0]) )
+        // just check first char is a digit or a space
+        if( (aData[0] == ' ') || isdigit(aData[0]) )
         {
             nType = ASCII_UNCOMPRESSED;
         }
@@ -167,7 +169,9 @@ typedef struct
 #endif
     FILE    *unc_file; // uncompressed
 
-    uint64_t nPulsesRead;
+    Py_ssize_t nPulsesRead;
+    bool bFinished;
+    bool bTimeSequential;
 
     int nPulseFields;
     SpylidarFieldDefn *pPulseDefn;
@@ -292,11 +296,11 @@ static int
 PyASCIIReader_init(PyASCIIReader *self, PyObject *args, PyObject *kwds)
 {
     const char *pszFname = NULL;
-    int nType;
+    int nType, nTimeSequential;
     PyObject *pPulseDTypeList, *pPointDTypeList;
 
-    if( !PyArg_ParseTuple(args, "siOO", &pszFname, &nType, &pPulseDTypeList,
-                &pPointDTypeList ) )
+    if( !PyArg_ParseTuple(args, "siOOi", &pszFname, &nType, &pPulseDTypeList,
+                &pPointDTypeList, &nTimeSequential ) )
     {
         return -1;
     }
@@ -345,10 +349,16 @@ PyASCIIReader_init(PyASCIIReader *self, PyObject *args, PyObject *kwds)
     }
 
     self->nPulsesRead = 0;
+    self->bFinished = false;
+    if( nTimeSequential )
+        self->bTimeSequential = true;
+    else
+        self->bTimeSequential = false;
     self->pPulseLineIdxs = NULL;
     self->pPointLineIdxs = NULL;
 
     // create our definitions
+
     self->pPulseDefn = DTypeListToFieldDef(pPulseDTypeList, &self->nPulseFields, 
             &self->pPulseLineIdxs, error);
     if( self->pPulseDefn == NULL )
@@ -403,31 +413,50 @@ PyASCIIReader_dealloc(PyASCIIReader *self)
 class CReadState
 {
 public:
-    CReadState()
+    CReadState(int nFields)
     {
-        m_pszBuffer1 = (char*)malloc(nMaxLineSize * sizeof(char));
-        if( m_pszBuffer1 == NULL )
+        m_bFirst = true;
+        m_nFields = nFields;
+        m_pszCurrentLine = (char*)malloc(nMaxLineSize * sizeof(char));
+        if( m_pszCurrentLine == NULL )
         {
             throw std::bad_alloc();
         }
-        m_pszBuffer2 = (char*)malloc(nMaxLineSize * sizeof(char));
-        if( m_pszBuffer2 == NULL )
+        m_pszLastLine = (char*)malloc(nMaxLineSize * sizeof(char));
+        if( m_pszLastLine == NULL )
         {
-            free(m_pszBuffer1);
+            free(m_pszCurrentLine);
             throw std::bad_alloc();
         }
-        m_pszCurrentLine = m_pszBuffer1;
-        m_pszLastLine = m_pszBuffer2;
+
+        m_pnCurrentColIdxs = (int*)malloc(nFields * sizeof(int));
+        if( m_pnCurrentColIdxs == NULL )
+        {
+            free(m_pszCurrentLine);
+            free(m_pszLastLine);
+            throw std::bad_alloc();
+        }
+        m_pnLastColIdxs = (int*)malloc(nFields * sizeof(int));
+        if( m_pnLastColIdxs == NULL )
+        {
+            free(m_pszCurrentLine);
+            free(m_pszLastLine);
+            free(m_pnCurrentColIdxs);
+            throw std::bad_alloc();
+        }
     }
     ~CReadState()
     {
-        free(m_pszBuffer1);
-        free(m_pszBuffer2);
+        free(m_pszCurrentLine);
+        free(m_pszLastLine);
+        free(m_pnCurrentColIdxs);
+        free(m_pnLastColIdxs);
     }
 
     bool getNewLine(PyASCIIReader *self)
     {
         // read into last line then clobber
+        // try the various reader handles...
 #ifdef HAVE_ZLIB
         if( self->gz_file != NULL )
         {
@@ -448,23 +477,313 @@ public:
         char *pszOldCurrent = m_pszCurrentLine;
         m_pszCurrentLine = m_pszLastLine;
         m_pszLastLine = pszOldCurrent;
+
+        // now do the indices
+        int *pnOldLast = m_pnLastColIdxs;
+        m_pnLastColIdxs = m_pnCurrentColIdxs;
+        m_pnCurrentColIdxs = pnOldLast;
+
+        // find first idx, some files have spaces etc at the start of the line
+        int nStartIdx = 0;
+        while(isspace(m_pszCurrentLine[nStartIdx]))
+            nStartIdx++;
+
+        m_pnCurrentColIdxs[0] = nStartIdx;
+        for( int i = 1; i < m_nFields; i++ )
+        {
+            // go through all the numbers
+            while((isdigit(m_pszCurrentLine[nStartIdx]) || (m_pszCurrentLine[nStartIdx] == '.')) && (nStartIdx < nMaxLineSize))
+                nStartIdx++;
+
+            // then anything in between - setting to \0 while we are at it
+            while((isspace(m_pszCurrentLine[nStartIdx]) || (m_pszCurrentLine[nStartIdx] == ',')) && (nStartIdx < nMaxLineSize))
+            {
+                m_pszCurrentLine[nStartIdx] = '\0';
+                nStartIdx++;
+            }
+
+            if( (m_pszCurrentLine[nStartIdx] == '\n' ) || (m_pszCurrentLine[nStartIdx] == '\r'))
+            {
+                fprintf(stderr, "reached end of line early\n");
+                break;
+            }
+
+            m_pnCurrentColIdxs[i] = nStartIdx;
+        }
+
+        // keep going so we can replace \n with \0
+        while((m_pszCurrentLine[nStartIdx] != '\n') && (m_pszCurrentLine[nStartIdx] != '\r') && (nStartIdx < nMaxLineSize))
+            nStartIdx++;
+
+        if( (m_pszCurrentLine[nStartIdx] == '\n') || (m_pszCurrentLine[nStartIdx] == '\r'))
+            m_pszCurrentLine[nStartIdx] = '\0';
+
+        // print
+        /*
+        fprintf(stderr, "nfields = %d\n", m_nFields);
+        fprintf(stderr, "Current:\n{");
+        for( int i = 0; i < m_nFields; i++)
+        {
+            fprintf(stderr, "%d=%s - ", m_pnCurrentColIdxs[i], &m_pszCurrentLine[m_pnCurrentColIdxs[i]]);
+        }
+        if( !m_bFirst )
+        {
+            fprintf(stderr, "}\nLast:\n{");
+            for( int i = 0; i < m_nFields; i++)
+            {
+                fprintf(stderr, "%d=%s - ", m_pnLastColIdxs[i], &m_pszLastLine[m_pnLastColIdxs[i]]);
+            }
+        }
+        fprintf(stderr, "}\n");*/
+        m_bFirst = false;
+        return true;
+    }
+
+    bool isSamePulse(int *pPulseIdxs, int nPulseIdxs)
+    {
+        if( m_bFirst )
+            return false;  // this ok?
+
+        // check all the strings are the same
+        for( int i = 0; i < nPulseIdxs; i++ )
+        {
+            int idx = m_pnCurrentColIdxs[pPulseIdxs[i]];
+            if(strcmp(&m_pszCurrentLine[idx], &m_pszLastLine[idx]) != 0)
+                return false;
+        }
+        return true;
+    }
+
+    // copy the data into a record from the given indices and using the struct defn
+    void copyDataToRecord(int *pIdxs, int nIdxs, SpylidarFieldDefn *pDefn, char *pRecord)
+    {
+        for( int i = 0; i < nIdxs; i++ )
+        {
+            int idx = m_pnCurrentColIdxs[pIdxs[i]];
+            char *pszString = &m_pszCurrentLine[idx];
+            SpylidarFieldDefn *pElDefn = &pDefn[i];
+            fprintf(stderr, "s = %s c = %c\n", pszString, pElDefn->cKind);
+            if( pElDefn->cKind == 'i' )
+            {
+                long long data = strtoll(pszString, NULL, 10);
+                switch(pElDefn->nSize)
+                {
+                    case 1:
+                    {
+                        npy_int8 d = data;
+                        memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
+                        break;
+                    }
+                    case 2:
+                    {
+                        npy_int16 d = data;
+                        memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
+                        break;
+                    }
+                    case 4:
+                    {
+                        npy_int32 d = data;
+                        memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
+                        break;
+                    }
+                    case 8:
+                    {
+                        npy_int64 d = data;
+                        memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
+                        break;
+                    }
+                    default:
+                        fprintf(stderr, "Undefined element size %d\n", pElDefn->nSize);
+                        break;
+                }
+            }
+            else if( pElDefn->cKind == 'u')
+            {
+                unsigned long long data = strtoull(pszString, NULL, 10);
+                switch(pElDefn->nSize)
+                {
+                    case 1:
+                    {
+                        npy_uint8 d = data;
+                        memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
+                        break;
+                    }
+                    case 2:
+                    {
+                        npy_uint16 d = data;
+                        memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
+                        break;
+                    }
+                    case 4:
+                    {
+                        npy_uint32 d = data;
+                        memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
+                        break;
+                    }
+                    case 8:
+                    {
+                        npy_uint64 d = data;
+                        memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
+                        break;
+                    }
+                    default:
+                        fprintf(stderr, "Undefined element size %d\n", pElDefn->nSize);
+                        break;
+                }
+            }
+            else if( pElDefn->cKind == 'f')
+            {
+                double data = atof(pszString);
+                switch(pElDefn->nSize)
+                {
+                    case 4:
+                    {
+                        float d = data;
+                        memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
+                        break;
+                    }
+                    case 8:
+                    {
+                        fprintf(stderr, "copying in %f %d %d\n", data, pElDefn->nOffset, pElDefn->nStructTotalSize);
+                        memcpy(&pRecord[pElDefn->nOffset], &data, sizeof(data));
+                        break;
+                    }
+                    default:
+                        fprintf(stderr, "Undefined element size %d\n", pElDefn->nSize);
+                        break;
+                }
+            }
+            else
+            {
+                fprintf(stderr, "Unknown kind code %c\n", pElDefn->cKind);
+            }
+        }
     }
 
 private:
-    char *m_pszBuffer1;
-    char *m_pszBuffer2;
+    bool m_bFirst;
+    int m_nFields;
     char *m_pszCurrentLine;
     char *m_pszLastLine;
+    int *m_pnCurrentColIdxs;
+    int *m_pnLastColIdxs;
 };
 
 static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
 {
-    Py_RETURN_NONE;
+    Py_ssize_t nPulseStart, nPulseEnd, nPulses;
+    if( !PyArg_ParseTuple(args, "nn:readData", &nPulseStart, &nPulseEnd ) )
+        return NULL;
+
+    nPulses = nPulseEnd - nPulseStart;
+
+    CReadState state(self->nPulseFields + self->nPointFields);
+
+    Py_ssize_t nPulsesToIgnore = 0;
+    if(nPulseStart < self->nPulsesRead)
+    {
+        // the start location before the current location
+        // reset to beginning and read through
+        fprintf(stderr, "reset to beginning\n");
+#ifdef HAVE_ZLIB
+        if( self->gz_file != NULL )
+        {
+            gzseek(self->gz_file, 0, SEEK_SET);
+        }
+#endif
+        if( self->unc_file != NULL )
+        {
+            rewind(self->unc_file);
+        }
+        nPulsesToIgnore = nPulseStart;
+        self->nPulsesRead = 0;
+        self->bFinished = false;
+    }
+    else if(nPulseStart > self->nPulsesRead)
+    {
+        nPulsesToIgnore = (nPulseStart - self->nPulsesRead);
+    }
+    fprintf(stderr, "nPulsesToIgnore = %ld\n", nPulsesToIgnore);
+
+    while(nPulsesToIgnore > 0)
+    {
+        if(!state.getNewLine(self))
+        {
+            self->bFinished = true;
+            break;
+        }
+        if( !state.isSamePulse(self->pPulseLineIdxs, self->nPulseFields))
+        {
+            nPulsesToIgnore--;
+            self->nPulsesRead++;
+        }
+    }
+
+    // we take a few liberties at this point. 
+    // we don't actually have a struct for these since they
+    // are user defined. So we just use type char.
+    // Because we set the size, this should be ok.
+    pylidar::CVector<char> pulseVector(nInitSize, nGrowBy, 
+                self->pPulseDefn[0].nStructTotalSize);
+    pylidar::CVector<char> pointVector(nInitSize, nGrowBy, 
+                self->pPointDefn[0].nStructTotalSize);
+
+    char pulseItem[self->pPulseDefn[0].nStructTotalSize];
+    char pointItem[self->pPointDefn[0].nStructTotalSize];
+
+    while( nPulses > 0 )
+    {
+        if(!state.getNewLine(self))
+        {
+            self->bFinished = true;
+            break;
+        }
+
+        bool bSamePulse = false;
+        if( self->bTimeSequential )
+            bSamePulse = state.isSamePulse(self->pPulseLineIdxs, self->nPulseFields);
+
+        // add our new point
+        // TODO: update NUMBER_OF_RETURNS on pulse
+        state.copyDataToRecord(self->pPointLineIdxs, self->nPointFields, self->pPointDefn, pointItem);
+        pointVector.push(pointItem);
+
+        if( !bSamePulse )
+        {
+            // new pulse
+            // TODO: set PTS_START_IDX
+            state.copyDataToRecord(self->pPulseLineIdxs, self->nPulseFields, self->pPulseDefn, pulseItem);
+            pulseVector.push(pulseItem);
+            nPulses--;
+        }
+    }
+
+    PyArrayObject *pPulses = pulseVector.getNumpyArray(self->pPulseDefn);
+    PyArrayObject *pPoints = pointVector.getNumpyArray(self->pPointDefn);
+
+    // build tuple
+    PyObject *pTuple = PyTuple_Pack(2, pPulses, pPoints);
+
+    return pTuple;
 }
 
 /* Table of methods */
 static PyMethodDef PyASCIIReader_methods[] = {
     {"readData", (PyCFunction)PyASCIIReader_readData, METH_VARARGS, NULL}, 
+    {NULL}  /* Sentinel */
+};
+
+static PyObject *PyASCIIReader_getFinished(PyASCIIReader *self, void *closure)
+{
+    if( self->bFinished )
+        Py_RETURN_TRUE;
+    else
+        Py_RETURN_FALSE;
+}
+
+/* get/set */
+static PyGetSetDef PyASCIIReader_getseters[] = {
+    {(char*)"finished", (getter)PyASCIIReader_getFinished, NULL, (char*)"Get Finished reading state", NULL}, 
     {NULL}  /* Sentinel */
 };
 
@@ -503,7 +822,7 @@ static PyTypeObject PyASCIIReaderType = {
     0,                     /* tp_iternext */
     PyASCIIReader_methods,             /* tp_methods */
     0,             /* tp_members */
-    0,           /* tp_getset */
+    PyASCIIReader_getseters,           /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
