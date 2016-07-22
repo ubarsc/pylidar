@@ -77,7 +77,8 @@ def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols,
         numpyColTypes.append((name, numpydtype))
 
     dataFiles.input1.setLiDARDriverOption('COL_TYPES', numpyColTypes)
-    dataFiles.input1.setLiDARDriverOption('PULSE_COLS', pulseCols)
+    if pulseCols is not None:
+        dataFiles.input1.setLiDARDriverOption('PULSE_COLS', pulseCols)
 
     if classificationTranslation is not None:
         dataFiles.input1.setLiDARDriverOption('CLASSIFICATION_CODES', 

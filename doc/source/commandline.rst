@@ -90,7 +90,8 @@ ASCII Specific Options
 For ASCII Formats you need to specify all the columns and their types in the input file. This can be done with the --coltype
 option multiple times, once for each column. This takes two parameters, first is the column name, second is the data type. 
 The data type can be one of: INT8, UINT8, INT16, UINT16, INT32, UINT32, INT64, UINT64, FLOAT32, FLOAT64. 
-You also need to specify with columns are pulse columns with the --pulsecols. This needs to be a comma separated
+For Time Sequential data, you also need to specify with columns are pulse columns with the --pulsecols. 
+This needs to be a comma separated
 list of column names that are to be treated as pulses. Here is an example::
 
     pylidar_translate --input data.dat.gz --output data.spdv4 --format SPDV4 \

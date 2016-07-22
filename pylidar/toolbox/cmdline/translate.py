@@ -160,11 +160,11 @@ def run():
         if cmdargs.coltype is None:
             msg = "must pass --coltypes parameter"
             raise generic.LiDARInvalidSetting(msg)
-        if cmdargs.pulsecols is None:
-            msg = "must pass --pulsecols parameter"
-            raise generic.LiDARInvalidSetting(msg)
 
-        pulsecols = cmdargs.pulsecols.split(',')
+        if cmdargs.pulsecols is not None:
+            pulsecols = cmdargs.pulsecols.split(',')
+        else:
+            pulsecols = None
 
         classtrans = None
         if cmdargs.classtrans is not None:
