@@ -208,9 +208,9 @@ Fields marked with Scaling = Yes must have these attributes.
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | SCANLINE_IDX               | uint16  |       | No        | No      | Pulse number within a scanline               |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| X_IDX                      | uint32  |       | Yes       | Yes     | X coord to use to spatially index this pulse |
+| X_IDX                      | uint32  |       | No        | Yes     | X coord to use to spatially index this pulse |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
-| Y_IDX                      | uint32  |       | Yes       | Yes     | Y coord to use to spatially index this pulse |
+| Y_IDX                      | uint32  |       | No        | Yes     | Y coord to use to spatially index this pulse |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+
 | X_ORIGIN                   | uint32  | m     | No        | Yes     | X location of pulse emission                 |
 +----------------------------+---------+-------+-----------+---------+----------------------------------------------+

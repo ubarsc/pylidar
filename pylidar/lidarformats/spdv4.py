@@ -89,7 +89,7 @@ HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 HEADER_ARRAY_FIELDS = ('BANDWIDTHS', 'WAVELENGTHS', 'VERSION_SPD', 'VERSION_DATA', 'RGB_FIELD')
 "fields in the header that are actually arrays"
 
-PULSES_ESSENTIAL_FIELDS = ('X_IDX', 'Y_IDX')
+PULSES_ESSENTIAL_FIELDS = ()
 "Note: PULSE_ID, NUMBER_OF_RETURNS and PTS_START_IDX always created by pylidar"
 POINTS_ESSENTIAL_FIELDS = ('X', 'Y', 'Z', 'CLASSIFICATION')
 "RETURN_NUMBER always created by pylidar"
