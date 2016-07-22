@@ -196,8 +196,10 @@ void FreeDefn(SpylidarFieldDefn *pDefn, int nFields)
 // pList is a list of (name, dtype, idx) tuples
 // pnFields will be set to the count of fields (nPulseFields/nPointFields)
 // ppnIdxs will be set to an array of idxs (pPulseLineIdxs/pPointLineIdxs)
+// If bInsertPulseFields in true then NUMBER_OF_RETURNS will be added PTS_START_IDX
+//      to the definition but not into pnFields or ppnIdxs
 SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppnIdxs,
-        PyObject *error)
+        bool bInsertPulseFields, PyObject *error)
 {
     if( !PySequence_Check(pList) )
     {
@@ -207,9 +209,26 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
 
     Py_ssize_t nSize = PySequence_Size(pList);
     // create Defn
-    SpylidarFieldDefn *pDefn = (SpylidarFieldDefn*)calloc(nSize, sizeof(SpylidarFieldDefn));
+    Py_ssize_t nDefnSize = nSize;
+    if( bInsertPulseFields)
+        nDefnSize += 2;
+
+    SpylidarFieldDefn *pDefn = NULL;
+    if( nDefnSize > 0 )
+    {
+        // +1 for sentinel
+        pDefn = (SpylidarFieldDefn*)calloc(nDefnSize+1, sizeof(SpylidarFieldDefn));
+    }
+    else
+    {
+        PyErr_SetString(error, "No definitions found");
+        return NULL;
+    }
     // idxs
-    *ppnIdxs = (int*)calloc(nSize, sizeof(int));
+    if( nSize > 0 )
+        *ppnIdxs = (int*)calloc(nSize, sizeof(int));
+    else
+        *ppnIdxs = NULL;
 
     int nOffset = 0;
     for( Py_ssize_t i = 0; i < nSize; i++ )
@@ -281,8 +300,23 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
         (*ppnIdxs)[i] = PyLong_AsLong(pIdx);
     }
 
+    if( bInsertPulseFields )
+    {
+        pDefn[nSize].pszName = strdup("NUMBER_OF_RETURNS");
+        pDefn[nSize].cKind = 'u';
+        pDefn[nSize].nSize = 1;
+        pDefn[nSize].nOffset = nOffset;
+        nOffset += pDefn[nSize].nSize;
+
+        pDefn[nSize+1].pszName = strdup("PTS_START_IDX");
+        pDefn[nSize+1].cKind = 'u';
+        pDefn[nSize+1].nSize = 8;
+        pDefn[nSize+1].nOffset = nOffset;
+        nOffset += pDefn[nSize+1].nSize;
+    }
+
     // now do nStructTotalSize
-    for( Py_ssize_t i = 0; i < nSize; i++ )
+    for( Py_ssize_t i = 0; i < nDefnSize; i++ )
     {
         pDefn[i].nStructTotalSize = nOffset;
     }
@@ -360,7 +394,7 @@ PyASCIIReader_init(PyASCIIReader *self, PyObject *args, PyObject *kwds)
     // create our definitions
 
     self->pPulseDefn = DTypeListToFieldDef(pPulseDTypeList, &self->nPulseFields, 
-            &self->pPulseLineIdxs, error);
+            &self->pPulseLineIdxs, true, error);
     if( self->pPulseDefn == NULL )
     {
         // error should be set
@@ -368,7 +402,7 @@ PyASCIIReader_init(PyASCIIReader *self, PyObject *args, PyObject *kwds)
     }
 
     self->pPointDefn = DTypeListToFieldDef(pPointDTypeList, &self->nPointFields, 
-            &self->pPointLineIdxs, error);
+            &self->pPointLineIdxs, false, error);
     if( self->pPointDefn == NULL )
     {
         // error should be set
@@ -453,7 +487,7 @@ public:
         free(m_pnLastColIdxs);
     }
 
-    bool getNewLine(PyASCIIReader *self)
+    bool getNewLine(PyASCIIReader *self, const char **pszErrorString)
     {
         // read into last line then clobber
         // try the various reader handles...
@@ -485,18 +519,20 @@ public:
 
         // find first idx, some files have spaces etc at the start of the line
         int nStartIdx = 0;
-        while(isspace(m_pszCurrentLine[nStartIdx]))
+        while(isspace(m_pszCurrentLine[nStartIdx]) && (nStartIdx < nMaxLineSize))
             nStartIdx++;
 
         m_pnCurrentColIdxs[0] = nStartIdx;
         for( int i = 1; i < m_nFields; i++ )
         {
             // go through all the numbers
-            while((isdigit(m_pszCurrentLine[nStartIdx]) || (m_pszCurrentLine[nStartIdx] == '.')) && (nStartIdx < nMaxLineSize))
+            while((isdigit(m_pszCurrentLine[nStartIdx]) || (m_pszCurrentLine[nStartIdx] == '.')) 
+                        && (nStartIdx < nMaxLineSize))
                 nStartIdx++;
 
             // then anything in between - setting to \0 while we are at it
-            while((isspace(m_pszCurrentLine[nStartIdx]) || (m_pszCurrentLine[nStartIdx] == ',')) && (nStartIdx < nMaxLineSize))
+            while(((m_pszCurrentLine[nStartIdx] == ' ') || (m_pszCurrentLine[nStartIdx] == ',') || (m_pszCurrentLine[nStartIdx] == '\t')) 
+                        && (nStartIdx < nMaxLineSize))
             {
                 m_pszCurrentLine[nStartIdx] = '\0';
                 nStartIdx++;
@@ -504,8 +540,8 @@ public:
 
             if( (m_pszCurrentLine[nStartIdx] == '\n' ) || (m_pszCurrentLine[nStartIdx] == '\r'))
             {
-                fprintf(stderr, "reached end of line early\n");
-                break;
+                *pszErrorString = "Number of columns in file does not match expected";
+                return false;
             }
 
             m_pnCurrentColIdxs[i] = nStartIdx;
@@ -562,7 +598,6 @@ public:
             int idx = m_pnCurrentColIdxs[pIdxs[i]];
             char *pszString = &m_pszCurrentLine[idx];
             SpylidarFieldDefn *pElDefn = &pDefn[i];
-            fprintf(stderr, "s = %s c = %c\n", pszString, pElDefn->cKind);
             if( pElDefn->cKind == 'i' )
             {
                 long long data = strtoll(pszString, NULL, 10);
@@ -644,7 +679,6 @@ public:
                     }
                     case 8:
                     {
-                        fprintf(stderr, "copying in %f %d %d\n", data, pElDefn->nOffset, pElDefn->nStructTotalSize);
                         memcpy(&pRecord[pElDefn->nOffset], &data, sizeof(data));
                         break;
                     }
@@ -676,93 +710,169 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
         return NULL;
 
     nPulses = nPulseEnd - nPulseStart;
+    PyObject *pTuple = NULL;
 
-    CReadState state(self->nPulseFields + self->nPointFields);
-
-    Py_ssize_t nPulsesToIgnore = 0;
-    if(nPulseStart < self->nPulsesRead)
+    try
     {
-        // the start location before the current location
-        // reset to beginning and read through
-        fprintf(stderr, "reset to beginning\n");
+        CReadState state(self->nPulseFields + self->nPointFields);
+
+        Py_ssize_t nPulsesToIgnore = 0;
+        if(nPulseStart < self->nPulsesRead)
+        {
+            // the start location before the current location
+            // reset to beginning and read through
+            fprintf(stderr, "reset to beginning\n");
 #ifdef HAVE_ZLIB
-        if( self->gz_file != NULL )
-        {
-            gzseek(self->gz_file, 0, SEEK_SET);
-        }
+            if( self->gz_file != NULL )
+            {
+                gzseek(self->gz_file, 0, SEEK_SET);
+            }
 #endif
-        if( self->unc_file != NULL )
-        {
-            rewind(self->unc_file);
+            if( self->unc_file != NULL )
+            {
+                rewind(self->unc_file);
+            }
+            nPulsesToIgnore = nPulseStart;
+            self->nPulsesRead = 0;
+            self->bFinished = false;
         }
-        nPulsesToIgnore = nPulseStart;
-        self->nPulsesRead = 0;
-        self->bFinished = false;
-    }
-    else if(nPulseStart > self->nPulsesRead)
-    {
-        nPulsesToIgnore = (nPulseStart - self->nPulsesRead);
-    }
-    fprintf(stderr, "nPulsesToIgnore = %ld\n", nPulsesToIgnore);
+        else if(nPulseStart > self->nPulsesRead)
+        {
+            nPulsesToIgnore = (nPulseStart - self->nPulsesRead);
+        }
+        fprintf(stderr, "nPulsesToIgnore = %ld\n", nPulsesToIgnore);
 
-    while(nPulsesToIgnore > 0)
-    {
-        if(!state.getNewLine(self))
-        {
-            self->bFinished = true;
-            break;
-        }
-        if( !state.isSamePulse(self->pPulseLineIdxs, self->nPulseFields))
-        {
-            nPulsesToIgnore--;
-            self->nPulsesRead++;
-        }
-    }
+        const char *pszErrorString = NULL;
 
-    // we take a few liberties at this point. 
-    // we don't actually have a struct for these since they
-    // are user defined. So we just use type char.
-    // Because we set the size, this should be ok.
-    pylidar::CVector<char> pulseVector(nInitSize, nGrowBy, 
+        while(nPulsesToIgnore > 0)
+        {
+            if(!state.getNewLine(self, &pszErrorString))
+            {
+                if( pszErrorString != NULL )
+                {
+                    PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+                    // best way I could find for obtaining module reference
+                    // from inside a class method. Not needed for Python < 3.
+                    m = PyState_FindModule(&moduledef);
+#endif
+                    PyErr_SetString(GETSTATE(m)->error, pszErrorString);
+                    return NULL;
+                }
+                self->bFinished = true;
+                break;
+            }
+
+            if( !state.isSamePulse(self->pPulseLineIdxs, self->nPulseFields))
+            {
+                nPulsesToIgnore--;
+                self->nPulsesRead++;
+            }
+        }
+
+        // we take a few liberties at this point. 
+        // we don't actually have a struct for these since they
+        // are user defined. So we just use type char.
+        // Because we set the size, this should be ok.
+        pylidar::CVector<char> pulseVector(nInitSize, nGrowBy, 
                 self->pPulseDefn[0].nStructTotalSize);
-    pylidar::CVector<char> pointVector(nInitSize, nGrowBy, 
+        pylidar::CVector<char> pointVector(nInitSize, nGrowBy, 
                 self->pPointDefn[0].nStructTotalSize);
 
-    char pulseItem[self->pPulseDefn[0].nStructTotalSize];
-    char pointItem[self->pPointDefn[0].nStructTotalSize];
+        char pulseItem[self->pPulseDefn[0].nStructTotalSize];
+        char pointItem[self->pPointDefn[0].nStructTotalSize];
 
-    while( nPulses > 0 )
-    {
-        if(!state.getNewLine(self))
+        // find offset of NUMBER_OF_RETURNS and PTS_START_IDX so we can fill them in
+        int nNumOfReturnsOffset = -1;
+        int nPtsStartIdxOffset = -1;
+        int i = 0;
+        while( self->pPulseDefn[i].pszName != NULL )
         {
-            self->bFinished = true;
-            break;
+            if( strcmp(self->pPulseDefn[i].pszName, "NUMBER_OF_RETURNS") == 0)
+                nNumOfReturnsOffset = self->pPulseDefn[i].nOffset;
+            else if( strcmp(self->pPulseDefn[i].pszName, "PTS_START_IDX") == 0)
+                nPtsStartIdxOffset = self->pPulseDefn[i].nOffset;
+
+            i++;
+        }
+        if( (nNumOfReturnsOffset == -1) || (nPtsStartIdxOffset == -1))
+        {
+            // this should never happen
+            fprintf(stderr, "couldn't find NUMBER_OF_RETURNS or PTS_START_IDX");
         }
 
-        bool bSamePulse = false;
-        if( self->bTimeSequential )
-            bSamePulse = state.isSamePulse(self->pPulseLineIdxs, self->nPulseFields);
-
-        // add our new point
-        // TODO: update NUMBER_OF_RETURNS on pulse
-        state.copyDataToRecord(self->pPointLineIdxs, self->nPointFields, self->pPointDefn, pointItem);
-        pointVector.push(pointItem);
-
-        if( !bSamePulse )
+        while( nPulses > 0 )
         {
-            // new pulse
-            // TODO: set PTS_START_IDX
-            state.copyDataToRecord(self->pPulseLineIdxs, self->nPulseFields, self->pPulseDefn, pulseItem);
-            pulseVector.push(pulseItem);
-            nPulses--;
+            if(!state.getNewLine(self, &pszErrorString))
+            {
+                if( pszErrorString != NULL )
+                {
+                    PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+                    // best way I could find for obtaining module reference
+                    // from inside a class method. Not needed for Python < 3.
+                    m = PyState_FindModule(&moduledef);
+#endif
+                    PyErr_SetString(GETSTATE(m)->error, pszErrorString);
+                    return NULL;
+                }
+                self->bFinished = true;
+                break;
+            }
+
+            bool bSamePulse = false;
+            if( self->bTimeSequential )
+                bSamePulse = state.isSamePulse(self->pPulseLineIdxs, self->nPulseFields);
+
+            if( !bSamePulse )
+            {
+                // new pulse
+                state.copyDataToRecord(self->pPulseLineIdxs, self->nPulseFields, self->pPulseDefn, pulseItem);
+
+                // set PTS_START_IDX
+                npy_uint64 nPtsStartIdx = pointVector.getNumElems();
+                memcpy(&pulseItem[nPtsStartIdxOffset], &nPtsStartIdx, sizeof(nPtsStartIdx));
+                npy_uint8 nNumReturns = 0;
+                memcpy(&pulseItem[nNumOfReturnsOffset], &nNumReturns, sizeof(nNumReturns));
+
+                pulseVector.push(pulseItem);
+                nPulses--;
+                self->nPulsesRead++;
+            }
+
+
+            // add our new point
+            state.copyDataToRecord(self->pPointLineIdxs, self->nPointFields, self->pPointDefn, pointItem);
+            pointVector.push(pointItem);
+
+            // update NUMBER_OF_RETURNS on pulse
+            char *pLastPulse = pulseVector.getLastElement();
+            if( pLastPulse != NULL )
+            {
+                npy_uint8 nNumReturns;
+                memcpy(&nNumReturns, &pLastPulse[nNumOfReturnsOffset], sizeof(nNumReturns));
+                nNumReturns++;
+                memcpy(&pLastPulse[nNumOfReturnsOffset], &nNumReturns, sizeof(nNumReturns));
+            }
         }
+
+        PyArrayObject *pPulses = pulseVector.getNumpyArray(self->pPulseDefn);
+        PyArrayObject *pPoints = pointVector.getNumpyArray(self->pPointDefn);
+
+        // build tuple
+        pTuple = PyTuple_Pack(2, pPulses, pPoints);
     }
-
-    PyArrayObject *pPulses = pulseVector.getNumpyArray(self->pPulseDefn);
-    PyArrayObject *pPoints = pointVector.getNumpyArray(self->pPointDefn);
-
-    // build tuple
-    PyObject *pTuple = PyTuple_Pack(2, pPulses, pPoints);
+    catch(std::bad_alloc& ba)
+    {
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Out of memory");
+        return NULL;
+    }
 
     return pTuple;
 }
@@ -781,9 +891,15 @@ static PyObject *PyASCIIReader_getFinished(PyASCIIReader *self, void *closure)
         Py_RETURN_FALSE;
 }
 
+static PyObject *PyASCIIReader_getPulsesRead(PyASCIIReader *self, void *closure)
+{
+    return PyLong_FromSsize_t(self->nPulsesRead);
+}
+
 /* get/set */
 static PyGetSetDef PyASCIIReader_getseters[] = {
     {(char*)"finished", (getter)PyASCIIReader_getFinished, NULL, (char*)"Get Finished reading state", NULL}, 
+    {(char*)"pulsesRead", (getter)PyASCIIReader_getPulsesRead, NULL, (char*)"Get number of pulses read", NULL},
     {NULL}  /* Sentinel */
 };
 
