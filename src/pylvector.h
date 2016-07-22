@@ -45,6 +45,7 @@ public:
         m_bOwned = false;
         m_nElemSize = 0;
     }
+    // Note: you can set nElemSize if you don't know size of type at compile time
     CVector(npy_intp nStartSize, npy_intp nGrowBy, npy_intp nElemSize=sizeof(T))
     {
         m_pData = (T*)PyArray_malloc(nStartSize * nElemSize);
@@ -103,7 +104,7 @@ public:
             }
             m_pData = pNewData;
         }
-        memcpy(&m_pData[m_nElems], pNewElem, m_nElemSize);
+        memcpy(getElem(m_nElems), pNewElem, m_nElemSize);
         m_nElems++;
     }
 
@@ -111,21 +112,22 @@ public:
     {
         if(m_nElems == 0)
             return NULL;
-        return &m_pData[m_nElems-1];
+        return getElem(m_nElems-1);
     }
 
     T *getFirstElement()
     {
         if(m_nElems == 0)
             return NULL;
-        return &m_pData[0];
+        return getElem(0);
     }
 
     T *getElem(npy_intp n)
     {
         //if( n >= m_nElems )
         //    return NULL;
-        return &m_pData[n];
+        // NB: sizeof(T) could be != m_nElemSize
+        return (T*)((char*)m_pData + (m_nElemSize * n));
     }
 
     void removeFront(npy_intp nRemove)
@@ -139,7 +141,7 @@ public:
         {
             // partial - first shuffle down
             npy_intp nRemain = m_nElems - nRemove;
-            memcpy(&m_pData[0], &m_pData[nRemove], nRemain * m_nElemSize);
+            memcpy(getElem(0), getElem(nRemove), nRemain * m_nElemSize);
             m_nElems = nRemain;
         }
     }
@@ -176,7 +178,7 @@ public:
         // CVector
         npy_intp nNewSize = m_nElems - nUpper;
         CVector<T> *splitted = new CVector<T>(nNewSize, m_nGrowBy);
-        memcpy(splitted->m_pData, &m_pData[nUpper], nNewSize * m_nElemSize);
+        memcpy(splitted->m_pData, getElem(nUpper), nNewSize * m_nElemSize);
         splitted->m_nElems = nNewSize;
 
         // resize this one down
@@ -204,7 +206,7 @@ public:
         // CVector
         npy_intp nNewSize = std::min(nUpper, m_nElems);
         CVector<T> *splitted = new CVector<T>(nNewSize, m_nGrowBy);
-        memcpy(splitted->m_pData, &m_pData[0], nNewSize * m_nElemSize);
+        memcpy(splitted->m_pData, getElem(0), nNewSize * m_nElemSize);
         splitted->m_nElems = nNewSize;
 
         // resize this one down
@@ -231,7 +233,7 @@ public:
             m_pData = pNewData;
         }
 
-        memcpy(&m_pData[m_nElems], other->m_pData, other->m_nElems * m_nElemSize);
+        memcpy(getElem(m_nElems), other->m_pData, other->m_nElems * m_nElemSize);
 
         m_nElems = nNewElems;
     }
