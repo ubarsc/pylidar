@@ -60,12 +60,12 @@ import numpy
 
 from . import generic
 # Fail slightly less drastically when running from ReadTheDocs
-try:
+if os.getenv('READTHEDOCS', default='False') != 'True':
     from . import _riegl
     SUPPORTEDOPTIONS = _riegl.getSupportedOptions()
-except ImportError:
-    pass
+else:
     SUPPORTEDOPTIONS = {}
+
 from . import gridindexutils
 
 def isRieglFile(fname):

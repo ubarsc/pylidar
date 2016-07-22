@@ -48,6 +48,7 @@ These are contained in the SUPPORTEDOPTIONS module level variable.
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function, division
 
+import os
 import sys
 import gzip
 import copy
@@ -56,91 +57,72 @@ import numpy
 from . import generic
 from . import gridindexutils
 
+# Fail slightly less drastically when running from ReadTheDocs
+if os.getenv('READTHEDOCS', default='False') != 'True':
+    from . import _ascii
+
 SUPPORTEDOPTIONS = ('COL_TYPES', 'PULSE_COLS', 'CLASSIFICATION_CODES')
 "driver options"
-COMPULSARYOPTIONS = ('COL_TYPES', 'PULSE_COLS')
+COMPULSARYOPTIONS = ('COL_TYPES',)
 "necessary driver options"
-SEPARATOR = ','
-"file seperator"
 
-class ASCIITSFile(generic.LiDARFile):
+class ASCIIFile(generic.LiDARFile):
     """
-    Driver for reading Riegl rxp files. Uses rivlib
-    via the _riegl module.
+    Driver for reading ASCII files. Uses the underlying _ascii C++ module.
     """
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
         
         if mode != generic.READ:
-            msg = 'ASCII TS driver is read only'
+            msg = 'ASCII driver is read only'
             raise generic.LiDARInvalidSetting(msg)
 
-        if not fname.endswith('.dat.gz'):
-            msg = 'only process *.dat.gz files at present'
+        try:
+            self.typeCode = _ascii.getFileType(fname)
+        except _ascii.error as e:
+            msg = 'cannot open as ASCII file' + str(e)
             raise generic.LiDARFileException(msg)
 
         # check if the options are all valid. Good to check in case of typo.
         # hard to do this in C
         for key in userClass.lidarDriverOptions:
             if key not in SUPPORTEDOPTIONS:
-                msg = '%s not a supported ASCII TS option' % repr(key)
-                print(msg)
+                msg = '%s not a supported ASCII option' % repr(key)
                 raise generic.LiDARInvalidSetting(msg)
 
         # also check they are all present - we can't read the file otherwise
         for key in COMPULSARYOPTIONS:
             if key not in userClass.lidarDriverOptions:
                 msg = 'must provide %s driver option' % key
-                print(msg)
                 raise generic.LiDARInvalidSetting(msg)
 
-        # save the types
-        self.colTypes = userClass.lidarDriverOptions['COL_TYPES']
-        # turn the pulse names into indices
-        pulseCols = userClass.lidarDriverOptions['PULSE_COLS']
-        self.pulseIdxs = []
-        self.colDtype = []
-        self.pulseDtype = []
 
-        # might be a more efficient way of doing this
-        # first process the pulseCols and build self.pulseDtype
-        # plus self.pulseIdxs
-        for key in pulseCols:
-            found = False
-            idx = 0
-            for name, dt in self.colTypes:
-                if name == key:
-                    found = True
-                    self.pulseIdxs.append(idx)
-                    self.pulseDtype.append((name, dt))
-                    break
-                idx += 1
-
-            if not found:
-                msg = 'Cannot find pulse column %s in COL_TYPES' % key
-                raise generic.LiDARInvalidSetting(msg)
-
-        # append the fields that refer to the points
-        self.pulseDtype.append(('NUMBER_OF_RETURNS', numpy.uint8))
-        self.pulseDtype.append(('PTS_START_IDX',  numpy.uint64))
-
-        # now go through and build self.pointDtype
-        # and self.pointIdxs
-        self.pointDtype = []
-        self.pointIdxs = []
+        self.pointDTypes = []
+        self.pulseDTypes = []
         idx = 0
-        for name, dt in self.colTypes:
-            if idx not in self.pulseIdxs:
-                self.pointDtype.append((name, dt))
-                self.pointIdxs.append(idx)
-            idx += 1
+        pulseCols = []
+        if 'PULSE_COLS' in userClass.lidarDriverOptions:
+            pulseCols = userClass.lidarDriverOptions['PULSE_COLS']
 
-        self.fh = gzip.open(fname, 'r')
+        for name, dtype in userClass.lidarDriverOptions['COL_TYPES']:
+            if name in pulseCols:
+                self.pulseDTypes.append((name, dtype, idx))
+            else:
+                self.pointDTypes.append((name, dtype, idx))
+
+            idx += 1
+            
+
+        bTimeSequential = len(self.pulseDTypes) > 0
+
+        # create reader
+        self.reader = _ascii.Reader(fname, self.typeCode, self.pulseDTypes, 
+                            self.pointDTypes, bTimeSequential)
+
         self.range = None
         self.lastRange = None
         self.lastPoints = None
         self.lastPulses = None
-        self.finished = False
 
         # set our translation codes
         if 'CLASSIFICATION_CODES' in userClass.lidarDriverOptions:
@@ -150,11 +132,10 @@ class ASCIITSFile(generic.LiDARFile):
             
     @staticmethod        
     def getDriverName():
-        return 'ASCII TS'
+        return 'ASCII'
 
     def close(self):
-        self.fh.close()
-        self.fh = None
+        self.reader = None
         self.range = None
         self.lastRange = None
         self.lastPoints = None
@@ -175,74 +156,16 @@ class ASCIITSFile(generic.LiDARFile):
         # return True if we can still read data
         # we just assume we can until we find out
         # after a read that we can't
-        return not self.finished
+        return not self.reader.finished
 
     def readData(self):
         """
         Internal method. Reads all the points and pulses
         for the current pulse range.
         """
-        # we know how many pulses we have so we can create that 
-        # array
-        nPulses = self.range.endPulse - self.range.startPulse
-        pulses = numpy.empty(nPulses, dtype=self.pulseDtype)
-        points = None
-        lastPulseDict = {}
-        for idx in self.pulseIdxs:
-            lastPulseDict[idx] = ''
 
-        pulseCount = 0
-        pointCount = 0
-        while pulseCount < nPulses:
-            line = self.fh.readline()
-            if sys.version_info[0] >= 3:
-                line = line.decode()
-            dataArr = line.strip('\r\n').split(SEPARATOR)
-
-            if len(dataArr) <= 1:
-                # seems to have single element when end of file....
-                self.finished = True
-                # need to delete items fom pulses that weren't read
-                pulses = numpy.delete(pulses, slice(pulseCount,self.range.endPulse))
-                break
-
-            # first pass - determine if new pulse or not
-            samePulse = True
-            for idx in self.pulseIdxs:
-                if dataArr[idx] != lastPulseDict[idx]:
-                    samePulse = False
-                    break
-
-            #print(pulseCount, pointCount, samePulse, dataArr)
-            if not samePulse:
-                # append to our array of pulses
-                for idx in self.pulseIdxs:
-                    name, dt = self.colTypes[idx]
-                    pulses[pulseCount][name] = dt(dataArr[idx])
-                    # update our dict so we can detect next one
-                    lastPulseDict[idx] = dataArr[idx]
-
-                # refering to the points
-                pulses[pulseCount]['NUMBER_OF_RETURNS'] = 0
-                pulses[pulseCount]['PTS_START_IDX'] = pointCount
-
-                pulseCount += 1
-                        
-            # right, do points
-            if points is None:
-                points = numpy.empty(1, dtype=self.pointDtype)
-            else:
-                newpoint = numpy.empty(1, dtype=self.pointDtype)
-                points = numpy.append(points, newpoint)
-
-            for idx in self.pointIdxs:
-                name, dt = self.colTypes[idx]
-                points[pointCount][name] = dt(dataArr[idx])
-
-            # update pulse
-            pulses[pulseCount-1]['NUMBER_OF_RETURNS'] += 1
-
-            pointCount += 1
+        pulses, points = self.reader.readData(self.range.startPulse,
+                            self.range.endPulse)
 
         # translate any classifications
         self.recodeClassification(points, generic.RECODE_TO_LAS)
@@ -328,14 +251,15 @@ class ASCIITSFile(generic.LiDARFile):
             # the processor always calls this so if a reading driver just ignore
             return
         
-        msg = 'ASCII TS driver does not support update/creating'
+        msg = 'ASCII driver does not support update/creating'
         raise generic.LiDARWritingNotSupported(msg)
 
     def getHeader(self):
         """
         ASCII files have no header
         """
-        return {}
+        format = _ascii.FORMAT_NAMES[self.typeCode]
+        return {'format' : format}
         
     def getHeaderValue(self, name):
         """
@@ -361,20 +285,25 @@ class ASCIITSFile(generic.LiDARFile):
         """
         return None
 
-class ASCIITSFileInfo(generic.LiDARFileInfo):
+class ASCIIFileInfo(generic.LiDARFileInfo):
     """
     Class that gets information about a .las file
     and makes it available as fields.
     """
     def __init__(self, fname):
         generic.LiDARFileInfo.__init__(self, fname)
-        
-        if not fname.endswith('.dat.gz'):
-            msg = 'only process *.dat.gz files at present'
+
+        try:
+            typeCode = _ascii.getFileType(fname)
+        except _ascii.error as e:
+            msg = 'cannot open as ASCII file' + str(e)
             raise generic.LiDARFileException(msg)
+
+        self.typeCode = typeCode
+        self.format = _ascii.FORMAT_NAMES[typeCode]
 
         # I don't think there is any information we can add here??
 
     @staticmethod        
     def getDriverName():
-        return 'ASCII TS'
+        return 'ASCII'

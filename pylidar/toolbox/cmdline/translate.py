@@ -155,7 +155,7 @@ def run():
         spdv42las.translate(info, cmdargs.input, cmdargs.output, 
                 cmdargs.spatial, cmdargs.extent)
 
-    elif inFormat == 'ASCII TS' and cmdargs.format == 'SPDV4':
+    elif inFormat == 'ASCII' and cmdargs.format == 'SPDV4':
 
         if cmdargs.coltype is None:
             msg = "must pass --coltypes parameter"

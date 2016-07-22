@@ -763,7 +763,7 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
                 break;
             }
 
-            if( !state.isSamePulse(self->pPulseLineIdxs, self->nPulseFields))
+            if( !self->bTimeSequential || !state.isSamePulse(self->pPulseLineIdxs, self->nPulseFields))
             {
                 nPulsesToIgnore--;
                 self->nPulsesRead++;
@@ -827,7 +827,8 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
             if( !bSamePulse )
             {
                 // new pulse
-                state.copyDataToRecord(self->pPulseLineIdxs, self->nPulseFields, self->pPulseDefn, pulseItem);
+                if( self->bTimeSequential )
+                    state.copyDataToRecord(self->pPulseLineIdxs, self->nPulseFields, self->pPulseDefn, pulseItem);
 
                 // set PTS_START_IDX
                 npy_uint64 nPtsStartIdx = pointVector.getNumElems();
@@ -902,6 +903,37 @@ static PyGetSetDef PyASCIIReader_getseters[] = {
     {(char*)"pulsesRead", (getter)PyASCIIReader_getPulsesRead, NULL, (char*)"Get number of pulses read", NULL},
     {NULL}  /* Sentinel */
 };
+
+// Return a dictionary of typeCode / names
+static PyObject *GetFormatNameDict()
+{
+    PyObject *pFormatNameDict = PyDict_New();
+    PyObject *pKey = PyLong_FromLong(ASCII_UNKNOWN);
+#if PY_MAJOR_VERSION >= 3
+    PyObject *pValue = PyUnicode_FromString("Unknown");
+#else
+    PyObject *pValue = PyString_FromString("Unknown");
+#endif
+    PyDict_SetItem(pFormatNameDict, pKey, pValue);
+
+    pKey = PyLong_FromLong(ASCII_UNCOMPRESSED);
+#if PY_MAJOR_VERSION >= 3
+    pValue = PyUnicode_FromString("Uncompressed File");
+#else
+    pValue = PyString_FromString("Uncompressed File");
+#endif
+    PyDict_SetItem(pFormatNameDict, pKey, pValue);
+
+    pKey = PyLong_FromLong(ASCII_GZIP);
+#if PY_MAJOR_VERSION >= 3
+    pValue = PyUnicode_FromString("GZip File");
+#else
+    pValue = PyString_FromString("GZip File");
+#endif
+    PyDict_SetItem(pFormatNameDict, pKey, pValue);
+
+    return pFormatNameDict;
+}
 
 static PyTypeObject PyASCIIReaderType = {
 #if PY_MAJOR_VERSION >= 3
@@ -1002,6 +1034,10 @@ init_ascii(void)
 
     Py_INCREF(&PyASCIIReaderType);
     PyModule_AddObject(pModule, "Reader", (PyObject *)&PyASCIIReaderType);
+
+    // dictionary of format names
+    PyObject *pFormatNameDict = GetFormatNameDict();
+    PyModule_AddObject(pModule, "FORMAT_NAMES", pFormatNameDict);
 
 #if PY_MAJOR_VERSION >= 3
     return pModule;

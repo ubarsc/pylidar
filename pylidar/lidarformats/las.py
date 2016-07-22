@@ -98,7 +98,7 @@ from rios import pixelgrid
 
 from . import generic
 # Fail slightly less drastically when running from ReadTheDocs
-try:
+if os.getenv('READTHEDOCS', default='False') != 'True':
     from . import _las
     READSUPPORTEDOPTIONS = _las.getReadSupportedOptions()
     WRITESUPPORTEDOPTIONS = _las.getWriteSupportedOptions()
@@ -110,7 +110,7 @@ try:
     # numpy needs a list before it will pull out fields, C returns
     # a tuple. Probably need to sort this at some stage    
     LAS_WAVEFORM_TABLE_FIELDS = list(_las.getExpectedWaveformFieldsForDescr())
-except ImportError:
+else:
     READSUPPORTEDOPTIONS = None
     "driver options"
     WRITESUPPORTEDOPTIONS = None
