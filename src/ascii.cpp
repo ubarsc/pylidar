@@ -721,7 +721,6 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
         {
             // the start location before the current location
             // reset to beginning and read through
-            fprintf(stderr, "reset to beginning\n");
 #ifdef HAVE_ZLIB
             if( self->gz_file != NULL )
             {
@@ -740,7 +739,6 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
         {
             nPulsesToIgnore = (nPulseStart - self->nPulsesRead);
         }
-        fprintf(stderr, "nPulsesToIgnore = %ld\n", nPulsesToIgnore);
 
         const char *pszErrorString = NULL;
 
