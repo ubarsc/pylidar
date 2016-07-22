@@ -105,6 +105,11 @@ class ASCIIFile(generic.LiDARFile):
             pulseCols = userClass.lidarDriverOptions['PULSE_COLS']
 
         for name, dtype in userClass.lidarDriverOptions['COL_TYPES']:
+            if name == "NUMBER_OF_RETURNS" or name == "PTS_START_IDX":
+                msg = ("Can't use fields NUMBER_OF_RETURNS or PTS_START_IDX " +
+                        "since they are generated")
+                raise generic.LiDARInvalidSetting(msg)
+
             if name in pulseCols:
                 self.pulseDTypes.append((name, dtype, idx))
             else:
