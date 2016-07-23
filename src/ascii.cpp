@@ -288,7 +288,8 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
 
         // now for the idxs
         PyObject *pIdx = PySequence_GetItem(pElem, 2);
-        if( !PyLong_Check(pIdx) )
+        PyObject *pIdxLong = PyNumber_Long(pIdx);
+        if( !PyLong_Check(pIdxLong) )
         {
             PyErr_SetString(error, "3rd element must be int");
             FreeDefn(pDefn, nSize);
@@ -297,7 +298,7 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
             return NULL;
         }
 
-        (*ppnIdxs)[i] = PyLong_AsLong(pIdx);
+        (*ppnIdxs)[i] = PyLong_AsLong(pIdxLong);
     }
 
     if( bInsertPulseFields )
