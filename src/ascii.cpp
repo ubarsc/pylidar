@@ -237,6 +237,7 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
         if( !PySequence_Check(pElem) || ( PySequence_Size(pElem) != 3 ) )
         {
             PyErr_SetString(error, "Each element must be a 3 element sequence");
+            Py_DECREF(pElem);
             FreeDefn(pDefn, nSize);
             free(*ppnIdxs);
             *ppnIdxs = NULL;
@@ -251,6 +252,8 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
 #endif
         {
             PyErr_SetString(error, "First element must be string");
+            Py_DECREF(pElem);
+            Py_DECREF(pName);
             FreeDefn(pDefn, nSize);
             free(*ppnIdxs);
             *ppnIdxs = NULL;
@@ -264,6 +267,7 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
 #else
         pDefn[i].pszName = strdup(PyString_AsString(pName));
 #endif
+        Py_DECREF(pName);
 
         PyObject *pNumpyDType = PySequence_GetItem(pElem, 1);
         // we can't actually do much with numpy.uint16 etc
@@ -272,6 +276,8 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
         if( !PyArray_DescrConverter(pNumpyDType, &pDescr) )
         {
             PyErr_SetString(error, "Couldn't convert 2nd element type to numpy Descr");
+            Py_DECREF(pElem);
+            Py_DECREF(pNumpyDType);
             FreeDefn(pDefn, nSize);
             free(*ppnIdxs);
             *ppnIdxs = NULL;
@@ -285,6 +291,7 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
         // do nStructTotalSize last once we have all the sizes
 
         Py_DECREF(pDescr);
+        Py_DECREF(pNumpyDType);
 
         // now for the idxs
         PyObject *pIdx = PySequence_GetItem(pElem, 2);
@@ -292,6 +299,9 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
         if( !PyLong_Check(pIdxLong) )
         {
             PyErr_SetString(error, "3rd element must be int");
+            Py_DECREF(pIdx);
+            Py_DECREF(pIdxLong);
+            Py_DECREF(pElem);
             FreeDefn(pDefn, nSize);
             free(*ppnIdxs);
             *ppnIdxs = NULL;
@@ -299,6 +309,10 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
         }
 
         (*ppnIdxs)[i] = PyLong_AsLong(pIdxLong);
+        Py_DECREF(pIdx);
+        Py_DECREF(pIdxLong);
+
+        Py_DECREF(pElem);
     }
 
     if( bInsertPulseFields )
