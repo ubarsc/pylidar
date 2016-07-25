@@ -638,13 +638,43 @@ class SPDV4File(generic.LiDARFile):
                 
         else:
             # make sure the attributes have the right names
+
+            # first collect all the min and max names so we can
+            # set the init vals appropriately
+            minNames = []
+            maxNames = []
+            for updateDict in [POINTS_HEADER_UPDATE_DICT, 
+                    PULSES_HEADER_UPDATE_DICT, WAVEFORMS_HEADER_UPDATE_DICT]:
+                for key in updateDict.keys():
+                    minName, maxName = updateDict[key]
+                    minNames.append(minName)
+                    maxNames.append(maxName)
+
             for key in HEADER_FIELDS:
                 cls = HEADER_FIELDS[key]
                 # blank value - 0 for numbers, '' for strings
+                # do check for min and max fields
                 if key in HEADER_ARRAY_FIELDS:
                     fileAttrs[key] = numpy.array([cls()])
                 else:
-                    fileAttrs[key] = cls() 
+                    if cls == bytes:
+                        # defaults to ''
+                        fileAttrs[key] = cls()
+                    else:
+                        if numpy.issubdtype(cls, numpy.floating):
+                            info = numpy.finfo(cls)
+                        else:
+                            info = numpy.iinfo(cls)
+
+                        # set to the opposite so they get properly updated
+                        if key in minNames:
+                            # have to make it of type cls as it isn't by default
+                            fileAttrs[key] = cls(info.max)
+                        elif key in maxNames:
+                            fileAttrs[key] = cls(info.min)
+                        else:
+                            # defaults to 0
+                            fileAttrs[key] = cls() 
 
             # write the GENERATING_SOFTWARE tag
             fileAttrs['GENERATING_SOFTWARE'] = generic.SOFTWARE_NAME
