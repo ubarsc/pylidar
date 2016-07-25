@@ -620,7 +620,12 @@ public:
             SpylidarFieldDefn *pElDefn = &pDefn[i];
             if( pElDefn->cKind == 'i' )
             {
+#ifdef _MSC_VER && _MSC_VER < 1900
+                // early versions of MSVC don't have strtoll
+                __int64 data = _strtoi64(pszString, NULL, 10);
+#else
                 long long data = strtoll(pszString, NULL, 10);
+#endif            
                 switch(pElDefn->nSize)
                 {
                     case 1:
@@ -654,7 +659,12 @@ public:
             }
             else if( pElDefn->cKind == 'u')
             {
+#ifdef _MSC_VER && _MSC_VER < 1900
+                // early versions of MSVC don't have strtoull
+                unsigned __int64 data = _strtoui64(pszString, NULL, 10);
+#else
                 unsigned long long data = strtoull(pszString, NULL, 10);
+#endif
                 switch(pElDefn->nSize)
                 {
                     case 1:
