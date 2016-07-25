@@ -33,6 +33,11 @@
     #include "zlib.h"
 #endif
 
+#ifdef _MSC_VER
+    // MSVC not happy about fopen, just shut it up for now
+    #define _CRT_SECURE_NO_WARNINGS
+#endif
+
 // for CVector
 static const int nGrowBy = 1000;
 static const int nInitSize = 40000;
@@ -620,25 +625,25 @@ public:
                 {
                     case 1:
                     {
-                        npy_int8 d = data;
+                        npy_int8 d = (npy_int8)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 2:
                     {
-                        npy_int16 d = data;
+                        npy_int16 d = (npy_int16)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 4:
                     {
-                        npy_int32 d = data;
+                        npy_int32 d = (npy_int32)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 8:
                     {
-                        npy_int64 d = data;
+                        npy_int64 d = (npy_int64)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
@@ -654,25 +659,25 @@ public:
                 {
                     case 1:
                     {
-                        npy_uint8 d = data;
+                        npy_uint8 d = (npy_uint8)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 2:
                     {
-                        npy_uint16 d = data;
+                        npy_uint16 d = (npy_uint16)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 4:
                     {
-                        npy_uint32 d = data;
+                        npy_uint32 d = (npy_uint32)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 8:
                     {
-                        npy_uint64 d = data;
+                        npy_uint64 d = (npy_uint64)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
@@ -688,7 +693,7 @@ public:
                 {
                     case 4:
                     {
-                        float d = data;
+                        float d = (float)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
@@ -792,8 +797,8 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
         pylidar::CVector<char> pointVector(nInitSize, nGrowBy, 
                 self->pPointDefn[0].nStructTotalSize);
 
-        char pulseItem[self->pPulseDefn[0].nStructTotalSize];
-        char pointItem[self->pPointDefn[0].nStructTotalSize];
+        char *pulseItem = new char[self->pPulseDefn[0].nStructTotalSize];
+        char *pointItem = new char[self->pPointDefn[0].nStructTotalSize];
 
         // find offset of NUMBER_OF_RETURNS and PTS_START_IDX so we can fill them in
         int nNumOfReturnsOffset = -1;
@@ -827,6 +832,8 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
                     m = PyState_FindModule(&moduledef);
 #endif
                     PyErr_SetString(GETSTATE(m)->error, pszErrorString);
+                    delete pulseItem;
+                    delete pointItem;
                     return NULL;
                 }
                 self->bFinished = true;
@@ -869,6 +876,8 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
                 memcpy(&pLastPulse[nNumOfReturnsOffset], &nNumReturns, sizeof(nNumReturns));
             }
         }
+        delete pulseItem;
+        delete pointItem;
 
         PyArrayObject *pPulses = pulseVector.getNumpyArray(self->pPulseDefn);
         PyArrayObject *pPoints = pointVector.getNumpyArray(self->pPointDefn);
