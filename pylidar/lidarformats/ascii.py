@@ -1,6 +1,11 @@
 
 """
-Driver for ASCII time sequential files
+Driver for ASCII files. The user must specify the column names and types
+via the COL_TYPES driver option.
+For time-sequential files, the PULSE_COLS driver option needs to be
+provided so the points can be grouped into pulses.
+When PULSE_COLS isn't provided then the file is assumed to be 
+non-time-sequential and a pulse is created for each point.
 
 Driver Options
 --------------
@@ -26,7 +31,7 @@ These are contained in the SUPPORTEDOPTIONS module level variable.
 |                       | Each tuple should have the internalCode   |
 |                       | first, then the lidarprocessor code       |
 |                       | Codes without a translation will be       |
-|                       | through without change.                   |
+|                       | copied through without change.            |
 +-----------------------+-------------------------------------------+
 
 """
