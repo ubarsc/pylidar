@@ -630,24 +630,44 @@ public:
                 {
                     case 1:
                     {
+                        if( (data < NPY_MIN_INT8) || (data > NPY_MAX_INT8))
+                        {
+                            // TODO: exception?
+                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                        }
                         npy_int8 d = (npy_int8)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 2:
                     {
+                        if( (data < NPY_MIN_INT16) || (data > NPY_MAX_INT16))
+                        {
+                            // TODO: exception?
+                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                        }
                         npy_int16 d = (npy_int16)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 4:
                     {
+                        if( (data < NPY_MIN_INT32) || (data > NPY_MAX_INT32))
+                        {
+                            // TODO: exception?
+                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                        }
                         npy_int32 d = (npy_int32)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 8:
                     {
+                        if( (data < NPY_MIN_INT64) || (data > NPY_MAX_INT64))
+                        {
+                            // TODO: exception?
+                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                        }
                         npy_int64 d = (npy_int64)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
@@ -669,24 +689,44 @@ public:
                 {
                     case 1:
                     {
+                        if( data > NPY_MAX_UINT8 )
+                        {
+                            // TODO: exception?
+                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                        }
                         npy_uint8 d = (npy_uint8)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 2:
                     {
+                        if( data > NPY_MAX_UINT16 )
+                        {
+                            // TODO: exception?
+                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                        }
                         npy_uint16 d = (npy_uint16)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 4:
                     {
+                        if( data > NPY_MAX_UINT32 )
+                        {
+                            // TODO: exception?
+                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                        }
                         npy_uint32 d = (npy_uint32)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
                     }
                     case 8:
                     {
+                        if( data > NPY_MAX_UINT64 )
+                        {
+                            // TODO: exception?
+                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                        }
                         npy_uint64 d = (npy_uint64)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
                         break;
