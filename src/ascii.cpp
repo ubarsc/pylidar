@@ -842,8 +842,8 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
                     m = PyState_FindModule(&moduledef);
 #endif
                     PyErr_SetString(GETSTATE(m)->error, pszErrorString);
-                    delete pulseItem;
-                    delete pointItem;
+                    delete[] pulseItem;
+                    delete[] pointItem;
                     return NULL;
                 }
                 self->bFinished = true;
@@ -886,8 +886,8 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
                 memcpy(&pLastPulse[nNumOfReturnsOffset], &nNumReturns, sizeof(nNumReturns));
             }
         }
-        delete pulseItem;
-        delete pointItem;
+        delete[] pulseItem;
+        delete[] pointItem;
 
         PyArrayObject *pPulses = pulseVector.getNumpyArray(self->pPulseDefn);
         PyArrayObject *pPoints = pointVector.getNumpyArray(self->pPointDefn);
