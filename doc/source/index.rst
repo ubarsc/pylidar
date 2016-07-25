@@ -92,6 +92,7 @@ Processing
 
    userclasses
    lidarprocessor
+   toolbox/arrayutils
    toolbox/toolbox
    toolbox/indexing
    toolbox/translate

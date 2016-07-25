@@ -8,6 +8,7 @@ Toolbox
 .. toctree::
     :maxdepth: 1
 
+    arrayutils
     grdfilters
     interpolation
     visualisation
