@@ -1,6 +1,11 @@
 
 """
-Driver for ASCII files. The user must specify the column names and types
+Driver for ASCII files. Currently uncompressed files with a .dat
+or .csv extension are supported. If the ZLIB_ROOT environment 
+variable was set at build time, then gzip compressed files with a
+.gz extension are also supported.
+
+The user must specify the column names and types
 via the COL_TYPES driver option.
 For time-sequential files, the PULSE_COLS driver option needs to be
 provided so the points can be grouped into pulses.
