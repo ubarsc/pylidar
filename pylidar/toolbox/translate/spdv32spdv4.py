@@ -57,6 +57,9 @@ def transFunc(data, otherArgs):
     # check the range
     translatecommon.checkRange(otherArgs.expectRange, points, pulses, 
             waveformInfo)
+    # any constant columns
+    points, pulses, waveformInfo = translatecommon.addConstCols(otherArgs.constCols,
+            points, pulses, waveformInfo)
     
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
@@ -65,7 +68,7 @@ def transFunc(data, otherArgs):
     data.output1.setTransmitted(trans)
 
 def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
-            nullVals):
+            nullVals, constCols):
     """
     Main function which does the work.
 
@@ -78,6 +81,7 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
         xmin ymin xmax ymax
     * scaling is a list of tuples with (type, varname, gain, offset).
     * nullVals is a list of tuples with (type, varname, value)
+    * constCols is a list of tupes with (type, varname, dtype, value)
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scaling)
 
@@ -114,6 +118,7 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
     otherArgs.scaling = scalingsDict
     otherArgs.expectRange = expectRange
     otherArgs.nullVals = nullVals
+    otherArgs.constCols = constCols
     
     lidarprocessor.doProcessing(transFunc, dataFiles, controls=controls, 
             otherArgs=otherArgs)

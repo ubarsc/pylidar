@@ -25,6 +25,7 @@ import numpy
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
+from pylidar.toolbox import arrayutils
 from rios import cuiprogress
 
 PULSE_DEFAULT_SCALING = {'X_ORIGIN':[100.0, 0.0], 'Y_ORIGIN':[100.0, 0.0],
@@ -175,6 +176,39 @@ def setOutputNull(nullVals, output):
         code = NAME_TO_CODE_DICT[typeName]
 
         output.setNullValue(varName, code, value)
+
+def addConstCols(constCols, points, pulses, waveforms=None):
+    """
+    Add constant columns to points, pulses or waveforms
+
+    constCols is a list of tupes with (type, varname, dtype, value)
+    """
+    if constCols is not None:
+        for typeName, varName, dtypeName, value in constCols:
+
+            if dtypeName not in STRING_TO_DTYPE:
+                msg = "unrecognised dtype string %s" % dtypeName
+                raise generic.LiDARInvalidSetting(msg)
+
+            dtypeCode = STRING_TO_DTYPE[dtypeName]
+            # I *think* this is safe since we set the dtype explicitly
+            value = float(value)
+
+            # TODO: what to do if array is None??
+            if typeName == PULSE:
+                pulses = arrayutils.addFieldToStructArray(pulses, varName, 
+                            dtypeCode, value)
+            elif typeName == POINT:
+                points = arrayutils.addFieldToStructArray(points, varName, 
+                            dtypeCode, value)
+            elif typeName == WAVEFORM:
+                points = arrayutils.addFieldToStructArray(points, varName, 
+                            dtypeCode, value)
+            else:
+                msg = "unrecognised type %s" % typeName
+                raise generic.LiDARInvalidSetting(msg)
+
+    return points, pulses, waveforms
 
 def overRideDefaultScalings(scaling):
     """

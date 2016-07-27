@@ -59,6 +59,9 @@ def transFunc(data, otherArgs):
     # check the range
     translatecommon.checkRange(otherArgs.expectRange, points, pulses, 
             waveformInfo)
+    # any constant columns
+    points, pulses, waveformInfo = translatecommon.addConstCols(otherArgs.constCols,
+            points, pulses, waveformInfo)
 
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
@@ -68,7 +71,7 @@ def transFunc(data, otherArgs):
         data.output1.setReceived(revc)
 
 def translate(info, infile, outfile, expectRange, spatial, extent, scaling, 
-        epsg, binSize, buildPulses, pulseIndex, nullVals):
+        epsg, binSize, buildPulses, pulseIndex, nullVals, constCols):
     """
     Main function which does the work.
 
@@ -86,6 +89,8 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
     * pulseIndex should be 'FIRST_RETURN' or 'LAST_RETURN' and determines how the
         pulses are indexed.
     * nullVals is a list of tuples with (type, varname, value)
+    * constCols is a list of tupes with (type, varname, dtype, value)
+    
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scaling)
 
@@ -132,6 +137,7 @@ def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
     otherArgs.expectRange = expectRange
     otherArgs.lasInfo = info
     otherArgs.nullVals = nullVals
+    otherArgs.constCols = constCols
 
     if extent is not None:
         extent = [float(x) for x in extent]

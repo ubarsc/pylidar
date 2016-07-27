@@ -99,6 +99,11 @@ def getCmdargs():
             "GROUND,LOWVEGE,MEDVEGE,HIGHVEGE,BUILDING,LOWPOINT,HIGHPOINT," +
             "WATER,RAIL,ROAD,BRIDGE,WIREGUARD,WIRECOND,TRANSTOWER,INSULATOR," +
             "TRUNK,FOLIAGE,BRANCH] (only for ASCII inputs)")
+    p.add_argument("--constcol", nargs=4, metavar=('type', 'varName', 'dtype', 
+            'value'), action='append', help="Create a constant column in the " +
+            "output file with the given type, name and value. type should be " +
+            "one of [POINT|PULSE|WAVEFORM] dtype should be UINT16 format. " +
+            "(only for SPDV4 outputs)")
 
     cmdargs = p.parse_args()
 
@@ -138,18 +143,18 @@ def run():
         las2spdv4.translate(info, cmdargs.input, cmdargs.output, 
                 cmdargs.range, cmdargs.spatial, cmdargs.extent, cmdargs.scaling, 
                 cmdargs.epsg, cmdargs.binsize, cmdargs.buildpulses, 
-                cmdargs.pulseindex, cmdargs.null)
+                cmdargs.pulseindex, cmdargs.null, cmdargs.constcol)
 
     elif inFormat == 'SPDV3' and cmdargs.format == 'SPDV4':
         spdv32spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.spatial, cmdargs.extent, cmdargs.scaling,
-                cmdargs.null)
+                cmdargs.null, cmdargs.constcol)
 
     elif inFormat == 'riegl' and cmdargs.format == 'SPDV4':
         riegl2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.scaling, cmdargs.internalrotation, 
                 cmdargs.magneticdeclination, cmdargs.externalrotationfn,
-                cmdargs.null)
+                cmdargs.null, cmdargs.constcol)
 
     elif inFormat == 'SPDV4' and cmdargs.format == 'LAS':
         spdv42las.translate(info, cmdargs.input, cmdargs.output, 
@@ -184,7 +189,7 @@ def run():
 
         ascii2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.scaling, cmdargs.coltype, pulsecols,
-                classtrans, cmdargs.null)
+                classtrans, cmdargs.null, cmdargs.constcol)
 
     else:
         msg = 'Cannot convert between formats %s and %s' 

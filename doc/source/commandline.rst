@@ -64,6 +64,20 @@ xmin ymin xmax ymax. This is an example of spatial processing restricted to a ce
 
     pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --spatial --binsize 1 --extent 664500 7765999 664999 7767000
 
+^^^^^^^^^^^^^^^^
+Constant Columns
+^^^^^^^^^^^^^^^^
+
+When creating an SPDV4 file extra columns can be set in the data that wasn't present in the 
+original file. These columns are initialised with a constant value. This can be useful
+when an input file is has all the same CLASSIFICATION or RETURN_TYPE and this needs to 
+be shown in the output when such a column doesn't exist in the input. The --constcol option takes 4 arguments. The
+first is a string describing what sort of column it is and should be one of POINT, PULSE or WAVEFORM. The second is the column name.
+The third is the data type and can be one of the following strings: INT8, UINT8, INT16, UINT16, INT32, UINT32, INT64, UINT64, FLOAT32, FLOAT64.
+Here is an example that creates a 'SOURCE' column for points that is UINT16 and initialised to 39::
+
+    pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --constcol POINT SOURCE UINT16 39
+
 ^^^^^^^^^^^^^^^^^^^^
 LAS Specific Options
 ^^^^^^^^^^^^^^^^^^^^

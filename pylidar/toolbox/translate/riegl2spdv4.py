@@ -77,6 +77,9 @@ def transFunc(data, otherArgs):
     # check the range
     translatecommon.checkRange(otherArgs.expectRange, points, pulses, 
             waveformInfo)
+    # any constant columns
+    points, pulses, waveformInfo = translatecommon.addConstCols(otherArgs.constCols,
+            points, pulses, waveformInfo)
 
     data.output1.setPulses(pulses)
     if points is not None:
@@ -87,7 +90,7 @@ def transFunc(data, otherArgs):
         data.output1.setReceived(recv)
 
 def translate(info, infile, outfile, expectRange, scalings, internalrotation, 
-        magneticdeclination, externalrotationfn, nullVals):
+        magneticdeclination, externalrotationfn, nullVals, constCols):
     """
     Main function which does the work.
 
@@ -101,6 +104,7 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
         will be read from this file and applied to the data
     * magneticdeclination. If not 0, then this will be applied to the data
     * nullVals is a list of tuples with (type, varname, value)
+    * constCols is a list of tupes with (type, varname, dtype, value)
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scalings)
 
@@ -152,6 +156,8 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
     otherArgs.expectRange = expectRange
     # null values
     otherArgs.nullVals = nullVals
+    # constant columns
+    otherArgs.constCols = constCols
 
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')

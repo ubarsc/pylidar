@@ -50,5 +50,14 @@ def addFieldToStructArray(oldArray, newName, newType, newData=0):
     # new field
     newArray[newName] = newData
 
+    # if oldArray was masked, make newArray masked also
+    if isinstance(oldArray, numpy.ma.MaskedArray):
+        # get first field so we can get the 'one mask value per element'
+        # kind of mask instead of the 'mask value per field' since this 
+        # would have changed
+        firstField = oldArray.dtype.names[0]
+        mask = oldArray[firstField].mask
+        newArray = numpy.ma.MaskedArray(newArray, mask=mask)
+
     return newArray
 
