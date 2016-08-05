@@ -689,7 +689,7 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
         {
             lasPulse.scan_angle_rank = pPoint->get_scan_angle_rank();
             lasPulse.scan_angle = pPoint->get_scan_angle();
-            lasPulse.pts_start_idx = pPoints->getNumElems();
+            lasPulse.pts_start_idx = pPoints->getNumElems() - 1;
             if( self->bBuildPulses )
                 lasPulse.number_of_returns = pPoint->get_number_of_returns();
             else
