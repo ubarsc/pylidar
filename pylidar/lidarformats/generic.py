@@ -469,7 +469,7 @@ class LiDARFile(basedriver.Driver):
         Recode classification column (if it exists in array)
         in the specified direction. 
         """
-        if CLASSIFICATION_COLNAME not in array.dtype.fields:
+        if array.dtype.fields is None or CLASSIFICATION_COLNAME not in array.dtype.fields:
             return
 
         classification = array[CLASSIFICATION_COLNAME]
