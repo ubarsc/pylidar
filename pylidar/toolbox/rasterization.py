@@ -59,8 +59,10 @@ def writeImageFunc(data, otherArgs):
         nIdx = 0
         for attribute in otherArgs.attributes:
             attributeData = dataStack[attribute]
-            outStack[nIdx] = otherArgs.func(attributeData, axis=0, 
-                fill_value=otherArgs.background)
+            attributeDataFunc = otherArgs.func(attributeData, axis=0)
+            outStack[nIdx] = attributeDataFunc
+            # Need to manually put in the 'background' value. Masked arrays are dangerous. 
+            outStack[nIdx][attributeDataFunc.mask] = otherArgs.background
             nIdx += 1
     else:
         outStack.fill(otherArgs.background)
