@@ -24,6 +24,7 @@ import copy
 import numpy
 from numba import jit
 from .lidarformats import generic
+from .toolbox import arrayutils
 
 @jit
 def stratify3DArrayByValueIdx(inValues, inValuesMask, outIdxs_row, outIdxs_col, outIdxs_p, 
@@ -599,11 +600,20 @@ class LidarData(object):
         """
         return self.driver.getScalingColumns(arrayType)
         
-    def setWaveformInfo(self, info):
+    def setWaveformInfo(self, info, colName=None):
         """
-        Set the waveform info as a masked 2d array
+        Set the waveform info as a masked 2d array.
+
+        If passed a structured array, the same
+        field names are expected as those read with the same driver.
+        
+        If the array is non-structured (ie you passed a colNames as a string
+        to getWaveformInfo()) you need to pass the same string as the colName 
+        parameter.
+
         """
-        self.waveformInfoToWrite = info
+        self.waveformInfoToWrite = self.convertToStructIfNeeded(info, colName,
+                                        self.waveformInfoToWrite)
 
     def setTransmitted(self, transmitted):
         """
@@ -620,11 +630,15 @@ class LidarData(object):
         self.receivedToWrite = received
 
     @staticmethod
-    def convertToStructIfNeeded(data, colName):
+    def convertToStructIfNeeded(data, colName, oldData=None):
         """
         Converts data to a structured array if it is not.
         If conversion is required it uses colName and data type of data.
         Raises exception if conversion not possible or does not make sense.
+
+        if oldData is not None and data is non-structured, then the new
+        data is appended onto oldData and returned. If data is structured,
+        and error is raised.
         """
         isStruct = data.dtype.names is not None
         isMasked = isinstance(data, numpy.ma.MaskedArray)
@@ -635,15 +649,25 @@ class LidarData(object):
             msg = 'if not using structured arrays, pass colName'
             raise generic.LiDARArrayColumnError(msg)
 
-        if not isStruct:
-            # turn back into structured array so keep consistent internally
-            structdata = numpy.empty(data.shape, 
-                                        dtype=[(colName, data.dtype)])
-            structdata[colName] = data
-            if isMasked:
-                structdata = numpy.ma.MaskedArray(structdata, mask=data.mask)
+        if isStruct:
+            if oldData is not None:
+                msg = 'This data type has already been set for this block'
+                raise generic.LiDARInvalidData(msg)
 
-            data = structdata
+        else:
+            if oldData is not None:
+                # append new data to oldData
+                data = arrayutils.addFieldToStructArray(oldData, colName, 
+                        data.dtype, data)
+            else:
+                # turn back into structured array so keep consistent internally
+                structdata = numpy.empty(data.shape, 
+                                        dtype=[(colName, data.dtype)])
+                structdata[colName] = data
+                if isMasked:
+                    structdata = numpy.ma.MaskedArray(structdata, mask=data.mask)
+
+                data = structdata
 
         return data
         
@@ -660,7 +684,8 @@ class LidarData(object):
         3d masked array (like that read from getPointsByBins()).
 
         """
-        self.pointsToWrite = self.convertToStructIfNeeded(points, colName)
+        self.pointsToWrite = self.convertToStructIfNeeded(points, colName,
+                                    self.pointsToWrite)
             
     def setPulses(self, pulses, colName=None):
         """
@@ -675,7 +700,8 @@ class LidarData(object):
         3d masked array (like that read from getPulsesByBins()).
 
         """
-        self.pulsesToWrite = self.convertToStructIfNeeded(pulses, colName)
+        self.pulsesToWrite = self.convertToStructIfNeeded(pulses, colName,
+                                    self.pulsesToWrite)
         
     def flush(self):
         """
