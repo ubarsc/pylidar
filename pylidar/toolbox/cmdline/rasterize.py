@@ -43,8 +43,8 @@ def getCmdargs():
         "multiple attributes for one --type to create an image stack.")
     p.add_argument("-f", "--function", default=DEFAULT_FUNCTION,
         help="function to apply to data. Must contain module name " + 
-        "and be able to operate on masked arrays and take axis and fill_value " +
-        "params. default=%(default)s")
+        "and be able to operate on masked arrays and take the 'axis' " +
+        "parameter. default=%(default)s")
     p.add_argument("-t", "--type", default=DEFAULT_ATTRIBUTE,
         help="Type of data to operate on. One of POINT|PULSE. " +
         "default=%(default)s")

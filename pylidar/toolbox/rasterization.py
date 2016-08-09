@@ -77,7 +77,7 @@ def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION,
     an output raster file. attributes is a list of attributes to run
     the function on. The function name must contain a module
     name and the specified function must take a masked array, plus
-    axis and fill_value parameters. atype should be a string containing 
+    the 'axis' parameter. atype should be a string containing 
     either POINT|PULSE.
     background is the background raster value to use. binSize is the bin size
     to use which defaults to that of the spatial indices used.
