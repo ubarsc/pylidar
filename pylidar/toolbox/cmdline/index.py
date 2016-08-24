@@ -56,10 +56,6 @@ def getCmdargs():
             " If not specified, a temporary directory will be created and " +
             "removed at the end of processing.")
     p.add_argument("--wkt", help="projection to use for output in WKT format")
-    p.add_argument("--mergechunksize", type=int,
-        default=gridindex.DEFAULT_NPULSES_PER_CHUNK,
-        help="Override the default number of pulses that are written at " +
-            "once when merging. (default: %(default)s)")
 
     cmdargs = p.parse_args()
 
@@ -102,6 +98,5 @@ def run():
                                 pulseIndexMethod=pulseindexmethod,
                                 binSize=cmdargs.resolution,
                                 blockSize=cmdargs.blocksize,
-                                wkt=cmdargs.wkt, 
-                                nPulsesPerChunkMerge=cmdargs.mergechunksize)
+                                wkt=cmdargs.wkt) 
 

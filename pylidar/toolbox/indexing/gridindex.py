@@ -55,15 +55,9 @@ PULSE_INDEX_END_WAVEFORM = spdv4.SPDV4_PULSE_INDEX_END_WAVEFORM
 PULSE_INDEX_ORIGIN = spdv4.SPDV4_PULSE_INDEX_ORIGIN
 PULSE_INDEX_MAX_INTENSITY = spdv4.SPDV4_PULSE_INDEX_MAX_INTENSITY
 
-"""
-Default number of Pulses to process at a time when merging
-"""
-DEFAULT_NPULSES_PER_CHUNK = 40000
-
 def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None, 
         tempDir=None, extent=None, indexType=INDEX_CARTESIAN,
-        pulseIndexMethod=PULSE_INDEX_FIRST_RETURN, wkt=None,
-        nPulsesPerChunkMerge=DEFAULT_NPULSES_PER_CHUNK):
+        pulseIndexMethod=PULSE_INDEX_FIRST_RETURN, wkt=None):
     """
     Creates a grid spatially indexed file from a non spatial input file.
     Currently only supports creation of a SPD V4 file.
@@ -104,8 +98,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
         if len(wkt) == 0:
             wkt = getDefaultWKT()
 
-    indexAndMerge(extentList, extent, wkt, outfile, header, 
-            nPulsesPerChunkMerge)
+    indexAndMerge(extentList, extent, wkt, outfile, header) 
     
     # delete the temp files
     for fname, extent in extentList:
@@ -381,8 +374,7 @@ def indexPulses(pulses, points, recv, pulseIndexMethod):
 
     return xIdx, yIdx
 
-def indexAndMerge(extentList, extent, wkt, outfile, header, 
-    nPulsesPerChunk=DEFAULT_NPULSES_PER_CHUNK):
+def indexAndMerge(extentList, extent, wkt, outfile, header):
     """
     Internal method to merge all the temporary files into the output
     spatially indexing as we go.
@@ -425,31 +417,28 @@ def indexAndMerge(extentList, extent, wkt, outfile, header,
     for subExtent, driver in driverExtentList:
 
         # read in all the data
+        # NOTE: can't write data in blocks as the driver needs to be able to 
+        # sort all the data in one go.
         bDataWritten = False
-        bMoreToDo = True
-        pulseRange = generic.PulseRange(0, nPulsesPerChunk)
-        while bMoreToDo:
-            bMoreToDo = driver.setPulseRange(pulseRange)
-            if bMoreToDo:
-                driver.setPulseRange(pulseRange)
-                pulses = driver.readPulsesForRange()
-                points = driver.readPointsByPulse()
-                waveformInfo = driver.readWaveformInfo()
-                recv = driver.readReceived()
-                trans = driver.readTransmitted()
+        npulses = driver.getTotalNumberPulses()
+        if npulses > 0:
+            pulseRange = generic.PulseRange(0, npulses)
+            driver.setPulseRange(pulseRange)
+            pulses = driver.readPulsesForRange()
+            points = driver.readPointsByPulse()
+            waveformInfo = driver.readWaveformInfo()
+            recv = driver.readReceived()
+            trans = driver.readTransmitted()
 
-                outDriver.setExtent(subExtent)
-                if nFilesWritten == 0:
-                    copyScaling(driver, outDriver)
-                    outDriver.setHeader(header)
+            outDriver.setExtent(subExtent)
+            if nFilesWritten == 0:
+                copyScaling(driver, outDriver)
+                outDriver.setHeader(header)
 
-                # on create, a spatial index is created
-                outDriver.writeData(pulses, points, trans, recv, 
+            # on create, a spatial index is created
+            outDriver.writeData(pulses, points, trans, recv, 
                             waveformInfo)        
-                bDataWritten = True
-
-                pulseRange.startPulse += nPulsesPerChunk
-                pulseRange.endPulse += nPulsesPerChunk
+            nFilesWritten +=1 
 
         # close the driver while we are here
         driver.close()
