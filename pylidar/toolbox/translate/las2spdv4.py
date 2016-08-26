@@ -70,8 +70,9 @@ def transFunc(data, otherArgs):
     if revc is not None and revc.size > 0:
         data.output1.setReceived(revc)
 
-def translate(info, infile, outfile, expectRange, spatial, extent, scaling, 
-        epsg, binSize, buildPulses, pulseIndex, nullVals, constCols):
+def translate(info, infile, outfile, expectRange=None, spatial=None, extent=None, 
+        scaling=None, epsg=None, binSize=None, buildPulses=None, pulseIndex=None, 
+        nullVals=None, constCols=None):
     """
     Main function which does the work.
 

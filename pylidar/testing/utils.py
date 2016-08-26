@@ -20,13 +20,47 @@ General testing utility functions.
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function, division
-
+import os
+import copy
+import json
+import shutil
 import hashlib
+import tarfile
+import subprocess
 from pylidar import lidarprocessor
+from rios import cuiprogress
+
+TESTSUITE_VERSION = 0
+"""
+Version of the test suite. Increment each change.
+Used to ensure the tarfile matches what we expect.
+"""
+
+TESTDATA_DIR = 'testdata'
+"subdirectory within the tar file with the data"
+
+NEWDATA_DIR = 'newdata'
+"""
+subdirectory that will be created where the tar file is extracted
+that will contain the 'new' files which will be compared with those
+in TESTDATA_DIR.
+"""
+
+VERSION_FILE = 'version.txt'
+"name of the file containing the version information in the tar file"
 
 # maybe these should be in lidarprocessor also?
 ARRAY_TYPE_TRANSMITTED = 100
 ARRAY_TYPE_RECEIVED = 101
+
+class TestingError(Exception):
+    "Base class for testing Exceptions"
+
+class TestingVersionError(TestingError):
+    "Was a mismatch in versions"
+
+class TestingDataMismatch(TestingError):
+    "Data does not match between expected and newly calculated"
 
 class Checksum(object):
     """
@@ -42,6 +76,7 @@ class Checksum(object):
     transmittedSize = 0
     receivedChecksum = None
     receivedSize = 0
+    header = {}
 
     @staticmethod
     def cmpDict(dict1, dict2):
@@ -54,13 +89,47 @@ class Checksum(object):
         if (dict1 is not None and dict2 is None) or (dict1 is None and dict2 is not None):
             return False
 
-        names = dict1.dtype.names
-        if names != dict2.dtype.names:
+        names = dict1.keys()
+        if names != dict2.keys():
             return False
 
         for name in names:
              if dict1[name] != dict2[name]:
                 return False
+        return True
+
+    @staticmethod
+    def cmpDictWithError(olddict, newdict, atype):
+        """
+        Internal method. Compares 2 dictionaries
+        and raises an Exception with a message if they don't match.
+
+        atype should be point|pulse|waveform|header and is included in the
+        error message.
+        """
+        if olddict is None and newdict is None:
+            return True
+        if olddict is not None and newdict is None: 
+            msg = '%s present one the original file but not in the new one'
+            msg = msg % atype
+            raise TestingDataMismatch(msg)
+        if olddict is None and newdict is not None:
+            msg = '%s present one the mew file but not in the original one'
+            msg = msg % atype
+            raise TestingDataMismatch(msg)
+
+        names = olddict.keys()
+        if names != newdict.keys():
+            msg = "for %s the column names don't match. Original: %s New: %s"
+            msg = msg % (atype, ','.join(names), ','.join(newdict.keys()))
+            raise TestingDataMismatch(msg)
+
+        for name in names:
+             if newdict[name] != olddict[name]:
+                msg = 'for %s the is a data mismatch on column %s'
+                msg = msg % (atype, name)
+                raise TestingDataMismatch(msg)
+
         return True
 
     def __eq__(self, other):
@@ -73,7 +142,8 @@ class Checksum(object):
             and self.transmittedChecksum == other.transmittedChecksum
             and self.transmittedSize == other.transmittedSize
             and self.receivedChecksum == other.receivedChecksum
-            and self.receivedSize == other.receivedSize)
+            and self.receivedSize == other.receivedSize
+            and self.header == other.header)
 
     def __ne__(self, other):
         return (not self.cmpDict(self.pointChecksums, other.pointChecksums) 
@@ -85,8 +155,49 @@ class Checksum(object):
             or self.transmittedChecksum != other.transmittedChecksum
             or self.transmittedSize != other.transmittedSize
             or self.receivedChecksum != other.receivedChecksum
-            or self.receivedSize != other.receivedSize)
+            or self.receivedSize != other.receivedSize
+            or self.header != other.header)
 
+    def doCheck(self, other):
+        """
+        Similar to __eq__, but raises an exception with a useful message 
+        Expects self to be the 'old' file info.
+        """
+        if self.pointSize != other.pointSize:
+            msg = 'old file has a different number of points to the new file'
+            raise TestingDataMismatch(msg)
+
+        if self.pulseSize != other.pulseSize:
+            msg = 'old file has a different number of pulses to the new file'
+            raise TestingDataMismatch(msg)
+
+        if self.waveformSize != other.waveformSize:
+            msg = 'old file has a different number of waveforms to the new file'
+            raise TestingDataMismatch(msg)
+
+        if self.transmittedSize != other.transmittedSize:
+            msg = 'old file has a different number of transmitted to the new file'
+            raise TestingDataMismatch(msg)
+
+        if self.transmittedChecksum != other.transmittedChecksum:
+            msg = "transmitted checksums don't match"
+            raise TestingDataMismatch(msg)
+
+        if self.receivedSize != other.receivedSize:
+            msg = 'old file has a different number of received to the new file'
+            raise TestingDataMismatch(msg)
+
+        if self.receivedChecksum != other.receivedChecksum:
+            msg = "received checksums don't match"
+            raise TestingDataMismatch(msg)
+
+        self.cmpDictWithError(self.pointChecksums, other.pointChecksums, 'point')
+        self.cmpDictWithError(self.pulseChecksums, other.pulseChecksums, 'pulse')
+        self.cmpDictWithError(self.waveformChecksums, other.waveformChecksums, 
+                'waveform')
+        self.cmpDictWithError(self.waveformChecksums, other.waveformChecksums, 
+                'header')
+        
     def __str__(self):
         s = 'pointSize:%d,pulseSize:%d,waveInfoSize:%d,transmittedSize:%d,receivedSize:%d' % (
             self.pointSize, self.pulseSize, self.waveformSize, 
@@ -125,6 +236,12 @@ class Checksum(object):
         for name in names:
             ckdict[name] = hashlib.md5()
         return ckdict
+
+    def setHeader(self, header):
+        """
+        Sets the header so we can compare with another header later
+        """
+        self.header = copy.copy(header)
 
     def updateChecksum(self, array, arrayType):
         """
@@ -197,8 +314,11 @@ class Checksum(object):
         self.convertDictToDigests(self.pulseChecksums)
         self.convertDictToDigests(self.pointChecksums)
         self.convertDictToDigests(self.waveformChecksums)
-        self.transmittedChecksum = self.transmittedChecksum.hexdigest()
-        self.receivedChecksum = self.receivedChecksum.hexdigest()
+
+        if self.transmittedChecksum is not None:
+            self.transmittedChecksum = self.transmittedChecksum.hexdigest()
+        if self.receivedChecksum is not None:
+            self.receivedChecksum = self.receivedChecksum.hexdigest()
 
 def pylidarChecksum(data, otherargs):
     """
@@ -220,19 +340,90 @@ def pylidarChecksum(data, otherargs):
     received = data.input.getReceived()   
     otherargs.checksum.updateChecksum(received, ARRAY_TYPE_RECEIVED)
 
+    if data.info.isFirstBlock():
+        header = data.input.getHeader()
+        otherargs.checksum.setHeader(header)
+
 def calculateCheckSum(infile):
     """
     Returns a Checksum instance for the given file
     """
+    print('Calculating LiDAR Checksum...')
     dataFiles = lidarprocessor.DataFiles()
     dataFiles.input = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
 
     otherArgs = lidarprocessor.OtherArgs()
     otherArgs.checksum = Checksum()
 
-    lidarprocessor.doProcessing(pylidarChecksum, dataFiles, otherArgs=otherArgs)
+    controls = lidarprocessor.Controls()
+    progress = cuiprogress.GDALProgressBar()
+    controls.setProgress(progress)
+
+    lidarprocessor.doProcessing(pylidarChecksum, dataFiles, otherArgs=otherArgs,
+            controls=controls)
 
     # as a last step, calculate the digests
     otherArgs.checksum.convertToDigests()
 
     return otherArgs.checksum
+
+def compareLiDARFiles(oldfile, newfile):
+    """
+    Compares 2 LiDAR files and raises and exception with information 
+    about the differences if they do not match.
+    """
+    oldChecksum = calculateCheckSum(oldfile)
+    newChecksum = calculateCheckSum(newfile)
+    oldChecksum.doCheck(newChecksum)
+    print('LiDAR files check ok')
+
+def compareImageFiles(oldfile, newfile):
+    """
+    Compares two image files using gdalchksum.py
+    """
+    oldChecksum = subprocess.check_output(['gdalchksum.py', oldfile])
+    newChecksum = subprocess.check_output(['gdalchksum.py', newfile])
+    if oldChecksum != newChecksum:
+        msg = 'image checksums do not match'
+        raise TestingDataMismatch(msg)
+    print('Image files check ok')
+
+def extractTarFile(tarFile, pathToUse='.'):
+    """
+    Extracts the tarFile to the given path and checks the version matches
+    what was expected. 
+
+    Returns the path to where the data files are (ie inside the extracted tarfile)
+    and the path to where to create the new data files for comparison.
+    """
+    outDataDir = os.path.join(pathToUse, TESTDATA_DIR)
+    if os.path.isdir(outDataDir):
+        # remove it
+        shutil.rmtree(outDataDir, ignore_errors=True)
+
+    # extract everything
+    tar = tarfile.open(tarFile)
+    tar.extractall(pathToUse)
+    tar.close()
+
+    # check the version 
+    versionPath = os.path.join(outDataDir, VERSION_FILE)
+    data = open(versionPath).readline()
+
+    dataDict = json.loads(data)
+
+    if dataDict['version'] != TESTSUITE_VERSION:
+        msg = "Version is match. Expected %d but tarfile is version %d"
+        msg = msg % (TESTSUITE_VERSION, dataDict['version'])
+        raise TestingVersionError(msg)
+
+    # create the NEWDATA_DIR
+    newDataDir = os.path.join(pathToUse, NEWDATA_DIR)
+    if os.path.isdir(newDataDir):
+        # remove it
+        shutil.rmtree(newDataDir, ignore_errors=True)
+
+    # create it
+    os.mkdir(newDataDir)
+
+    return outDataDir, newDataDir

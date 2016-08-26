@@ -217,7 +217,8 @@ if NO_INSTALL_CMDLINE:
     scriptList = None
 else:
     scriptList = ['bin/pylidar_translate', 'bin/pylidar_info', 
-            'bin/pylidar_index', 'bin/pylidar_tile', 'bin/pylidar_rasterize']
+            'bin/pylidar_index', 'bin/pylidar_tile', 'bin/pylidar_rasterize',
+            'bin/pylidar_test']
 
 setup(name='pylidar',
       version=pylidar.PYLIDAR_VERSION,
