@@ -77,7 +77,7 @@ to be passed to message handler function set with
 Controls.setMessageHandler
 """
 
-DEFAULT_WINDOW_SIZE = 200 # bins
+DEFAULT_WINDOW_SIZE = 256 # bins
 "Size of the default window size in bins"
 
 ARRAY_TYPE_POINTS = generic.ARRAY_TYPE_POINTS
