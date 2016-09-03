@@ -52,6 +52,8 @@ def getCmdargs():
         help="Output raster background value. default=%(default)s.")
     p.add_argument("--binsize", type=float, 
         help="resolution to do processing at")
+    p.add_argument("--footprint", choices=['INTERSECTION', 'UNION', 'BOUNDS_FROM_REFERENCE'],
+        help="Multiple input files will be combined in this way")
     p.add_argument("-m", "--module", help="Extra modules that need to be " + 
         "imported for use by --function")
     p.add_argument("-q", "--quiet", default=False, action='store_true', 
@@ -68,6 +70,10 @@ def getCmdargs():
         p.print_help()
         sys.exit()
 
+    if cmdargs.footprint is not None:
+        # Evaluate the footprint string as a named constant
+        cmdargs.footprint = eval("lidarprocessor.{}".format(cmdargs.footprint))
+
     return cmdargs
 
 def run():
@@ -80,4 +86,4 @@ def run():
     rasterization.rasterize(cmdargs.infiles, cmdargs.output, 
         cmdargs.attributes, cmdargs.function,
         cmdargs.type, cmdargs.background, cmdargs.binsize, cmdargs.module,
-        cmdargs.quiet)
+        cmdargs.quiet, footprint=cmdargs.footprint)
