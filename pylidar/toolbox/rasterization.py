@@ -70,8 +70,8 @@ def writeImageFunc(data, otherArgs):
     data.imageOut.setData(outStack)
 
 def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION, 
-        atype=DEFAULT_ATTRIBUTE, 
-        background=0, binSize=None, extraModule=None, quiet=False):
+        atype=DEFAULT_ATTRIBUTE, background=0, binSize=None, extraModule=None, 
+        quiet=False, footprint=None):
     """
     Apply the given function to the list of input files and create
     an output raster file. attributes is a list of attributes to run
@@ -101,6 +101,9 @@ def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION,
 
     if binSize is not None:
         controls.setReferenceResolution(binSize)
+    
+    if footprint is not None:
+        controls.setFootprint(footprint)
 
     otherArgs = lidarprocessor.OtherArgs()
     # reference to the function to call
