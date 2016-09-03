@@ -90,8 +90,9 @@ def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION,
     dataFiles.imageOut = lidarprocessor.ImageFile(outfile, lidarprocessor.CREATE)
 
     # import any other modules required
+    globalsDict = globals()
     if extraModule is not None:
-        importlib.import_module(extraModule)
+        globalsDict[extraModule] = importlib.import_module(extraModule)
 
     controls = lidarprocessor.Controls()
     controls.setSpatialProcessing(True)
@@ -107,7 +108,7 @@ def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION,
 
     otherArgs = lidarprocessor.OtherArgs()
     # reference to the function to call
-    otherArgs.func = eval(function)
+    otherArgs.func = eval(function, globalsDict)
     otherArgs.attributes = attributes
     otherArgs.background = background
     atype = atype.upper()
