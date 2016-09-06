@@ -61,6 +61,9 @@ running the command line utilities.
 Downloads
 ---------
 
+Source
+^^^^^^
+
 Source code is available from `BitBucket <https://bitbucket.org/chchrsc/pylidar>`_. 
 `RIOS <http://rioshome.org/>`_, `Numba <http://numba.pydata.org/>`_, `Numpy <http://www.numpy.org/>`_
 and `h5py <http://h5py.org/>`_ are required dependencies. Additional formats require 
@@ -77,6 +80,12 @@ before building as detailed in this table:
 +---------------+-----------------------------+------------------------------------------------------+
 | ASCII .gz     | ZLIB_ROOT                   | `zlib <http://zlib.net/>`_                           |
 +---------------+-----------------------------+------------------------------------------------------+
+
+The related `pynninterp <https://bitbucket.org/petebunting/pynninterp>`_ module is used
+for some interpolation operations.
+
+Conda
+^^^^^
 
 `Conda <http://conda.pydata.org/miniconda.html#miniconda>`_ packages are available under the 'rios' channel.
 Once you have installed `Conda <http://conda.pydata.org/miniconda.html#miniconda>`_, run the following commands on the 
@@ -119,7 +128,7 @@ Drivers
    lidarformats/spdv4
    lidarformats/las
    lidarformats/riegl
-   lidarformats/ascii_ts
+   lidarformats/ascii
    lidarformats/h5space
    lidarformats/gridindexutils
 
