@@ -523,7 +523,7 @@ spatial index will be recomputed on the fly"""
         points = point_space.read(self.fileHandle['DATA']['POINTS'])
 
         # translate any classifications
-        self.recodeClassification(points, generic.RECODE_TO_LAS)
+        self.recodeClassification(points, generic.RECODE_TO_LAS, colNames)
         
         # self.lastExtent updated in readPulsesForExtent()
         # keep these indices from pulses to points - handy for the indexing 
@@ -1356,7 +1356,7 @@ spatial index will be recomputed on the fly"""
         points = point_space.read(self.fileHandle['DATA']['POINTS'])
 
         # translate any classifications
-        self.recodeClassification(points, generic.RECODE_TO_LAS)
+        self.recodeClassification(points, generic.RECODE_TO_LAS, colNames)
         
         # keep these indices from pulses to points - handy for the indexing 
         # functions.

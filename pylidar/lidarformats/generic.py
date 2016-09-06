@@ -464,15 +464,28 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
 
-    def recodeClassification(self, array, direction):
+    def recodeClassification(self, array, direction, colNames=None):
         """
         Recode classification column (if it exists in array)
         in the specified direction. 
-        """
-        if array.dtype.fields is None or CLASSIFICATION_COLNAME not in array.dtype.fields:
-            return
 
-        classification = array[CLASSIFICATION_COLNAME]
+        If array is not structured and colNames is a string equal
+        to CLASSIFICATION_COLNAME, then the array is treated as the
+        classification column.
+        """
+        if array.dtype.fields is None:
+            # non structured
+            if (colNames is None or not isinstance(colNames, str) or 
+                    colNames != CLASSIFICATION_COLNAME):
+                return
+            else:
+                classification = array
+        else:
+            # structured
+            if CLASSIFICATION_COLNAME not in array.dtype.fields:
+                return
+            else:
+                classification = array[CLASSIFICATION_COLNAME]
 
         maskList = []
         # we have to do this in 2 steps since we are changing

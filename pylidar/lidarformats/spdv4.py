@@ -1082,7 +1082,7 @@ spatial index will be recomputed on the fly"""
         points = self.readFieldsAndUnScale(pointsHandle, colNames, point_space)
 
         # translate any classifications
-        self.recodeClassification(points, generic.RECODE_TO_LAS)
+        self.recodeClassification(points, generic.RECODE_TO_LAS, colNames)
             
         self.lastExtent = copy.copy(self.extent)
         self.lastPoints = points
@@ -2264,7 +2264,7 @@ spatial index will be recomputed on the fly"""
         points = self.readFieldsAndUnScale(pointsHandle, colNames, point_space)
 
         # translate any classifications
-        self.recodeClassification(points, generic.RECODE_TO_LAS)
+        self.recodeClassification(points, generic.RECODE_TO_LAS, colNames)
         
         # keep these indices from pulses to points - handy for the indexing 
         # functions.
