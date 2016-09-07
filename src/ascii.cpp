@@ -952,7 +952,8 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
 
 /* Table of methods */
 static PyMethodDef PyASCIIReader_methods[] = {
-    {"readData", (PyCFunction)PyASCIIReader_readData, METH_VARARGS, NULL}, 
+    {"readData", (PyCFunction)PyASCIIReader_readData, METH_VARARGS, 
+        "reads data. pass pulsestart, pulseend"}, 
     {NULL}  /* Sentinel */
 };
 
