@@ -24,7 +24,10 @@ from __future__ import print_function, division
 import sys
 import argparse
 
+from . import utils
 from . import testsuite1
+from . import testsuite2
+from . import testsuite4
 
 def getCmdargs():
     """
@@ -46,4 +49,8 @@ def getCmdargs():
 def run():
     cmdargs = getCmdargs()
 
-    testsuite1.run(cmdargs.input, cmdargs.path)
+    oldpath, newpath = utils.extractTarFile(cmdargs.input, cmdargs.path)
+
+    testsuite1.run(oldpath, newpath)
+    testsuite2.run(oldpath, newpath)
+    testsuite4.run(oldpath, newpath)

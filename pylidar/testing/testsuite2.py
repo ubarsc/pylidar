@@ -1,6 +1,6 @@
 
 """
-Simple testsuite that checks we can import a LAS file and create a DEM
+Simple testsuite that checks we can create a DEM from 2 files.
 """
 
 # This file is part of PyLidar
@@ -23,15 +23,17 @@ from __future__ import print_function, division
 
 import os
 from . import utils
+from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from pylidar.toolbox.translate.las2spdv4 import translate
 from pylidar.toolbox.indexing.gridindex import createGridSpatialIndex
 from pylidar.toolbox.rasterization import rasterize
 
-INPUT_LAS = 'apl1dr_x509000ys6945000z56_2009_ba1m6_pbrisba.las'
-IMPORTED_SPD = 'testsuite1.spd'
-INDEXED_SPD = 'testsuite1_idx.spd'
-OUTPUT_DEM = 'testsuite1.img'
+INPUT2_LAS = 'apl1dr_x510000ys6945000z56_2009_ba1m6_pbrisba.las'
+IMPORTED_SPD = 'testsuite2.spd'
+INDEXED_SPD_1 = 'testsuite1_idx.spd'
+INDEXED_SPD_2 = 'testsuite2_idx.spd'
+OUTPUT_DEM = 'testsuite2.img'
 
 def run(oldpath, newpath):
     """
@@ -39,9 +41,9 @@ def run(oldpath, newpath):
 
     Importing
     Creating spatial index
-    creating a raster
+    creating a raster from 2 files at a different resolution
     """
-    inputLas = os.path.join(oldpath, INPUT_LAS)
+    inputLas = os.path.join(oldpath, INPUT2_LAS)
     info = generic.getLidarFileInfo(inputLas)
 
     importedSPD = os.path.join(newpath, IMPORTED_SPD)
@@ -49,13 +51,14 @@ def run(oldpath, newpath):
             pulseIndex='FIRST_RETURN')
     utils.compareLiDARFiles(os.path.join(oldpath, IMPORTED_SPD), importedSPD)
 
-    indexedSPD = os.path.join(newpath, INDEXED_SPD)
-    createGridSpatialIndex(importedSPD, indexedSPD, binSize=2.0, 
+    indexedSPD1 = os.path.join(newpath, INDEXED_SPD_1)
+    indexedSPD2 = os.path.join(newpath, INDEXED_SPD_2)
+    createGridSpatialIndex(importedSPD, indexedSPD2, binSize=2.0, 
             tempDir=newpath)
-    utils.compareLiDARFiles(os.path.join(oldpath, INDEXED_SPD), indexedSPD)
+    utils.compareLiDARFiles(os.path.join(oldpath, INDEXED_SPD_2), indexedSPD2)
 
     outputDEM = os.path.join(newpath, OUTPUT_DEM)
-    rasterize([indexedSPD], outputDEM, ['Z'], function="numpy.ma.min", 
-            atype='POINT')
+    rasterize([indexedSPD1, indexedSPD2], outputDEM, ['Z'], binSize=3.0,
+            function="numpy.ma.min", atype='POINT', footprint=lidarprocessor.UNION)
     utils.compareImageFiles(os.path.join(oldpath, OUTPUT_DEM), outputDEM)
     
