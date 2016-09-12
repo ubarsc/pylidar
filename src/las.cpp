@@ -565,6 +565,19 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
         if( !self->pReader->read_point() )
         {
             self->bFinished = true;
+            // have to do a bit of a hack here since
+            // if we are doing spatial reading and building pulses
+            // it could be that not all the points were within the 
+            // extent so we must check that we haven't got an incomplete
+            // set of returns and adjust appropriately.
+            if( self->bBuildPulses && (pPoints != NULL))
+            {
+                SLasPulse *pLastPulse = pulses.getLastElement();
+                if( pLastPulse != NULL )
+                {
+                    pLastPulse->number_of_returns = pPoints->getNumElems() - pLastPulse->pts_start_idx;
+                }
+            }
             break;
         }
 
@@ -803,11 +816,12 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
     {
         SLasPulse *pPulse = pulses.getElem(nPulseCount);
         SLasPoint *p1 = pPoints->getElem(pPulse->pts_start_idx);
-        SLasPoint *p2 = pPoints->getElem(pPulse->pts_start_idx + pPulse->number_of_returns);
+        SLasPoint *p2 = NULL;
 
         // set x_idx and y_idx for the pulses
         if( pPulse->number_of_returns > 0 )
         {
+            p2 = pPoints->getElem(pPulse->pts_start_idx + pPulse->number_of_returns - 1);
             if( self->nPulseIndex == FIRST_RETURN )
             {
                 pPulse->x_idx = p1->x;

@@ -3,6 +3,10 @@
 VERSION=2
 TARFILE=testdata_${VERSION}.tar.gz
 
+rm *.spd
+rm *.img
+rm *.xml
+
 # testsuite1
 pylidar_translate -i apl1dr_x509000ys6945000z56_2009_ba1m6_pbrisba.las \
     -o testsuite1.spd --epsg 28356 -f SPDV4 --pulseindex FIRST_RETURN --buildpulses
