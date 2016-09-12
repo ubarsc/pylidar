@@ -44,7 +44,8 @@ def run(oldpath, newpath):
 
     importedSPD = os.path.join(newpath, IMPORTED_SPD)
     translate(info, inputLas, importedSPD, epsg=28356, 
-            pulseIndex='FIRST_RETURN', spatial=True, binSize=2.0)
+            pulseIndex='FIRST_RETURN', spatial=True, binSize=2.0, 
+            buildPulses=True)
     utils.compareLiDARFiles(os.path.join(oldpath, IMPORTED_SPD), importedSPD)
 
     outputDEM = os.path.join(newpath, OUTPUT_DEM)

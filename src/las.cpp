@@ -781,7 +781,18 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
         // spatial reads keep going until all the way through the file
         if( PyTuple_Size(args) == 2 )
         {
+            // need to ensure we have read all the points for the last
+            // pulse also
             bFinished = (pulses.getNumElems() >= nPulses);
+            if( bFinished )
+            {
+                SLasPulse *pLastPulse = pulses.getLastElement();
+                if( (pLastPulse != NULL ) && (pPoints != NULL) )
+                {
+                    npy_uint32 nExpectedPoints = pLastPulse->number_of_returns + pLastPulse->pts_start_idx;
+                    bFinished = (pPoints->getNumElems() >= nExpectedPoints);
+                }
+            }
         }
     }
 

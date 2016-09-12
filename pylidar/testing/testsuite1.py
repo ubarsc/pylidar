@@ -46,7 +46,7 @@ def run(oldpath, newpath):
 
     importedSPD = os.path.join(newpath, IMPORTED_SPD)
     translate(info, inputLas, importedSPD, epsg=28356, 
-            pulseIndex='FIRST_RETURN')
+            pulseIndex='FIRST_RETURN', buildPulses=True)
     utils.compareLiDARFiles(os.path.join(oldpath, IMPORTED_SPD), importedSPD)
 
     indexedSPD = os.path.join(newpath, INDEXED_SPD)

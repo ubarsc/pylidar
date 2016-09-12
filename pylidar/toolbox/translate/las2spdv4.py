@@ -71,7 +71,7 @@ def transFunc(data, otherArgs):
         data.output1.setReceived(revc)
 
 def translate(info, infile, outfile, expectRange=None, spatial=None, extent=None, 
-        scaling=None, epsg=None, binSize=None, buildPulses=None, pulseIndex=None, 
+        scaling=None, epsg=None, binSize=None, buildPulses=False, pulseIndex=None, 
         nullVals=None, constCols=None):
     """
     Main function which does the work.
@@ -122,8 +122,9 @@ def translate(info, infile, outfile, expectRange=None, spatial=None, extent=None
     else:
         msg = "Pulse index argument not recognised."
         raise generic.LiDARInvalidSetting(msg)
-    if not buildPulses:
-        dataFiles.input1.setLiDARDriverOption('BUILD_PULSES', False)
+
+    dataFiles.input1.setLiDARDriverOption('BUILD_PULSES', buildPulses)
+
     if spatial:
         dataFiles.input1.setLiDARDriverOption('BIN_SIZE', float(binSize))
 

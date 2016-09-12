@@ -252,6 +252,8 @@ SPDV4_CLASSIFICATION_BRANCH = 11
 "classification codes"
 SPDV4_CLASSIFICATION_WALL = 12
 "classification codes"
+SPDV4_CLASSIFICATION_RAIL = 13
+"classification codes"
 
 @jit
 def flatten3dWaveformData(wavedata, inmask, nrecv, flattened):
@@ -765,6 +767,8 @@ class SPDV4File(generic.LiDARFile):
                                 generic.CLASSIFICATION_FOLIAGE))
         self.classificationTranslation.append((SPDV4_CLASSIFICATION_BRANCH,
                                 generic.CLASSIFICATION_BRANCH))
+        self.classificationTranslation.append((SPDV4_CLASSIFICATION_RAIL,
+                                generic.CLASSIFICATION_RAIL))
 
         
     @staticmethod 

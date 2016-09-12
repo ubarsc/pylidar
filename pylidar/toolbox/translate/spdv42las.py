@@ -61,10 +61,15 @@ def setOutputScaling(points, indata, outdata):
             # in its min and max for Y
             # not sure if this should be in the driver...
             gain = abs(gain)
-            offest = maxVal
-            
-        outdata.setScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS, 
+            offset = maxVal
+
+        try:            
+            outdata.setScaling(colName, lidarprocessor.ARRAY_TYPE_POINTS, 
                         gain, offset)
+        except generic.LiDARArrayColumnError:
+            # failure should mean that scaling cannot be set for this column
+            # (should be an essential field).
+            pass
         
 def transFunc(data):
     """
@@ -92,8 +97,10 @@ def transFunc(data):
 
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
-    data.output1.setWaveformInfo(waveformInfo)
-    data.output1.setReceived(revc)
+    if waveformInfo is not None:
+        data.output1.setWaveformInfo(waveformInfo)
+    if revc is not None:
+        data.output1.setReceived(revc)
 
 def translate(info, infile, outfile, spatial, extent):
     """
