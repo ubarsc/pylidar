@@ -1112,6 +1112,15 @@ init_ascii(void)
     PyObject *pFormatNameDict = GetFormatNameDict();
     PyModule_AddObject(pModule, "FORMAT_NAMES", pFormatNameDict);
 
+    // format presence flags
+#ifdef HAVE_ZLIB
+    Py_INCREF(Py_True);
+    PyModule_AddObject(pModule, "HAVE_ZLIB", Py_True);
+#else
+    Py_INCREF(Py_False);
+    PyModule_AddObject(pModule, "HAVE_ZLIB", Py_False);
+#endif
+
 #if PY_MAJOR_VERSION >= 3
     return pModule;
 #endif

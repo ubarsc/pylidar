@@ -70,6 +70,9 @@ from . import gridindexutils
 # Fail slightly less drastically when running from ReadTheDocs
 if os.getenv('READTHEDOCS', default='False') != 'True':
     from . import _ascii
+    HAVE_ZLIB = _ascii.HAVE_ZLIB
+else:
+    HAVE_ZLIB = False
 
 SUPPORTEDOPTIONS = ('COL_TYPES', 'PULSE_COLS', 'CLASSIFICATION_CODES')
 "driver options"

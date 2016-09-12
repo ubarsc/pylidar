@@ -34,16 +34,21 @@ from .lidarformats import generic
 from .lidarformats import spdv3
 from .lidarformats import spdv4
 from .lidarformats import ascii
+
+HAVE_FMT_ASCII_ZLIB = ascii.HAVE_ZLIB
+HAVE_FMT_RIEGL = True
 try:
     from .lidarformats import riegl
 except ImportError:
     # libraries not available
-    pass
+    HAVE_FMT_RIEGL = False
+
+HAVE_FMT_LAS = True
 try:
     from .lidarformats import las
 except ImportError:
     # library not available
-    pass
+    HAVE_FMT_LAS = False
     
 from . import userclasses
 
