@@ -278,7 +278,7 @@ class LasFile(generic.LiDARFile):
             if self.lastRange is None or self.range != self.lastRange:
                 pulses, points, info, recv = self.lasFile.readData(self.range.startPulse, 
                             self.range.endPulse)
-                self.lastRange = self.range        
+                self.lastRange = copy.copy(self.range)
                 self.lastPoints = points
                 self.lastPulses = pulses
                 self.lastWaveformInfo = info
@@ -298,7 +298,7 @@ class LasFile(generic.LiDARFile):
             
                     pulses, points, info, recv = self.lasFile.readData()
                 
-                    self.lastExtent = extent
+                    self.lastExtent = copy.copy(extent)
                     self.lastPoints = points
                     self.lastPulses = pulses
                     self.lastWaveformInfo = info

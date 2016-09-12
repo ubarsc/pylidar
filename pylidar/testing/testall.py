@@ -27,6 +27,7 @@ import argparse
 from . import utils
 from . import testsuite1
 from . import testsuite2
+from . import testsuite3
 from . import testsuite4
 from pylidar import lidarprocessor
 
@@ -63,6 +64,12 @@ def run():
 
     if lidarprocessor.HAVE_FMT_LAS:
         testsuite2.run(oldpath, newpath)
+        testsRun += 1
+    else:
+        testsIgnoredNoDriver += 1
+
+    if lidarprocessor.HAVE_FMT_LAS:
+        testsuite3.run(oldpath, newpath)
         testsRun += 1
     else:
         testsIgnoredNoDriver += 1

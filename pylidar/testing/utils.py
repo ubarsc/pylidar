@@ -30,7 +30,7 @@ import subprocess
 from pylidar import lidarprocessor
 from rios import cuiprogress
 
-TESTSUITE_VERSION = 1
+TESTSUITE_VERSION = 2
 """
 Version of the test suite. Increment each change.
 Used to ensure the tarfile matches what we expect.

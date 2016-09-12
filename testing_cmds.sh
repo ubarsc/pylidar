@@ -25,6 +25,9 @@ pylidar_rasterize -i testsuite3.spd -o testsuite3.img -f numpy.ma.min -a Z
 # testsuite4
 python -c "from pylidar.testing.testsuite4 import run;run('.', '.')"
 
+# testsuite5
+#pylidar_translate -i testsuite1.spd -o testsuite5.las -f LAS
+
 cd ..
-tar cvfz testdata_1.tar.gz testdata
+tar cvfz testdata_2.tar.gz testdata
 
