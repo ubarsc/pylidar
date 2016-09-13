@@ -83,8 +83,7 @@ to filter by classification::
         # if given a list of fields, returns a structured array with all of them
         ptVals = data.input.getPoints(colsNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
         # create mask for ground
-        # TODO: update this when standard classifications are introduced
-        mask = ptVals['CLASSIFICATION'] == 2
+        mask = ptVals['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND
 
         # get the coords for this block
         pxlCoords = data.info.getBlockCoordArrays()
