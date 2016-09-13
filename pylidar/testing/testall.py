@@ -30,6 +30,7 @@ from . import testsuite2
 from . import testsuite3
 from . import testsuite4
 from . import testsuite5
+from . import testsuite6
 from pylidar import lidarprocessor
 
 def getCmdargs():
@@ -83,6 +84,9 @@ def run():
         testsRun += 1
     else:
         testsIgnoredNoDriver += 1
+
+    testsuite6.run(oldpath, newpath)
+    testsRun += 1
 
     print(testsRun, 'tests run successfully')
     print(testsIgnoredNoDriver, 'tests skipped because of missing format drivers')

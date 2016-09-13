@@ -35,6 +35,9 @@ python -c "from pylidar.testing.testsuite4 import run;run('.', '.')"
 # testsuite5
 pylidar_translate -i testsuite1.spd -o testsuite5.las -f LAS
 
+# testsuite6
+python -c "from pylidar.testing.testsuite6 import run;run('.', '.')"
+
 rm *.xml
 cd ..
 rm $TARFILE

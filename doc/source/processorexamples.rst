@@ -81,7 +81,7 @@ to filter by classification::
 
     def interpGroundReturns(data):
         # if given a list of fields, returns a structured array with all of them
-        ptVals = data.input.getPoints(colsNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
+        ptVals = data.input.getPoints(colNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
         # create mask for ground
         mask = ptVals['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND
 
@@ -104,13 +104,15 @@ to filter by classification::
             out = numpy.empty(pxlCoords[0].shape, dtype=numpy.float64)
             out.fill(0)
 
+        # make 3d
+        out = numpy.expand_dims(out, axis=0)
         data.imageOut.setData(out)
 
     dataFiles = lidarprocessor.DataFiles()
     dataFiles.input = lidarprocessor.LidarFile('file.spd', lidarprocessor.READ)
     dataFiles.imageOut = lidarprocessor.ImageFile('outfile.img', lidarprocessor.CREATE)
 
-    lidarprocessor.doProcessing(writeImageFunc, dataFiles)
+    lidarprocessor.doProcessing(interpGroundReturns, dataFiles)
 
 
 The data.info object is an instance of :class:`pylidar.userclasses.UserInfo` and contains
@@ -157,6 +159,8 @@ which should work the same regardless of how many files are to be input. This co
             out = numpy.empty(pxlCoords[0].shape, dtype=numpy.float64)
             out.fill(0)
 
+        # make 3d
+        out = numpy.expand_dims(out, axis=0)
         data.imageOut.setData(out)
 
     dataFiles = lidarprocessor.DataFiles()
@@ -166,7 +170,7 @@ which should work the same regardless of how many files are to be input. This co
         dataFiles.allinputs.append(input)
     dataFiles.imageOut = lidarprocessor.ImageFile('outfile.img', lidarprocessor.CREATE)
 
-    lidarprocessor.doProcessing(writeImageFunc, dataFiles)
+    lidarprocessor.doProcessing(interpGroundReturns, dataFiles)
 
 ---------------------
 Updating a Lidar File
@@ -198,7 +202,7 @@ This example updates a Lidar file with data from an image raster::
     dataFiles.input = lidarprocessor.LidarFile('file.spd', lidarprocessor.UPDATE)
     dataFiles.imageIn = lidarprocessor.ImageFile('dem.img', lidarprocessor.READ)
 
-    lidarprocessor.doProcessing(writeImageFunc, dataFiles)
+    lidarprocessor.doProcessing(updatePointFunc, dataFiles)
 
 If requesting a non-structured array like this::
 
