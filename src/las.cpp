@@ -557,6 +557,7 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
     SLasPoint *pLasPoint = NULL; // we don't know size - may be extra fields
     SLasWaveformInfo lasWaveformInfo;
     bool bFinished = false;
+    int nReturnNumber = 0; // pPoint->get_return_number can be unreliable so we need another way
 
     // spatial reads go until there is no more data (see setExtent)
     // non-spatial reads get bFinished updated.
@@ -695,18 +696,23 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
         }
 
         pPoints->push(pLasPoint);
+        //fprintf(stderr, "Pushed new point ret num %d %d\n", pLasPoint->return_number, nReturnNumber);
 
         // only add a pulse if we are building a pulse per point (self->bBuildPulses == false)
         // or this is the first return of a number of points
-        if( !self->bBuildPulses || ( pLasPoint->return_number == 0 ) )
+        if( !self->bBuildPulses || (nReturnNumber == 0 ) )
         {
             lasPulse.scan_angle_rank = pPoint->get_scan_angle_rank();
             lasPulse.scan_angle = pPoint->get_scan_angle();
             lasPulse.pts_start_idx = pPoints->getNumElems() - 1;
+            //fprintf(stderr, "expecting %d points\n", (int)pPoint->get_number_of_returns());
             if( self->bBuildPulses )
                 lasPulse.number_of_returns = pPoint->get_number_of_returns();
             else
                 lasPulse.number_of_returns = 1;
+
+            // reset - decrement below
+            nReturnNumber = lasPulse.number_of_returns;
 
             lasPulse.orig_number_of_returns = pPoint->get_number_of_returns();
             lasPulse.gps_time = pPoint->get_gps_time();
@@ -790,26 +796,20 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
             pulses.push(&lasPulse);
         }
 
+        nReturnNumber--;
+
         // update loop exit for non-spatial reads
         // spatial reads keep going until all the way through the file
         if( PyTuple_Size(args) == 2 )
         {
             // need to ensure we have read all the points for the last
             // pulse also
-            bFinished = (pulses.getNumElems() >= nPulses);
-            if( bFinished )
-            {
-                SLasPulse *pLastPulse = pulses.getLastElement();
-                if( (pLastPulse != NULL ) && (pPoints != NULL) )
-                {
-                    npy_uint32 nExpectedPoints = pLastPulse->number_of_returns + pLastPulse->pts_start_idx;
-                    bFinished = (pPoints->getNumElems() >= nExpectedPoints);
-                }
-            }
+            bFinished = (pulses.getNumElems() >= nPulses) && (nReturnNumber == 0);
         }
     }
 
     self->nPulsesRead += pulses.getNumElems();
+    //fprintf(stderr, "pulses %ld points %ld\n", pulses.getNumElems(), pPoints->getNumElems());
 
     // go through all the pulses and do some tidying up
     for( npy_intp nPulseCount = 0; nPulseCount < pulses.getNumElems(); nPulseCount++)
