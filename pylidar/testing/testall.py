@@ -29,6 +29,7 @@ from . import testsuite1
 from . import testsuite2
 from . import testsuite3
 from . import testsuite4
+from . import testsuite5
 from pylidar import lidarprocessor
 
 def getCmdargs():
@@ -76,6 +77,12 @@ def run():
 
     testsuite4.run(oldpath, newpath)
     testsRun += 1
+
+    if lidarprocessor.HAVE_FMT_LAS:
+        testsuite5.run(oldpath, newpath)
+        testsRun += 1
+    else:
+        testsIgnoredNoDriver += 1
 
     print(testsRun, 'tests run successfully')
     print(testsIgnoredNoDriver, 'tests skipped because of missing format drivers')

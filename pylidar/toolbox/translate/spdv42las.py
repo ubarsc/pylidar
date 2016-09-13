@@ -102,7 +102,7 @@ def transFunc(data):
     if revc is not None:
         data.output1.setReceived(revc)
 
-def translate(info, infile, outfile, spatial, extent):
+def translate(info, infile, outfile, spatial=False, extent=None):
     """
     Does the translation between SPD V4 and .las format files.
 
