@@ -136,8 +136,7 @@ which should work the same regardless of how many files are to be input. This co
         # turn into one big array
         ptVals = numpy.ma.hstack(ptVals)
         # create mask for ground
-        # TODO: update this when standard classifications are introduced
-        mask = ptVals['CLASSIFICATION'] == 2
+        mask = ptVals['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND
 
         # get the coords for this block
         pxlCoords = data.info.getBlockCoordArrays()
