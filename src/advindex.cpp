@@ -78,9 +78,9 @@ static int
 PyAdvIndex_init(PyAdvIndex *self, PyObject *args, PyObject *kwds)
 {
     const char *pszFname = NULL;
-    int nIdxType;
+    int nIdxType, nNewFile;
 
-    if( !PyArg_ParseTuple(args, "si", &pszFname, &nIdxType) )
+    if( !PyArg_ParseTuple(args, "sii", &pszFname, &nIdxType, &nNewFile) )
     {
         return -1;
     }
@@ -92,6 +92,7 @@ PyAdvIndex_init(PyAdvIndex *self, PyObject *args, PyObject *kwds)
     IndexProperty_SetIndexType(props, (RTIndexType)nIdxType);
     IndexProperty_SetIndexStorage(props, RT_Disk);
     IndexProperty_SetFileName(props, pszFname);
+    IndexProperty_SetOverwrite(props, nNewFile);
 
     self->idx = Index_Create(props);
     if( (self->idx == NULL ) || !Index_IsValid(self->idx) )

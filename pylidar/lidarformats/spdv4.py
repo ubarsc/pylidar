@@ -180,11 +180,13 @@ SPDV4_PULSE_INDEX_ZPLANE = 7 # Reserved
 
 SPDV4_INDEXTYPE_SIMPLEGRID = spdv4_index.SPDV4_INDEXTYPE_SIMPLEGRID
 "types of spatial indices"
+SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE = spdv4_index.SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE
+"types of spatial indices"
 
 SPDV4_SIMPLEGRID_COUNT_DTYPE = spdv4_index.SPDV4_SIMPLEGRID_COUNT_DTYPE
-"types for the spatial index"
+"data types for the spatial index"
 SPDV4_SIMPLEGRID_INDEX_DTYPE = spdv4_index.SPDV4_SIMPLEGRID_COUNT_DTYPE
-"types for the spatial index"
+"data types for the spatial index"
 
 SPDV4_POINT_FLAGS_IGNORE = 1
 "flags for POINT_FLAGS"

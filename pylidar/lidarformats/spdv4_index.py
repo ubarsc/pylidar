@@ -19,12 +19,19 @@ The spatial index handing for SPDV4
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function, division
 
+import os
 import sys
 import copy
 import numpy
 from rios import pixelgrid
 from . import generic
 from . import gridindexutils
+
+HAVE_ADVINDEX = True
+try:
+    from . import _advindex
+except ImportError:
+    HAVE_ADVINDEX = False
 
 SPDV4_INDEX_CARTESIAN = 1
 "types of indexing in the file"
@@ -39,11 +46,13 @@ SPDV4_INDEX_SCAN = 5
 
 SPDV4_INDEXTYPE_SIMPLEGRID = 0
 "types of spatial indices"
+SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE = 1
+"types of spatial indices"
 
 SPDV4_SIMPLEGRID_COUNT_DTYPE = numpy.uint32
-"types for the spatial index"
+"data types for the spatial index"
 SPDV4_SIMPLEGRID_INDEX_DTYPE = numpy.uint64
-"types for the spatial index"
+"data types for the spatial index"
 
 class SPDV4SpatialIndex(object):
     """
@@ -104,6 +113,21 @@ class SPDV4SpatialIndex(object):
         
     def setPulsesForExtent(self, extent, pulses, lastPulseID):
         raise NotImplementedError()
+
+    @staticmethod
+    def getClassForType(indexType):
+        """
+        Internal method - returns the cls for given index code
+        """
+        if indexType == SPDV4_INDEXTYPE_SIMPLEGRID:
+            cls = SPDV4SimpleGridSpatialIndex
+        elif HAVE_ADVINDEX and indexType == SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE:
+            cls = SPDV4LibSpatialIndexRtreeIndex
+        else:
+            msg = 'Unknown indextype %d' % indexType
+            raise generic.LiDARInvalidSetting(msg)
+
+        return cls
         
     @staticmethod
     def getHandlerForFile(fileHandle, mode, prefType=SPDV4_INDEXTYPE_SIMPLEGRID):
@@ -120,18 +144,32 @@ class SPDV4SpatialIndex(object):
         it will be created.
         """
         handler = None
-        if prefType == SPDV4_INDEXTYPE_SIMPLEGRID:
-            cls = SPDV4SimpleGridSpatialIndex
-            
-        # TODO: other types here
+
+        # in order of preference
+        availableIndices = [SPDV4_INDEXTYPE_SIMPLEGRID]
+        if HAVE_ADVINDEX:
+            availableIndices.append(SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE)
+
+        cls = SPDV4SpatialIndex.getClassForType(prefType)
+        availableIndices.remove(prefType)
         
         # now try and create the instance
-        try:
-            handler = cls(fileHandle, mode)
-        except generic.LiDARSpatialIndexNotAvailable:
-            # TODO: code to try other indices if READ
-            pass
-            
+        bContinue = True
+        while bContinue:
+            try:
+                handler = cls(fileHandle, mode)
+                bContinue = False
+            except generic.LiDARSpatialIndexNotAvailable:
+                if mode == generic.READ:
+                    # try the next one
+                    if len(availableIndices) > 0:
+                        prefType = availableIndices.pop()
+                        cls = SPDV4SpatialIndex.getClassForType(prefType)
+                    else:
+                        bContinue = False
+                else:
+                    bContinue = False
+
         return handler
         
 SPATIALINDEX_GROUP = 'SPATIALINDEX'
@@ -250,7 +288,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
 
     def getPulsesSpaceForExtent(self, extent, overlap):
         """
-        Get the space and indexed for pulses of the given extent.
+        Get the space and indexes for pulses of the given extent.
         """
         # return cache
         if self.lastExtent is not None and self.lastExtent == extent:
@@ -270,7 +308,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
 
     def getPointsSpaceForExtent(self, extent, overlap):
         """
-        Get the space and indexed for points of the given extent.
+        Get the space and indexes for points of the given extent.
         """
         # TODO: cache
     
@@ -345,3 +383,39 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         # and the mask to remove points, waveforms etc
         # and the bin index to sort points, waveforms, etc
         return pulses, mask, sortedBins
+
+class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
+    """
+    Uses libspatialindex with the rtree algorithm to store the data
+    """
+    def __init__(self, fileHandle, mode):
+        base, ext = os.path.splitext(fileHandle.filename)
+
+        raise generic.LiDARSpatialIndexNotAvailable()
+
+        newFile = mode == generic.CREATE        
+        self.index = _advindex.Index(base, _advindex.INDEX_RTREE, newFile)
+
+    def close(self):
+        del self.index
+
+    def getPulsesSpaceForExtent(self, extent, overlap):
+        """
+        Get the space and indexes for pulses of the given extent.
+        """
+
+    def getPointsSpaceForExtent(self, extent, overlap):
+        """
+        Get the space and indexes for points of the given extent.
+        """
+
+    def createNewIndex(self, pixelGrid):
+        """
+        Create a new spatial index
+        """
+
+    def setPulsesForExtent(self, extent, pulses, lastPulseID):
+        """
+        Update the spatial index. Given extent and data works out what
+        needs to be written.
+        """
