@@ -20,6 +20,7 @@ from __future__ import print_function, division
 
 import os
 import numpy
+from decimal import Decimal, ROUND_UP
 from . import h5space
 
 DEBUG_MODE = os.getenv('PYLIDAR_DEBUG', '0')
@@ -446,10 +447,14 @@ def getSlicesForExtent(siPixGrid, siShape, overlap, xMin, xMax, yMin, yMax):
     siSlice = None
     
     # work out where on the whole of file spatial index to read from
-    xoff = int((xMin - siPixGrid.xMin) / siPixGrid.xRes)
-    yoff = int((siPixGrid.yMax - yMax) / siPixGrid.yRes)
-    xright = int(numpy.ceil((xMax - siPixGrid.xMin) / siPixGrid.xRes))
-    xbottom = int(numpy.ceil((siPixGrid.yMax - yMin) / siPixGrid.yRes))
+    decPixxRes = Decimal(str(siPixGrid.xRes))
+    decPixyRes = Decimal(str(siPixGrid.yRes))
+    decPixxMin = Decimal(str(siPixGrid.xMin))
+    decPixyMax = Decimal(str(siPixGrid.yMax))
+    xoff = int((Decimal(str(xMin)) - decPixxMin) / decPixxRes)
+    yoff = int((decPixyMax - Decimal(str(yMax))) / decPixyRes)
+    xright = int(((Decimal(str(xMax)) - decPixxMin) / decPixxRes).quantize(Decimal('1.'), rounding=ROUND_UP))
+    xbottom = int(((decPixyMax - Decimal(str(yMin))) / decPixyRes).quantize(Decimal('1.'), rounding=ROUND_UP))
     xsize = xright - xoff
     ysize = xbottom - yoff
         
