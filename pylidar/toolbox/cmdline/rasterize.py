@@ -54,6 +54,8 @@ def getCmdargs():
         help="resolution to do processing at")
     p.add_argument("--footprint", choices=['INTERSECTION', 'UNION', 'BOUNDS_FROM_REFERENCE'],
         help="Multiple input files will be combined in this way")
+    p.add_argument("--windowsize", type=float, 
+        help="Window size to use for each processing block")
     p.add_argument("-m", "--module", help="Extra modules that need to be " + 
         "imported for use by --function")
     p.add_argument("-q", "--quiet", default=False, action='store_true', 
@@ -86,4 +88,5 @@ def run():
     rasterization.rasterize(cmdargs.infiles, cmdargs.output, 
         cmdargs.attributes, cmdargs.function,
         cmdargs.type, cmdargs.background, cmdargs.binsize, cmdargs.module,
-        cmdargs.quiet, footprint=cmdargs.footprint)
+        cmdargs.quiet, footprint=cmdargs.footprint, 
+        windowSize=cmdargs.windowsize)

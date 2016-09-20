@@ -71,7 +71,7 @@ def writeImageFunc(data, otherArgs):
 
 def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION, 
         atype=DEFAULT_ATTRIBUTE, background=0, binSize=None, extraModule=None, 
-        quiet=False, footprint=None):
+        quiet=False, footprint=None, windowSize=None):
     """
     Apply the given function to the list of input files and create
     an output raster file. attributes is a list of attributes to run
@@ -83,6 +83,8 @@ def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION,
     to use which defaults to that of the spatial indices used.
     extraModule should be a string with an extra module to import - use
     this for modules other than numpy that are needed by your function.
+    quiet means no progress etc
+    footprint specifies the footprint type
     """
     dataFiles = lidarprocessor.DataFiles()
     dataFiles.inList = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) 
@@ -105,6 +107,9 @@ def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION,
     
     if footprint is not None:
         controls.setFootprint(footprint)
+
+    if windowSize is not None:
+        controls.setWindowSize(windowSize)
 
     otherArgs = lidarprocessor.OtherArgs()
     # reference to the function to call
