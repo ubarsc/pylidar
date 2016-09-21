@@ -447,6 +447,7 @@ def getSlicesForExtent(siPixGrid, siShape, overlap, xMin, xMax, yMin, yMax):
     siSlice = None
     
     # work out where on the whole of file spatial index to read from
+    # have to use the Decimal class and pass strings in (floats seem to lose precision)
     decPixxRes = Decimal(str(siPixGrid.xRes))
     decPixyRes = Decimal(str(siPixGrid.yRes))
     decPixxMin = Decimal(str(siPixGrid.xMin))

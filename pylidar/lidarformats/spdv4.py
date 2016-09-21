@@ -35,6 +35,7 @@ from __future__ import print_function, division
 import sys
 import copy
 import numpy
+from decimal import Decimal, ROUND_UP
 import h5py
 from numba import jit
 from rios import pixelgrid
@@ -911,10 +912,11 @@ spatial index will be recomputed on the fly"""
         # since SPDV4 files have only a spatial index on pulses currently.
         points = self.readPointsForExtent(colNames)
         
-        nrows = int(numpy.ceil((self.lastExtent.yMax - self.lastExtent.yMin) / 
-                        self.lastExtent.binSize))
-        ncols = int(numpy.ceil((self.lastExtent.xMax - self.lastExtent.xMin) / 
-                        self.lastExtent.binSize))
+        decBinSize = Decimal(str(self.lastExtent.binSize))
+        nrows = int(((Decimal(str(self.lastExtent.yMax)) - Decimal(str(self.lastExtent.yMin))) / 
+                        decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
+        ncols = int(((Decimal(str(self.lastExtent.xMax)) - Decimal(str(self.lastExtent.xMin))) / 
+                        decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
                         
         # add overlap
         nrows += (self.controls.overlap * 2)
