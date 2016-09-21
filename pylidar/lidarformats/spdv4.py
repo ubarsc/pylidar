@@ -13,6 +13,16 @@ These are contained in the WRITESUPPORTEDOPTIONS module level variable.
 | SCALING_BUT_NO_DATA_WARNING | Warn when scaling set for a column that   |
 |                             | doesn't get created. Defaults to True     |
 +-----------------------------+-------------------------------------------+
+| PREFERRED_SPATIAL_INDEX     | The spatial index to use on creation of   |
+|                             | index, or for reading the preferred one   |
+|                             | to use. Defaults to                       |
+|                             | SPDV4_INDEXTYPE_SIMPLEGRID                |
++-----------------------------+-------------------------------------------+
+| CREATE_INDEX_ON_UPDATE      | If PREFERRED_SPATIAL_INDEX is             |
+|                             | SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE set |
+|                             | this to True to create the index on       |
+|                             | update                                    |
++-----------------------------+-------------------------------------------+
 
 """
 # This file is part of PyLidar
@@ -44,7 +54,8 @@ from . import gridindexutils
 from . import h5space
 from . import spdv4_index
 
-WRITESUPPORTEDOPTIONS = ('SCALING_BUT_NO_DATA_WARNING',)
+WRITESUPPORTEDOPTIONS = ('SCALING_BUT_NO_DATA_WARNING', 
+            'PREFERRED_SPATIAL_INDEX', 'CREATE_INDEX_ON_UPDATE')
 "driver options"
 READSUPPORTEDOPTIONS = ()
 "driver options"
@@ -323,6 +334,18 @@ class SPDV4File(generic.LiDARFile):
             self.scalingButNoDataWarning = (
                 userClass.lidarDriverOptions['SCALING_BUT_NO_DATA_WARNING'])
 
+        # type of spatial index to use
+        self.preferredSpatialIndex = SPDV4_INDEXTYPE_SIMPLEGRID
+        if 'PREFERRED_SPATIAL_INDEX' in userClass.lidarDriverOptions:
+            self.preferredSpatialIndex = (
+                userClass.lidarDriverOptions['PREFERRED_SPATIAL_INDEX'])
+
+        # create index on update - only valid for more advanced indices
+        self.createIndexOnUdate = False
+        if 'CREATE_INDEX_ON_UPDATE' in userClass.lidarDriverOptions:
+            self.createIndexOnUdate = (
+                userClass.lidarDriverOptions['CREATE_INDEX_ON_UPDATE'])
+
         # attempt to open the file
         try:
             self.fileHandle = h5py.File(fname, h5py_mode)
@@ -392,9 +415,9 @@ class SPDV4File(generic.LiDARFile):
             data.create_group('WAVEFORMS')
 
         # Spatial Index
-        # TODO: prefType
         self.si_handler = spdv4_index.SPDV4SpatialIndex.getHandlerForFile(
-                            self.fileHandle, mode)
+                            self.fileHandle, mode, 
+                            prefType=self.preferredSpatialIndex)
          
         # the following is for caching reads so we don't need to 
         # keep re-reading each time the user asks. Also handy since
@@ -552,7 +575,8 @@ spatial index will be recomputed on the fly"""
         """
         Return True if we have a spatial index.
         """
-        return self.si_handler is not None
+        return (self.si_handler is not None and 
+            self.si_handler.pixelGrid is not None)
         
     def close(self):
         """
@@ -1189,6 +1213,12 @@ spatial index will be recomputed on the fly"""
                         (y_idx <= self.extent.yMax))
                 pulses = pulses[mask]
                 self.lastPulsesSpace.updateBoolArray(mask)
+
+                if self.createIndexOnUdate and self.si_handler.canUpdateInPlace():
+                    # allow the spatial index to be created in place
+                    self.si_handler.setPulsesForExtent(self.extent, pulses, 
+                        self.lastPulseID)
+
             else:  # create
                 # get the spatial index handling code to sort it.
                 pulses, mask, binidx = self.si_handler.setPulsesForExtent(

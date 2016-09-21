@@ -114,6 +114,13 @@ class SPDV4SpatialIndex(object):
     def setPulsesForExtent(self, extent, pulses, lastPulseID):
         raise NotImplementedError()
 
+    def canUpdateInPlace(self):
+        """
+        Return True if data doesn't have to be re-sorted when writing
+        a spatial index
+        """
+        raise NotImplementedError()
+
     @staticmethod
     def getClassForType(indexType):
         """
@@ -384,6 +391,10 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         # and the bin index to sort points, waveforms, etc
         return pulses, mask, sortedBins
 
+    def canUpdateInPlace(self):
+        "Data must always be sorted"
+        return False
+
 class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
     """
     Uses libspatialindex with the rtree algorithm to store the data
@@ -391,31 +402,44 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
     def __init__(self, fileHandle, mode):
         base, ext = os.path.splitext(fileHandle.filename)
 
-        raise generic.LiDARSpatialIndexNotAvailable()
+        if mode == generic.READ:
+            idx = base + '.idx'
+            if not os.path.exists(idx):
+                raise generic.LiDARSpatialIndexNotAvailable()
 
         newFile = mode == generic.CREATE        
         self.index = _advindex.Index(base, _advindex.INDEX_RTREE, newFile)
+        self.pixelGrid = None
 
     def close(self):
-        del self.index
+        self.index = None
 
     def getPulsesSpaceForExtent(self, extent, overlap):
         """
         Get the space and indexes for pulses of the given extent.
         """
+        raise NotImplementedError()
 
     def getPointsSpaceForExtent(self, extent, overlap):
         """
         Get the space and indexes for points of the given extent.
         """
+        raise NotImplementedError()
 
     def createNewIndex(self, pixelGrid):
         """
         Create a new spatial index
         """
+        raise NotImplementedError()
 
     def setPulsesForExtent(self, extent, pulses, lastPulseID):
         """
         Update the spatial index. Given extent and data works out what
         needs to be written.
         """
+        self.index.setPoints(pulses['X_IDX'], pulses['Y_IDX'], 
+                    pulses['PULSE_ID'])
+
+    def canUpdateInPlace(self):
+        "We can do this"
+        return True
