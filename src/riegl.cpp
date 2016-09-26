@@ -427,15 +427,15 @@ protected:
         }       
         if( m_pMagneticMatrix != NULL )
         {
-            pylidar::CMatrix<float> input(1, 4);
+            pylidar::CMatrix<float> input(4, 1);
             input.set(0, 0, a);
-            input.set(0, 1, b);
-            input.set(0, 2, c);
-            input.set(0, 3, 1.0);
-            pylidar::CMatrix<float> transOut = input.multiply(*m_pMagneticMatrix);
+            input.set(1, 0, b);
+            input.set(2, 0, c);
+            input.set(3, 0, 1.0);
+            pylidar::CMatrix<float> transOut = m_pMagneticMatrix->multiply(input);
             a = transOut.get(0, 0);
-            b = transOut.get(0, 1);
-            c = transOut.get(0, 2);
+            b = transOut.get(1, 0);
+            c = transOut.get(2, 0);
         }
         *pX = a;
         *pY = b;
