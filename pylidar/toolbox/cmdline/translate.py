@@ -53,7 +53,7 @@ def getCmdargs():
         help="Set to the EPSG (if not in supplied LAS file). e.g. " + 
             "GDA / MGA Zone 56 is 28356 (not yet implemented for all input formats, but it should be)")
     p.add_argument("--wktfile", help=("Name of text file with WKT string of projection of input "+
-        "file. Not yet implemented for all input formats, but it should be. ")
+        "file. Not yet implemented for all input formats, but it should be. "))
     p.add_argument("--scaling", nargs=5, metavar=('type', 'varName', 'dtype',
             'gain', 'offset'), action='append', 
             help="Set gain and offset scaling for named variable." +
