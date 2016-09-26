@@ -415,15 +415,15 @@ protected:
         // test
         if( m_pRotationMatrix != NULL )
         {
-            pylidar::CMatrix<float> input(1, 4);
+            pylidar::CMatrix<float> input(4, 1);
             input.set(0, 0, a);
-            input.set(0, 1, b);
-            input.set(0, 2, c);
-            input.set(0, 3, d); // apply transformation (1) or rotation only (0)
-            pylidar::CMatrix<float> transOut = input.multiply(*m_pRotationMatrix);
+            input.set(1, 0, b);
+            input.set(2, 0, c);
+            input.set(3, 0, d); // apply transformation (1) or rotation only (0)
+            pylidar::CMatrix<float> transOut = m_pRotationMatrix->multiply(input);
             a = transOut.get(0, 0);
-            b = transOut.get(0, 1);
-            c = transOut.get(0, 2);
+            b = transOut.get(1, 0);
+            c = transOut.get(2, 0);
         }       
         if( m_pMagneticMatrix != NULL )
         {
