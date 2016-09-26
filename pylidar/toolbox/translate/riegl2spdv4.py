@@ -23,6 +23,7 @@ from __future__ import print_function, division
 import copy
 import json
 import numpy
+from osgeo import osr
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
@@ -61,6 +62,13 @@ def transFunc(data, otherArgs):
         data.output1.setHeaderValue("SENSOR_BEAM_DIVERGENCE",
                 rieglInfo["BEAM_DIVERGENCE"])
 
+        if otherArgs.epsg is not None:
+            sr = osr.SpatialReference()
+            sr.ImportFromEPSG(otherArgs.epsg)
+            data.output1.setHeaderValue('SPATIAL_REFERENCE', sr.ExportToWkt())
+        elif otherArgs.wkt is not None:
+            data.output1.setHeaderValue('SPATIAL_REFERENCE', otherArgs.wkt)
+
         rotationMatrixList = None
         if otherArgs.rotationMatrix is not None:
             rotationMatrixList = otherArgs.rotationMatrix.tolist()
@@ -90,7 +98,7 @@ def transFunc(data, otherArgs):
         data.output1.setReceived(recv)
 
 def translate(info, infile, outfile, expectRange, scalings, internalrotation, 
-        magneticdeclination, externalrotationfn, nullVals, constCols):
+        magneticdeclination, externalrotationfn, nullVals, constCols, epsg=None, wkt=None):
     """
     Main function which does the work.
 
@@ -158,6 +166,8 @@ def translate(info, infile, outfile, expectRange, scalings, internalrotation,
     otherArgs.nullVals = nullVals
     # constant columns
     otherArgs.constCols = constCols
+    otherArgs.epsg = epsg
+    otherArgs.wkt = wkt
 
     dataFiles.output1 = lidarprocessor.LidarFile(outfile, lidarprocessor.CREATE)
     dataFiles.output1.setLiDARDriver('SPDV4')

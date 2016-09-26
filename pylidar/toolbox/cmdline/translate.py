@@ -50,8 +50,10 @@ def getCmdargs():
         help="Only process the given spatial extent. Only valid with --spatial"+
             " option")
     p.add_argument("--epsg", type=int,
-        help="Set to the EPSG (if not in supplied LAS file). i.e. " + 
-            "GDA / MGA Zone 56 is 28356 (only for LAS inputs)")
+        help="Set to the EPSG (if not in supplied LAS file). e.g. " + 
+            "GDA / MGA Zone 56 is 28356 (not yet implemented for all input formats, but it should be)")
+    p.add_argument("--wktfile", help=("Name of text file with WKT string of projection of input "+
+        "file. Not yet implemented for all input formats, but it should be. ")
     p.add_argument("--scaling", nargs=5, metavar=('type', 'varName', 'dtype',
             'gain', 'offset'), action='append', 
             help="Set gain and offset scaling for named variable." +
@@ -133,6 +135,9 @@ def run():
     and calls the appropiate translation function.
     """
     cmdargs = getCmdargs()
+    wktStr = None
+    if cmdargs.wktfile is not None:
+        wktStr = open(cmdargs.wktfile).read()
 
     # first determine the format of the input file
     # I'm not sure this is possible in all situations, but assume it is for now
@@ -154,7 +159,7 @@ def run():
         riegl2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.scaling, cmdargs.internalrotation, 
                 cmdargs.magneticdeclination, cmdargs.externalrotationfn,
-                cmdargs.null, cmdargs.constcol)
+                cmdargs.null, cmdargs.constcol, epsg=cmdargs.epsg, wkt=wktStr)
 
     elif inFormat == 'SPDV4' and cmdargs.format == 'LAS':
         spdv42las.translate(info, cmdargs.input, cmdargs.output, 
