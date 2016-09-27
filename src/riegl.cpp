@@ -412,18 +412,35 @@ protected:
 
     void applyTransformation(double a, double b, double c, double d, double *pX, double *pY, double *pZ)
     {
+        // Variables for kludge
+        int ii, jj, kk;
+        double aa[3];
+        
         // test
         if( m_pRotationMatrix != NULL )
         {
-            pylidar::CMatrix<float> input(4, 1);
-            input.set(0, 0, a);
-            input.set(1, 0, b);
-            input.set(2, 0, c);
-            input.set(3, 0, d); // apply transformation (1) or rotation only (0)
-            pylidar::CMatrix<float> transOut = m_pRotationMatrix->multiply(input);
-            a = transOut.get(0, 0);
-            b = transOut.get(1, 0);
-            c = transOut.get(2, 0);
+            // This code is a kludge to get around the truncation of the values to float32
+            for(int ii = 0; ii < 3; ii++) {
+                aa[ii] = m_pRotationMatrix->get(ii, 0) * a +
+                         m_pRotationMatrix->get(ii, 1) * b +
+                         m_pRotationMatrix->get(ii, 2) * c +
+                         m_pRotationMatrix->get(ii, 3) * d;
+            }
+            a = aa[0];
+            b = aa[1];
+            c = aa[2];
+            
+            // This is the proper code, but does not work because of the float types. 
+//             pylidar::CMatrix<float> input(4, 1);
+//             input.set(0, 0, a);
+//             input.set(1, 0, b);
+//             input.set(2, 0, c);
+//             input.set(3, 0, d); // apply transformation (1) or rotation only (0)
+//             pylidar::CMatrix<float> transOut = m_pRotationMatrix->multiply(input);
+//             a = transOut.get(0, 0);
+//             b = transOut.get(1, 0);
+//             c = transOut.get(2, 0);
+//             d = transOut.get(3, 0);
         }       
         if( m_pMagneticMatrix != NULL )
         {
