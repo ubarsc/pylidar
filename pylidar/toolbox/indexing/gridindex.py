@@ -407,6 +407,15 @@ def indexAndMerge(extentList, extent, wkt, outfile, header):
     nrows,ncols = pixGrid.getDimensions()
     header['NUMBER_BINS_X'] = ncols
     header['NUMBER_BINS_Y'] = nrows
+
+    # clobber these values since we don't want to 
+    # start with the number in the original file
+    # they will be reset to 0 in the new file
+    del header['NUMBER_OF_POINTS']
+    del header['NUMBER_OF_PULSES']
+    # these too
+    del header['GENERATING_SOFTWARE']
+    del header['CREATION_DATETIME']
     
     progress = cuiprogress.GDALProgressBar()
     progress.setLabelText('Merging...')
