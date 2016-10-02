@@ -144,7 +144,7 @@ static SpylidarFieldDefn RieglWaveformInfoFields[] = {
 class RieglReader : public scanlib::pointcloud
 {
 public:
-    RieglReader(pylidar::CMatrix<float> *pRotationMatrix, pylidar::CMatrix<float> *pMagneticMatrix) : 
+    RieglReader(pylidar::CMatrix<double> *pRotationMatrix, pylidar::CMatrix<double> *pMagneticMatrix) : 
         scanlib::pointcloud(false), 
         m_nTotalPulsesReadFile(0),
         m_nPulsesToIgnore(0),
@@ -412,44 +412,29 @@ protected:
 
     void applyTransformation(double a, double b, double c, double d, double *pX, double *pY, double *pZ)
     {
-        // Variables for kludge
-        int ii, jj, kk;
-        double aa[3];
-        
         // test
         if( m_pRotationMatrix != NULL )
         {
-            // This code is a kludge to get around the truncation of the values to float32
-            for(int ii = 0; ii < 3; ii++) {
-                aa[ii] = m_pRotationMatrix->get(ii, 0) * a +
-                         m_pRotationMatrix->get(ii, 1) * b +
-                         m_pRotationMatrix->get(ii, 2) * c +
-                         m_pRotationMatrix->get(ii, 3) * d;
-            }
-            a = aa[0];
-            b = aa[1];
-            c = aa[2];
             
-            // This is the proper code, but does not work because of the float types. 
-//             pylidar::CMatrix<float> input(4, 1);
-//             input.set(0, 0, a);
-//             input.set(1, 0, b);
-//             input.set(2, 0, c);
-//             input.set(3, 0, d); // apply transformation (1) or rotation only (0)
-//             pylidar::CMatrix<float> transOut = m_pRotationMatrix->multiply(input);
-//             a = transOut.get(0, 0);
-//             b = transOut.get(1, 0);
-//             c = transOut.get(2, 0);
-//             d = transOut.get(3, 0);
+             pylidar::CMatrix<double> input(4, 1);
+             input.set(0, 0, a);
+             input.set(1, 0, b);
+             input.set(2, 0, c);
+             input.set(3, 0, d); // apply transformation (1) or rotation only (0)
+             pylidar::CMatrix<double> transOut = m_pRotationMatrix->multiply(input);
+             a = transOut.get(0, 0);
+             b = transOut.get(1, 0);
+             c = transOut.get(2, 0);
+             d = transOut.get(3, 0);
         }       
         if( m_pMagneticMatrix != NULL )
         {
-            pylidar::CMatrix<float> input(4, 1);
+            pylidar::CMatrix<double> input(4, 1);
             input.set(0, 0, a);
             input.set(1, 0, b);
             input.set(2, 0, c);
             input.set(3, 0, 1.0);
-            pylidar::CMatrix<float> transOut = m_pMagneticMatrix->multiply(input);
+            pylidar::CMatrix<double> transOut = m_pMagneticMatrix->multiply(input);
             a = transOut.get(0, 0);
             b = transOut.get(1, 0);
             c = transOut.get(2, 0);
@@ -466,8 +451,8 @@ private:
     pylidar::CVector<SRieglPoint> m_Points;
     npy_uint32 m_scanline;
     npy_uint16 m_scanlineIdx;
-    pylidar::CMatrix<float> *m_pRotationMatrix;
-    pylidar::CMatrix<float> *m_pMagneticMatrix;
+    pylidar::CMatrix<double> *m_pRotationMatrix;
+    pylidar::CMatrix<double> *m_pMagneticMatrix;
 };
 
 // This class just reads the 'pose' parameters and is used by the
@@ -563,7 +548,7 @@ public:
             {
                 // now work out rotation matrix
                 // pitch matrix
-                pylidar::CMatrix<float> pitchMat(4, 4);
+                pylidar::CMatrix<double> pitchMat(4, 4);
                 pitchMat.set(0, 0, std::cos(m_fPitch));
                 pitchMat.set(0, 1, 0.0);
                 pitchMat.set(0, 2, std::sin(m_fPitch));
@@ -582,7 +567,7 @@ public:
                 pitchMat.set(3, 3, 1.0);
             
                 // roll matrix
-                pylidar::CMatrix<float> rollMat(4, 4);
+                pylidar::CMatrix<double> rollMat(4, 4);
                 rollMat.set(0, 0, 1.0);
                 rollMat.set(0, 1, 0.0);
                 rollMat.set(0, 2, 0.0);
@@ -601,7 +586,7 @@ public:
                 rollMat.set(3, 3, 1.0);
             
                 // yaw matrix; compass reading has been set to zero if nan
-                pylidar::CMatrix<float> yawMat(4, 4);
+                pylidar::CMatrix<double> yawMat(4, 4);
                 yawMat.set(0, 0, std::cos(m_fYaw));
                 yawMat.set(0, 1, -std::sin(m_fYaw));
                 yawMat.set(0, 2, 0.0);
@@ -620,11 +605,11 @@ public:
                 yawMat.set(3, 3, 1.0);
 
                 // construct rotation matrix
-                pylidar::CMatrix<float> tempMat = yawMat.multiply(pitchMat);
-                pylidar::CMatrix<float> rotMat = tempMat.multiply(rollMat);
+                pylidar::CMatrix<double> tempMat = yawMat.multiply(pitchMat);
+                pylidar::CMatrix<double> rotMat = tempMat.multiply(rollMat);
 
                 PyDict_SetItemString(pDict, "ROTATION_MATRIX", 
-                        (PyObject*)rotMat.getAsNumpyArray(NPY_FLOAT));
+                        (PyObject*)rotMat.getAsNumpyArray(NPY_DOUBLE));
             }
 
             // scanline info useful for building spatial index
@@ -740,21 +725,21 @@ protected:
 
 
 private:
-    float m_fLat;
-    float m_fLong;
-    float m_fHeight;
-    float m_fHMSL;
-    float m_fRoll;
-    float m_fPitch;
-    float m_fYaw;
-    float m_beamDivergence;
-    float m_beamExitDiameter;
-    float m_thetaMin;
-    float m_thetaMax;
-    float m_phiMin;
-    float m_phiMax;
-    float m_thetaInc;
-    float m_phiInc;
+    double m_fLat;
+    double m_fLong;
+    double m_fHeight;
+    double m_fHMSL;
+    double m_fRoll;
+    double m_fPitch;
+    double m_fYaw;
+    double m_beamDivergence;
+    double m_beamExitDiameter;
+    double m_thetaMin;
+    double m_thetaMax;
+    double m_phiMin;
+    double m_phiMax;
+    double m_thetaInc;
+    double m_phiInc;
     long m_scanline;
     long m_scanlineIdx;
     long m_maxScanlineIdx;
@@ -775,8 +760,8 @@ typedef struct
     scanlib::buffer *pBuffer;
     RieglReader *pReader;
     bool bFinishedReading;
-    pylidar::CMatrix<float> *pMagneticDeclination;
-    pylidar::CMatrix<float> *pRotationMatrix;
+    pylidar::CMatrix<double> *pMagneticDeclination;
+    pylidar::CMatrix<double> *pRotationMatrix;
 
     // for waveforms, if present
     fwifc_file waveHandle;
@@ -951,16 +936,16 @@ PyObject *pOptionDict;
             return -1;
         }
 
-        // ensure Float32
-        PyArrayObject *pRotationMatrixF32 = (PyArrayObject*)PyArray_FROM_OT(pRotationMatrix, NPY_FLOAT32);
+        // ensure Float64
+        PyArrayObject *pRotationMatrixF64 = (PyArrayObject*)PyArray_FROM_OT(pRotationMatrix, NPY_FLOAT64);
         // make our matrix
         try
         {
-            self->pRotationMatrix = new pylidar::CMatrix<float>(pRotationMatrixF32);
+            self->pRotationMatrix = new pylidar::CMatrix<double>(pRotationMatrixF64);
         }
         catch(std::exception e)
         {
-            Py_DECREF(pRotationMatrixF32);
+            Py_DECREF(pRotationMatrixF64);
             // raise Python exception
             PyObject *m;
 #if PY_MAJOR_VERSION >= 3
@@ -972,7 +957,7 @@ PyObject *pOptionDict;
             return -1;
         }
 
-        Py_DECREF(pRotationMatrixF32);
+        Py_DECREF(pRotationMatrixF64);
     }
     else
     {
@@ -996,9 +981,9 @@ PyObject *pOptionDict;
         }
 
         double dMagneticDeclination = PyFloat_AsDouble(pMagneticDeclination);
-        float mdrad = dMagneticDeclination * NPY_PI / 180.0;
+        double mdrad = dMagneticDeclination * NPY_PI / 180.0;
 
-        self->pMagneticDeclination = new pylidar::CMatrix<float>(4, 4);
+        self->pMagneticDeclination = new pylidar::CMatrix<double>(4, 4);
         self->pMagneticDeclination->set(0, 0, std::cos(mdrad));
         self->pMagneticDeclination->set(0, 1, -std::sin(mdrad));
         self->pMagneticDeclination->set(0, 2, 0.0);
