@@ -347,7 +347,7 @@ init_advindex(void)
 #if PY_MAJOR_VERSION >= 3
     pModule = PyModule_Create(&moduledef);
 #else
-    pModule = Py_InitModule("_advindex", module_methods);
+    pModule = Py_InitModule("_advindex", PyAdvIndex_methods);
 #endif
     if( pModule == NULL )
         INITERROR;
