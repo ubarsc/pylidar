@@ -1907,6 +1907,10 @@ spatial index will be recomputed on the fly"""
         """
         Given some data, updates the _MIN, _MAX etc
         """
+        # Pull out the types for NUMBER_OF_POINTS and NUMBER_OF_PULSES
+        nPointsType = HEADER_FIELDS['NUMBER_OF_POINTS']
+        nPulsesType = HEADER_FIELDS['NUMBER_OF_PULSES']
+
         if points is not None and points.size > 0:
             for key in POINTS_HEADER_UPDATE_DICT.keys():
                 if key in points.dtype.names:
@@ -1918,8 +1922,9 @@ spatial index will be recomputed on the fly"""
                     if maxVal > self.fileHandle.attrs[maxKey]:
                         self.fileHandle.attrs[maxKey] = maxVal
             # update the NUMBER_OF_POINTS field also
+            # ensure these are saved back as the same type
             if self.mode == generic.CREATE:
-                self.fileHandle.attrs['NUMBER_OF_POINTS'] += points.size
+                self.fileHandle.attrs['NUMBER_OF_POINTS'] += nPointsType(points.size)
 
         if pulses is not None and pulses.size > 0:
             for key in PULSES_HEADER_UPDATE_DICT.keys():
@@ -1932,8 +1937,9 @@ spatial index will be recomputed on the fly"""
                     if maxVal > self.fileHandle.attrs[maxKey]:
                         self.fileHandle.attrs[maxKey] = maxVal
             # update the NUMBER_OF_PULSES field also
+            # ensure these are saved back as the same type
             if self.mode == generic.CREATE:
-                self.fileHandle.attrs['NUMBER_OF_PULSES'] += pulses.size
+                self.fileHandle.attrs['NUMBER_OF_PULSES'] += nPulsesType(pulses.size)
 
         if waveformInfo is not None and waveformInfo.size > 0:
             for key in WAVEFORMS_HEADER_UPDATE_DICT.keys():
