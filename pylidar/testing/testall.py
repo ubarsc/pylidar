@@ -31,6 +31,7 @@ from . import testsuite3
 from . import testsuite4
 from . import testsuite5
 from . import testsuite6
+from . import testsuite7
 from pylidar import lidarprocessor
 
 def getCmdargs():
@@ -86,6 +87,9 @@ def run():
         testsIgnoredNoDriver += 1
 
     testsuite6.run(oldpath, newpath)
+    testsRun += 1
+
+    testsuite7.run(oldpath, newpath)
     testsRun += 1
 
     print(testsRun, 'tests run successfully')

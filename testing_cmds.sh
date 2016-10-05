@@ -1,11 +1,22 @@
 #!/bin/sh
 
-VERSION=2
+# update the TESTSUITE_VERSION in pylidar/testing/utils.py AND INSTALL
+# before running this
+
+# check we aren't being run the root directory of the install
+# as getting the version number then fails
+if [ -d "pylidar/lidarformats" ]; then
+    echo "This script cannot be run from the root source directory"
+    exit 1
+fi
+
+VERSION=`python -c "from pylidar.testing.utils import TESTSUITE_VERSION;print(TESTSUITE_VERSION)"`
 TARFILE=testdata_${VERSION}.tar.gz
 
-rm *.spd
-rm *.img
-rm *.xml
+rm -f *.spd *.img *.xml
+
+# create version.txt
+echo {'"'version'"': $VERSION} > version.txt
 
 # testsuite1
 pylidar_translate -i apl1dr_x509000ys6945000z56_2009_ba1m6_pbrisba.las \
@@ -38,8 +49,11 @@ pylidar_translate -i testsuite1.spd -o testsuite5.las -f LAS
 # testsuite6
 python -c "from pylidar.testing.testsuite6 import run;run('.', '.')"
 
+# testsuite7
+python -c "from pylidar.testing.testsuite7 import run;run('.', '.')"
+
 rm *.xml
 cd ..
-rm $TARFILE
+rm -f $TARFILE
 tar cvfz $TARFILE testdata
 

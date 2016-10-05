@@ -1,7 +1,7 @@
 
 """
-Simple testsuite that checks we can do interpolation, set overlap
-and pixelgrid.
+Simple testsuite that checks we can set the pixelgrid different
+from the spatial index.
 """
 
 # This file is part of PyLidar
@@ -32,36 +32,20 @@ from rios import cuiprogress
 from rios import pixelgrid
 
 IN_FILE = 'testsuite1_idx.spd'
-INTERP_FILE = 'testsuite6.img'
+OUT_FILE = 'testsuite7.img'
 PROJECTION_SOURCE = 'testsuite1.img'
 
-def interpGroundReturns(data):
-    # if given a list of fields, returns a structured array with all of them
-    ptVals = data.input.getPoints(colNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
-    # create mask for ground
-    mask = ptVals['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND
-
-    # get the coords for this block
-    pxlCoords = data.info.getBlockCoordArrays()
-
-    if ptVals.shape[0] > 0:
-        # there is data for this block
-        xVals = ptVals['X'][mask]
-        yVals = ptVals['Y'][mask]
-        zVals = ptVals['Z'][mask]
-        # 'pynn' needs the pynnterp module installed
-        out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, 'pynn')
-
-        # mask out where interpolation failed
-        invalid = numpy.isnan(out)
-        out[invalid] = 0
+def writeImageFunc(data):
+    zValues = data.input.getPointsByBins(colNames='Z')
+    (maxPts, nRows, nCols) = zValues.shape
+    nullval = 0
+    if maxPts > 0:
+        minZ = zValues.min(axis=0)
+        stack = numpy.ma.expand_dims(minZ, axis=0)
     else:
-        # no data - set to zero
-        out = numpy.empty(pxlCoords[0].shape, dtype=numpy.float64)
-        out.fill(0)
-
-    out = numpy.expand_dims(out, axis=0)
-    data.imageOut.setData(out)
+        stack = numpy.empty((1, nRows, nCols), dtype=zValues.dtype)
+        stack.fill(nullval)
+    data.imageOut.setData(stack)
 
 def getProjection(imageFile):
     """
@@ -72,15 +56,13 @@ def getProjection(imageFile):
 
 def run(oldpath, newpath):
     """
-    Runs the 6th basic test suite. Tests:
+    Runs the 7th basic test suite. Tests:
 
-    Interpolation
-    overlap
-    setting pixel grid
+    setting pixel grid different from the spatial index
     """
     input = os.path.join(oldpath, IN_FILE)
-    interp = os.path.join(newpath, INTERP_FILE)
-    origInterp = os.path.join(oldpath, INTERP_FILE)
+    interp = os.path.join(newpath, OUT_FILE)
+    origInterp = os.path.join(oldpath, OUT_FILE)
 
     dataFiles = lidarprocessor.DataFiles()
     dataFiles.input = lidarprocessor.LidarFile(input, lidarprocessor.READ)
@@ -89,17 +71,16 @@ def run(oldpath, newpath):
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
-    controls.setOverlap(2)
 
     # can't use origInterp as projection source as this might not 
     # be created yet (eg called from testing_cmds.sh)
     projectionSource = os.path.join(oldpath, PROJECTION_SOURCE)
     wkt = getProjection(projectionSource)
-    pixGrid = pixelgrid.PixelGridDefn(xMin=509198.0, yMax=6944830, xMax=509856, 
+    pixGrid = pixelgrid.PixelGridDefn(xMin=509199.0, yMax=6944830, xMax=509857, 
                     yMin=6944130, xRes=2.0, yRes=2.0, projection=wkt)
     controls.setFootprint(lidarprocessor.BOUNDS_FROM_REFERENCE)
     controls.setReferencePixgrid(pixGrid)
 
-    lidarprocessor.doProcessing(interpGroundReturns, dataFiles, controls=controls)
+    lidarprocessor.doProcessing(writeImageFunc, dataFiles, controls=controls)
 
     utils.compareImageFiles(origInterp, interp)
