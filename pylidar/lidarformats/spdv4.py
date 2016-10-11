@@ -1208,8 +1208,8 @@ spatial index will be recomputed on the fly"""
                 # self.extent is the size of the block without the overlap
                 # so just strip out everything outside of it
                 mask = ((x_idx >= self.extent.xMin) & 
-                        (x_idx <= self.extent.xMax) & 
-                        (y_idx >= self.extent.yMin) &
+                        (x_idx < self.extent.xMax) & 
+                        (y_idx > self.extent.yMin) &
                         (y_idx <= self.extent.yMax))
                 pulses = pulses[mask]
                 self.lastPulsesSpace.updateBoolArray(mask)
@@ -1619,7 +1619,7 @@ spatial index will be recomputed on the fly"""
                     info.max)
                 raise generic.LiDARScalingError(msg)
 
-            data = data.astype(dataType)
+            data = numpy.around(data).astype(dataType)
             
         return data, hdfname
 

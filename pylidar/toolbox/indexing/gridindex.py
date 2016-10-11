@@ -150,6 +150,10 @@ def splitFileIntoTiles(infile, binSize=1.0, blockSize=None,
             msg = 'info for creating bounding box not available'
             raise generic.LiDARFunctionUnsupported(msg)
 
+        # TODO: we treat points as being in the block when they are >=
+        # the min coords and < the max coords. What happens on the bottom
+        # and right margins?? We could possibly miss points that are there.
+
         # round the coords to the nearest multiple
         xMin = numpy.floor(xMin / binSize) * binSize
         yMin = numpy.floor(yMin / binSize) * binSize
@@ -167,6 +171,15 @@ def splitFileIntoTiles(infile, binSize=1.0, blockSize=None,
         blockSize = min(minAxis / BLOCKSIZE_N_BLOCKS, 200.0)
         # make it a multiple of binSize
         blockSize = int(numpy.ceil(blockSize / binSize)) * binSize
+    else:
+        # ensure that their given block size can be evenly divided by 
+        # the binSize
+        # the modulo operator doesn't work too well with floats 
+        # so we take a different approach
+        a = blockSize / binSize
+        if a != int(a):
+            msg = 'blockSize must be evenly divisible be the binSize'
+            raise generic.LiDARInvalidData(msg)
         
     extentList = []
     subExtent = Extent(extent.xMin, extent.xMin + blockSize, 
@@ -302,7 +315,7 @@ def classifyFunc(data, otherArgs):
         if otherArgs.indexType == INDEX_CARTESIAN:
             xIdxFieldName = 'X'
             yIdxFieldName = 'Y'
-            xIdx, yIdx = indexPulses(pulses, points, recv, otherArgs.pulseIndexMethod)
+            xIdx, yIdx = indexPulses(pulses, points, otherArgs.pulseIndexMethod)
         elif otherArgs.indexType == INDEX_SPHERICAL:
             xIdxFieldName = 'AZIMUTH'
             yIdxFieldName = 'ZENITH'
@@ -323,6 +336,7 @@ def classifyFunc(data, otherArgs):
         # so we are consistent. 
         mask = ((xIdx >= extent.xMin) & (xIdx < extent.xMax) & 
                 (yIdx > extent.yMin) & (yIdx <= extent.yMax))
+
         # subset the data
         pulsesSub = pulses[mask]
         # this is required otherwise the pulses get stripped out
@@ -346,7 +360,7 @@ def classifyFunc(data, otherArgs):
         driver.writeData(pulsesSub, pointsSub, transSub, recvSub, 
                     waveformInfoSub)
 
-def indexPulses(pulses, points, recv, pulseIndexMethod):
+def indexPulses(pulses, points, pulseIndexMethod):
     """
     Internal method to assign a point coordinates to the X_IDX and Y_IDX
     columns based on the user specified pulse_index_method.
@@ -356,8 +370,8 @@ def indexPulses(pulses, points, recv, pulseIndexMethod):
             xIdx = points['X'][0, ...]
             yIdx = points['Y'][0, ...]
         else:
-            xIdx = numpy.zeros(points.shape[1],dtype=numpy.uint32)
-            yIdx = numpy.zeros(points.shape[1],dtype=numpy.uint32)
+            xIdx = numpy.zeros(points.shape[1],dtype=points['X'].dtype)
+            yIdx = numpy.zeros(points.shape[1],dtype=points['Y'].dtype)
     elif pulseIndexMethod == PULSE_INDEX_LAST_RETURN:
         if points.shape[0] > 0:
             firstfield = points.dtype.names[0]
@@ -366,8 +380,8 @@ def indexPulses(pulses, points, recv, pulseIndexMethod):
             xIdx = points['X'][last, idx]
             yIdx = points['Y'][last, idx]
         else:
-            xIdx = numpy.zeros(points.shape[1],dtype=numpy.uint32)
-            yIdx = numpy.zeros(points.shape[1],dtype=numpy.uint32)         
+            xIdx = numpy.zeros(points.shape[1],dtype=points['X'].dtype)
+            yIdx = numpy.zeros(points.shape[1],dtype=points['Y'].dtype)
     else:
         msg = 'unsupported pulse indexing method'
         raise generic.LiDARPulseIndexUnsupported(msg)        
@@ -446,8 +460,8 @@ def indexAndMerge(extentList, extent, wkt, outfile, header):
 
             # on create, a spatial index is created
             outDriver.writeData(pulses, points, trans, recv, 
-                            waveformInfo)        
-            nFilesWritten +=1 
+                            waveformInfo)
+            nFilesWritten += 1
 
         # close the driver while we are here
         driver.close()

@@ -358,6 +358,7 @@ def calculateCheckSum(infile):
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
+    controls.setMessageHandler(lidarprocessor.silentMessageFn)
 
     lidarprocessor.doProcessing(pylidarChecksum, dataFiles, otherArgs=otherArgs,
             controls=controls)
