@@ -341,9 +341,9 @@ class SPDV4File(generic.LiDARFile):
                 userClass.lidarDriverOptions['PREFERRED_SPATIAL_INDEX'])
 
         # create index on update - only valid for more advanced indices
-        self.createIndexOnUdate = False
+        self.createIndexOnUpdate = False
         if 'CREATE_INDEX_ON_UPDATE' in userClass.lidarDriverOptions:
-            self.createIndexOnUdate = (
+            self.createIndexOnUpdate = (
                 userClass.lidarDriverOptions['CREATE_INDEX_ON_UPDATE'])
 
         # attempt to open the file
@@ -534,9 +534,9 @@ class SPDV4File(generic.LiDARFile):
         extentPixGrid = pixelgrid.PixelGridDefn(xMin=extent.xMin, 
                 xMax=extent.xMax, yMin=extent.yMin, yMax=extent.yMax,
                 xRes=extent.binSize, yRes=extent.binSize, projection=totalPixGrid.projection)
-        self.extentAlignedWithSpatialIndex = (
-                extentPixGrid.alignedWith(totalPixGrid) and 
-                extent.binSize == totalPixGrid.xRes)
+        self.extentAlignedWithSpatialIndex = (self.si_handler.canAccessUnaligned() or
+                (extentPixGrid.alignedWith(totalPixGrid) and 
+                extent.binSize == totalPixGrid.xRes))
         
         if (not self.extentAlignedWithSpatialIndex and 
                     not self.unalignedWarningGiven):
@@ -1214,15 +1214,17 @@ spatial index will be recomputed on the fly"""
                 pulses = pulses[mask]
                 self.lastPulsesSpace.updateBoolArray(mask)
 
-                if self.createIndexOnUdate and self.si_handler.canUpdateInPlace():
-                    # allow the spatial index to be created in place
-                    self.si_handler.setPulsesForExtent(self.extent, pulses, 
-                        self.lastPulseID)
-
             else:  # create
                 # get the spatial index handling code to sort it.
                 pulses, mask, binidx = self.si_handler.setPulsesForExtent(
                                         self.extent, pulses, self.lastPulseID)
+
+        elif (self.mode == generic.UPDATE and self.createIndexOnUpdate and 
+                self.si_handler.canUpdateInPlace()):
+            # allow the spatial index to be created in place
+                    self.si_handler.setPulsesForExtent(self.extent, pulses, 
+                        self.lastPulsesSpace)
+
           
         return pulses, mask, binidx
 

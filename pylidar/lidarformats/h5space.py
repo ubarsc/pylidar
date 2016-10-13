@@ -147,27 +147,45 @@ class H5Space(object):
     h5py datasets.
     
     """
-    def __init__(self, size, boolArray, boolStart):
+    def __init__(self, size, boolArray=None, boolStart=None, indices=None):
         """
         size is the size of the dataset this object will be used with
         boolArray is a boolean array that is True for elements to be read.
         boolStart is the index into the start of the dataset where boolArray 
             begins.
+
+        indices is an array containing the indices that need to be selected.
+
+        Pass either boolArray and boolStart or indices but not all 3.
         """
         # create the space object
         self.space = h5py.h5s.create_simple((size,), (size,))
         # default is all selected - reset to none in case boolArray all False
         self.space.select_none()
-        # convert the bool array into it
-        start = numpy.empty(1, dtype=numpy.uint64)
-        count = numpy.empty(1, dtype=numpy.uint64)
-        if boolArray.size > 0:
-            convertBoolToHDF5Space(boolArray, boolStart, self.space.id, start, count,
-                H5Sselect_hyperslab, h5py.h5s.SELECT_SET, h5py.h5s.SELECT_OR)
+
+        if boolArray is not None and boolStart is not None:
+            # convert the bool array into it
+            start = numpy.empty(1, dtype=numpy.uint64)
+            count = numpy.empty(1, dtype=numpy.uint64)
+            if boolArray.size > 0:
+                convertBoolToHDF5Space(boolArray, boolStart, self.space.id, 
+                    start, count, H5Sselect_hyperslab, h5py.h5s.SELECT_SET, 
+                    h5py.h5s.SELECT_OR)
         
-        # grab these for updateBoolArray()    
-        self.boolArray = boolArray
-        self.boolStart = boolStart
+            # grab these for updateBoolArray()    
+            self.boolArray = boolArray
+            self.boolStart = boolStart
+            self.indices = None
+
+        elif indices is not None:
+            self.space.select_elements(indices)
+            self.indices = indices
+            self.boolArray = None
+            self.boolStart = None
+
+        else:
+            msg = 'Need to specify either boolArray and boolStart or indices'
+            raise ValueError(msg)
 
     def read(self, dataSet):
         """
@@ -206,10 +224,16 @@ class H5Space(object):
         #if mask.size != self.space.get_select_npoints():
         #    raise ValueError('mask is wrong size')
             
-        start = numpy.empty(1, dtype=numpy.uint64)
-        count = numpy.empty(1, dtype=numpy.uint64)
-        updateFromBool(self.space.id, self.boolStart, self.boolArray, mask, 
-            start, count, H5Sselect_hyperslab, h5py.h5s.SELECT_NOTB)
+        if self.boolStart is not None and self.boolArray is not None:
+            start = numpy.empty(1, dtype=numpy.uint64)
+            count = numpy.empty(1, dtype=numpy.uint64)
+            updateFromBool(self.space.id, self.boolStart, self.boolArray, mask, 
+                start, count, H5Sselect_hyperslab, h5py.h5s.SELECT_NOTB)
+        else:
+            # indices
+            self.indices = self.indices[mask]
+            self.space.select_none()
+            self.space.select_elements(self.indices)
 
     def getSelectionSize(self):
         """

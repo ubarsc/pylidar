@@ -23,6 +23,7 @@
 #include <Python.h>
 #include "numpy/arrayobject.h"
 #include <spatialindex/capi/sidx_api.h>
+#include "pylvector.h"
 
 /* An exception object for this module */
 /* created in the init function */
@@ -37,6 +38,21 @@ struct AdvIndexState
 #define GETSTATE(m) (&_state)
 static struct AdvIndexState _state;
 #endif
+
+// structure for array returned from getPoints
+typedef struct {
+    double x;
+    double y;
+    npy_int64 idx;
+} SPointInfo;
+
+/* field info for pylidar_structArrayToNumpy */
+static SpylidarFieldDefn PointInfoFields[] = {
+    CREATE_FIELD_DEFN(SPointInfo, x, 'f'),
+    CREATE_FIELD_DEFN(SPointInfo, y, 'f'),
+    CREATE_FIELD_DEFN(SPointInfo, idx, 'i'),
+    {NULL} // Sentinel
+};
 
 #if PY_MAJOR_VERSION >= 3
 static int advindex_traverse(PyObject *m, visitproc visit, void *arg) 
@@ -95,6 +111,10 @@ PyAdvIndex_init(PyAdvIndex *self, PyObject *args, PyObject *kwds)
     IndexProperty_SetOverwrite(props, nNewFile);
 
     self->idx = Index_Create(props);
+
+    // finished with the properties
+    IndexProperty_Destroy(props);
+
     if( (self->idx == NULL ) || !Index_IsValid(self->idx) )
     {
         PyObject *m;
@@ -116,6 +136,7 @@ PyAdvIndex_dealloc(PyAdvIndex *self)
 {
     if( self->idx != NULL )
     {
+        Index_Flush(self->idx);
         Index_Destroy(self->idx);
     }
 }
@@ -241,9 +262,9 @@ static PyObject *PyAdvIndex_getPoints(PyAdvIndex *self, PyObject *args)
     dMinArray[1] = dYMin;
     dMaxArray[1] = dYMax;
 
-    int64_t *pItems = NULL;
+    IndexItemH *pItems = NULL;
     uint64_t nResults = 0;
-    if( Index_Intersects_id(self->idx, dMinArray, dMaxArray, 2, &pItems, &nResults) != RT_None )
+    if( Index_Intersects_obj(self->idx, dMinArray, dMaxArray, 2, &pItems, &nResults) != RT_None )
     {
         PyObject *m;
 #if PY_MAJOR_VERSION >= 3
@@ -255,17 +276,61 @@ static PyObject *PyAdvIndex_getPoints(PyAdvIndex *self, PyObject *args)
         return NULL;
     }
 
-    // create new array and copy ids in
-    npy_intp dims = nResults;
-    PyArrayObject *pIDArray = (PyArrayObject*)PyArray_EMPTY(1, &dims, NPY_UINT64, 0);
+    // create new array and copy coords and ids in
+    pylidar::CVector<SPointInfo> infoArray(nResults, 0);
     for( uint64_t i = 0; i < nResults; i++ )
     {
-        *(npy_uint64*)PyArray_GETPTR1(pIDArray, i) = pItems[i];
+        double *pdmin, *pdmax;
+        uint32_t d;
+        IndexItem_GetBounds(pItems[i], &pdmin, &pdmax, &d);
+        int64_t dx = IndexItem_GetID(pItems[i]);
+
+        SPointInfo *pItem = infoArray.getElem(i);
+
+        // just a point, so dmin == dmax
+        pItem->x = pdmin[0];
+        pItem->y = pdmin[1];
+        pItem->idx = dx;
+
+        Index_Free(pdmin);
+        Index_Free(pdmax);
     }
     
-    Index_Free(pItems);
+    Index_DestroyObjResults(pItems, nResults);
 
-    return (PyObject*)pIDArray;
+    return (PyObject*)infoArray.getNumpyArray(PointInfoFields);
+}
+
+static PyObject *PyAdvIndex_getExtent(PyAdvIndex *self, PyObject *args)
+{
+    double *pdMin, *pdMax;
+    uint32_t nDimension;
+
+    Index_Flush(self->idx);
+
+    if( Index_GetBounds(self->idx, &pdMin, &pdMax, &nDimension) != RT_None )
+    {
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_Format(GETSTATE(m)->error, "Error querying index: %s", Error_GetLastErrorMsg());
+        return NULL;
+    }
+
+    PyObject *pXMin = PyFloat_FromDouble(pdMin[0]);
+    PyObject *pYMin = PyFloat_FromDouble(pdMin[1]);
+    PyObject *pXMax = PyFloat_FromDouble(pdMax[0]);
+    PyObject *pYMax = PyFloat_FromDouble(pdMax[1]);
+
+    PyObject *pTuple = PyTuple_Pack(4, pXMin, pYMin, pXMax, pYMax);
+
+    Index_Free(pdMin);
+    Index_Free(pdMax);
+
+    return pTuple;
 }
 
 /* Table of methods */
@@ -274,6 +339,8 @@ static PyMethodDef PyAdvIndex_methods[] = {
             "Sets points into the spatial index, pass xarray, yarray, idarray"}, 
     {"getPoints", (PyCFunction)PyAdvIndex_getPoints, METH_VARARGS, 
             "Gets id of points within bounds, pass xmin, ymin, xmax, ymax"}, 
+    {"getExtent", (PyCFunction)PyAdvIndex_getExtent, METH_NOARGS,
+            "Gets the bounds of the spatial index as xmin, ymin, xmax, ymax"},
     {NULL}  /* Sentinel */
 };
 
@@ -347,7 +414,7 @@ init_advindex(void)
 #if PY_MAJOR_VERSION >= 3
     pModule = PyModule_Create(&moduledef);
 #else
-    pModule = Py_InitModule("_advindex", PyAdvIndex_methods);
+    pModule = Py_InitModule("_advindex", NULL);
 #endif
     if( pModule == NULL )
         INITERROR;

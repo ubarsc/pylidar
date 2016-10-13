@@ -76,7 +76,7 @@ typedef struct {
     npy_uint64 wfm_start_idx;
 } SLasPulse;
 
-/* field info for pylidar_structArrayToNumpy */
+/* field info for CVector::getNumpyArray */
 static SpylidarFieldDefn LasPulseFields[] = {
     CREATE_FIELD_DEFN(SLasPulse, scan_angle_rank, 'i'),
     CREATE_FIELD_DEFN(SLasPulse, scan_angle, 'i'),
@@ -120,7 +120,7 @@ typedef struct {
     npy_uint16 nir;
 } SLasPoint;
 
-/* field info for pylidar_structArrayToNumpy */
+/* field info for CVector::getNumpyArray */
 static SpylidarFieldDefn LasPointFields[] = {
     CREATE_FIELD_DEFN(SLasPoint, x, 'f'),
     CREATE_FIELD_DEFN(SLasPoint, y, 'f'),
@@ -151,7 +151,7 @@ typedef struct {
     double      receive_wave_offset;
 } SLasWaveformInfo;
 
-/* field info for pylidar_structArrayToNumpy */
+/* field info for CVector::getNumpyArray */
 static SpylidarFieldDefn LasWaveformInfoFields[] = {
     CREATE_FIELD_DEFN(SLasWaveformInfo, number_of_waveform_received_bins, 'u'),
     CREATE_FIELD_DEFN(SLasWaveformInfo, received_start_idx, 'u'),

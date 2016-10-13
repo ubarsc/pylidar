@@ -66,19 +66,20 @@ class SPDV4SpatialIndex(object):
         # read the pixelgrid info out of the header
         # this is same for all spatial indices on SPD V4
         fileAttrs = fileHandle.attrs
-        binSize = fileAttrs['BIN_SIZE']
+        self.binSize = fileAttrs['BIN_SIZE']
         shape = fileAttrs['NUMBER_BINS_Y'], fileAttrs['NUMBER_BINS_X']
         xMin = fileAttrs['INDEX_TLX']
         yMax = fileAttrs['INDEX_TLY']
-        xMax = xMin + (shape[1] * binSize)
-        yMin = yMax - (shape[0] * binSize)
-        wkt = fileAttrs['SPATIAL_REFERENCE']
-        if sys.version_info[0] == 3 and isinstance(wkt, bytes):
-            wkt = wkt.decode()
+        xMax = xMin + (shape[1] * self.binSize)
+        yMin = yMax - (shape[0] * self.binSize)
+        self.wkt = fileAttrs['SPATIAL_REFERENCE']
+        if sys.version_info[0] == 3 and isinstance(self.wkt, bytes):
+            self.wkt = self.wkt.decode()
 
         if shape[0] != 0 or shape[1] != 0:        
-            self.pixelGrid = pixelgrid.PixelGridDefn(projection=wkt, xMin=xMin,
-                xMax=xMax, yMin=yMin, yMax=yMax, xRes=binSize, yRes=binSize)
+            self.pixelGrid = pixelgrid.PixelGridDefn(projection=self.wkt, xMin=xMin,
+                xMax=xMax, yMin=yMin, yMax=yMax, xRes=self.binSize, 
+                yRes=self.binSize)
         else:
             self.pixelGrid = None
                 
@@ -87,7 +88,7 @@ class SPDV4SpatialIndex(object):
         Call to write data, close files etc
         """
         # update the header
-        if self.mode == generic.CREATE and self.pixelGrid is not None:
+        if self.mode != generic.READ and self.pixelGrid is not None:
             fileAttrs = self.fileHandle.attrs
             fileAttrs['BIN_SIZE'] = self.pixelGrid.xRes
             nrows, ncols = self.pixelGrid.getDimensions()
@@ -112,12 +113,27 @@ class SPDV4SpatialIndex(object):
         raise NotImplementedError()
         
     def setPulsesForExtent(self, extent, pulses, lastPulseID):
+        """
+        When creating a new file, lastPulseID is the id of the last pulse
+        currently written to file (which should equal the number of pulses
+        in the file). 
+
+        When updating lastPulseID will actually be a h5space.H5Space object
+        that was used to read these pulses.
+        """
         raise NotImplementedError()
 
     def canUpdateInPlace(self):
         """
         Return True if data doesn't have to be re-sorted when writing
         a spatial index
+        """
+        raise NotImplementedError()
+
+    def canAccessUnaligned(self):
+        """
+        Return True if the requested extent does have to be aligned
+        with the spatial index
         """
         raise NotImplementedError()
 
@@ -350,6 +366,8 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         """
         Update the spatial index. Given extent and data works out what
         needs to be written.
+
+        We can only do this on create so lastPulseID is an id to be added
         """
         xMin = self.pixelGrid.snapToGrid(extent.xMin, self.pixelGrid.xMin, 
                 self.pixelGrid.xRes)
@@ -395,11 +413,17 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         "Data must always be sorted"
         return False
 
+    def canAccessUnaligned(self):
+        "Requests must always be aligned with index"
+        return False
+
 class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
     """
     Uses libspatialindex with the rtree algorithm to store the data
     """
     def __init__(self, fileHandle, mode):
+        SPDV4SpatialIndex.__init__(self, fileHandle, mode)
+
         base, ext = os.path.splitext(fileHandle.filename)
 
         if mode == generic.READ:
@@ -411,35 +435,144 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
         self.index = _advindex.Index(base, _advindex.INDEX_RTREE, newFile)
         self.pixelGrid = None
 
+        # define the pulse data columns to use for the spatial index
+        self.indexType = fileHandle.attrs['INDEX_TYPE']
+        if mode != generic.READ and self.indexType == 0:
+            # TODO: not sure what really should happen here..
+            print('Index Type not set - defaulting to Cartesian')
+            self.indexType = SPDV4_INDEX_CARTESIAN
+            fileHandle.attrs['INDEX_TYPE'] = self.indexType
+
+        if self.indexType == SPDV4_INDEX_CARTESIAN:
+            self.si_xPulseColName = 'X_IDX'
+            self.si_yPulseColName = 'Y_IDX'
+        elif self.indexType == SPDV4_INDEX_SPHERICAL:
+            self.si_xPulseColName = 'AZIMUTH'
+            self.si_yPulseColName = 'ZENITH'
+        elif self.indexType == SPDV4_INDEX_SCAN:
+            self.si_xPulseColName = 'SCANLINE_IDX'
+            self.si_yPulseColName = 'SCANLINE'
+        else:
+            msg = 'Unsupported index type %d' % self.indexType
+            raise generic.LiDARInvalidSetting(msg)                    
+
     def close(self):
+
+        # create a pixelgrid so the base class can write it out
+        print('closing rtree')
+        xMin, yMin, xMax, yMax = self.index.getExtent();
+        print(xMin, yMin, xMax, yMax)
+        self.pixelGrid = pixelgrid.PixelGridDefn(projection=self.wkt, xMin=xMin,
+                xMax=xMax, yMin=yMin, yMax=yMax, xRes=self.binSize, 
+                yRes=self.binSize)
+
         self.index = None
+        SPDV4SpatialIndex.close(self)
 
     def getPulsesSpaceForExtent(self, extent, overlap):
         """
         Get the space and indexes for pulses of the given extent.
         """
-        raise NotImplementedError()
+        overlapDist = overlap * extent.binSize
+        pulseInfo = self.index.getPoints(extent.xMin - overlapDist, 
+                        extent.yMin - overlapDist, 
+                        extent.xMax + overlapDist,
+                        extent.yMax + overlapDist)
+
+        # now we have to build a spatial index for these points
+        # so we can get the idx and idxmask etc
+        nrows = int(numpy.ceil((extent.yMax - extent.yMin) / 
+                    extent.binSize))
+        ncols = int(numpy.ceil((extent.xMax - extent.xMin) / 
+                    extent.binSize))
+        nrows += (overlap * 2)
+        ncols += (overlap * 2)
+        mask, sortedbins, new_idx, new_cnt = gridindexutils.CreateSpatialIndex(
+                    pulseInfo['Y'], pulseInfo['X'], 
+                    extent.binSize, 
+                    extent.yMax + overlapDist, extent.xMin - overlapDist, 
+                    nrows, ncols, 
+                    SPDV4_SIMPLEGRID_INDEX_DTYPE, SPDV4_SIMPLEGRID_COUNT_DTYPE)
+
+        # re-sort the pulse idxs to match the new 'sub' spatial index
+        pulseIdxs = pulseInfo['IDX'][mask] # should all be True
+        pulseIdxs = pulsesIdxs[sortedbins]
+
+        # as everything else depends on this way of working
+        # but don't get the 'space' as this is relative to the 
+        # spatial index, but not the file.
+        # i'm hoping that the internal 'outBool' used in this function
+        # will be small 
+        idx, mask_idx = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                            new_idx, new_cnt)
+
+        nOut = self.fileHandle['DATA']['PULSES']['PULSE_ID'].shape[0]
+
+        # create the 'space' based on our indices
+        pulseSpace = h5space.H5Space(nOut, indices=pulseIdxs)
+        return pulseSpace, idx, mask_idx
 
     def getPointsSpaceForExtent(self, extent, overlap):
         """
         Get the space and indexes for points of the given extent.
         """
-        raise NotImplementedError()
+        # TODO: cache
+    
+        # should return cached if exists
+        pulse_space, pulse_idx, pulse_idx_mask = self.getPulsesSpaceForExtent(
+                                    extent, overlap)
+        
+        pulsesHandle = self.fileHandle['DATA']['PULSES']
+        nReturns = pulse_space.read(pulsesHandle['NUMBER_OF_RETURNS'])
+        startIdxs = pulse_space.read(pulsesHandle['PTS_START_IDX'])
+
+        # instead of building a bool space with convertSPDIdxToReadIdxAndMaskInfo
+        # which assumes all the points are close together (otherwise the
+        # internal 'outBool' array is huge) we will go to indices like 
+        # getPulsesSpaceForExtent
+        pointIdxs = numpy.repeat(startIdxs, nReturns)
+
+        # but - we still need to call convertSPDIdxToReadIdxAndMaskInfo
+        # because we already have the idxs to read, we can recode the
+        # startIdxs so they don't span such a big range as we don't need
+        # them to relate to anything in the file anymore
+        startIdxs = gridindexutils.CollapseStartIdxs(startIdxs, nReturns)
+
+        point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                        startIdxs, nReturns)
+
+        nOut = self.fileHandle['DATA']['POINTS']['RETURN_NUMBER'].shape[0]
+
+        pointSpace = h5space.H5Space(nOut, indices=pointIdxs)
+
+        return pointSpace, point_idx, point_idx_mask
+
 
     def createNewIndex(self, pixelGrid):
         """
         Create a new spatial index
         """
+        # only updating existing files supported for now
         raise NotImplementedError()
 
-    def setPulsesForExtent(self, extent, pulses, lastPulseID):
+    def setPulsesForExtent(self, extent, pulses, lastPulseSpace):
         """
         Update the spatial index. Given extent and data works out what
         needs to be written.
+
+        We only do this on update so we have a h5space that we can use
+        to extract the indices of the last lot of pulses.
         """
-        self.index.setPoints(pulses['X_IDX'], pulses['Y_IDX'], 
-                    pulses['PULSE_ID'])
+        idxs = lastPulseSpace.space.get_select_elem_pointlist()
+        print(idxs.shape, idxs.dtype)
+        idxs = [..., 0]
+        self.index.setPoints(pulses[self.si_xPulseColName], 
+                pulses[self.si_yPulseColName], idxs)
 
     def canUpdateInPlace(self):
+        "We can do this"
+        return True
+
+    def canAccessUnaligned(self):
         "We can do this"
         return True

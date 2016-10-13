@@ -213,7 +213,7 @@ def addAdvIndexing(extModules, cxxFlags):
         libspatialindexRoot = os.environ['LIBSPATIALINDEX_ROOT']
 
         advIdxModule = Extension(name='pylidar.lidarformats._advindex',
-            sources=['src/advindex.cpp'],
+            sources=['src/advindex.cpp', 'src/pylidar.c'],
             include_dirs=[os.path.join(libspatialindexRoot, 'include')],
             extra_compile_args=cxxFlags,
             define_macros=[NUMPY_MACROS],

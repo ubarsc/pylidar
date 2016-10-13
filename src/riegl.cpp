@@ -68,7 +68,7 @@ typedef struct {
     npy_uint8 number_of_waveform_samples;
 } SRieglPulse;
 
-/* field info for pylidar_structArrayToNumpy */
+/* field info for CVector::getNumpyArray */
 static SpylidarFieldDefn RieglPulseFields[] = {
     CREATE_FIELD_DEFN(SRieglPulse, pulse_ID, 'u'),
     CREATE_FIELD_DEFN(SRieglPulse, timestamp, 'u'),
@@ -103,7 +103,7 @@ typedef struct {
     double z;
 } SRieglPoint;
 
-/* field info for pylidar_structArrayToNumpy */
+/* field info for CVector::getNumpyArray */
 static SpylidarFieldDefn RieglPointFields[] = {
     CREATE_FIELD_DEFN(SRieglPoint, return_Id, 'u'),
     CREATE_FIELD_DEFN(SRieglPoint, timestamp, 'u'),
@@ -128,7 +128,7 @@ typedef struct {
     float      receive_wave_offset;
 } SRieglWaveformInfo;
 
-/* field info for pylidar_structArrayToNumpy */
+/* field info for CVector::getNumpyArray */
 static SpylidarFieldDefn RieglWaveformInfoFields[] = {
     CREATE_FIELD_DEFN(SRieglWaveformInfo, number_of_waveform_received_bins, 'u'),
     CREATE_FIELD_DEFN(SRieglWaveformInfo, range_to_waveform_start, 'u'),

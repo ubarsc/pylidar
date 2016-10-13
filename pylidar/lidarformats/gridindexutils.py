@@ -513,3 +513,22 @@ def getSlicesForExtent(siPixGrid, siShape, overlap, xMin, xMax, yMin, yMax):
                     slice(xoff_margin_file, xoff_margin_file+xSize_margin_file))
 
     return imageSlice, siSlice
+
+@jit
+def CollapseStartIdxs(startIdxs, nReturns):
+    """
+    Return a new startIdxs that covers the smallest range possible
+    """
+    newIdxs = numpy.empty_like(startIdxs)
+    idx = 0
+    lastIdx = 0
+    for i in range(startIdxs.shape[0]):
+        if i == 0:
+            lastIdx = startIdxs[i]
+        elif startIdxs[i] != lastIdx:
+            idx += 1
+            lastIdx = startIdxs[i]
+
+        newIdxs[idx] = idx
+
+    return newIdxs 
