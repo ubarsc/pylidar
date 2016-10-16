@@ -1,5 +1,6 @@
 """
-Does the printing out to terminal of file info
+Provides support for calling the canopy function from the 
+command line.
 """
 
 # This file is part of PyLidar
@@ -22,23 +23,31 @@ from __future__ import print_function, division
 
 import sys
 import argparse
-from pylidar.lidarformats import generic
-# need to import lidarprocessor also so we have
-# all the formats imported
+
 from pylidar import lidarprocessor
+from pylidar.toolbox.canopy import canopymetric
 
 def getCmdargs():
     """
     Get commandline arguments
     """
     p = argparse.ArgumentParser()
-    p.add_argument("-i", "--input", help="Input file name")
-    p.add_argument("-v", "--verbose", default=False, action="store_true",
-            help="print more verbose output")
+    p.add_argument("-i", "--infiles", nargs="+", 
+        help="Input lidar files (required)")
+    p.add_argument("-o", "--output", help="output file (required)")
+    p.add_argument("-m", "--metric", default=canopymetric.DEFAULT_METRIC, 
+        help="Canopy metric to calculate. default=%(default)s")
+    p.add_argument("-q", "--quiet", default=False, action='store_true', 
+        help="Don't show progress etc")
 
     cmdargs = p.parse_args()
+    if cmdargs.infiles is None:
+        print("Must specify input file names") 
+        p.print_help()
+        sys.exit()
 
-    if cmdargs.input is None:
+    if cmdargs.output is None:
+        print("Must specify output file name") 
         p.print_help()
         sys.exit()
 
@@ -46,19 +55,10 @@ def getCmdargs():
 
 def run():
     """
-    Main function. Looks at the command line arguments
-    and prints the info
+    Main function. Checks the command line parameters and calls
+    the canopymetrics routine.
     """
     cmdargs = getCmdargs()
 
-    info = generic.getLidarFileInfo(cmdargs.input, cmdargs.verbose)
-    print('Driver Name:', info.getDriverName())
-    print('')
-
-    for key,val in sorted(info.__dict__.items()):
-        if isinstance(val, dict):
-            print(key.upper()) # TODO: we need to be uppercase??
-            for hkey,hval in sorted(val.items()):
-                print(" ", hkey.upper(), hval)
-        else:
-            print(key.upper(), val)
+    canopymetric.runCanopyMetric(cmdargs.infiles, cmdargs.output, 
+        cmdargs.metric, cmdargs.quiet)

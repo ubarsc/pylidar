@@ -1,6 +1,6 @@
 
 """
-Functions for performing automated testing on pylidar
+canopy module. Algorithms for creating canopy metrics
 """
 # This file is part of PyLidar
 # Copyright (C) 2015 John Armston, Pete Bunting, Neil Flood, Sam Gillingham

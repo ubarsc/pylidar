@@ -241,7 +241,7 @@ if NO_INSTALL_CMDLINE:
 else:
     scriptList = ['bin/pylidar_translate', 'bin/pylidar_info', 
             'bin/pylidar_index', 'bin/pylidar_tile', 'bin/pylidar_rasterize',
-            'bin/pylidar_test']
+            'bin/pylidar_test', 'bin/pylidar_canopy']
 
 setup(name='pylidar',
       version=pylidar.PYLIDAR_VERSION,
@@ -250,7 +250,7 @@ setup(name='pylidar',
       packages=['pylidar', 'pylidar/lidarformats', 'pylidar/toolbox', 
                 'pylidar/toolbox/grdfilters', 'pylidar/toolbox/indexing',
                 'pylidar/toolbox/translate', 'pylidar.toolbox.cmdline', 
-                'pylidar/testing'],
+                'pylidar/testing', 'pylidar/toolbox/canopy'],
       scripts=scriptList,
       license='LICENSE.txt', 
       url='http://pylidar.org/',
