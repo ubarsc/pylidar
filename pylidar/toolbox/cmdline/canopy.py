@@ -35,8 +35,9 @@ def getCmdargs():
     p.add_argument("-i", "--infiles", nargs="+", 
         help="Input lidar files (required)")
     p.add_argument("-o", "--output", help="output file (required)")
-    p.add_argument("-m", "--metric", default=canopymetric.DEFAULT_METRIC, 
+    p.add_argument("-m", "--metric", default=canopymetric.DEFAULT_CANOPY_METRIC, 
         help="Canopy metric to calculate. default=%(default)s")
+    p.add_argument("-b", "--binsize", type=float, help="Binsize to use for reading input files")
     p.add_argument("-q", "--quiet", default=False, action='store_true', 
         help="Don't show progress etc")
 
@@ -61,4 +62,4 @@ def run():
     cmdargs = getCmdargs()
 
     canopymetric.runCanopyMetric(cmdargs.infiles, cmdargs.output, 
-        cmdargs.metric, cmdargs.quiet)
+        cmdargs.binsize, cmdargs.metric, cmdargs.quiet)
