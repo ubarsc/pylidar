@@ -95,8 +95,9 @@ PyAdvIndex_init(PyAdvIndex *self, PyObject *args, PyObject *kwds)
 {
     const char *pszFname = NULL;
     int nIdxType, nNewFile;
+    long nIndexID; // only used if !nNewFile
 
-    if( !PyArg_ParseTuple(args, "sii", &pszFname, &nIdxType, &nNewFile) )
+    if( !PyArg_ParseTuple(args, "siil", &pszFname, &nIdxType, &nNewFile, &nIndexID) )
     {
         return -1;
     }
@@ -109,6 +110,14 @@ PyAdvIndex_init(PyAdvIndex *self, PyObject *args, PyObject *kwds)
     IndexProperty_SetIndexStorage(props, RT_Disk);
     IndexProperty_SetFileName(props, pszFname);
     IndexProperty_SetOverwrite(props, nNewFile);
+    IndexProperty_SetDimension(props, 2);
+
+    if( !nNewFile )
+    {
+        // old file, pass in the IndexID saved during the read
+        // otherwise it won't have any data...
+        IndexProperty_SetIndexID(props, nIndexID);
+    }
 
     self->idx = Index_Create(props);
 
@@ -139,6 +148,7 @@ PyAdvIndex_dealloc(PyAdvIndex *self)
         Index_Flush(self->idx);
         Index_Destroy(self->idx);
     }
+    Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static PyObject *PyAdvIndex_setPoints(PyAdvIndex *self, PyObject *args)
@@ -146,6 +156,18 @@ static PyObject *PyAdvIndex_setPoints(PyAdvIndex *self, PyObject *args)
     PyArrayObject *pXArray, *pYArray, *pIDArray;
     if( !PyArg_ParseTuple(args, "OOO:setPoints", &pXArray, &pYArray, &pIDArray) )
     {
+        return NULL;
+    }
+
+    if( self->idx == NULL )
+    {
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Index not open");
         return NULL;
     }
 
@@ -255,6 +277,18 @@ static PyObject *PyAdvIndex_getPoints(PyAdvIndex *self, PyObject *args)
         return NULL;
     }
 
+    if( self->idx == NULL )
+    {
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Index not open");
+        return NULL;
+    }
+
     double dMinArray[2];
     double dMaxArray[2];
     dMinArray[0] = dXMin;
@@ -301,12 +335,47 @@ static PyObject *PyAdvIndex_getPoints(PyAdvIndex *self, PyObject *args)
     return (PyObject*)infoArray.getNumpyArray(PointInfoFields);
 }
 
+static PyObject *PyAdvIndex_getIndexID(PyAdvIndex *self, PyObject *args)
+{
+    if( self->idx == NULL )
+    {
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Index not open");
+        return NULL;
+    }
+
+    IndexPropertyH props = Index_GetProperties(self->idx);
+
+    int64_t indexID = IndexProperty_GetIndexID(props);
+
+    IndexProperty_Destroy(props);
+
+    // TODO: on Windows at least sizeof(long) != sizeof(int64_t)
+    // so we will need so use a numpy scalar object
+    return PyLong_FromLong(indexID);
+}
+
 static PyObject *PyAdvIndex_getExtent(PyAdvIndex *self, PyObject *args)
 {
     double *pdMin, *pdMax;
     uint32_t nDimension;
 
-    Index_Flush(self->idx);
+    if( self->idx == NULL )
+    {
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Index not open");
+        return NULL;
+    }
 
     if( Index_GetBounds(self->idx, &pdMin, &pdMax, &nDimension) != RT_None )
     {
@@ -333,6 +402,27 @@ static PyObject *PyAdvIndex_getExtent(PyAdvIndex *self, PyObject *args)
     return pTuple;
 }
 
+static PyObject *PyAdvIndex_close(PyAdvIndex *self, PyObject *args)
+{
+    if( self->idx == NULL )
+    {
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Index not open");
+        return NULL;
+    }
+
+    Index_Flush(self->idx);
+    Index_Destroy(self->idx);
+    self->idx = NULL;
+
+    Py_RETURN_NONE;
+}
+
 /* Table of methods */
 static PyMethodDef PyAdvIndex_methods[] = {
     {"setPoints", (PyCFunction)PyAdvIndex_setPoints, METH_VARARGS, 
@@ -341,6 +431,10 @@ static PyMethodDef PyAdvIndex_methods[] = {
             "Gets id of points within bounds, pass xmin, ymin, xmax, ymax"}, 
     {"getExtent", (PyCFunction)PyAdvIndex_getExtent, METH_NOARGS,
             "Gets the bounds of the spatial index as xmin, ymin, xmax, ymax"},
+    {"getIndexID", (PyCFunction)PyAdvIndex_getIndexID, METH_NOARGS,
+            "Gets the index identifier needed for passing to constructor to read"},
+    {"close", (PyCFunction)PyAdvIndex_close, METH_NOARGS,
+            "Closes the index"},
     {NULL}  /* Sentinel */
 };
 
@@ -410,6 +504,8 @@ init_advindex(void)
 
     /* initialize the numpy stuff */
     import_array();
+    /* same for pylidar functions */
+    pylidar_init();
 
 #if PY_MAJOR_VERSION >= 3
     pModule = PyModule_Create(&moduledef);

@@ -178,7 +178,11 @@ class H5Space(object):
             self.indices = None
 
         elif indices is not None:
-            self.space.select_elements(indices)
+            if len(indices) > 0:
+                # this step is necessary otherwise you get the error:
+                # Coordinate array must have shape (<npoints>, 1)
+                indices = numpy.expand_dims(indices, axis=1)
+                self.space.select_elements(indices)
             self.indices = indices
             self.boolArray = None
             self.boolStart = None
@@ -241,3 +245,17 @@ class H5Space(object):
         """
         return self.space.get_select_npoints()
         
+    def getSelectedIndices(self):
+        """
+        Return the selected indices, mainly for used my advanced spatial 
+        indices. Returns self.indices if set, otherwise works it out form 
+        boolArray etc.
+        """
+        if self.indices is not None:
+            return self.indices
+        else:
+            indices = numpy.arange(self.boolStart, 
+                            self.boolStart + len(self.boolArray), 
+                            dtype=numpy.uint64)
+
+            return indices[self.boolArray]

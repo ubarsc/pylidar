@@ -22,10 +22,12 @@ from __future__ import print_function, division
 import os
 import sys
 import copy
+from decimal import Decimal, ROUND_UP
 import numpy
 from rios import pixelgrid
 from . import generic
 from . import gridindexutils
+from . import h5space
 
 HAVE_ADVINDEX = True
 try:
@@ -431,9 +433,16 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
             if not os.path.exists(idx):
                 raise generic.LiDARSpatialIndexNotAvailable()
 
-        newFile = mode == generic.CREATE        
-        self.index = _advindex.Index(base, _advindex.INDEX_RTREE, newFile)
-        self.pixelGrid = None
+        newFile = (mode != generic.READ)
+        indexID = 0
+        if 'RTREE_INDEX_ID' in fileHandle.attrs:
+            # only used if newFile is False
+            # maybe should live with the serialised index when we 
+            # get to that
+            indexID = fileHandle.attrs['RTREE_INDEX_ID']
+
+        self.index = _advindex.Index(base, _advindex.INDEX_RTREE, 
+                newFile, indexID)
 
         # define the pulse data columns to use for the spatial index
         self.indexType = fileHandle.attrs['INDEX_TYPE']
@@ -459,13 +468,29 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
     def close(self):
 
         # create a pixelgrid so the base class can write it out
-        print('closing rtree')
-        xMin, yMin, xMax, yMax = self.index.getExtent();
-        print(xMin, yMin, xMax, yMax)
+        xMin, yMin, xMax, yMax = self.index.getExtent()
+
+        # update this in case the user has set or updated it
+        self.binSize = self.fileHandle.attrs['BIN_SIZE']
+
+        # round the coords to the nearest multiple
+        xMin = numpy.floor(xMin / self.binSize) * self.binSize
+        yMin = numpy.floor(yMin / self.binSize) * self.binSize
+        xMax = numpy.ceil(xMax / self.binSize) * self.binSize
+        yMax = numpy.ceil(yMax / self.binSize) * self.binSize
+
         self.pixelGrid = pixelgrid.PixelGridDefn(projection=self.wkt, xMin=xMin,
                 xMax=xMax, yMin=yMin, yMax=yMax, xRes=self.binSize, 
                 yRes=self.binSize)
 
+        if self.mode != generic.READ:
+            # save the index ID which is needed for reading
+            # maybe should live with the serialised index when we 
+            # get to that
+            indexID = self.index.getIndexID()
+            self.fileHandle.attrs['RTREE_INDEX_ID'] = indexID
+
+        self.index.close()
         self.index = None
         SPDV4SpatialIndex.close(self)
 
@@ -478,13 +503,20 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
                         extent.yMin - overlapDist, 
                         extent.xMax + overlapDist,
                         extent.yMax + overlapDist)
+        #print('pulseInfo', pulseInfo)
 
         # now we have to build a spatial index for these points
         # so we can get the idx and idxmask etc
-        nrows = int(numpy.ceil((extent.yMax - extent.yMin) / 
-                    extent.binSize))
-        ncols = int(numpy.ceil((extent.xMax - extent.xMin) / 
-                    extent.binSize))
+        #nrows = int(numpy.ceil((extent.yMax - extent.yMin) / 
+        #            extent.binSize))
+        #ncols = int(numpy.ceil((extent.xMax - extent.xMin) / 
+        #            extent.binSize))
+        decBinSize = Decimal(str(extent.binSize))
+        ncols = int(((Decimal(str(extent.xMax)) - Decimal(str(extent.xMin))) / 
+                            decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
+        nrows = int(((Decimal(str(extent.yMax)) - Decimal(str(extent.yMin))) / 
+                            decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
+
         nrows += (overlap * 2)
         ncols += (overlap * 2)
         mask, sortedbins, new_idx, new_cnt = gridindexutils.CreateSpatialIndex(
@@ -496,7 +528,7 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
 
         # re-sort the pulse idxs to match the new 'sub' spatial index
         pulseIdxs = pulseInfo['IDX'][mask] # should all be True
-        pulseIdxs = pulsesIdxs[sortedbins]
+        pulseIdxs = pulseIdxs[sortedbins]
 
         # as everything else depends on this way of working
         # but don't get the 'space' as this is relative to the 
@@ -563,9 +595,7 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
         We only do this on update so we have a h5space that we can use
         to extract the indices of the last lot of pulses.
         """
-        idxs = lastPulseSpace.space.get_select_elem_pointlist()
-        print(idxs.shape, idxs.dtype)
-        idxs = [..., 0]
+        idxs = lastPulseSpace.getSelectedIndices()
         self.index.setPoints(pulses[self.si_xPulseColName], 
                 pulses[self.si_yPulseColName], idxs)
 
