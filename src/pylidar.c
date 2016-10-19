@@ -457,6 +457,7 @@ char *pszName;
 #endif
         PyList_Append(pNameList, pNameString);
         free(pszName);
+        Py_DECREF(pNameString);
 
 #if PY_MAJOR_VERSION >= 3
         pFormatString = PyUnicode_FromFormat("%c%d", (int)pDefn->cKind, pDefn->nSize);
@@ -464,6 +465,7 @@ char *pszName;
         pFormatString = PyString_FromFormat("%c%d", (int)pDefn->cKind, pDefn->nSize);
 #endif
         PyList_Append(pFormatList, pFormatString);
+        Py_DECREF(pFormatString);
 
 #if PY_MAJOR_VERSION >= 3
         pOffsetInt = PyLong_FromLong(pDefn->nOffset);
@@ -471,6 +473,7 @@ char *pszName;
         pOffsetInt = PyInt_FromLong(pDefn->nOffset);
 #endif
         PyList_Append(pOffsetList, pOffsetInt);
+        Py_DECREF(pOffsetInt);
 
         nStructTotalSize = pDefn->nStructTotalSize;
 
@@ -490,14 +493,18 @@ char *pszName;
     pItemSizeKey = PyString_FromString("itemsize");
 #endif            
     PyDict_SetItem(pDtypeDict, pNamesKey, pNameList);
+    Py_DECREF(pNameList);
     PyDict_SetItem(pDtypeDict, pFormatsKey, pFormatList);
+    Py_DECREF(pFormatList);
     PyDict_SetItem(pDtypeDict, pOffsetsKey, pOffsetList);
+    Py_DECREF(pOffsetList);
 #if PY_MAJOR_VERSION >= 3
     pItemSizeObj = PyLong_FromLong(nStructTotalSize);
 #else
     pItemSizeObj = PyInt_FromLong(nStructTotalSize);
 #endif
-    PyDict_SetItem(pDtypeDict, pItemSizeKey, pItemSizeObj );
+    PyDict_SetItem(pDtypeDict, pItemSizeKey, pItemSizeObj);
+    Py_DECREF(pItemSizeObj);
 
     /* Convert dictionary to array description */
     if( !PyArray_DescrConverter(pDtypeDict, &pDescr) )
@@ -506,17 +513,21 @@ char *pszName;
         return NULL;
     }
 
+    Py_DECREF(pDtypeDict);
+
     /* Create new array wrapping the existing C one */
     pOut = (PyArrayObject*)PyArray_NewFromDescr(&PyArray_Type, pDescr, 1, &nElems, NULL, pStructArray,
                     NPY_ARRAY_CARRAY, NULL );
-    /* Need to set this separately since PyArray_NewFromDescr always */
-    /* has it unset, even if you pass it as the flags parameter */
-    PyArray_ENABLEFLAGS(pOut, NPY_ARRAY_OWNDATA);
     if( pOut == NULL )
     {
         pylidar_error("Unable to create array");
         return NULL;
     }
+
+    /* Need to set this separately since PyArray_NewFromDescr always */
+    /* has it unset, even if you pass it as the flags parameter */
+    PyArray_ENABLEFLAGS(pOut, NPY_ARRAY_OWNDATA);
+
     return pOut;
 }
 

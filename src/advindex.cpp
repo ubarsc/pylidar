@@ -395,6 +395,10 @@ static PyObject *PyAdvIndex_getExtent(PyAdvIndex *self, PyObject *args)
     PyObject *pYMax = PyFloat_FromDouble(pdMax[1]);
 
     PyObject *pTuple = PyTuple_Pack(4, pXMin, pYMin, pXMax, pYMax);
+    Py_DECREF(pXMin);
+    Py_DECREF(pYMin);
+    Py_DECREF(pXMax);
+    Py_DECREF(pYMax);
 
     Index_Free(pdMin);
     Index_Free(pdMax);

@@ -48,7 +48,7 @@ public:
     // Note: you can set nElemSize if you don't know size of type at compile time
     CVector(npy_intp nStartSize, npy_intp nGrowBy, npy_intp nElemSize=sizeof(T))
     {
-        m_pData = (T*)PyArray_malloc(nStartSize * nElemSize);
+        m_pData = (T*)PyDataMem_NEW(nStartSize * nElemSize);
         m_nElems = 0;
         m_nTotalSize = nStartSize;
         m_nGrowBy = nGrowBy;
@@ -58,7 +58,7 @@ public:
     // takes copy
     CVector(T *pData, npy_intp nSize, npy_intp nGrowBy=1)
     {
-        m_pData = (T*)PyArray_malloc(nSize);
+        m_pData = (T*)PyDataMem_NEW(nSize);
         memcpy(m_pData, pData, nSize);
         m_nElems = nSize / sizeof(T);
         m_nTotalSize = m_nElems;
@@ -74,7 +74,7 @@ public:
     void reset()
     {
         if( m_bOwned && ( m_pData != NULL) )
-            PyArray_free(m_pData);
+            PyDataMem_FREE((char*)m_pData);
         m_nElems = 0;
         m_nTotalSize = 0;
         m_nGrowBy = 0;
@@ -97,7 +97,7 @@ public:
         {
             // realloc
             m_nTotalSize += m_nGrowBy;
-            T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * m_nElemSize);
+            T *pNewData = (T*)PyDataMem_RENEW(m_pData, m_nTotalSize * m_nElemSize);
             if( pNewData == NULL )
             {
                 throw std::bad_alloc();
@@ -151,8 +151,17 @@ public:
     {
         // TODO: resize array down to nElems?
         m_bOwned = false;
-        PyArrayObject *p = pylidar_structArrayToNumpy(m_pData, m_nElems, pDefn);
-        return p;
+        if( m_nElems > 0 )
+        {
+            return pylidar_structArrayToNumpy(m_pData, m_nElems, pDefn);
+        }
+        else
+        {
+            // free mem, otherwise we get a memory leak as numpy 
+            // doesn't seem to free a empty array
+            PyDataMem_FREE((char*)m_pData);
+            return pylidar_structArrayToNumpy(NULL, 0, pDefn);
+        }
     }
 
     // for non structured arrays
@@ -160,8 +169,19 @@ public:
     {
         m_bOwned = false;
         npy_intp dims = m_nElems;
-        PyArrayObject *p = (PyArrayObject*)PyArray_SimpleNewFromData(1, &dims, typenum, (void*)m_pData);
-        PyArray_ENABLEFLAGS(p, NPY_ARRAY_OWNDATA);
+        PyArrayObject *p = NULL;
+        if( m_nElems > 0 )
+        {
+            p = (PyArrayObject*)PyArray_SimpleNewFromData(1, &dims, typenum, (void*)m_pData);
+            PyArray_ENABLEFLAGS(p, NPY_ARRAY_OWNDATA);
+        }
+        else
+        {
+            // free mem, otherwise we get a memory leak as numpy 
+            // doesn't seem to free a empty array
+            PyDataMem_FREE((char*)m_pData);
+            p = (PyArrayObject*)PyArray_SimpleNewFromData(1, &dims, typenum, NULL);
+        }
         return p;
     }
 
@@ -184,7 +204,7 @@ public:
         // resize this one down
         m_nElems = nUpper;
         m_nTotalSize = nUpper;
-        T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * m_nElemSize);
+        T *pNewData = (T*)PyDataMem_RENEW(m_pData, m_nTotalSize * m_nElemSize);
         if( pNewData == NULL )
         {
             throw std::bad_alloc();
@@ -225,7 +245,7 @@ public:
         if( nNewTotalSize > m_nTotalSize )
         {
             m_nTotalSize = nNewTotalSize;
-            T *pNewData = (T*)PyArray_realloc(m_pData, m_nTotalSize * m_nElemSize);
+            T *pNewData = (T*)PyDataMem_RENEW(m_pData, m_nTotalSize * m_nElemSize);
             if( pNewData == NULL )
             {
                 throw std::bad_alloc();

@@ -493,56 +493,115 @@ public:
     PyObject *getInfoDictionary()
     {
         PyObject *pDict = PyDict_New();
-        PyObject *pString;
+        PyObject *pString, *pVal;
 
         // we assume that the values of these variables
         // (part of the pointcloud class itself) always exist
         // as they are probably part of the preamble so if any
         // reading of the stream has been done, they should be there.
-        PyDict_SetItemString(pDict, "NUM_FACETS", PyLong_FromLong(num_facets));
-        PyDict_SetItemString(pDict, "GROUP_VELOCITY", PyFloat_FromDouble(group_velocity));
-        PyDict_SetItemString(pDict, "UNAMBIGUOUS_RANGE", PyFloat_FromDouble(unambiguous_range));
+        pVal = PyLong_FromLong(num_facets);
+        PyDict_SetItemString(pDict, "NUM_FACETS", pVal);
+        Py_DECREF(pVal);
+
+        pVal = PyFloat_FromDouble(group_velocity);
+        PyDict_SetItemString(pDict, "GROUP_VELOCITY", pVal);
+        Py_DECREF(pVal);
+
+        pVal = PyFloat_FromDouble(unambiguous_range);
+        PyDict_SetItemString(pDict, "UNAMBIGUOUS_RANGE", pVal);
+        Py_DECREF(pVal);
 #if PY_MAJOR_VERSION >= 3
         pString = PyUnicode_FromString(serial.c_str());
 #else
         pString = PyString_FromString(serial.c_str());
 #endif
         PyDict_SetItemString(pDict, "SERIAL", pString);
+        Py_DECREF(pString);
 #if PY_MAJOR_VERSION >= 3
         pString = PyUnicode_FromString(type_id.c_str());
 #else
         pString = PyString_FromString(type_id.c_str());
 #endif
         PyDict_SetItemString(pDict, "TYPE_ID", pString);
+        Py_DECREF(pString);
 #if PY_MAJOR_VERSION >= 3
         pString = PyUnicode_FromString(build.c_str());
 #else
         pString = PyString_FromString(build.c_str());
 #endif
         PyDict_SetItemString(pDict, "BUILD", pString);
+        Py_DECREF(pString);
         
         // now the fields that are valid if we have gathered 
         // from the 'pose' records
         if( m_bHaveData )
         {
-            PyDict_SetItemString(pDict, "LATITUDE", PyFloat_FromDouble(m_fLat));
-            PyDict_SetItemString(pDict, "LONGITUDE", PyFloat_FromDouble(m_fLong));
-            PyDict_SetItemString(pDict, "HEIGHT", PyFloat_FromDouble(m_fHeight));
-            PyDict_SetItemString(pDict, "HMSL", PyFloat_FromDouble(m_fHMSL));
-            PyDict_SetItemString(pDict, "BEAM_DIVERGENCE", PyFloat_FromDouble(m_beamDivergence));
-            PyDict_SetItemString(pDict, "BEAM_EXIT_DIAMETER", PyFloat_FromDouble(m_beamExitDiameter));
-            PyDict_SetItemString(pDict, "THETA_MIN", PyFloat_FromDouble(m_thetaMin));
-            PyDict_SetItemString(pDict, "THETA_MAX", PyFloat_FromDouble(m_thetaMax));
-            PyDict_SetItemString(pDict, "PHI_MIN", PyFloat_FromDouble(m_phiMin));
-            PyDict_SetItemString(pDict, "PHI_MAX", PyFloat_FromDouble(m_phiMax));
-            PyDict_SetItemString(pDict, "THETA_INC", PyFloat_FromDouble(m_thetaInc));
-            PyDict_SetItemString(pDict, "PHI_INC", PyFloat_FromDouble(m_phiInc));
+            pVal = PyFloat_FromDouble(m_fLat);
+            PyDict_SetItemString(pDict, "LATITUDE", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_fLong);
+            PyDict_SetItemString(pDict, "LONGITUDE", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_fHeight);
+            PyDict_SetItemString(pDict, "HEIGHT", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_fHMSL);
+            PyDict_SetItemString(pDict, "HMSL", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_beamDivergence);
+            PyDict_SetItemString(pDict, "BEAM_DIVERGENCE", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_beamExitDiameter);
+            PyDict_SetItemString(pDict, "BEAM_EXIT_DIAMETER", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_thetaMin);
+            PyDict_SetItemString(pDict, "THETA_MIN", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_thetaMax);
+            PyDict_SetItemString(pDict, "THETA_MAX", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_phiMin);
+            PyDict_SetItemString(pDict, "PHI_MIN", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_phiMax);
+            PyDict_SetItemString(pDict, "PHI_MAX", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_thetaInc);
+            PyDict_SetItemString(pDict, "THETA_INC", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_phiInc);
+            PyDict_SetItemString(pDict, "PHI_INC", pVal);
+            Py_DECREF(pVal);
+
             if( !npy_isnan(m_fRoll) )
-                PyDict_SetItemString(pDict, "ROLL", PyFloat_FromDouble(m_fRoll));
+            {
+                pVal = PyFloat_FromDouble(m_fRoll);
+                PyDict_SetItemString(pDict, "ROLL", pVal);
+                Py_DECREF(pVal);
+            }
             if( !npy_isnan(m_fPitch) )
-            PyDict_SetItemString(pDict, "PITCH", PyFloat_FromDouble(m_fPitch));
+            {
+                pVal = PyFloat_FromDouble(m_fPitch);
+                PyDict_SetItemString(pDict, "PITCH", pVal);
+                Py_DECREF(pVal);
+            }
             if( !npy_isnan(m_fYaw) )
-                PyDict_SetItemString(pDict, "YAW", PyFloat_FromDouble(m_fYaw));
+            {
+                pVal = PyFloat_FromDouble(m_fYaw);
+                PyDict_SetItemString(pDict, "YAW", pVal);
+                Py_DECREF(pVal);
+            }
 
             if( !npy_isnan(m_fRoll) && !npy_isnan(m_fPitch) )
             {
@@ -608,16 +667,31 @@ public:
                 pylidar::CMatrix<double> tempMat = yawMat.multiply(pitchMat);
                 pylidar::CMatrix<double> rotMat = tempMat.multiply(rollMat);
 
-                PyDict_SetItemString(pDict, "ROTATION_MATRIX", 
-                        (PyObject*)rotMat.getAsNumpyArray(NPY_DOUBLE));
+                pVal = (PyObject*)rotMat.getAsNumpyArray(NPY_DOUBLE);
+                PyDict_SetItemString(pDict, "ROTATION_MATRIX", pVal);
+                Py_DECREF(pVal);
             }
 
             // scanline info useful for building spatial index
-            PyDict_SetItemString(pDict, "SCANLINE_MIN", PyLong_FromLong(0));
-            PyDict_SetItemString(pDict, "SCANLINE_MAX", PyLong_FromLong(m_scanline));
-            PyDict_SetItemString(pDict, "SCANLINE_IDX_MIN", PyLong_FromLong(0));
-            PyDict_SetItemString(pDict, "SCANLINE_IDX_MAX", PyLong_FromLong(m_maxScanlineIdx));
-            PyDict_SetItemString(pDict, "NUMBER_OF_PULSES", PyLong_FromLong(m_numPulses));
+            pVal = PyLong_FromLong(0);
+            PyDict_SetItemString(pDict, "SCANLINE_MIN", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyLong_FromLong(m_scanline);
+            PyDict_SetItemString(pDict, "SCANLINE_MAX", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyLong_FromLong(0);
+            PyDict_SetItemString(pDict, "SCANLINE_IDX_MIN", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyLong_FromLong(m_maxScanlineIdx);
+            PyDict_SetItemString(pDict, "SCANLINE_IDX_MAX", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyLong_FromLong(m_numPulses);
+            PyDict_SetItemString(pDict, "NUMBER_OF_PULSES", pVal);
+            Py_DECREF(pVal);
         }
         return pDict;
     }
@@ -1229,6 +1303,8 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 
     // build tuple
     PyObject *pTuple = PyTuple_Pack(2, pPulses, pPoints);
+    Py_DECREF(pPulses);
+    Py_DECREF(pPoints);
 
     return pTuple;
 }
@@ -1387,6 +1463,10 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
 
     // build tuple
     PyObject *pTuple = PyTuple_Pack(4, pNumpyInfo, pNumpyRec, pNumpyWfmStart, pNumpyWfmNumber);
+    Py_DECREF(pNumpyInfo);
+    Py_DECREF(pNumpyRec);
+    Py_DECREF(pNumpyWfmStart);
+    Py_DECREF(pNumpyWfmNumber);
 
     return pTuple;
 }

@@ -383,32 +383,41 @@ static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
                 GET_LENGTH(pHeader->file_signature));
 #endif
     PyDict_SetItemString(pHeaderDict, "FILE_SIGNATURE", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->file_source_ID);
     PyDict_SetItemString(pHeaderDict, "FILE_SOURCE_ID", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->global_encoding);
     PyDict_SetItemString(pHeaderDict, "GLOBAL_ENCODING", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_1);
     PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_1", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_2);
     PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_2", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_3);
     PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_3", pVal);
+    Py_DECREF(pVal);
 
     pylidar::CVector<U8> project_ID_GUID_data_4Vector(pHeader->project_ID_GUID_data_4, 
                             sizeof(pHeader->project_ID_GUID_data_4));    
     pVal = (PyObject*)project_ID_GUID_data_4Vector.getNumpyArray(NPY_UINT8);
     PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_4", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->version_major);
     PyDict_SetItemString(pHeaderDict, "VERSION_MAJOR", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->version_minor);
     PyDict_SetItemString(pHeaderDict, "VERSION_MINOR", pVal);
+    Py_DECREF(pVal);
 
 #if PY_MAJOR_VERSION >= 3
     pVal = PyUnicode_FromStringAndSize(pHeader->system_identifier, 
@@ -418,6 +427,7 @@ static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
                 GET_LENGTH(pHeader->system_identifier));
 #endif
     PyDict_SetItemString(pHeaderDict, "SYSTEM_IDENTIFIER", pVal);
+    Py_DECREF(pVal);
 
 #if PY_MAJOR_VERSION >= 3
     pVal = PyUnicode_FromStringAndSize(pHeader->generating_software, 
@@ -427,53 +437,69 @@ static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
                 GET_LENGTH(pHeader->generating_software));
 #endif
     PyDict_SetItemString(pHeaderDict, "GENERATING_SOFTWARE", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->file_creation_day);
     PyDict_SetItemString(pHeaderDict, "FILE_CREATION_DAY", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->file_creation_year);
     PyDict_SetItemString(pHeaderDict, "FILE_CREATION_YEAR", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->header_size);
     PyDict_SetItemString(pHeaderDict, "HEADER_SIZE", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->offset_to_point_data);
     PyDict_SetItemString(pHeaderDict, "OFFSET_TO_POINT_DATA", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->number_of_variable_length_records);
     PyDict_SetItemString(pHeaderDict, "NUMBER_OF_VARIABLE_LENGTH_RECORDS", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->point_data_format);
     PyDict_SetItemString(pHeaderDict, "POINT_DATA_FORMAT", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->point_data_record_length);
     PyDict_SetItemString(pHeaderDict, "POINT_DATA_RECORD_LENGTH", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyLong_FromLong(pHeader->number_of_point_records);
     PyDict_SetItemString(pHeaderDict, "NUMBER_OF_POINT_RECORDS", pVal);
+    Py_DECREF(pVal);
 
     pylidar::CVector<U32> number_of_points_by_returnVector(pHeader->number_of_points_by_return, 
                             sizeof(pHeader->number_of_points_by_return));    
     pVal = (PyObject*)number_of_points_by_returnVector.getNumpyArray(NPY_UINT32);
     PyDict_SetItemString(pHeaderDict, "NUMBER_OF_POINTS_BY_RETURN", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_x);
     PyDict_SetItemString(pHeaderDict, "X_MAX", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyFloat_FromDouble(pHeader->min_x);
     PyDict_SetItemString(pHeaderDict, "X_MIN", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_y);
     PyDict_SetItemString(pHeaderDict, "Y_MAX", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyFloat_FromDouble(pHeader->min_y);
     PyDict_SetItemString(pHeaderDict, "Y_MIN", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyFloat_FromDouble(pHeader->max_z);
     PyDict_SetItemString(pHeaderDict, "Z_MAX", pVal);
+    Py_DECREF(pVal);
 
     pVal = PyFloat_FromDouble(pHeader->min_z);
     PyDict_SetItemString(pHeaderDict, "Z_MIN", pVal);
+    Py_DECREF(pVal);
 
     return pHeaderDict;
 }
@@ -862,6 +888,13 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
 
     // build tuple
     PyObject *pTuple = PyTuple_Pack(4, pNumpyPulses, pNumpyPoints, pNumpyInfos, pNumpyReceived);
+
+    // decref the objects since we have finished with them (PyTuple_Pack increfs)
+    Py_DECREF(pNumpyPulses);
+    Py_DECREF(pNumpyPoints);
+    Py_DECREF(pNumpyInfos);
+    Py_DECREF(pNumpyReceived);
+
     return pTuple;
 }
 

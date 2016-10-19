@@ -934,6 +934,9 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
 
         // build tuple
         pTuple = PyTuple_Pack(2, pPulses, pPoints);
+
+        Py_DECREF(pPulses);
+        Py_DECREF(pPoints);
     }
     catch(std::bad_alloc& ba)
     {
@@ -988,6 +991,7 @@ static PyObject *GetFormatNameDict()
     PyObject *pValue = PyString_FromString("Unknown");
 #endif
     PyDict_SetItem(pFormatNameDict, pKey, pValue);
+    Py_DECREF(pValue);
 
     pKey = PyLong_FromLong(ASCII_UNCOMPRESSED);
 #if PY_MAJOR_VERSION >= 3
@@ -996,6 +1000,7 @@ static PyObject *GetFormatNameDict()
     pValue = PyString_FromString("Uncompressed File");
 #endif
     PyDict_SetItem(pFormatNameDict, pKey, pValue);
+    Py_DECREF(pValue);
 
     pKey = PyLong_FromLong(ASCII_GZIP);
 #if PY_MAJOR_VERSION >= 3
@@ -1004,6 +1009,7 @@ static PyObject *GetFormatNameDict()
     pValue = PyString_FromString("GZip File");
 #endif
     PyDict_SetItem(pFormatNameDict, pKey, pValue);
+    Py_DECREF(pValue);
 
     return pFormatNameDict;
 }
