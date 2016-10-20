@@ -46,8 +46,8 @@ def getCmdargs():
         "and be able to operate on masked arrays and take the 'axis' " +
         "parameter. default=%(default)s")
     p.add_argument("-t", "--type", default=DEFAULT_ATTRIBUTE,
-        help="Type of data to operate on. One of POINT|PULSE. " +
-        "default=%(default)s")
+        choices=['POINT', 'PULSE'],
+        help="Type of data to operate on. default=%(default)s")
     p.add_argument("-b","--background", type=float, default=0, 
         help="Output raster background value. default=%(default)s.")
     p.add_argument("--binsize", type=float, 

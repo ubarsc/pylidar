@@ -45,11 +45,11 @@ def getCmdargs():
     p.add_argument("-b","--blocksize", type=float,
         help="Override the default blocksize")
     p.add_argument("--indextype", default=DEFAULT_INDEXTYPE,
-        help="Spatial index type: CARTESIAN | SPHERICAL | SCAN" +
-            " (default: %(default)s)")
+        choices=['CARTESIAN', 'SPHERICAL', 'SCAN'],
+        help="Spatial index type. (default: %(default)s)")
     p.add_argument("--pulseindexmethod", default=DEFAULT_PULSEINDEXMETHOD,
-        help="Pulse index method: FIRST_RETURN | LAST_RETURN" +
-            " (default: %(default)s)")
+        choices=['FIRST_RETURN', 'LAST_RETURN'],
+        help="Pulse index method. (default: %(default)s)")
     p.add_argument("--extent", nargs=4, metavar=('xmin', 'ymin', 'xmax', 'ymax'),
         help="Set extent of the output file")
     p.add_argument("--tempdir", help="Temporary directory to use. "+

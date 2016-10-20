@@ -75,8 +75,8 @@ def getCmdargs():
     p.add_argument("--buildpulses", default=False, action="store_true",
             help="Build pulse data structure. Default is False (only for LAS inputs)")
     p.add_argument("--pulseindex", default="FIRST_RETURN",
-            help="Pulse index method. Set to FIRST_RETURN or LAST_RETURN. " + 
-            "Default is FIRST_RETURN. (only for LAS inputs)")
+            choices=['FIRST_RETURN', 'LAST_RETURN'],
+            help="Pulse index method. (default: %(default)s). (only for LAS inputs)")
     p.add_argument("--internalrotation", dest="internalrotation",
             default=False, action="store_true", help="Use internal rotation data" +
             " when processing .rxp files. Overrides --externalrotationfn " + 
