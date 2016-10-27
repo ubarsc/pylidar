@@ -25,7 +25,7 @@ import importlib
 from pylidar import lidarprocessor
 from rios import cuiprogress
 
-DEFAULT_FUNCTION = "numpy.ma.max"
+DEFAULT_FUNCTION = "numpy.ma.min"
 DEFAULT_ATTRIBUTE = 'POINT'
 
 POINT = 0
