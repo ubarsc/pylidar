@@ -467,11 +467,18 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
             currentExtent.xMax = workingPixGrid.xMax
         if currentExtent.yMin < workingPixGrid.yMin:
             currentExtent.yMin = workingPixGrid.yMin
-                        
-        nTotalBlocks = int(numpy.ceil(
-            (workingPixGrid.xMax - workingPixGrid.xMin) / windowSizeWorld) *
-            numpy.ceil(
-            (workingPixGrid.yMax - workingPixGrid.yMin) / windowSizeWorld))
+
+        # work out number of pixels of workingPixGrid - allow 
+        # rounding error of up to half a pixel by using round
+        xsize = numpy.round((workingPixGrid.xMax - workingPixGrid.xMin) / 
+                        workingPixGrid.xRes)
+        ysize = numpy.round((workingPixGrid.yMax - workingPixGrid.yMin) /
+                        workingPixGrid.yRes)
+
+        # now work out total blocks - ceil() allows for partial blocks
+        xtotalblocks = int(numpy.ceil(xsize / controls.windowSize))
+        ytotalblocks = int(numpy.ceil(ysize / controls.windowSize))
+        nTotalBlocks = xtotalblocks * ytotalblocks
         bMoreToDo = currentExtent.yMax > workingPixGrid.yMin
         
     else:
@@ -544,27 +551,24 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
         
         if controls.spatialProcessing:
             # update to read in next block
-            # try going accross first
-            currentExtent.xMin += windowSizeWorld
-            currentExtent.xMax += windowSizeWorld
+            # try going across first
+            xblock = nBlocksSoFar % xtotalblocks
+            yblock = nBlocksSoFar // xtotalblocks
+            currentExtent.xMin = workingPixGrid.xMin + xblock * windowSizeWorld
+            currentExtent.xMax = workingPixGrid.xMin + (xblock+1) * windowSizeWorld
+            currentExtent.yMax = workingPixGrid.yMax - yblock * windowSizeWorld
+            currentExtent.yMin = workingPixGrid.yMax - (yblock+1) * windowSizeWorld
         
             # partial block
             if currentExtent.xMax > workingPixGrid.xMax:
                 currentExtent.xMax = workingPixGrid.xMax
         
-            if currentExtent.xMin >= workingPixGrid.xMax:
-                # start next line down
-                currentExtent.xMin = workingPixGrid.xMin
-                currentExtent.xMax = workingPixGrid.xMin + windowSizeWorld
-                currentExtent.yMax -= windowSizeWorld
-                currentExtent.yMin -= windowSizeWorld
-            
             # partial block
             if currentExtent.yMin < workingPixGrid.yMin:
                 currentExtent.yMin = workingPixGrid.yMin
             
             # done?
-            bMoreToDo = currentExtent.yMax > workingPixGrid.yMin
+            bMoreToDo = (nBlocksSoFar < nTotalBlocks)
         else:
             currentRange.startPulse += windowSizeSq
             currentRange.endPulse += windowSizeSq
@@ -661,21 +665,21 @@ def getWorkingPixGrid(controls, userContainer, gridList, driverList):
     if referenceGrid is None:
         # default to first image
         referenceGrid = gridList[0]
-        
-    # override the resolution and snap the coords    
-    if controls.referenceResolution is not None or controls.snapGrid:
-        res = controls.referenceResolution
-        if res is None:
-            # just use the already calculated res
-            res = referenceGrid.xRes
 
-        # do the snapping
+    if controls.referenceResolution is not None:
+        # snap one edge to match the new resolution
+        res = controls.referenceResolution
+        referenceGrid.xMax = res * numpy.ceil(referenceGrid.xMax / res)
+        referenceGrid.yMin = res * numpy.floor(referenceGrid.yMin / res)
+        referenceGrid.xRes = res
+        referenceGrid.yRes = res
+        
+    elif controls.snapGrid:
+        res = referenceGrid.xRes
         referenceGrid.xMin = res * numpy.floor(referenceGrid.xMin / res)
         referenceGrid.xMax = res * numpy.ceil(referenceGrid.xMax / res)
         referenceGrid.yMin = res * numpy.floor(referenceGrid.yMin / res)
         referenceGrid.yMax = res * numpy.ceil(referenceGrid.yMax / res)
-        referenceGrid.xRes = res
-        referenceGrid.yRes = res
 
     # Check they all have the same projection
     # the LiDAR files don't need to align since we can recompute the spatial 

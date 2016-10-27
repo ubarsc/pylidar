@@ -22,7 +22,6 @@ from __future__ import print_function, division
 import os
 import sys
 import copy
-from decimal import Decimal, ROUND_UP
 import numpy
 from rios import pixelgrid
 from . import generic
@@ -105,16 +104,17 @@ class SPDV4SpatialIndex(object):
         
         self.fileHandle = None
         
-    def getPulsesSpaceForExtent(self, extent, overlap):
+    def getPulsesSpaceForExtent(self, extent, overlap, extentAlignedWithIndex):
         raise NotImplementedError()
 
-    def getPointsSpaceForExtent(self, extent, overlap):
+    def getPointsSpaceForExtent(self, extent, overlap, extentAlignedWithIndex):
         raise NotImplementedError()
         
     def createNewIndex(self, pixelGrid):
         raise NotImplementedError()
         
-    def setPulsesForExtent(self, extent, pulses, lastPulseID):
+    def setPulsesForExtent(self, extent, pulses, lastPulseID, 
+                extentAlignedWithIndex):
         """
         When creating a new file, lastPulseID is the id of the last pulse
         currently written to file (which should equal the number of pulses
@@ -278,21 +278,33 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
                     
         SPDV4SpatialIndex.close(self)
         
-    def getSISubset(self, extent, overlap):
+    def getSISubset(self, extent, overlap, extentAlignedWithIndex):
         """
         Internal method. Reads the required block out of the spatial
         index for the requested extent.
         """
         # snap the extent to the grid of the spatial index
         pixGrid = self.pixelGrid
-        xMin = pixGrid.snapToGrid(extent.xMin, pixGrid.xMin, pixGrid.xRes)
-        xMax = pixGrid.snapToGrid(extent.xMax, pixGrid.xMax, pixGrid.xRes)
-        yMin = pixGrid.snapToGrid(extent.yMin, pixGrid.yMin, pixGrid.yRes)
-        yMax = pixGrid.snapToGrid(extent.yMax, pixGrid.yMax, pixGrid.yRes)
+        if extentAlignedWithIndex:
+            xMin = extent.xMin
+            xMax = extent.xMax
+            yMin = extent.yMin
+            yMax = extent.yMax
+        else:
+            xMin = gridindexutils.snapToGrid(extent.xMin, pixGrid.xMin, 
+                pixGrid.xRes, gridindexutils.SNAPMETHOD_LESS)
+            xMax = gridindexutils.snapToGrid(extent.xMax, pixGrid.xMax, 
+                pixGrid.xRes, gridindexutils.SNAPMETHOD_GREATER)
+            yMin = gridindexutils.snapToGrid(extent.yMin, pixGrid.yMin, 
+                pixGrid.yRes, gridindexutils.SNAPMETHOD_LESS)
+            yMax = gridindexutils.snapToGrid(extent.yMax, pixGrid.yMax, 
+                pixGrid.yRes, gridindexutils.SNAPMETHOD_GREATER)
 
         # size of spatial index we need to read
-        nrows = int(numpy.ceil((yMax - yMin) / self.pixelGrid.yRes))
-        ncols = int(numpy.ceil((xMax - xMin) / self.pixelGrid.xRes))
+        # round() ok since points should already be on the grid, nasty 
+        # rounding errors propogated with ceil()                                    
+        nrows = int(numpy.round((yMax - yMin) / self.pixelGrid.yRes))
+        ncols = int(numpy.round((xMax - xMin) / self.pixelGrid.xRes))
         # add overlap 
         nrows += (overlap * 2)
         ncols += (overlap * 2)
@@ -311,7 +323,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
 
         return idx_subset, cnt_subset
 
-    def getPulsesSpaceForExtent(self, extent, overlap):
+    def getPulsesSpaceForExtent(self, extent, overlap, extentAlignedWithIndex):
         """
         Get the space and indexes for pulses of the given extent.
         """
@@ -319,7 +331,8 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         if self.lastExtent is not None and self.lastExtent == extent:
             return self.lastPulseSpace, self.lastPulseIdx, self.lastPulseIdxMask
         
-        idx_subset, cnt_subset = self.getSISubset(extent, overlap)
+        idx_subset, cnt_subset = self.getSISubset(extent, overlap,
+                extentAlignedWithIndex)
         nOut = self.fileHandle['DATA']['PULSES']['PULSE_ID'].shape[0]
         pulse_space, pulse_idx, pulse_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                 idx_subset, cnt_subset, nOut)
@@ -331,7 +344,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
                 
         return pulse_space, pulse_idx, pulse_idx_mask
 
-    def getPointsSpaceForExtent(self, extent, overlap):
+    def getPointsSpaceForExtent(self, extent, overlap, extentAlignedWithIndex):
         """
         Get the space and indexes for points of the given extent.
         """
@@ -339,7 +352,7 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
     
         # should return cached if exists
         pulse_space, pulse_idx, pulse_idx_mask = self.getPulsesSpaceForExtent(
-                                    extent, overlap)
+                                    extent, overlap, extentAlignedWithIndex)
         
         pulsesHandle = self.fileHandle['DATA']['PULSES']
         nReturns = pulse_space.read(pulsesHandle['NUMBER_OF_RETURNS'])
@@ -364,25 +377,35 @@ class SPDV4SimpleGridSpatialIndex(SPDV4SpatialIndex):
         # save the pixelGrid
         self.pixelGrid = pixelGrid
 
-    def setPulsesForExtent(self, extent, pulses, lastPulseID):
+    def setPulsesForExtent(self, extent, pulses, lastPulseID, 
+                extentAlignedWithIndex):
         """
         Update the spatial index. Given extent and data works out what
         needs to be written.
 
         We can only do this on create so lastPulseID is an id to be added
         """
-        xMin = self.pixelGrid.snapToGrid(extent.xMin, self.pixelGrid.xMin, 
-                self.pixelGrid.xRes)
-        xMax = self.pixelGrid.snapToGrid(extent.xMax, self.pixelGrid.xMax, 
-                self.pixelGrid.xRes)
-        yMin = self.pixelGrid.snapToGrid(extent.yMin, self.pixelGrid.yMin, 
-                self.pixelGrid.yRes)
-        yMax = self.pixelGrid.snapToGrid(extent.yMax, self.pixelGrid.yMax, 
-                self.pixelGrid.yRes)
+        pixGrid = self.pixelGrid
+        if extentAlignedWithIndex:
+            xMin = extent.xMin
+            xMax = extent.xMax
+            yMin = extent.yMin
+            yMax = extent.yMax
+        else:
+            xMin = gridindexutils.snapToGrid(extent.xMin, pixGrid.xMin, 
+                pixGrid.xRes, gridindexutils.SNAPMETHOD_LESS)
+            xMax = gridindexutils.snapToGrid(extent.xMax, pixGrid.xMax, 
+                pixGrid.xRes, gridindexutils.SNAPMETHOD_GREATER)
+            yMin = gridindexutils.snapToGrid(extent.yMin, pixGrid.yMin, 
+                pixGrid.yRes, gridindexutils.SNAPMETHOD_LESS)
+            yMax = gridindexutils.snapToGrid(extent.yMax, pixGrid.yMax, 
+                pixGrid.yRes, gridindexutils.SNAPMETHOD_GREATER)
                 
         # size of spatial index we need to write
-        nrows = int(numpy.ceil((yMax - yMin) / self.pixelGrid.xRes))
-        ncols = int(numpy.ceil((xMax - xMin) / self.pixelGrid.xRes))
+        # round() ok since points should already be on the grid, nasty 
+        # rounding errors propogated with ceil()                                    
+        nrows = int(numpy.round((yMax - yMin) / self.pixelGrid.xRes))
+        ncols = int(numpy.round((xMax - xMin) / self.pixelGrid.xRes))
 
         mask, sortedBins, idx_subset, cnt_subset = gridindexutils.CreateSpatialIndex(
                 pulses[self.si_yPulseColName], pulses[self.si_xPulseColName], self.pixelGrid.xRes, yMax, xMin,
@@ -494,7 +517,7 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
         self.index = None
         SPDV4SpatialIndex.close(self)
 
-    def getPulsesSpaceForExtent(self, extent, overlap):
+    def getPulsesSpaceForExtent(self, extent, overlap, extentAlignedWithIndex):
         """
         Get the space and indexes for pulses of the given extent.
         """
@@ -507,15 +530,12 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
 
         # now we have to build a spatial index for these points
         # so we can get the idx and idxmask etc
-        #nrows = int(numpy.ceil((extent.yMax - extent.yMin) / 
-        #            extent.binSize))
-        #ncols = int(numpy.ceil((extent.xMax - extent.xMin) / 
-        #            extent.binSize))
-        decBinSize = Decimal(str(extent.binSize))
-        ncols = int(((Decimal(str(extent.xMax)) - Decimal(str(extent.xMin))) / 
-                            decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
-        nrows = int(((Decimal(str(extent.yMax)) - Decimal(str(extent.yMin))) / 
-                            decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
+        # round() ok since points should already be on the grid, nasty 
+        # rounding errors propogated with ceil()                                    
+        nrows = int(numpy.round((extent.yMax - extent.yMin) / 
+                    extent.binSize))
+        ncols = int(numpy.round((extent.xMax - extent.xMin) / 
+                    extent.binSize))
 
         nrows += (overlap * 2)
         ncols += (overlap * 2)
@@ -544,7 +564,7 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
         pulseSpace = h5space.H5Space(nOut, indices=pulseIdxs)
         return pulseSpace, idx, mask_idx
 
-    def getPointsSpaceForExtent(self, extent, overlap):
+    def getPointsSpaceForExtent(self, extent, overlap, extentAlignedWithIndex):
         """
         Get the space and indexes for points of the given extent.
         """
@@ -587,7 +607,8 @@ class SPDV4LibSpatialIndexRtreeIndex(SPDV4SpatialIndex):
         # only updating existing files supported for now
         raise NotImplementedError()
 
-    def setPulsesForExtent(self, extent, pulses, lastPulseSpace):
+    def setPulsesForExtent(self, extent, pulses, lastPulseSpace,
+            extentAlignedWithIndex):
         """
         Update the spatial index. Given extent and data works out what
         needs to be written.

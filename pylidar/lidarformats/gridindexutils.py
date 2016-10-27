@@ -20,7 +20,6 @@ from __future__ import print_function, division
 
 import os
 import numpy
-from decimal import Decimal, ROUND_UP
 from . import h5space
 
 DEBUG_MODE = os.getenv('PYLIDAR_DEBUG', '0')
@@ -447,15 +446,12 @@ def getSlicesForExtent(siPixGrid, siShape, overlap, xMin, xMax, yMin, yMax):
     siSlice = None
     
     # work out where on the whole of file spatial index to read from
-    # have to use the Decimal class and pass strings in (floats seem to lose precision)
-    decPixxRes = Decimal(str(siPixGrid.xRes))
-    decPixyRes = Decimal(str(siPixGrid.yRes))
-    decPixxMin = Decimal(str(siPixGrid.xMin))
-    decPixyMax = Decimal(str(siPixGrid.yMax))
-    xoff = int((Decimal(str(xMin)) - decPixxMin) / decPixxRes)
-    yoff = int((decPixyMax - Decimal(str(yMax))) / decPixyRes)
-    xright = int(((Decimal(str(xMax)) - decPixxMin) / decPixxRes).quantize(Decimal('1.'), rounding=ROUND_UP))
-    xbottom = int(((decPixyMax - Decimal(str(yMin))) / decPixyRes).quantize(Decimal('1.'), rounding=ROUND_UP))
+    xoff = int((xMin - siPixGrid.xMin) / siPixGrid.xRes)
+    yoff = int((siPixGrid.yMax - yMax) / siPixGrid.yRes)
+    # round() ok since points should already be on the grid, nasty 
+    # rounding errors propogated with ceil()                                    
+    xright = int(numpy.round((xMax - siPixGrid.xMin) / siPixGrid.xRes))
+    xbottom = int(numpy.round((siPixGrid.yMax - yMin) / siPixGrid.yRes))
     xsize = xright - xoff
     ysize = xbottom - yoff
         
@@ -532,3 +528,35 @@ def CollapseStartIdxs(startIdxs, nReturns):
         newIdxs[idx] = idx
 
     return newIdxs 
+
+SNAPMETHOD_NEAREST = 0
+"Constant for use with snapToGrid. Snaps to nearest grid value"
+SNAPMETHOD_LESS = 1
+"Constant for use with snapToGrid. Snaps to lesser grid value"
+SNAPMETHOD_GREATER = 2
+"Constant for use with snapToGrid. Snaps to greater grid value"
+
+def snapToGrid(val, valOnGrid, res, method):
+    """
+    Snaps a coordinate (val) to a grid specified by one coord
+    on that grid (valOnGrid). res is the pixel size of that grid
+    and method is on of SNAPMETHOD_NEAREST, SNAPMETHOD_LESS or
+    SNAPMETHOD_GREATER.
+    
+    """
+    diff = val - valOnGrid
+    numPix = diff / res
+    if method == SNAPMETHOD_NEAREST:
+        sign = numpy.sign(numPix)
+        absNumPix = numpy.abs(numPix)
+        numWholePix = numpy.round(absNumPix) * sign
+    elif method == SNAPMETHOD_LESS:
+        numWholePix = numpy.floor(numPix)
+    elif method == SNAPMETHOD_GREATER:
+        numWholePix = numpy.ceil(numPix)
+    else:
+        msg = 'Unknown method %d' % method
+        raise ValueError(msg)
+
+    snappedVal = valOnGrid + numWholePix * res
+    return snappedVal

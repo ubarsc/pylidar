@@ -60,35 +60,42 @@ def run():
     testsIgnoredNoDriver = 0
 
     if lidarprocessor.HAVE_FMT_LAS:
+        print('Running Test 1')
         testsuite1.run(oldpath, newpath)
         testsRun += 1
     else:
         testsIgnoredNoDriver += 1
 
     if lidarprocessor.HAVE_FMT_LAS:
+        print('Running Test 2')
         testsuite2.run(oldpath, newpath)
         testsRun += 1
     else:
         testsIgnoredNoDriver += 1
 
     if lidarprocessor.HAVE_FMT_LAS:
+        print('Running Test 3')
         testsuite3.run(oldpath, newpath)
         testsRun += 1
     else:
         testsIgnoredNoDriver += 1
 
+    print('Running Test 4')
     testsuite4.run(oldpath, newpath)
     testsRun += 1
 
     if lidarprocessor.HAVE_FMT_LAS:
+        print('Running Test 5')
         testsuite5.run(oldpath, newpath)
         testsRun += 1
     else:
         testsIgnoredNoDriver += 1
 
+    print('Running Test 6')
     testsuite6.run(oldpath, newpath)
     testsRun += 1
 
+    print('Running Test 7')
     testsuite7.run(oldpath, newpath)
     testsRun += 1
 

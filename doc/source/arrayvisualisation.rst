@@ -10,7 +10,7 @@ Data returned from getPoints(). A one dimensional structured array. Each element
 
 .. image:: point.png
 
-Data returned from getPulsesByBins(). A 2 dimensional masked structured array. Each row has the points for a pulse. As some pulses have more points than others, the mask=True for elements that aren't valid for a pulse (greyed out):
+Data returned from getPointsByPulses(). A 2 dimensional masked structured array. Each row has the points for a pulse. As some pulses have more points than others, the mask=True for elements that aren't valid for a pulse (greyed out):
 
 .. image:: pointsbypulse.png
 

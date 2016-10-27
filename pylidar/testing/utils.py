@@ -126,7 +126,7 @@ class Checksum(object):
 
         for name in names:
              if newdict[name] != olddict[name]:
-                msg = 'for %s the is a data mismatch on column %s'
+                msg = 'for %s there is a data mismatch on column %s'
                 msg = msg % (atype, name)
                 raise TestingDataMismatch(msg)
 

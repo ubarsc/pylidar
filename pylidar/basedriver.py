@@ -54,8 +54,8 @@ class Extent(object):
             self.binSize != other.binSize)
         
     def __str__(self):
-        s = "xMin:%s,xMax:%s,yMin:%s,yMax:%s,binSize:%s" % (self.xMin, self.xMax,
-                      self.yMin, self.yMax, self.binSize)
+        s = "xMin:%s,xMax:%s,yMin:%s,yMax:%s,binSize:%s" % (repr(self.xMin), 
+            repr(self.xMax), repr(self.yMin), repr(self.yMax), repr(self.binSize))
         return s
 
 

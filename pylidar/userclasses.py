@@ -231,8 +231,10 @@ class UserInfo(object):
         be what one wants.         
         
         """
-        nRows = int(numpy.ceil((self.extent.yMax - self.extent.yMin) / self.extent.binSize))
-        nCols = int(numpy.ceil((self.extent.xMax - self.extent.xMin) / self.extent.binSize))
+        # round() ok since points should already be on the grid, nasty 
+        # rounding errors propogated with ceil()                                    
+        nRows = int(numpy.round((self.extent.yMax - self.extent.yMin) / self.extent.binSize))
+        nCols = int(numpy.round((self.extent.xMax - self.extent.xMin) / self.extent.binSize))
         # add overlap 
         nRows += (self.controls.overlap * 2)
         nCols += (self.controls.overlap * 2)

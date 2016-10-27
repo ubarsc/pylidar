@@ -45,7 +45,6 @@ from __future__ import print_function, division
 import sys
 import copy
 import numpy
-from decimal import Decimal, ROUND_UP
 import h5py
 from numba import jit
 from rios import pixelgrid
@@ -810,7 +809,8 @@ spatial index will be recomputed on the fly"""
         
         point_space, idx, mask_idx = (
                             self.si_handler.getPointsSpaceForExtent(self.extent, 
-                                        self.controls.overlap))
+                                        self.controls.overlap, 
+                                        self.extentAlignedWithSpatialIndex))
         
         points = self.readFieldsAndUnScale(pointsHandle, colNames, point_space)
 
@@ -847,16 +847,19 @@ spatial index will be recomputed on the fly"""
         
         pulse_space, idx, mask_idx = (
                             self.si_handler.getPulsesSpaceForExtent(self.extent, 
-                                    self.controls.overlap))
+                                    self.controls.overlap, 
+                                    self.extentAlignedWithSpatialIndex))
 
         pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, pulse_space)
         
         if not self.extentAlignedWithSpatialIndex:
             # need to recompute subset of spatial index to bins
             # are aligned with current extent
-            nrows = int(numpy.ceil((self.extent.yMax - self.extent.yMin) / 
+            # round() ok since points should already be on the grid, nasty 
+            # rounding errors propogated with ceil()         
+            nrows = int(numpy.round((self.extent.yMax - self.extent.yMin) / 
                         self.extent.binSize))
-            ncols = int(numpy.ceil((self.extent.xMax - self.extent.xMin) / 
+            ncols = int(numpy.round((self.extent.xMax - self.extent.xMin) / 
                         self.extent.binSize))
             nrows += (self.controls.overlap * 2)
             ncols += (self.controls.overlap * 2)
@@ -936,12 +939,13 @@ spatial index will be recomputed on the fly"""
         # since SPDV4 files have only a spatial index on pulses currently.
         points = self.readPointsForExtent(colNames)
         
-        decBinSize = Decimal(str(self.lastExtent.binSize))
-        nrows = int(((Decimal(str(self.lastExtent.yMax)) - Decimal(str(self.lastExtent.yMin))) / 
-                        decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
-        ncols = int(((Decimal(str(self.lastExtent.xMax)) - Decimal(str(self.lastExtent.xMin))) / 
-                        decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
-                        
+        # round() ok since points should already be on the grid, nasty 
+        # rounding errors propogated with ceil()                                    
+        nrows = int(numpy.round((self.lastExtent.yMax - self.lastExtent.yMin) / 
+                        self.lastExtent.binSize))
+        ncols = int(numpy.round((self.lastExtent.xMax - self.lastExtent.xMin) / 
+                        self.lastExtent.binSize))
+
         # add overlap
         nrows += (self.controls.overlap * 2)
         ncols += (self.controls.overlap * 2)
@@ -1217,13 +1221,14 @@ spatial index will be recomputed on the fly"""
             else:  # create
                 # get the spatial index handling code to sort it.
                 pulses, mask, binidx = self.si_handler.setPulsesForExtent(
-                                        self.extent, pulses, self.lastPulseID)
+                                        self.extent, pulses, self.lastPulseID,
+                                        self.extentAlignedWithSpatialIndex)
 
         elif (self.mode == generic.UPDATE and self.createIndexOnUpdate and 
                 self.si_handler.canUpdateInPlace()):
             # allow the spatial index to be created in place
                     self.si_handler.setPulsesForExtent(self.extent, pulses, 
-                        self.lastPulsesSpace)
+                        self.lastPulsesSpace, self.extentAlignedWithSpatialIndex)
 
           
         return pulses, mask, binidx

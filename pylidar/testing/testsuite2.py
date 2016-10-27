@@ -51,7 +51,7 @@ def run(oldpath, newpath):
             pulseIndex='FIRST_RETURN', buildPulses=True)
     utils.compareLiDARFiles(os.path.join(oldpath, IMPORTED_SPD), importedSPD)
 
-    indexedSPD1 = os.path.join(newpath, INDEXED_SPD_1)
+    indexedSPD1 = os.path.join(oldpath, INDEXED_SPD_1)
     indexedSPD2 = os.path.join(newpath, INDEXED_SPD_2)
     createGridSpatialIndex(importedSPD, indexedSPD2, binSize=2.0, 
             tempDir=newpath)

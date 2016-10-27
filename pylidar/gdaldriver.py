@@ -23,7 +23,6 @@ from __future__ import print_function, division
 from distutils.version import LooseVersion
 
 import numpy
-from decimal import Decimal, ROUND_UP
 from osgeo import gdal
 from rios import pixelgrid
 from rios import imageio
@@ -97,12 +96,11 @@ class GDALDriver(basedriver.Driver):
                                     float(extent.xMin), float(extent.yMax))
         self.blockxcoord = int(self.blockxcoord)                            
         self.blockycoord = int(self.blockycoord)                            
-                                    
-        decBinSize = Decimal(str(extent.binSize))
-        self.blockxsize = int(((Decimal(str(extent.xMax)) - Decimal(str(extent.xMin))) / 
-                            decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
-        self.blockysize = int(((Decimal(str(extent.yMax)) - Decimal(str(extent.yMin))) / 
-                            decBinSize).quantize(Decimal('1.'), rounding=ROUND_UP))
+
+        # round() ok since points should already be on the grid, nasty 
+        # rounding errors propogated with ceil()                                    
+        self.blockxsize = int(numpy.round((extent.xMax - extent.xMin) / extent.binSize))
+        self.blockysize = int(numpy.round((extent.yMax - extent.yMin) / extent.binSize))
                     
     def getPixelGrid(self):
         """

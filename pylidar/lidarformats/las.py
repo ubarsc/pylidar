@@ -468,9 +468,11 @@ class LasFile(generic.LiDARFile):
         self.readData(extent)
         
         # TODO: cache somehow with colNames
-        nrows = int(numpy.ceil((extent.yMax - extent.yMin) / 
+        # round() ok since points should already be on the grid, nasty 
+        # rounding errors propogated with ceil()         
+        nrows = int(numpy.round((extent.yMax - extent.yMin) / 
             extent.binSize))
-        ncols = int(numpy.ceil((extent.xMax - extent.xMin) / 
+        ncols = int(numpy.round((extent.xMax - extent.xMin) / 
             extent.binSize))
         nrows += (self.controls.overlap * 2)
         ncols += (self.controls.overlap * 2)
@@ -527,9 +529,11 @@ class LasFile(generic.LiDARFile):
         self.readData(extent)
 
         # TODO: cache somehow with colNames
-        nrows = int(numpy.ceil((extent.yMax - extent.yMin) / 
+        # round() ok since points should already be on the grid, nasty 
+        # rounding errors propogated with ceil()         
+        nrows = int(numpy.round((extent.yMax - extent.yMin) / 
             extent.binSize))
-        ncols = int(numpy.ceil((extent.xMax - extent.xMin) / 
+        ncols = int(numpy.round((extent.xMax - extent.xMin) / 
             extent.binSize))
         nrows += (self.controls.overlap * 2)
         ncols += (self.controls.overlap * 2)

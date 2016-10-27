@@ -545,14 +545,26 @@ spatial index will be recomputed on the fly"""
 
         # snap the extent to the grid of the spatial index
         pixGrid = self.getPixelGrid()
-        xMin = pixGrid.snapToGrid(self.extent.xMin, pixGrid.xMin, pixGrid.xRes)
-        xMax = pixGrid.snapToGrid(self.extent.xMax, pixGrid.xMax, pixGrid.xRes)
-        yMin = pixGrid.snapToGrid(self.extent.yMin, pixGrid.yMin, pixGrid.yRes)
-        yMax = pixGrid.snapToGrid(self.extent.yMax, pixGrid.yMax, pixGrid.yRes)
+        if self.extentAlignedWithSpatialIndex:
+            xMin = self.extent.xMin
+            xMax = self.extent.xMax
+            yMin = self.extent.yMin
+            yMax = self.extent.yMax
+        else:
+            xMin = gridindexutils.snapToGrid(self.extent.xMin, pixGrid.xMin, 
+                pixGrid.xRes, gridindexutils.SNAPMETHOD_LESS)
+            xMax = gridindexutils.snapToGrid(self.extent.xMax, pixGrid.xMax, 
+                pixGrid.xRes, gridindexutils.SNAPMETHOD_GREATER)
+            yMin = gridindexutils.snapToGrid(self.extent.yMin, pixGrid.yMin, 
+                pixGrid.yRes, gridindexutils.SNAPMETHOD_LESS)
+            yMax = gridindexutils.snapToGrid(self.extent.yMax, pixGrid.yMax, 
+                pixGrid.yRes, gridindexutils.SNAPMETHOD_GREATER)
 
         # size of spatial index we need to read
-        nrows = int(numpy.ceil((yMax - yMin) / self.si_binSize))
-        ncols = int(numpy.ceil((xMax - xMin) / self.si_binSize))
+        # round() ok since points should already be on the grid, nasty 
+        # rounding errors propogated with ceil()                   
+        nrows = int(numpy.round((yMax - yMin) / self.si_binSize))
+        ncols = int(numpy.round((xMax - xMin) / self.si_binSize))
         # add overlap 
         nrows += (self.controls.overlap * 2)
         ncols += (self.controls.overlap * 2)
@@ -578,9 +590,11 @@ spatial index will be recomputed on the fly"""
         if not self.extentAlignedWithSpatialIndex:
             # need to recompute subset of spatial index to bins
             # are aligned with current extent
-            nrows = int(numpy.ceil((self.extent.yMax - self.extent.yMin) / 
+            # round() ok since points should already be on the grid, nasty 
+            # rounding errors propogated with ceil()         
+            nrows = int(numpy.round((self.extent.yMax - self.extent.yMin) / 
                         self.extent.binSize))
-            ncols = int(numpy.ceil((self.extent.xMax - self.extent.xMin) / 
+            ncols = int(numpy.round((self.extent.xMax - self.extent.xMin) / 
                         self.extent.binSize))
             nrows += (self.controls.overlap * 2)
             ncols += (self.controls.overlap * 2)
