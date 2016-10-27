@@ -446,8 +446,8 @@ def getSlicesForExtent(siPixGrid, siShape, overlap, xMin, xMax, yMin, yMax):
     siSlice = None
     
     # work out where on the whole of file spatial index to read from
-    xoff = int((xMin - siPixGrid.xMin) / siPixGrid.xRes)
-    yoff = int((siPixGrid.yMax - yMax) / siPixGrid.yRes)
+    xoff = int(numpy.round((xMin - siPixGrid.xMin) / siPixGrid.xRes))
+    yoff = int(numpy.round((siPixGrid.yMax - yMax) / siPixGrid.yRes))
     # round() ok since points should already be on the grid, nasty 
     # rounding errors propogated with ceil()                                    
     xright = int(numpy.round((xMax - siPixGrid.xMin) / siPixGrid.xRes))
