@@ -28,6 +28,8 @@ from pylidar.lidarformats import generic
 from pylidar.toolbox.translate.las2spdv4 import translate
 from pylidar.toolbox.rasterization import rasterize
 
+REQUIRED_FORMATS = ["LAS"]
+
 INPUT_LAZ = 'apl1dr_x509000ys6945000z56_2009_ba1m6_pbrisba_zip.laz'
 IMPORTED_SPD = 'testsuite3.spd'
 OUTPUT_DEM = 'testsuite3.img'

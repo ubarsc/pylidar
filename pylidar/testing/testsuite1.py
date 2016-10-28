@@ -28,6 +28,8 @@ from pylidar.toolbox.translate.las2spdv4 import translate
 from pylidar.toolbox.indexing.gridindex import createGridSpatialIndex
 from pylidar.toolbox.rasterization import rasterize
 
+REQUIRED_FORMATS = ["LAS"]
+
 INPUT_LAS = 'apl1dr_x509000ys6945000z56_2009_ba1m6_pbrisba.las'
 IMPORTED_SPD = 'testsuite1.spd'
 INDEXED_SPD = 'testsuite1_idx.spd'

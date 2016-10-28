@@ -395,7 +395,8 @@ def extractTarFile(tarFile, pathToUse='.'):
     what was expected. 
 
     Returns the path to where the data files are (ie inside the extracted tarfile)
-    and the path to where to create the new data files for comparison.
+    and the path to where to create the new data files for comparison and the list
+    of tests in the tar file (there should be a module for each of these)
     """
     outDataDir = os.path.join(pathToUse, TESTDATA_DIR)
     if os.path.isdir(outDataDir):
@@ -418,6 +419,8 @@ def extractTarFile(tarFile, pathToUse='.'):
         msg = msg % (TESTSUITE_VERSION, dataDict['version'])
         raise TestingVersionError(msg)
 
+    tests = dataDict['tests']
+
     # create the NEWDATA_DIR
     newDataDir = os.path.join(pathToUse, NEWDATA_DIR)
     if os.path.isdir(newDataDir):
@@ -427,4 +430,4 @@ def extractTarFile(tarFile, pathToUse='.'):
     # create it
     os.mkdir(newDataDir)
 
-    return outDataDir, newDataDir
+    return outDataDir, newDataDir, tests

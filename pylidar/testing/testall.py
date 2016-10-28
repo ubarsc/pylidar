@@ -22,16 +22,12 @@ Runs all the available test suites
 from __future__ import print_function, division
 
 import sys
+import shutil
 import argparse
+import importlib
 
 from . import utils
-from . import testsuite1
-from . import testsuite2
-from . import testsuite3
-from . import testsuite4
-from . import testsuite5
-from . import testsuite6
-from . import testsuite7
+# testsuite1 etc loaded dynamically below
 from pylidar import lidarprocessor
 
 def getCmdargs():
@@ -42,6 +38,12 @@ def getCmdargs():
     p.add_argument("-i", "--input", help="Input tar file name")
     p.add_argument("-p", "--path", default='.', 
             help="Path to use. (default: %(default)s)")
+    p.add_argument("-l", "--list", action="store_true", default=False,
+            help="List tests in input, then exit")
+    p.add_argument("-n", "--noremove", action="store_true", default=False,
+            help="Do not clean up files on exit")
+    p.add_argument("-t", "--test", action="append",
+            help="Just run specified test. Can be given multiple times")
 
     cmdargs = p.parse_args()
 
@@ -54,50 +56,57 @@ def getCmdargs():
 def run():
     cmdargs = getCmdargs()
 
-    oldpath, newpath = utils.extractTarFile(cmdargs.input, cmdargs.path)
+    oldpath, newpath, tests = utils.extractTarFile(cmdargs.input, cmdargs.path)
+
+    if cmdargs.list:
+        for name in tests:
+            print(name)
+        if not cmdargs.noremove:
+            shutil.rmtree(oldpath)
+            shutil.rmtree(newpath)
+        sys.exit()
 
     testsRun = 0
     testsIgnoredNoDriver = 0
 
-    if lidarprocessor.HAVE_FMT_LAS:
-        print('Running Test 1')
-        testsuite1.run(oldpath, newpath)
-        testsRun += 1
-    else:
-        testsIgnoredNoDriver += 1
+    # get current package name (needed for module importing below)
+    # should be pylidar.testing (remove .testall)
+    arr = __name__.split('.')
+    package = '.'.join(arr[:-1])
+    
+    for name in tests:
 
-    if lidarprocessor.HAVE_FMT_LAS:
-        print('Running Test 2')
-        testsuite2.run(oldpath, newpath)
-        testsRun += 1
-    else:
-        testsIgnoredNoDriver += 1
+        if cmdargs.test is not None and name not in cmdargs.test:
+            continue
 
-    if lidarprocessor.HAVE_FMT_LAS:
-        print('Running Test 3')
-        testsuite3.run(oldpath, newpath)
-        testsRun += 1
-    else:
-        testsIgnoredNoDriver += 1
+        # import module - should we do something better if there
+        # is an error? ie we don't have the specific test asked for?
+        mod = importlib.import_module('.' + name, package=package)
 
-    print('Running Test 4')
-    testsuite4.run(oldpath, newpath)
-    testsRun += 1
+        # Check we can actually run this test
+        doTest = True
+        if hasattr(mod, 'REQUIRED_FORMATS'):
+            fmts = getattr(mod, 'REQUIRED_FORMATS')
+            for fmt in fmts:
+                if fmt == "LAS":
+                    if not lidarprocessor.HAVE_FMT_LAS:
+                        print('Skipping', name, 'due to missing format driver', fmt)
+                        doTest = False
+                        break
+                else:
+                    msg = 'Unknown required format %s' % fmt
+                    raise ValueError(msg)
 
-    if lidarprocessor.HAVE_FMT_LAS:
-        print('Running Test 5')
-        testsuite5.run(oldpath, newpath)
-        testsRun += 1
-    else:
-        testsIgnoredNoDriver += 1
-
-    print('Running Test 6')
-    testsuite6.run(oldpath, newpath)
-    testsRun += 1
-
-    print('Running Test 7')
-    testsuite7.run(oldpath, newpath)
-    testsRun += 1
+        if doTest:
+            print('Running', name)
+            mod.run(oldpath, newpath)
+            testsRun += 1
+        else:
+            testsIgnoredNoDriver += 1
 
     print(testsRun, 'tests run successfully')
     print(testsIgnoredNoDriver, 'tests skipped because of missing format drivers')
+
+    if not cmdargs.noremove:
+        shutil.rmtree(oldpath)
+        shutil.rmtree(newpath)
