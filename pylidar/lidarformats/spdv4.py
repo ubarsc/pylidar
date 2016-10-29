@@ -878,7 +878,6 @@ spatial index will be recomputed on the fly"""
             pulses = pulses[mask]
             pulses = pulses[sortedbins]
 
-            
         self.lastExtent = copy.copy(self.extent)
         self.lastPulses = pulses
         self.lastPulsesSpace = pulse_space
@@ -994,13 +993,12 @@ spatial index will be recomputed on the fly"""
         
         points = numpy.ma.array(pointsByBins, mask=pts_idx_mask)
         
-        if returnPulseIndex:
+        if indexByPulse and returnPulseIndex:
             # have to generate array the same lengths as the 1d points
             # but containing the indexes of the pulses
-            pulse_count = numpy.arange(0, self.lastPulses.size)
+            pulse_count = numpy.arange(0, nreturns.size)
             # convert this into an array with an element for each point
-            pulse_idx_1d = numpy.repeat(pulse_count, 
-                            self.lastPulses['NUMBER_OF_RETURNS'])
+            pulse_idx_1d = numpy.repeat(pulse_count, nreturns)
             # mask the ones that are within the spatial index
             pulse_idx_1d = pulse_idx_1d[mask]
             # sort the right way
