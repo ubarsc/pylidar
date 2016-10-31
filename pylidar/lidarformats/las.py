@@ -717,10 +717,6 @@ class LasFile(generic.LiDARFile):
             msg = 'Can only get scaling values on read'
             raise generic.LiDARInvalidSetting(msg)
             
-        if self.firstBlockWritten:
-            msg = 'scaling can only be updated before first block written'
-            raise generic.LiDARFunctionUnsupported(msg)
-            
         if arrayType != generic.ARRAY_TYPE_POINTS:
             msg = 'Can only get scaling for points'
             raise generic.LiDARInvalidSetting(msg)

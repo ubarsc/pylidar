@@ -106,6 +106,9 @@ def getCmdargs():
             "output file with the given type, name and value. type should be " +
             "one of [POINT|PULSE|WAVEFORM] dtype should be UINT16 format. " +
             "(only for SPDV4 outputs)")
+    p.add_argument("--lasscalings", default=False, action="store_true",
+            help="Use the scalings and types in the LAS file in the output. " + 
+            "Overrides --scaling. (only for LAS inputs)")
 
     cmdargs = p.parse_args()
 
@@ -148,7 +151,8 @@ def run():
         las2spdv4.translate(info, cmdargs.input, cmdargs.output, 
                 cmdargs.range, cmdargs.spatial, cmdargs.extent, cmdargs.scaling, 
                 cmdargs.epsg, cmdargs.binsize, cmdargs.buildpulses, 
-                cmdargs.pulseindex, cmdargs.null, cmdargs.constcol)
+                cmdargs.pulseindex, cmdargs.null, cmdargs.constcol,
+                cmdargs.lasscalings)
 
     elif inFormat == 'SPDV3' and cmdargs.format == 'SPDV4':
         spdv32spdv4.translate(info, cmdargs.input, cmdargs.output,

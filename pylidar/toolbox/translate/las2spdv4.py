@@ -42,6 +42,9 @@ def transFunc(data, otherArgs):
     
     # set scaling and write header
     if data.info.isFirstBlock():
+        if otherArgs.useLASScaling:
+            updateScalingWithLASValues(otherArgs.scaling, data.input1, points)
+
         translatecommon.setOutputScaling(otherArgs.scaling, data.output1)
         translatecommon.setOutputNull(otherArgs.nullVals, data.output1)
         if otherArgs.epsg is not None:
@@ -70,9 +73,41 @@ def transFunc(data, otherArgs):
     if revc is not None and revc.size > 0:
         data.output1.setReceived(revc)
 
+def updateScalingWithLASValues(scalingDict, input, pointsArray):
+    """
+    Updates scalingDict with scalings from input (a LAS file). pointsArray
+    is needed so we know what fields exist in the input.
+    """
+    ptsScaling = scalingDict[lidarprocessor.ARRAY_TYPE_POINTS]
+    for colName in pointsArray.dtype.names:
+        try:
+            gain, offset = input.getScaling(colName, 
+                    lidarprocessor.ARRAY_TYPE_POINTS)
+
+            dtype = input.getNativeDataType(colName, 
+                    lidarprocessor.ARRAY_TYPE_POINTS)
+
+            if colName in ptsScaling:
+                # can't change dtype as per spdv4 spec
+                dtype = ptsScaling[colName][-1]
+
+            ptsScaling[colName] = [gain, offset, dtype]
+        except generic.LiDARArrayColumnError:
+            # no scaling/dtype set for this column
+            pass
+
+    # we can safely assume that X_IDX, Y_IDX on the pulses etc should be the same as 
+    # X, Y on the points (the driver creates X_IDX from X etc)
+    plsScaling = scalingDict[lidarprocessor.ARRAY_TYPE_PULSES]
+    for inName, outName in [("X", "X_IDX"), ("Y", "Y_IDX")]:
+        gain, offset = input.getScaling(inName, lidarprocessor.ARRAY_TYPE_POINTS)
+
+        dtype = plsScaling[outName][-1]
+        plsScaling[outName] = [gain, offset, dtype]
+
 def translate(info, infile, outfile, expectRange=None, spatial=None, extent=None, 
         scaling=None, epsg=None, binSize=None, buildPulses=False, pulseIndex=None, 
-        nullVals=None, constCols=None):
+        nullVals=None, constCols=None, useLASScaling=False):
     """
     Main function which does the work.
 
@@ -91,6 +126,8 @@ def translate(info, infile, outfile, expectRange=None, spatial=None, extent=None
         pulses are indexed.
     * nullVals is a list of tuples with (type, varname, value)
     * constCols is a list of tupes with (type, varname, dtype, value)
+    * if useLASScaling is True, then the scaling used in the LAS file
+        is used for columns. Overrides anything given in 'scaling'
     
     """
     scalingsDict = translatecommon.overRideDefaultScalings(scaling)
@@ -140,6 +177,7 @@ def translate(info, infile, outfile, expectRange=None, spatial=None, extent=None
     otherArgs.lasInfo = info
     otherArgs.nullVals = nullVals
     otherArgs.constCols = constCols
+    otherArgs.useLASScaling = useLASScaling
 
     if extent is not None:
         extent = [float(x) for x in extent]
