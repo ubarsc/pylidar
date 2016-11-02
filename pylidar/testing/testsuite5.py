@@ -56,7 +56,7 @@ def run(oldpath, newpath):
             stderr=subprocess.STDOUT)
 
     nLines = len(result.split(b'\n'))
-    if nLines > 6:
+    if nLines > 7:
         print(result)
         msg = ('Seems to be more output from lasdiff than expected, ' + 
                     'likely to be a difference in file')
