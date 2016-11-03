@@ -80,21 +80,18 @@ class Driver(object):
         self.controls = controls
         self.userClass = userClass
 
-    @abc.abstractmethod        
     def setExtent(self, extent):
         """
         Set the extent for reading or writing
         """
         raise NotImplementedError()
         
-    @abc.abstractmethod
     def getPixelGrid(self):
         """
         Return the PixelGridDefn for this file
         """
         raise NotImplementedError()
         
-    @abc.abstractmethod
     def setPixelGrid(self, pixGrid):
         """
         Set the PixelGridDefn for the reading or 
