@@ -21,9 +21,13 @@ from __future__ import print_function, division
 
 import os
 import numpy
-import scipy.interpolate
 
 # See which interpolator we have access to
+haveScipyInterp = True
+try:
+    import scipy.interpolate
+except ImportError:
+    haveScipyInterp = False
 
 # https://bitbucket.org/chchrsc/cgalinterp
 # Have had trouble with CGAL on some datasets
@@ -68,6 +72,9 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method):
         raise InterpolationError("Must have at least 4 input points to create interpolator")
     
     if method == 'nearest' or method == 'linear' or method == 'cubic':
+        if not haveScipyInterp:
+            msg = "scipy must be installed for nearest, linear or cubic"
+            raise InterpolationError(msg)
         interpZ = scipy.interpolate.griddata((xVals, yVals), zVals, (gridCoords[0].flatten(), gridCoords[1].flatten()), method=method, rescale=True)
         interpZ = interpZ.astype(numpy.float64)
         out = numpy.reshape(interpZ, gridCoords[0].shape)
