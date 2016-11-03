@@ -212,7 +212,6 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
 
-    @abc.abstractmethod        
     def readPointsForExtent(self, colNames=None):
         """
         Read all the points within the given extent
@@ -224,7 +223,6 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
-    @abc.abstractmethod
     def readPulsesForExtent(self, colNames=None):
         """
         Read all the pulses within the given extent
@@ -236,7 +234,6 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
 
-    @abc.abstractmethod        
     def readPulsesForExtentByBins(extent=None, colNames=None):
         """
         Read all the pulses within the given extent as a 3d structured 
@@ -250,7 +247,6 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
-    @abc.abstractmethod
     def readPointsForExtentByBins(extent=None, colNames=None, indexByPulse=False, 
                 returnPulseIndex=False):
         """
@@ -465,7 +461,6 @@ class LiDARFile(basedriver.Driver):
         """
         return []
 
-    @abc.abstractmethod
     def writeData(self, pulses=None, points=None, transmitted=None, 
                 received=None, waveformInfo=None):
         """
