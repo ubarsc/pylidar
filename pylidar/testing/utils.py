@@ -21,6 +21,7 @@ General testing utility functions.
 
 from __future__ import print_function, division
 import os
+import sys
 import copy
 import json
 import shutil
@@ -29,6 +30,7 @@ import tarfile
 import subprocess
 from pylidar import lidarprocessor
 from rios import cuiprogress
+from rios.parallel.jobmanager import find_executable
 
 TESTSUITE_VERSION = 3
 """
@@ -52,6 +54,11 @@ VERSION_FILE = 'version.txt'
 # maybe these should be in lidarprocessor also?
 ARRAY_TYPE_TRANSMITTED = 100
 ARRAY_TYPE_RECEIVED = 101
+
+# path to gdalchksum.py so we can run it on Windows
+GDALCHKSUM = find_executable('gdalchksum.py')
+if GDALCHKSUM is None:
+    raise IOError('Cannot find gdalchksum.py in $PATH')
 
 class TestingError(Exception):
     "Base class for testing Exceptions"
@@ -382,8 +389,13 @@ def compareImageFiles(oldfile, newfile):
     """
     Compares two image files using gdalchksum.py
     """
-    oldChecksum = subprocess.check_output(['gdalchksum.py', oldfile])
-    newChecksum = subprocess.check_output(['gdalchksum.py', newfile])
+    # be explicit when starting gdalchksum.py since this
+    # is needed on Windows. Doesn't hurt on other platforms
+    # tho.
+    oldChecksum = subprocess.check_output([sys.executable, 
+                    GDALCHKSUM, oldfile])
+    newChecksum = subprocess.check_output([sys.executable, 
+                    GDALCHKSUM, newfile])
     if oldChecksum != newChecksum:
         msg = 'image checksums do not match'
         raise TestingDataMismatch(msg)
