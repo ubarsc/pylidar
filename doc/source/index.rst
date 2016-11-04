@@ -84,6 +84,14 @@ before building as detailed in this table:
 The related `pynninterp <https://bitbucket.org/petebunting/pynninterp>`_ module is used
 for some interpolation operations.
 
+Test Suite
+^^^^^^^^^^
+
+After installation, run pylidar_test to run a number of tests to check that the install is OK. You will
+need the latest testdata_X.tar.gz file (with the highest 'X') from the 
+`downloads area <https://bitbucket.org/chchrsc/pylidar/downloads>`_. Pass the path to this file to 
+pylidar_test with -i option.
+
 Conda
 ^^^^^
 
