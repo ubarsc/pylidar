@@ -935,6 +935,21 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
         pPointDefn = self->pLasPointFieldsWithExt;
     }
 
+    if( pPoints == NULL )
+    {
+        // There were no points loaded in this call. 
+        // We still need to create an empty array so go through the process
+        // so the fields match any arrays we have already returned.
+        int nSizeStruct = LasPointFields[0].nStructTotalSize;
+        if( self->pLasPointFieldsWithExt != NULL )
+        {
+            // there are extra fields. Use this size instead
+            nSizeStruct = self->pLasPointFieldsWithExt[0].nStructTotalSize;
+        }
+        // now know size of items
+        pPoints = new pylidar::CVector<SLasPoint>(nInitSize, nGrowBy, nSizeStruct);
+    }
+
     PyArrayObject *pNumpyPoints = pPoints->getNumpyArray(pPointDefn);
     delete pPoints;
     PyArrayObject *pNumpyInfos = waveformInfos.getNumpyArray(LasWaveformInfoFields);
