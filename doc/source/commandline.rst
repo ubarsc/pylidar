@@ -187,3 +187,36 @@ Run "pylidar_tile -h" to obtain full help. The basic usage is to specify a input
     pylidar_tile --input data.spdv4
 
 Many of the flags are similar to "pylidar_index" so consult the help above for more information on these.
+
+
+--------------------------------------------------------------
+Deriving vertical plant profiles from TLS using pylidar_canopy
+--------------------------------------------------------------
+
+Once you have converted your data to SPV4 format, you can use this
+utility to derive various published lidar canopy metrics.
+
+Currently only vertical plant profiles [Pgap(theta,z), PAI(z), PAVD(z)] from 
+TLS as described by Calders et al. (2014) Agricultural and Forest 
+Meteorology are implemented. These are designed to stratify gap fraction, 
+plant area index, and plant area volume desity by height when only
+single scan locations are measured.
+
+Run "pylidar_canopy -h" to obtain full help. The basic usage is to specify 
+1 or 2 (in the case of a RIEGL VZ400) input files like this::
+
+    pylidar_canopy -i tls_scan_upright.spd tls_scan_tilted.spd -o vertical_profiles.csv
+        -p -r planefit.rpt --minzenith 35.0 5.0 --maxzenith 70.0 35.0
+
+The output if a CSV file with a table of vertical profile metrics [Pgap(theta,z), PAI(z), PAVD(z)] 
+as columns and vertical height bin (m) starting points as rows. This command will also apply a 
+plane fit on-the-fly to correct a single location scan for topographic effects (the -p option) 
+and also output a report on the fit statistics (the -r option).
+
+Only view zenith angles between 35 and 70 degrees are used for the tls_scan_upright.spd 
+file and 5 and 25 degrees for the tls_scan_tilted.spd file (the defaults for the --minzenith 
+and --maxzenith options.
+
+
+
+
