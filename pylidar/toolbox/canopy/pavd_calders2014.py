@@ -21,121 +21,201 @@ Functions for calculating vertical plant profiles (Calders et al., 2014)
 from __future__ import print_function, division
 
 import numpy
+import collections
+import statsmodels.api as sm
 from numba import jit
 
 @jit
-def stratifyPointsByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,
-                                 pulseZenith,pulsesByPointZenith,pointReturnNumber,pulsesByPointNReturns,
-                                 pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weighted):
+def stratifyPointsByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,pulseZenith,pulsesByPointZenith,
+                                 pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weights):
     """
     Updates a 2D array of point counts (zenith, height) and 1D array of pulse counts (zenith)
     
     """
     for i in range(midZenithBins.shape[0]):        
-        if (midZenithBins[i] > minimumZenith) & (midZenithBins[i] <= maximumZenith):            
+        if (midZenithBins[i] > minimumZenith) and (midZenithBins[i] <= maximumZenith):            
             lowerzenith = midZenithBins[i] - zenithBinSize / 2
             upperzenith = midZenithBins[i] + zenithBinSize / 2
             for j in range(pulseZenith.shape[0]):
                 if (pulseZenith[j] > lowerzenith) and (pulseZenith[j] <= upperzenith):
-                    pulseCounts[i,0] += 1            
+                    pulseCounts[i,0] += 1.0            
             for j in range(pulsesByPointZenith.shape[0]):
-                if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith):
-                    if weighted:        
-                        w = float(pointReturnNumber[j]) / float(pulsesByPointNReturns[j])
-                    else:
-                        if pointReturnNumber[j] > 1:
-                            w = 0.0
-                        else:
-                            w = 1.0
-                    k = int( (pointHeight[j] - heightBins[0]) / heightBinSize )
-                    if (k >= 0) and (k < heightBins.shape[0]):
-                        pointCounts[i,k] += w
+                if weights[j] > 0:
+                    if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith):
+                        k = int( (pointHeight[j] - heightBins[0]) / heightBinSize )
+                        if (k >= 0) and (k < heightBins.shape[0]):
+                            pointCounts[i,k] += weights[j]
 
 
-def calcLinearPlantProfiles(height, zenith, pgap):
+@jit
+def stratifyPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask,
+                           minX, maxX, minY, maxY, resolution, nbinsX):
+    """
+    Updates 1D arrays of point coordinates corresponding to a minimum Z grid
+    """
+    halfextentX = (maxX - minX) / 2
+    halfextentY = (maxY - minY) / 2
+    for i in range(pointZ.shape[0]):
+        if (pointX[i] >= minX) and (pointX[i] <= maxX) and (pointY[i] >= minY) and (pointY[i] <= maxY):
+            j = int( (pointY[i] - (-halfextentY) ) / resolution) * nbinsX + int( (pointX[i] - (-halfextentX) ) / resolution)
+            if (j >= 0) and (j < gridZ.shape[0]):
+                if not gridMask[j]:
+                    if pointZ[i] < gridZ[j]:
+                        gridX[j] = pointX[i]
+                        gridY[j] = pointY[i]
+                        gridZ[j] = pointZ[i]
+                else:
+                    gridX[j] = pointX[i]
+                    gridY[j] = pointY[i]
+                    gridZ[j] = pointZ[i]
+                    gridMask[j] = False
+    
+            
+def runXYStratification(data, otherargs):
+    """
+    Derive a minimum Z surface following Calders et al. (2014)
+    """
+    pointcolnames = ['X','Y','Z']
+    halfextent = otherargs.gridsize / 2.0
+    
+    for indata in data.inList:
+        
+        points = indata.getPoints(colNames=pointcolnames)
+        
+        stratifyPointsByXYGrid(points['X'], points['Y'], points['Z'], otherargs.xgrid, otherargs.ygrid, otherargs.zgrid, 
+            otherargs.gridmask, -halfextent, halfextent, -halfextent, halfextent, otherargs.gridbinsize, otherargs.gridsize)
+
+
+def runZenithHeightStratification(data, otherargs):
+    """
+    Derive Pgap(z) profiles following Calders et al. (2014)
+    """
+    if otherargs.planecorrection:
+        pointcolnames = ['X','Y','Z','CLASSIFICATION','RETURN_NUMBER']
+    else:
+        pointcolnames = [otherargs.heightcol,'CLASSIFICATION','RETURN_NUMBER']
+    pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH']
+    
+    for i,indata in enumerate(data.inList):
+        
+        points = indata.getPoints(colNames=pointcolnames)
+        pulses = indata.getPulses(colNames=pulsecolnames)
+        pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
+        
+        if otherargs.weighted:
+            weights = points['RETURN_NUMBER'] / pulsesByPoint['NUMBER_OF_RETURNS'].astype(numpy.float32)
+        else:
+            weights = numpy.array(points['RETURN_NUMBER'] == 1, dtype=numpy.float32)
+        
+        if otherargs.planecorrection:
+            pointHeights = points['Z'] - (otherargs.planefit["Parameters"][1] * points['X'] + 
+                otherargs.planefit["Parameters"][2] * points['Y'] + otherargs.planefit["Parameters"][0])
+        else:
+            pointHeights = points[otherargs.heightcol]
+        
+        stratifyPointsByZenithHeight(otherargs.zenith,otherargs.minzenith[i],otherargs.maxzenith[i],
+            otherargs.zenithbinsize,pulses['ZENITH'],pulsesByPoint['ZENITH'],pointHeights,
+            otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,weights)
+
+
+def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
     """
     Calculate the linear model PAI/PAVD
     """ 
-    kthetal = -numpy.log(pgap)
+    kthetal = -numpy.log(pgapz)
     xtheta = 2 * numpy.tan(zenith) / numpy.pi
-    paiv = numpy.zeros(height.size)
-    paih = numpy.zeros(height.size)
+    paiv = numpy.zeros(pgapz.shape[1])
+    paih = numpy.zeros(pgapz.shape[1])
     for i,h in enumerate(height):    
         a = numpy.vstack([xtheta, numpy.ones(xtheta.size)]).T
         y = kthetal[:,i]
-        if y.any():
+        if numpy.any(y):
             lv, lh = numpy.linalg.lstsq(a, y)[0]        
             paiv[i] = lv
             paih[i] = lh
     
     pai = paiv + paih
-    pavd = deriv(height,pai)
-    mla = 90 - numpy.degrees(numpy.arctan2(paiv,paih))
+    pavd = numpy.gradient(pai, heightbinsize)
+    
+    mla = numpy.degrees( numpy.arctan2(paiv,paih) )
     
     return pai,pavd,mla
 
 
-def calcHingePlantProfiles(height, zenith, pgap):
+def calcHingePlantProfiles(heightbinsize, zenith, pgapz):
     """
     Calculate the hinge angle PAI/PAVD
     """       
     hingeindex = numpy.argmin(numpy.abs(zenith - numpy.arctan(numpy.pi / 2)))
-    pai = -1.1 * numpy.log(pgap[hingeindex,:])       
-    pavd = deriv(height,pai)
+    pai = -1.1 * numpy.log(pgapz[hingeindex,:])
+    pavd = numpy.gradient(pai, heightbinsize)
     
     return pai,pavd
     
                       
-def calcSolidAnglePlantProfiles(height, zenith, pgap, zenithbinsize, pai=None):
+def calcSolidAnglePlantProfiles(zenith, pgapz, heightbinsize, zenithbinsize, pai=None):
     """
     Calculate the Jupp et al. (2009) solid angle weighted PAI/PAVD
     """
     w = 2 * numpy.pi * numpy.sin(zenith) * zenithbinsize
-    wn = w / numpy.sum(w[pgap[:,-1] < 1])        
-    ratio = numpy.zeros(height.size)
+    wn = w / numpy.sum(w[pgapz[:,-1] < 1])        
+    ratio = numpy.zeros(pgapz.shape[1])
     
     for i in range(zenith.size):
-        if (pgap[i,-1] < 1):
-            ratio += wn[i] * numpy.log(pgap[i,:]) / numpy.log(pgap[i,-1])
+        if (pgapz[i,-1] < 1):
+            ratio += wn[i] * numpy.log(pgapz[i,:]) / numpy.log(pgapz[i,-1])
     
     if pai is None:
         hingeindex = numpy.argmin(numpy.abs(zenith - numpy.arctan(numpy.pi / 2)))
-        pai = -1.1 * numpy.log(pgap[hingeindex,-1])
+        pai = -1.1 * numpy.log(pgapz[hingeindex,-1])
     
     pai = pai * ratio
-    pavd = deriv(height,pai)
+    pavd = numpy.gradient(pai, heightbinsize)
     
-    return pai, pavd       
-
-
-def deriv(x,y):
-    """
-    IDL's numerical differentiation using 3-point, Lagrangian interpolation
-    df/dx = y0*(2x-x1-x2)/(x01*x02)+y1*(2x-x0-x2)/(x10*x12)+y2*(2x-x0-x1)/(x20*x21)
-    where: x01 = x0-x1, x02 = x0-x2, x12 = x1-x2, etc.
-    """
-    
-    x12 = x - numpy.roll(x,-1) #x1 - x2
-    x01 = numpy.roll(x,1) - x #x0 - x1
-    x02 = numpy.roll(x,1) - numpy.roll(x,-1) #x0 - x2
-
-    d = numpy.roll(y,1) * (x12 / (x01*x02)) + y * (1.0/x12 - 1.0/x01) - numpy.roll(y,-1) * (x01 / (x02 * x12)) # Middle points
-    d[0] = y[0] * (x01[1]+x02[1])/(x01[1]*x02[1]) - y[1] * x02[1]/(x01[1]*x12[1]) + y[2] * x01[1]/(x02[1]*x12[1]) # First point
-    d[y.size-1] = -y[y.size-3] * x12[y.size-2]/(x01[y.size-2]*x02[y.size-2]) + \
-    y[y.size-2] * x02[y.size-2]/(x01[y.size-2]*x12[y.size-2]) - y[y.size-1] * \
-    (x02[y.size-2]+x12[y.size-2]) / (x02[y.size-2]*x12[y.size-2]) # Last point
-
-    return d
+    return pai,pavd
 
     
-def writePgapProfiles(outfile, zenith, height, pgapz):
+def writeProfiles(outfile, zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, sapp_pai, sapp_pavd):
     """
-    Write out the Pgap profiles to file
+    Write out the vertical profiles to file
     """  
     csvobj = open(outfile, "w")
-    headerstr = ["theta%04i"%(ring*100) for ring in zenith]
-    csvobj.write("%s,%s\n" % ("height",",".join(headerstr)))
+    
+    headerstr1 = ["vz%04i"%(ring*100) for ring in zenith]
+    headerstr2 = ["linearPAI","linearPAVD","linearMLA","hingePAI","juppPAVD"]    
+    csvobj.write("%s,%s,%s\n" % ("height",",".join(headerstr1),",".join(headerstr2)))
+    
     for i in range(height.shape[0]):
-        valstr = ["%f" % j for j in pgapz[:,i]]
-        csvobj.write("%f,%s\n" % (height[i], ",".join(valstr))) 
+        valstr1 = ["%.4f" % j for j in pgapz[:,i]]
+        
+        canopyz = [lpp_pai[i],lpp_pavd[i],lpp_mla[i],sapp_pai[i],sapp_pavd[i]]
+        valstr2 = ["%.4f" % j for j in canopyz]
+        
+        csvobj.write("%.4f,%s,%s\n" % (height[i], ",".join(valstr1), ",".join(valstr2)))
+    
     csvobj.close()
+
+
+def planeFitHubers(x, y, z, reportfile=None):
+    """
+    Plane fitting (Huber's T norm with median absolute deviation scaling)
+    Weighting by 1/r yet to be implemented in statsmodels.api
+    """    
+    xy = numpy.vstack((x,y)).T
+    xy = sm.add_constant(xy)
+    huber_t = sm.RLM(z, xy, M=sm.robust.norms.HuberT())
+    huber_results = huber_t.fit()
+            
+    outdictn = collections.OrderedDict()
+    outdictn["Parameters"] = huber_results.params        
+    outdictn["Summary"] = huber_results.summary(yname='Z', xname=['Intercept','X','Y'])
+    outdictn["Slope"] = numpy.degrees( numpy.arctan(numpy.sqrt(outdictn["Parameters"][1]**2 + outdictn["Parameters"][2]**2)) )
+    outdictn["Aspect"] = numpy.degrees( numpy.arctan(outdictn["Parameters"][1] / outdictn["Parameters"][2]) )
+    
+    if reportfile is not None:
+        f = open(reportfile,'w')
+        for k,v in outdictn.items():
+            f.write("%s:\n%s\n" % (k,v))
+        f.close()
+       
+    return outdictn
