@@ -24,6 +24,8 @@ to use for reading or writing the current block.
 
 from __future__ import print_function, division
 
+import abc
+
 READ = 0
 "access modes passed to driver constructor"
 UPDATE = 1
@@ -63,6 +65,8 @@ class Driver(object):
     """
     Base Driver object to be subclassed be both the LiDAR and raster drivers
     """
+    __metaclass__ = abc.ABCMeta
+
     def __init__(self, fname, mode, controls, userClass):
         """
         fname is the file to open or create
@@ -75,7 +79,7 @@ class Driver(object):
         self.mode = mode
         self.controls = controls
         self.userClass = userClass
-        
+
     def setExtent(self, extent):
         """
         Set the extent for reading or writing
@@ -95,6 +99,7 @@ class Driver(object):
         """
         raise NotImplementedError()
         
+    @abc.abstractmethod
     def close(self):
         """
         Close all open file handles

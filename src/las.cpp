@@ -172,6 +172,7 @@ typedef struct {
     double fBinSize;
     long nPulseIndex; // FIRST_RETURN or LAST_RETURNs
     SpylidarFieldDefn *pLasPointFieldsWithExt; // != NULL and use instead of LasPointFields when extended fields defined
+    std::map<std::string, int> *pExtraPointNativeTypes; // if pLasPointFieldsWithExt != typenums of the extra fields
 } PyLasFileRead;
 
 static const char *SupportedDriverOptionsRead[] = {"BUILD_PULSES", "BIN_SIZE", "PULSE_INDEX", NULL};
@@ -249,6 +250,10 @@ PyLasFileRead_dealloc(PyLasFileRead *self)
     {
         free(self->pLasPointFieldsWithExt);
     }
+    if(self->pExtraPointNativeTypes != NULL)
+    {
+        delete self->pExtraPointNativeTypes;
+    }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -283,6 +288,7 @@ PyObject *pOptionDict;
     self->fBinSize = 0;
     self->nPulseIndex = FIRST_RETURN;
     self->pLasPointFieldsWithExt = NULL;
+    self->pExtraPointNativeTypes = NULL;
 
     /* Check creation options */
     PyObject *pBuildPulses = PyDict_GetItemString(pOptionDict, "BUILD_PULSES");
@@ -617,14 +623,21 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
             int nOldFields = (sizeof(LasPointFields) / sizeof(SpylidarFieldDefn)) - 1; // without sentinel
             int nNewFields = nOldFields + pPoint->attributer->number_attributes + 1; // with sentinel
             self->pLasPointFieldsWithExt = (SpylidarFieldDefn*)malloc(sizeof(SpylidarFieldDefn) * nNewFields);
+            // our map of the types
+            self->pExtraPointNativeTypes = new std::map<std::string, int>();
 
             // copy the data over
             memcpy(self->pLasPointFieldsWithExt, LasPointFields, sizeof(SpylidarFieldDefn) * nOldFields);
 
             // assume extra fields are all floats which seems to make sense as even
             // if they are stored as short etc, there is scaling often applied.
+            // TODO: check alignment of location of new fields instead of just
+            // using sizeof(SLasPoint) for RISC
             int nNewTotalSize = sizeof(SLasPoint) + 
                     (sizeof(double) * pPoint->attributer->number_attributes);
+            // TODO: add any padding required so that the type of the first
+            // item in SLasPoint is aligned. This is what C compiler would
+            // do (I think)
 
             // reset the nStructTotalSize field
             for( int i = 0; i < (nNewFields-1); i++ )
@@ -639,8 +652,49 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
                 pDest->pszName = pPoint->attributer->attributes[i].name;
                 pDest->cKind = 'f';
                 pDest->nSize = sizeof(double);
+                // TODO: see comment about alignment above for RISC
                 pDest->nOffset = sizeof(SLasPoint) + (i * sizeof(double));
                 // nStructTotalSize done above
+
+                // now the map of types
+                int typenum;
+                switch(pPoint->attributer->attributes[i].data_type)
+                {
+                case LAS_ATTRIBUTE_U8:
+                    typenum = NPY_UINT8;
+                    break;
+                case LAS_ATTRIBUTE_I8:
+                    typenum = NPY_INT8;
+                    break;
+                case LAS_ATTRIBUTE_U16:
+                    typenum = NPY_UINT16;
+                    break;
+                case LAS_ATTRIBUTE_I16:
+                    typenum = NPY_INT16;
+                    break;
+                case LAS_ATTRIBUTE_U32:
+                    typenum = NPY_UINT32;
+                    break;
+                case LAS_ATTRIBUTE_I32:
+                    typenum = NPY_INT32;
+                    break;
+                case LAS_ATTRIBUTE_U64:
+                    typenum = NPY_UINT64;
+                    break;
+                case LAS_ATTRIBUTE_I64:
+                    typenum = NPY_INT64;
+                    break;
+                case LAS_ATTRIBUTE_F32:
+                    typenum = NPY_FLOAT32;
+                    break;
+                case LAS_ATTRIBUTE_F64:
+                    typenum = NPY_FLOAT64;
+                    break;
+                default:
+                    fprintf(stderr, "Unkown type for field %s. Assuming f64\n", pPoint->attributer->attributes[i].name);
+                    typenum = NPY_FLOAT64;
+                }
+                self->pExtraPointNativeTypes->insert(std::pair<std::string, int>(pPoint->attributer->attributes[i].name, typenum));
             }
 
             // ensure sentinel set
@@ -881,6 +935,21 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
         pPointDefn = self->pLasPointFieldsWithExt;
     }
 
+    if( pPoints == NULL )
+    {
+        // There were no points loaded in this call. 
+        // We still need to create an empty array so go through the process
+        // so the fields match any arrays we have already returned.
+        int nSizeStruct = LasPointFields[0].nStructTotalSize;
+        if( self->pLasPointFieldsWithExt != NULL )
+        {
+            // there are extra fields. Use this size instead
+            nSizeStruct = self->pLasPointFieldsWithExt[0].nStructTotalSize;
+        }
+        // now know size of items
+        pPoints = new pylidar::CVector<SLasPoint>(nInitSize, nGrowBy, nSizeStruct);
+    }
+
     PyArrayObject *pNumpyPoints = pPoints->getNumpyArray(pPointDefn);
     delete pPoints;
     PyArrayObject *pNumpyInfos = waveformInfos.getNumpyArray(LasWaveformInfoFields);
@@ -1028,14 +1097,23 @@ static PyObject *PyLasFileRead_getNativeDataType(PyLasFileRead *self, PyObject *
     }
     else
     {
-        if( self->pLasPointFieldsWithExt != NULL )
+        // see if it is one of the extra fields
+        if( self->pExtraPointNativeTypes != NULL )
         {
-            pDescr = pylidar_getDtypeForField(self->pLasPointFieldsWithExt, pszField);
+            std::map<std::string, int>::iterator itr;
+            itr = self->pExtraPointNativeTypes->find(pszField);
+            if( itr != self->pExtraPointNativeTypes->end() )
+            {
+                pDescr = PyArray_DescrFromType(itr->second);
+            }
         }
-        else
+
+        // if not, it should be one of the standard fields we create
+        if( pDescr == NULL )
         {
             pDescr = pylidar_getDtypeForField(LasPointFields, pszField);
         }
+
         if( pDescr == NULL )
         {
             // raise Python exception

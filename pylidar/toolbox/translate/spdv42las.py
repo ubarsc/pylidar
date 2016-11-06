@@ -37,16 +37,23 @@ def setOutputScaling(points, indata, outdata):
         except generic.LiDARArrayColumnError:
             # no scaling
             continue
+
         indtype = indata.getNativeDataType(colName, 
                     lidarprocessor.ARRAY_TYPE_POINTS)
         ininfo = numpy.iinfo(indtype)
+
         try:
             outdtype = outdata.getNativeDataType(colName, 
                     lidarprocessor.ARRAY_TYPE_POINTS)
         except generic.LiDARArrayColumnError:
-            outdtype = points[colName].dtype
+            # OK so it wasn't one of the compulsory fields, 
+            # set to same type as in input file
+            outdtype = indtype
+            outdata.setNativeDataType(colName, 
+                    lidarprocessor.ARRAY_TYPE_POINTS, outdtype)
             
         if numpy.issubdtype(outdtype, numpy.floating):
+            # no scaling required
             continue
             
         outinfo = numpy.iinfo(outdtype)

@@ -19,6 +19,7 @@ Base class for LiDAR format reader/writers
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function, division
 
+import abc
 import numpy
 from .. import basedriver
 from .. import __version__
@@ -193,6 +194,7 @@ class LiDARFile(basedriver.Driver):
         # if they differ from the LAS spec
         self.classificationTranslation = []
 
+    # can't combine static and abstract in Python 2.x
     @staticmethod        
     def getDriverName():
         """
@@ -200,6 +202,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
+    # can't combine static and abstract in Python 2.x
     @staticmethod
     def getTranslationDict(arrayType):
         """
@@ -208,7 +211,7 @@ class LiDARFile(basedriver.Driver):
         arrayType is the type of array that is to be translates (ARRAY_TYPE_*)
         """
         raise NotImplementedError()
-        
+
     def readPointsForExtent(self, colNames=None):
         """
         Read all the points within the given extent
@@ -230,7 +233,7 @@ class LiDARFile(basedriver.Driver):
         all columns are returned.
         """
         raise NotImplementedError()
-        
+
     def readPulsesForExtentByBins(extent=None, colNames=None):
         """
         Read all the pulses within the given extent as a 3d structured 
@@ -265,21 +268,24 @@ class LiDARFile(basedriver.Driver):
         
         """
         raise NotImplementedError()
-        
+
+    @abc.abstractmethod        
     def readPointsByPulse(self):     
         """
         Read a 2d structured masked array containing the points
         for each pulse.
         """
         raise NotImplementedError()
-        
+
+    @abc.abstractmethod        
     def readWaveformInfo(self):
         """
         2d structured masked array containing information
         about the waveforms.
         """
         raise NotImplementedError()
-        
+
+    @abc.abstractmethod        
     def readTransmitted(self):
         """
         Read the transmitted waveform for all pulses
@@ -287,6 +293,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
+    @abc.abstractmethod
     def readReceived(self):
         """
         Read the received waveform for all pulses
@@ -294,6 +301,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
 
+    @abc.abstractmethod
     def hasSpatialIndex(self):
         """
         Returns True if file has a spatial index defined
@@ -301,6 +309,7 @@ class LiDARFile(basedriver.Driver):
         raise NotImplementedError()
         
     # see below for no spatial index
+    @abc.abstractmethod
     def setPulseRange(self, pulseRange):
         """
         Sets the PulseRange object to use for non spatial
@@ -310,6 +319,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
     
+    @abc.abstractmethod
     def readPointsForRange(self, colNames=None):
         """
         Reads the points for the current range. Returns a 1d array.
@@ -321,6 +331,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
+    @abc.abstractmethod
     def readPulsesForRange(self, colNames=None):
         """
         Reads the pulses for the current range. Returns a 1d array.
@@ -332,6 +343,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
+    @abc.abstractmethod
     def getTotalNumberPulses(self):
         """
         Returns the total number of pulses in this file. Used for progress.
@@ -341,6 +353,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
 
+    @abc.abstractmethod
     def getHeader(self):
         """
         Return a dictionary of key/value pairs containing header info
@@ -353,6 +366,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
             
+    @abc.abstractmethod
     def getHeaderValue(self, name):
         """
         Just extract the one value and return it
@@ -458,6 +472,7 @@ class LiDARFile(basedriver.Driver):
         """
         raise NotImplementedError()
         
+    @abc.abstractmethod
     def close(self):
         """
         Write any updated spatial index and close any file handles.

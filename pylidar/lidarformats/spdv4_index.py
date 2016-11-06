@@ -21,6 +21,7 @@ from __future__ import print_function, division
 
 import os
 import sys
+import abc
 import copy
 import numpy
 from rios import pixelgrid
@@ -60,6 +61,7 @@ class SPDV4SpatialIndex(object):
     Class that hides the details of different Spatial Indices
     that can be contained in the SPDV4 file.
     """
+    __metaclass__ = abc.ABCMeta
     def __init__(self, fileHandle, mode):
         self.fileHandle = fileHandle
         self.mode = mode
@@ -104,15 +106,19 @@ class SPDV4SpatialIndex(object):
         
         self.fileHandle = None
         
+    @abc.abstractmethod
     def getPulsesSpaceForExtent(self, extent, overlap, extentAlignedWithIndex):
         raise NotImplementedError()
 
+    @abc.abstractmethod
     def getPointsSpaceForExtent(self, extent, overlap, extentAlignedWithIndex):
         raise NotImplementedError()
         
+    @abc.abstractmethod
     def createNewIndex(self, pixelGrid):
         raise NotImplementedError()
         
+    @abc.abstractmethod
     def setPulsesForExtent(self, extent, pulses, lastPulseID, 
                 extentAlignedWithIndex):
         """
@@ -125,6 +131,7 @@ class SPDV4SpatialIndex(object):
         """
         raise NotImplementedError()
 
+    @abc.abstractmethod
     def canUpdateInPlace(self):
         """
         Return True if data doesn't have to be re-sorted when writing
@@ -132,6 +139,7 @@ class SPDV4SpatialIndex(object):
         """
         raise NotImplementedError()
 
+    @abc.abstractmethod
     def canAccessUnaligned(self):
         """
         Return True if the requested extent does have to be aligned
