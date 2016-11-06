@@ -21,29 +21,58 @@ Functions for calculating vertical plant profiles (Calders et al., 2014)
 from __future__ import print_function, division
 
 import numpy
+from numba import jit
+
+@jit
+def stratifyPointsByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,
+                                 pulseZenith,pulsesByPointZenith,pointReturnNumber,pulsesByPointNReturns,
+                                 pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weighted):
+    """
+    Updates a 2D array of point counts (zenith, height) and 1D array of pulse counts (zenith)
+    
+    """
+    for i in range(midZenithBins.shape[0]):        
+        if (midZenithBins[i] > minimumZenith) & (midZenithBins[i] <= maximumZenith):            
+            lowerzenith = midZenithBins[i] - zenithBinSize / 2
+            upperzenith = midZenithBins[i] + zenithBinSize / 2
+            for j in range(pulseZenith.shape[0]):
+                if (pulseZenith[j] > lowerzenith) and (pulseZenith[j] <= upperzenith):
+                    pulseCounts[i,0] += 1            
+            for j in range(pulsesByPointZenith.shape[0]):
+                if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith):
+                    if weighted:        
+                        w = float(pointReturnNumber[j]) / float(pulsesByPointNReturns[j])
+                    else:
+                        if pointReturnNumber[j] > 1:
+                            w = 0.0
+                        else:
+                            w = 1.0
+                    k = int( (pointHeight[j] - heightBins[0]) / heightBinSize )
+                    if (k >= 0) and (k < heightBins.shape[0]):
+                        pointCounts[i,k] += w
 
 
 def calcLinearPlantProfiles(height, zenith, pgap):
-   """
-   Calculate the linear model PAI/PAVD
-   """ 
-   kthetal = -numpy.log(pgap)
-   xtheta = 2 * numpy.tan(zenith) / numpy.pi
-   paiv = numpy.zeros(height.size)
-   paih = numpy.zeros(height.size)
-   for i,h in enumerate(height):    
-       a = numpy.vstack([xtheta, numpy.ones(xtheta.size)]).t
-       y = kthetal[:,i]
-       if y.any():
-           lv, lh = numpy.linalg.lstsq(a, y)[0]        
-           paiv[i] = lv
-           paih[i] = lh
-   
-   pai = paiv + paih
-   pavd = deriv(self.heights,self.pai)
-   mla = 90 - numpy.degrees(numpy.arctan2(paiv,paih))
-   
-   return pai,pavd,mla
+    """
+    Calculate the linear model PAI/PAVD
+    """ 
+    kthetal = -numpy.log(pgap)
+    xtheta = 2 * numpy.tan(zenith) / numpy.pi
+    paiv = numpy.zeros(height.size)
+    paih = numpy.zeros(height.size)
+    for i,h in enumerate(height):    
+        a = numpy.vstack([xtheta, numpy.ones(xtheta.size)]).T
+        y = kthetal[:,i]
+        if y.any():
+            lv, lh = numpy.linalg.lstsq(a, y)[0]        
+            paiv[i] = lv
+            paih[i] = lh
+    
+    pai = paiv + paih
+    pavd = deriv(height,pai)
+    mla = 90 - numpy.degrees(numpy.arctan2(paiv,paih))
+    
+    return pai,pavd,mla
 
 
 def calcHingePlantProfiles(height, zenith, pgap):
@@ -97,3 +126,16 @@ def deriv(x,y):
     (x02[y.size-2]+x12[y.size-2]) / (x02[y.size-2]*x12[y.size-2]) # Last point
 
     return d
+
+    
+def writePgapProfiles(outfile, zenith, height, pgapz):
+    """
+    Write out the Pgap profiles to file
+    """  
+    csvobj = open(outfile, "w")
+    headerstr = ["theta%04i"%(ring*100) for ring in zenith]
+    csvobj.write("%s,%s\n" % ("height",",".join(headerstr)))
+    for i in range(height.shape[0]):
+        valstr = ["%f" % j for j in pgapz[:,i]]
+        csvobj.write("%f,%s\n" % (height[i], ",".join(valstr))) 
+    csvobj.close()
