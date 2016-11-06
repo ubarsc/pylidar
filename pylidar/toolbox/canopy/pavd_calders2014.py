@@ -29,7 +29,25 @@ from numba import jit
 def stratifyPointsByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,pulseZenith,pulsesByPointZenith,
                                  pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weights):
     """
+    Called by runZenithHeightStratification()
+    
     Updates a 2D array of point counts (zenith, height) and 1D array of pulse counts (zenith)
+    
+    Parameters:
+        midZenithBins           1D array of midpoints of zenith angle bins to use for the stratification
+        minimumZenith           Minimum zenith angle value to consider for this block
+        maximumZenith           Maximum zenith angle value to consider for this block
+        zenithBinSize           Zenith angle bin size
+        pulseZenith             1D array of pulse zenith angles for this block
+        pulsesByPointZenith     1D array of pulse zenith angles for each point in this block
+        pointHeight             1D array of point heights for this block
+        heightBins              1D array of vertical height bin starts to use the stratification
+        heightBinSize           Vertical height bin size
+        weights                 1D array of points weights to use for calculating point intercept counts
+        
+    Returns:    
+        pointCounts             2D array (zenith bins, height bins) of point intercept counts to update for this block
+        pulseCounts             1D array (zenith bins) of laser shot counts to update for this block       
     
     """
     for i in range(midZenithBins.shape[0]):        
@@ -51,7 +69,27 @@ def stratifyPointsByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenit
 def stratifyPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask,
                            minX, maxX, minY, maxY, resolution, nbinsX):
     """
+    Called by runXYStratification()
+    
     Updates 1D arrays of point coordinates corresponding to a minimum Z grid
+    
+    Parameters:
+        pointX          1D array of point X coordinates for this block
+        pointY          1D array of point Y coordinates for this block
+        pointZ          1D array of point Z coordinates for this block
+        minX            Minimum X coordinate to consider
+        maxX            Maximum X coordinate to consider
+        minY            Minimum Y coordinate to consider
+        maxY            Maximum Y coordinate to consider
+        resolution      Spatial resolution of out XY grid
+        nbinsX          Number of X bins in the output grid 
+        
+    Returns:
+        gridX           A 1D array representation of a 2D grid of minumum Z point X coordinates
+        gridY           A 1D array representation of a 2D grid of minumum Z point Y coordinates
+        gridZ           A 1D array representation of a 2D grid of minumum Z point Z coordinates
+        gridMask        A 1D array representation of a 2D bool grid of missing values
+    
     """
     halfextentX = (maxX - minX) / 2
     halfextentY = (maxY - minY) / 2
@@ -73,7 +111,7 @@ def stratifyPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask
             
 def runXYStratification(data, otherargs):
     """
-    Derive a minimum Z surface following Calders et al. (2014)
+    Derive a minimum Z surface following plane correction procedures outlined in Calders et al. (2014)
     """
     pointcolnames = ['X','Y','Z']
     halfextent = otherargs.gridsize / 2.0
@@ -88,7 +126,7 @@ def runXYStratification(data, otherargs):
 
 def runZenithHeightStratification(data, otherargs):
     """
-    Derive Pgap(z) profiles following Calders et al. (2014)
+    Derive Pgap(z) profiles following vertical profile procedures outlined in Calders et al. (2014)
     """
     if otherargs.planecorrection:
         pointcolnames = ['X','Y','Z','CLASSIFICATION','RETURN_NUMBER']
@@ -120,7 +158,7 @@ def runZenithHeightStratification(data, otherargs):
 
 def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
     """
-    Calculate the linear model PAI/PAVD
+    Calculate the linear model PAI/PAVD (see Jupp et al., 20009)
     """ 
     kthetal = -numpy.log(pgapz)
     xtheta = 2 * numpy.tan(zenith) / numpy.pi
@@ -144,7 +182,7 @@ def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
 
 def calcHingePlantProfiles(heightbinsize, zenith, pgapz):
     """
-    Calculate the hinge angle PAI/PAVD
+    Calculate the hinge angle PAI/PAVD (see Jupp et al., 20009)
     """       
     hingeindex = numpy.argmin(numpy.abs(zenith - numpy.arctan(numpy.pi / 2)))
     pai = -1.1 * numpy.log(pgapz[hingeindex,:])
@@ -199,7 +237,7 @@ def writeProfiles(outfile, zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, sa
 def planeFitHubers(x, y, z, reportfile=None):
     """
     Plane fitting (Huber's T norm with median absolute deviation scaling)
-    Weighting by 1/r yet to be implemented in statsmodels.api
+    Weighting by 1 / point range yet to be implemented in statsmodels.api
     """    
     xy = numpy.vstack((x,y)).T
     xy = sm.add_constant(xy)

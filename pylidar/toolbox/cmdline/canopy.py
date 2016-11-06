@@ -53,7 +53,7 @@ def getCmdargs():
         print("Must specify input file names") 
         p.print_help()
         sys.exit()
-
+    
     if cmdargs.output is None:
         print("Must specify output file name") 
         p.print_help()
