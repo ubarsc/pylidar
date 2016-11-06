@@ -32,13 +32,22 @@ def getCmdargs():
     Get commandline arguments
     """
     p = argparse.ArgumentParser()
-    p.add_argument("-i", "--infiles", nargs="+", 
-        help="Input lidar files (required)")
-    p.add_argument("-o", "--output", help="output file (required)")
-    p.add_argument("-m", "--metric", default=canopymetric.DEFAULT_CANOPY_METRIC, 
-        help="Canopy metric to calculate. default=%(default)s")
-
-
+    p.add_argument("-i", "--infiles", nargs="+", help="Input lidar files (required)")
+    p.add_argument("-o", "--output", help="Output file (required)")
+    p.add_argument("-m", "--metric", default=canopymetric.DEFAULT_CANOPY_METRIC, help="Canopy metric to calculate. default=%(default)s")
+    p.add_argument("-w","--weighted", default=False, action="store_true", help="Calculate Pgap(z) using weighted interception (Armston et al., 2013)")         
+    p.add_argument("-p","--planecorrection", default=False, action="store_true", help="Apply plane correction to point heights (PAVD_CALDERS2014 metric only)")
+    p.add_argument("-r","--reportfile", help="Output file report file for point height plane correction (PAVD_CALDERS2014 metric only)")
+    p.add_argument("--heightcol", default='Z', help="Point column name to use for vertical profile heights (default: %(default)s).")
+    p.add_argument("--heightbinsize", default=0.5, type=float, help="Vertical bin size (default: %(default)f m)")
+    p.add_argument("--minheight", default=0.0, type=float, help="Minimum vertical profile height (default: %(default)f m)")
+    p.add_argument("--maxheight", default=50.0, type=float, help="Maximum vertical profile height (default: %(default)f m)")
+    p.add_argument("--zenithbinsize", default=5.0, type=float, help="View zenith bin size (default: %(default)f deg)")
+    p.add_argument("--minzenith", nargs="+", default=[35.0,5.0], type=float, help="Minimum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
+    p.add_argument("--maxzenith", nargs="+", default=[70.0,35.0], type=float, help="Maximum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
+    p.add_argument("--gridsize", default=100, type=int, help="Grid dimension for the point height plane correction (default: %(default)i; PAVD_CALDERS2014 metric only)")
+    p.add_argument("--gridbinsize", default=5.0, type=float, help="Grid resolution for the point height plane correction (default: %(default)f m; PAVD_CALDERS2014 metric only)")    
+       
     cmdargs = p.parse_args()
     if cmdargs.infiles is None:
         print("Must specify input file names") 
@@ -52,12 +61,33 @@ def getCmdargs():
 
     return cmdargs
 
+
 def run():
     """
     Main function. Checks the command line parameters and calls
     the canopymetrics routine.
     """
     cmdargs = getCmdargs()
+    otherargs = lidarprocessor.OtherArgs()
 
-    canopymetric.runCanopyMetric(cmdargs.infiles, cmdargs.output, 
-        cmdargs.metric)
+    if cmdargs.metric == "PAVD_CALDERS2014":    
+        
+        otherargs.weighted = cmdargs.weighted
+        otherargs.heightcol = cmdargs.heightcol
+        otherargs.heightbinsize = cmdargs.heightbinsize
+        otherargs.minheight = cmdargs.minheight
+        otherargs.maxheight = cmdargs.maxheight
+        otherargs.zenithbinsize = cmdargs.zenithbinsize
+        otherargs.minzenith = cmdargs.minzenith
+        otherargs.maxzenith = cmdargs.maxzenith       
+        otherargs.planecorrection = cmdargs.planecorrection
+        otherargs.rptfile = cmdargs.reportfile
+        otherargs.gridsize = cmdargs.gridsize
+        otherargs.gridbinsize = cmdargs.gridbinsize
+    
+    else:
+        msg = 'Unsupported metric %s' % cmdargs.metric
+        raise CanopyMetricError(msg)
+        
+    canopymetric.runCanopyMetric(cmdargs.infiles, cmdargs.output, cmdargs.metric, otherargs)
+
