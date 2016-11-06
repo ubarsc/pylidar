@@ -20,7 +20,6 @@ Module for calculating canopy metrics from lidar data.
 
 from __future__ import print_function, division
 
-import sys
 import numpy
 import importlib
 from pylidar.lidarformats import generic
@@ -36,25 +35,8 @@ class CanopyMetricError(Exception):
     "Exception type for canopymetric errors"
 
 
-def runPavdCalders2014(data, otherargs):
-    """
-    Calculate PAVD following Calders et al. (2014)
-    """
-    pointcolnames = [otherargs.heightcol,'CLASSIFICATION','RETURN_NUMBER']
-    pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH']
-    
-    for i,indata in enumerate(data.inList):
-        
-        points = indata.getPoints(colNames=pointcolnames)
-        pulses = indata.getPulses(colNames=pulsecolnames)
-        pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
-        
-        pavd_calders2014.stratifyPointsByZenithHeight(otherargs.zenith,otherargs.minimum_zenith[i],otherargs.maximum_zenith[i],
-            otherargs.zenithbinsize,pulses['ZENITH'],pulsesByPoint['ZENITH'],points['RETURN_NUMBER'],pulsesByPoint['NUMBER_OF_RETURNS'],
-            points[otherargs.heightcol],otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,otherargs.weighted)
-    
 
-def runCanopyMetric(infiles, outfile, metric=DEFAULT_CANOPY_METRIC):
+def runCanopyMetric(infiles, outfile, metric, otherargs):
     """
     Apply canopy metric
     Metric name should be of the form <metric>_<source>
@@ -62,11 +44,9 @@ def runCanopyMetric(infiles, outfile, metric=DEFAULT_CANOPY_METRIC):
     
     # Set all the input files
     dataFiles = lidarprocessor.DataFiles()
-    dataFiles.inList = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) 
-                        for fname in infiles]
+    dataFiles.inList = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) for fname in infiles]
     
     controls = lidarprocessor.Controls()
-    otherargs = lidarprocessor.OtherArgs()
     
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)  
@@ -76,38 +56,43 @@ def runCanopyMetric(infiles, outfile, metric=DEFAULT_CANOPY_METRIC):
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
         
-        otherargs.weighted = True
-                
-        otherargs.heightcol = 'Z'
-        otherargs.heightbinsize = 0.5
-        minheight = -2.0
-        maxheight = 50.0               
-
-        otherargs.zenithbinsize = 5.0
-        otherargs.minimum_zenith = [35.0,0.0]
-        otherargs.maximum_zenith = [70.0,35.0]
+        if otherargs.planecorrection:  
+            print("Applying plane correction to point heights...")
+            
+            otherargs.xgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+            otherargs.ygrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+            otherargs.zgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+            otherargs.gridmask = numpy.ones(otherargs.gridsize**2, dtype=numpy.bool)
+                       
+            lidarprocessor.doProcessing(pavd_calders2014.runXYStratification, dataFiles, controls=controls, otherArgs=otherargs)
+            
+            otherargs.planefit = pavd_calders2014.planeFitHubers(otherargs.xgrid[~otherargs.gridmask], otherargs.ygrid[~otherargs.gridmask], 
+                otherargs.zgrid[~otherargs.gridmask], reportfile=otherargs.rptfile)
         
-        minzenith = min(otherargs.minimum_zenith)
-        maxzenith = max(otherargs.maximum_zenith)
+        minZenithAll = min(otherargs.minzenith)
+        maxZenithAll = max(otherargs.maxzenith)  
         
-        otherargs.zenith = numpy.arange(minzenith+otherargs.zenithbinsize, maxzenith, otherargs.zenithbinsize) \
-                                        + otherargs.zenithbinsize / 2
-        otherargs.height = numpy.arange(minheight, maxheight, otherargs.heightbinsize)
+        otherargs.zenith = numpy.arange(minZenithAll+otherargs.zenithbinsize/2, maxZenithAll, otherargs.zenithbinsize)
+        otherargs.height = numpy.arange(otherargs.minheight, otherargs.maxheight, otherargs.heightbinsize)
         otherargs.counts = numpy.zeros([otherargs.zenith.shape[0],otherargs.height.shape[0]])
         otherargs.pulses = numpy.zeros([otherargs.zenith.shape[0],1])     
         
-        lidarprocessor.doProcessing(runPavdCalders2014, dataFiles, controls=controls, 
-            otherArgs=otherargs)
+        print("Calculating vertical plant profiles...")
+        lidarprocessor.doProcessing(pavd_calders2014.runZenithHeightStratification, dataFiles, controls=controls, otherArgs=otherargs)
         
-        pgapz = 1 - numpy.cumsum(otherargs.counts, axis=0) / otherargs.pulses
+        pgapz = 1 - numpy.cumsum(otherargs.counts, axis=1) / otherargs.pulses
         zenithRadians = numpy.radians(otherargs.zenith)
-        #lpp_pai,lpp_pavd,lpp_mla = pavd_calders2014.calcLinearPlantProfiles(otherargs.height, zenithRadians, pgapz)
-        #sapp_pai,sapp_pavd = pavd_calders2014.calcSolidAnglePlantProfiles(otherargs.height, zenithRadians, pgapz, 
-        #    otherargs.zenithbinsize)
         
-        pavd_calders2014.writePgapProfiles(outfile, otherargs.zenith, otherargs.height, pgapz)
+        lpp_pai,lpp_pavd,lpp_mla = pavd_calders2014.calcLinearPlantProfiles(otherargs.height, otherargs.heightbinsize, 
+            zenithRadians, pgapz)
+        sapp_pai,sapp_pavd = pavd_calders2014.calcSolidAnglePlantProfiles(zenithRadians, pgapz, otherargs.heightbinsize,
+            otherargs.zenithbinsize)
+        
+        pavd_calders2014.writeProfiles(outfile, otherargs.zenith, otherargs.height, pgapz, 
+                                       lpp_pai,lpp_pavd,lpp_mla, sapp_pai, sapp_pavd)
               
     else:
+        
         msg = 'Unsupported metric %s' % metric
         raise CanopyMetricError(msg)
         
