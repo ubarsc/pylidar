@@ -45,8 +45,9 @@ def getCmdargs():
     p.add_argument("--zenithbinsize", default=5.0, type=float, help="View zenith bin size (default: %(default)f deg)")
     p.add_argument("--minzenith", nargs="+", default=[35.0,5.0], type=float, help="Minimum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
     p.add_argument("--maxzenith", nargs="+", default=[70.0,35.0], type=float, help="Maximum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
-    p.add_argument("--gridsize", default=100, type=int, help="Grid dimension for the point height plane correction (default: %(default)i; PAVD_CALDERS2014 metric only)")
+    p.add_argument("--gridsize", default=20, type=int, help="Grid dimension for the point height plane correction (default: %(default)i; PAVD_CALDERS2014 metric only)")
     p.add_argument("--gridbinsize", default=5.0, type=float, help="Grid resolution for the point height plane correction (default: %(default)f m; PAVD_CALDERS2014 metric only)")    
+    p.add_argument("--origin", nargs="+", default=[0.0,0.0], type=float, help="Perspective XY centre (origin) of the TLS scan location (PAVD_CALDERS2014 metric only)")
        
     cmdargs = p.parse_args()
     if cmdargs.infiles is None:
@@ -84,6 +85,7 @@ def run():
         otherargs.rptfile = cmdargs.reportfile
         otherargs.gridsize = cmdargs.gridsize
         otherargs.gridbinsize = cmdargs.gridbinsize
+        otherargs.origin = cmdargs.origin
     
     else:
         msg = 'Unsupported metric %s' % cmdargs.metric

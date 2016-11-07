@@ -91,11 +91,9 @@ def stratifyPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask
         gridMask        A 1D array representation of a 2D bool grid of missing values
     
     """
-    halfextentX = (maxX - minX) / 2
-    halfextentY = (maxY - minY) / 2
     for i in range(pointZ.shape[0]):
         if (pointX[i] >= minX) and (pointX[i] <= maxX) and (pointY[i] >= minY) and (pointY[i] <= maxY):
-            j = int( (pointY[i] - (-halfextentY) ) / resolution) * nbinsX + int( (pointX[i] - (-halfextentX) ) / resolution)
+            j = int( (pointY[i] - minY) / resolution) * nbinsX + int( (pointX[i] - minX) / resolution)
             if (j >= 0) and (j < gridZ.shape[0]):
                 if not gridMask[j]:
                     if pointZ[i] < gridZ[j]:
@@ -114,14 +112,20 @@ def runXYStratification(data, otherargs):
     Derive a minimum Z surface following plane correction procedures outlined in Calders et al. (2014)
     """
     pointcolnames = ['X','Y','Z']
-    halfextent = otherargs.gridsize / 2.0
-    
+
+    halfextent = (otherargs.gridsize * otherargs.gridbinsize) / 2.0
+
+    minX = otherargs.origin[0] - halfextent
+    minY = otherargs.origin[1] - halfextent 
+    maxX = otherargs.origin[0] + halfextent
+    maxY = otherargs.origin[1] + halfextent 
+            
     for indata in data.inList:
         
         points = indata.getPoints(colNames=pointcolnames)
         
         stratifyPointsByXYGrid(points['X'], points['Y'], points['Z'], otherargs.xgrid, otherargs.ygrid, otherargs.zgrid, 
-            otherargs.gridmask, -halfextent, halfextent, -halfextent, halfextent, otherargs.gridbinsize, otherargs.gridsize)
+            otherargs.gridmask, minX, maxX, minY, maxY, otherargs.gridbinsize, otherargs.gridsize)
 
 
 def runZenithHeightStratification(data, otherargs):
