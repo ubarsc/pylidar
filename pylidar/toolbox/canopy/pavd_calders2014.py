@@ -172,8 +172,9 @@ def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
     for i,h in enumerate(height):    
         a = numpy.vstack([xtheta, numpy.ones(xtheta.size)]).T
         y = kthetal[:,i]
-        if numpy.any(y):
-            lv, lh = numpy.linalg.lstsq(a, y)[0]        
+        mask = ~numpy.isnan(y)
+        if numpy.any(mask):
+            lv, lh = numpy.linalg.lstsq(a[mask,:], y[mask])[0]        
             paiv[i] = lv
             paih[i] = lh
     
