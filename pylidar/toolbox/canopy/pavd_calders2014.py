@@ -25,8 +25,9 @@ import collections
 import statsmodels.api as sm
 from numba import jit
 
+
 @jit
-def stratifyPointsByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,pulseZenith,pulsesByPointZenith,
+def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,pulseZenith,pulsesByPointZenith,
                                  pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weights):
     """
     Called by runZenithHeightStratification()
@@ -66,10 +67,10 @@ def stratifyPointsByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenit
 
 
 @jit
-def stratifyPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask,
+def minPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask,
                            minX, maxX, minY, maxY, resolution, nbinsX):
     """
-    Called by runXYStratification()
+    Called by runXYMinGridding()
     
     Updates 1D arrays of point coordinates corresponding to a minimum Z grid
     
@@ -93,7 +94,7 @@ def stratifyPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask
     """
     for i in range(pointZ.shape[0]):
         if (pointX[i] >= minX) and (pointX[i] <= maxX) and (pointY[i] >= minY) and (pointY[i] <= maxY):
-            j = int( (pointY[i] - minY) / resolution) * nbinsX + int( (pointX[i] - minX) / resolution)
+            j = int( (pointY[i] - minY) / resolution ) * nbinsX + int( (pointX[i] - minX) / resolution )
             if (j >= 0) and (j < gridZ.shape[0]):
                 if not gridMask[j]:
                     if pointZ[i] < gridZ[j]:
@@ -107,7 +108,7 @@ def stratifyPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask
                     gridMask[j] = False
     
             
-def runXYStratification(data, otherargs):
+def runXYMinGridding(data, otherargs):
     """
     Derive a minimum Z surface following plane correction procedures outlined in Calders et al. (2014)
     """
@@ -124,7 +125,7 @@ def runXYStratification(data, otherargs):
         
         points = indata.getPoints(colNames=pointcolnames)
         
-        stratifyPointsByXYGrid(points['X'], points['Y'], points['Z'], otherargs.xgrid, otherargs.ygrid, otherargs.zgrid, 
+        minPointsByXYGrid(points['X'], points['Y'], points['Z'], otherargs.xgrid, otherargs.ygrid, otherargs.zgrid, 
             otherargs.gridmask, minX, maxX, minY, maxY, otherargs.gridbinsize, otherargs.gridsize)
 
 
@@ -155,14 +156,14 @@ def runZenithHeightStratification(data, otherargs):
         else:
             pointHeights = points[otherargs.heightcol]
         
-        stratifyPointsByZenithHeight(otherargs.zenith,otherargs.minzenith[i],otherargs.maxzenith[i],
+        countPointsPulsesByZenithHeight(otherargs.zenith,otherargs.minzenith[i],otherargs.maxzenith[i],
             otherargs.zenithbinsize,pulses['ZENITH'],pulsesByPoint['ZENITH'],pointHeights,
             otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,weights)
 
 
 def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
     """
-    Calculate the linear model PAI/PAVD (see Jupp et al., 20009)
+    Calculate the linear model PAI/PAVD (see Jupp et al., 2009)
     """ 
     kthetal = -numpy.log(pgapz)
     xtheta = 2 * numpy.tan(zenith) / numpy.pi
@@ -186,7 +187,7 @@ def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
 
 def calcHingePlantProfiles(heightbinsize, zenith, pgapz):
     """
-    Calculate the hinge angle PAI/PAVD (see Jupp et al., 20009)
+    Calculate the hinge angle PAI/PAVD (see Jupp et al., 2009)
     """       
     hingeindex = numpy.argmin(numpy.abs(zenith - numpy.arctan(numpy.pi / 2)))
     pai = -1.1 * numpy.log(pgapz[hingeindex,:])

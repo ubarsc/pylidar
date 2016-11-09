@@ -43,8 +43,8 @@ def getCmdargs():
     p.add_argument("--minheight", default=0.0, type=float, help="Minimum vertical profile height (default: %(default)f m)")
     p.add_argument("--maxheight", default=50.0, type=float, help="Maximum vertical profile height (default: %(default)f m)")
     p.add_argument("--zenithbinsize", default=5.0, type=float, help="View zenith bin size (default: %(default)f deg)")
-    p.add_argument("--minzenith", nargs="+", default=[35.0,5.0], type=float, help="Minimum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
-    p.add_argument("--maxzenith", nargs="+", default=[70.0,35.0], type=float, help="Maximum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
+    p.add_argument("--minzenith", nargs="+", default=[35.0], type=float, help="Minimum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
+    p.add_argument("--maxzenith", nargs="+", default=[70.0], type=float, help="Maximum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
     p.add_argument("--gridsize", default=20, type=int, help="Grid dimension for the point height plane correction (default: %(default)i; PAVD_CALDERS2014 metric only)")
     p.add_argument("--gridbinsize", default=5.0, type=float, help="Grid resolution for the point height plane correction (default: %(default)f m; PAVD_CALDERS2014 metric only)")    
     p.add_argument("--origin", nargs="+", default=[0.0,0.0], type=float, help="Perspective XY centre (origin) of the TLS scan location (PAVD_CALDERS2014 metric only)")
@@ -56,10 +56,16 @@ def getCmdargs():
         sys.exit()
     
     if cmdargs.output is None:
-        print("Must specify output file name") 
+        print("Must specify output CSV file name") 
         p.print_help()
         sys.exit()
-
+    
+    nInfiles = len(cmdargs.infiles)
+    if (len(cmdargs.minzenith) != nInfiles) or (len(cmdargs.maxzenith) != nInfiles):
+        print("--minzenith and --maxzenith must have the same length as --infiles")
+        p.print_help()
+        sys.exit()
+    
     return cmdargs
 
 
