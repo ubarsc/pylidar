@@ -58,6 +58,9 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
             if info.getDriverName() == 'riegl':
                 if "ROTATION_MATRIX" in info.header:
                     dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", info.header["ROTATION_MATRIX"])
+                else:
+                    msg = 'Input file %s has no valid pitch/roll/yaw data' % infiles[i]
+                    raise CanopyMetricError(msg)                    
                    
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
@@ -86,7 +89,7 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
         print("Calculating vertical plant profiles...")
         lidarprocessor.doProcessing(pavd_calders2014.runZenithHeightStratification, dataFiles, controls=controls, otherArgs=otherargs)
         
-        pgapz = 1 - numpy.cumsum(otherargs.counts, axis=1) / otherargs.pulses
+        pgapz = numpy.where(otherargs.pulses > 0, 1 - numpy.cumsum(otherargs.counts, axis=1) / otherargs.pulses, numpy.nan)
         zenithRadians = numpy.radians(otherargs.zenith)
         
         lpp_pai,lpp_pavd,lpp_mla = pavd_calders2014.calcLinearPlantProfiles(otherargs.height, otherargs.heightbinsize, 
