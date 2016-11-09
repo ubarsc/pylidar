@@ -91,7 +91,7 @@ static SpylidarFieldDefn RieglPulseFields[] = {
 
 /* Structure for points */
 typedef struct {
-    npy_uint64 return_Id;
+    npy_uint64 return_Number;
     npy_uint64 timestamp;
     float deviation_Return;
     npy_uint8 classification;
@@ -105,7 +105,7 @@ typedef struct {
 
 /* field info for CVector::getNumpyArray */
 static SpylidarFieldDefn RieglPointFields[] = {
-    CREATE_FIELD_DEFN(SRieglPoint, return_Id, 'u'),
+    CREATE_FIELD_DEFN(SRieglPoint, return_Number, 'u'),
     CREATE_FIELD_DEFN(SRieglPoint, timestamp, 'u'),
     CREATE_FIELD_DEFN(SRieglPoint, deviation_Return, 'f'),
     CREATE_FIELD_DEFN(SRieglPoint, classification, 'u'),
@@ -368,7 +368,7 @@ protected:
         // the current echo is always indexed by target_count-1.
         scanlib::target& current_target(targets[target_count-1]);
 
-        point.return_Id = target_count;
+        point.return_Number = target_count;
         point.timestamp = current_target.time * 1e9 + 0.5;
         point.deviation_Return = current_target.deviation;
         point.classification = 1;

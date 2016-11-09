@@ -142,7 +142,7 @@ class RieglFile(generic.LiDARFile):
         """
         dict = {}
         if arrayType == generic.ARRAY_TYPE_POINTS:
-            dict[generic.FIELD_POINTS_RETURN_NUMBER] = 'RETURN_ID'
+            dict[generic.FIELD_POINTS_RETURN_NUMBER] = 'RETURN_NUMBER'
         return dict
         
     def close(self):
