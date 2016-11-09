@@ -53,6 +53,12 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
     
     if metric == "PAVD_CALDERS2014":
         
+        for i in range( len(dataFiles.inList) ):        
+            info = generic.getLidarFileInfo(infiles[i])
+            if info.getDriverName() == 'riegl':
+                if "ROTATION_MATRIX" in info.header:
+                    dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", info.header["ROTATION_MATRIX"])
+                   
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
         
@@ -64,7 +70,7 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
             otherargs.zgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
             otherargs.gridmask = numpy.ones(otherargs.gridsize**2, dtype=numpy.bool)
                        
-            lidarprocessor.doProcessing(pavd_calders2014.runXYStratification, dataFiles, controls=controls, otherArgs=otherargs)
+            lidarprocessor.doProcessing(pavd_calders2014.runXYMinGridding, dataFiles, controls=controls, otherArgs=otherargs)
             
             otherargs.planefit = pavd_calders2014.planeFitHubers(otherargs.xgrid[~otherargs.gridmask], otherargs.ygrid[~otherargs.gridmask], 
                 otherargs.zgrid[~otherargs.gridmask], reportfile=otherargs.rptfile)
