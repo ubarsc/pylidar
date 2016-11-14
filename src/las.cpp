@@ -1127,7 +1127,17 @@ static PyObject *PyLasFileRead_getNativeDataType(PyLasFileRead *self, PyObject *
             return NULL;
         }
     }    
-    return (PyObject*)pDescr;
+
+    // ok turns out that a 'Descr' is different to the Python 'type' object
+    // however it does have a field that points to a type object
+    PyTypeObject *pTypeObj = pDescr->typeobj;
+
+    // increment this refcount, but don't need the whole structure now
+    // so decref
+    Py_INCREF(pTypeObj);
+    Py_DECREF(pDescr);
+
+    return (PyObject*)pTypeObj;
 }
 
 /* Table of methods */
@@ -2470,11 +2480,11 @@ static PyObject *PyLasFileWrite_getNativeDataType(PyLasFileWrite *self, PyObject
 static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject *args)
 {
     const char *pszField;
-    PyObject *pDtype;
-    if( !PyArg_ParseTuple(args, "sO:setNativeDataType", &pszField, &pDtype) )
+    PyObject *pPythonType;
+    if( !PyArg_ParseTuple(args, "sO:setNativeDataType", &pszField, &pPythonType) )
         return NULL;
 
-    if( !PyArray_DescrCheck(pDtype) )
+    if( !PyType_Check(pPythonType) )
     {
         // raise Python exception
         PyObject *m;
@@ -2483,7 +2493,22 @@ static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject
         // from inside a class method. Not needed for Python < 3.
         m = PyState_FindModule(&moduledef);
 #endif
-        PyErr_SetString(GETSTATE(m)->error, "Last argument needs to be numpy dtype");
+        PyErr_SetString(GETSTATE(m)->error, "Last argument needs to be python type");
+        return NULL;
+    }
+
+    // now convert to a numpy dtype so we can get kind/size info
+    PyArray_Descr *pDtype = NULL;
+    if( !PyArray_DescrConverter(pPythonType, &pDtype) )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, "Could not convert python type to numpy dtype");
         return NULL;
     }
 
@@ -2501,12 +2526,15 @@ static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject
         return NULL;
     }
 
-    PyArray_Descr *pDescr = (PyArray_Descr*)pDtype;
     SFieldInfo info;
-    info.cKind = pDescr->kind;
+    info.cKind = pDtype->kind;
     info.nOffset = 0; // don't know yet
-    info.nSize = pDescr->elsize;
+    info.nSize = pDtype->elsize;
     self->pAttributeTypeMap->insert(std::pair<std::string, SFieldInfo>(pszField, info));
+
+    // I *think* this is correct since I don't pass it to any of the (ref stealing)
+    // array creation routines
+    Py_DECREF(pDtype);
 
     Py_RETURN_NONE;
 }
