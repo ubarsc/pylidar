@@ -171,7 +171,7 @@ def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
     Calculate the linear model PAI/PAVD (see Jupp et al., 2009)
     """ 
     kthetal = -numpy.log(pgapz)
-    xtheta = 2 * numpy.tan(zenith) / numpy.pi
+    xtheta = numpy.abs(2 * numpy.tan(zenith) / numpy.pi)
     paiv = numpy.zeros(pgapz.shape[1])
     paih = numpy.zeros(pgapz.shape[1])
     for i,h in enumerate(height):    

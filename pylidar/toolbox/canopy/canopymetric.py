@@ -92,11 +92,12 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
         
         pgapz = numpy.where(otherargs.pulses > 0, 1 - numpy.cumsum(otherargs.counts, axis=1) / otherargs.pulses, numpy.nan)
         zenithRadians = numpy.radians(otherargs.zenith)
+        zenithBinSizeRadians = numpy.radians(otherargs.zenithbinsize)
         
         lpp_pai,lpp_pavd,lpp_mla = pavd_calders2014.calcLinearPlantProfiles(otherargs.height, otherargs.heightbinsize, 
             zenithRadians, pgapz)
         sapp_pai,sapp_pavd = pavd_calders2014.calcSolidAnglePlantProfiles(zenithRadians, pgapz, otherargs.heightbinsize,
-            otherargs.zenithbinsize)
+            zenithBinSizeRadians)
         
         pavd_calders2014.writeProfiles(outfile, otherargs.zenith, otherargs.height, pgapz, 
                                        lpp_pai, lpp_pavd, lpp_mla, sapp_pai, sapp_pavd)
