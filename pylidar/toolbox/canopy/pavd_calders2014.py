@@ -178,10 +178,16 @@ def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
         a = numpy.vstack([xtheta, numpy.ones(xtheta.size)]).T
         y = kthetal[:,i]
         mask = ~numpy.isnan(y)
-        if numpy.any(mask):
+        if numpy.count_nonzero(mask) > 2:
             lv, lh = numpy.linalg.lstsq(a[mask,:], y[mask])[0]        
             paiv[i] = lv
-            paih[i] = lh
+            paih[i] = lh    
+            if lv < 0:
+                paih[i] = numpy.mean(y[mask])
+                paiv[i] = 0.0
+            if lh < 0:
+                paiv[i] = numpy.mean(y[mask] / xtheta[mask])
+                paih[i] = 0.0
     
     pai = paiv + paih
     pavd = numpy.gradient(pai, heightbinsize)
