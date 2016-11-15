@@ -60,7 +60,7 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
                     dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", info.header["ROTATION_MATRIX"])
                 else:
                     msg = 'Input file %s has no valid pitch/roll/yaw data' % infiles[i]
-                    raise CanopyMetricError(msg)                    
+                    raise CanopyMetricError(msg)                  
                    
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
@@ -79,10 +79,11 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
                 otherargs.zgrid[~otherargs.gridmask], reportfile=otherargs.rptfile)
         
         minZenithAll = min(otherargs.minzenith)
-        maxZenithAll = max(otherargs.maxzenith)  
+        maxZenithAll = max(otherargs.maxzenith)
+        minHeightBin = min(0.0, otherargs.minheight)  
         
         otherargs.zenith = numpy.arange(minZenithAll+otherargs.zenithbinsize/2, maxZenithAll, otherargs.zenithbinsize)
-        otherargs.height = numpy.arange(otherargs.minheight, otherargs.maxheight, otherargs.heightbinsize)
+        otherargs.height = numpy.arange(minHeightBin, otherargs.maxheight, otherargs.heightbinsize)
         otherargs.counts = numpy.zeros([otherargs.zenith.shape[0],otherargs.height.shape[0]])
         otherargs.pulses = numpy.zeros([otherargs.zenith.shape[0],1])     
         
@@ -98,8 +99,9 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
             otherargs.zenithbinsize)
         
         pavd_calders2014.writeProfiles(outfile, otherargs.zenith, otherargs.height, pgapz, 
-                                       lpp_pai,lpp_pavd,lpp_mla, sapp_pai, sapp_pavd)
-              
+                                       lpp_pai, lpp_pavd, lpp_mla, sapp_pai, sapp_pavd)
+           
+                                                  
     else:
         
         msg = 'Unsupported metric %s' % metric

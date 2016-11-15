@@ -40,14 +40,15 @@ def getCmdargs():
     p.add_argument("-r","--reportfile", help="Output file report file for point height plane correction (PAVD_CALDERS2014 metric only)")
     p.add_argument("--heightcol", default='Z', help="Point column name to use for vertical profile heights (default: %(default)s).")
     p.add_argument("--heightbinsize", default=0.5, type=float, help="Vertical bin size (default: %(default)f m)")
-    p.add_argument("--minheight", default=0.0, type=float, help="Minimum vertical profile height (default: %(default)f m)")
-    p.add_argument("--maxheight", default=50.0, type=float, help="Maximum vertical profile height (default: %(default)f m)")
+    p.add_argument("--minheight", default=0.0, type=float, help="Minimum point height to include in vertical profile (default: %(default)f m)")
+    p.add_argument("--maxheight", default=50.0, type=float, help="Maximum point height to include in vertical profile (default: %(default)f m)")
     p.add_argument("--zenithbinsize", default=5.0, type=float, help="View zenith bin size (default: %(default)f deg)")
     p.add_argument("--minzenith", nargs="+", default=[35.0], type=float, help="Minimum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
     p.add_argument("--maxzenith", nargs="+", default=[70.0], type=float, help="Maximum view zenith angle to use for each input file (PAVD_CALDERS2014 metric only)")
     p.add_argument("--gridsize", default=20, type=int, help="Grid dimension for the point height plane correction (default: %(default)i; PAVD_CALDERS2014 metric only)")
     p.add_argument("--gridbinsize", default=5.0, type=float, help="Grid resolution for the point height plane correction (default: %(default)f m; PAVD_CALDERS2014 metric only)")    
     p.add_argument("--origin", nargs="+", default=[0.0,0.0], type=float, help="Perspective XY centre (origin) of the TLS scan location (PAVD_CALDERS2014 metric only)")
+    p.add_argument("--excludedclasses", nargs="+", default=[], type=int, help="Point CLASSIFICATION values to exclude from the metric calculation (default is all points)")
        
     cmdargs = p.parse_args()
     if cmdargs.infiles is None:
@@ -92,6 +93,7 @@ def run():
         otherargs.gridsize = cmdargs.gridsize
         otherargs.gridbinsize = cmdargs.gridbinsize
         otherargs.origin = cmdargs.origin
+        otherargs.excludedclasses = cmdargs.excludedclasses
     
     else:
         msg = 'Unsupported metric %s' % cmdargs.metric

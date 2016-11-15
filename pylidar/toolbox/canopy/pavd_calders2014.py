@@ -28,7 +28,7 @@ from numba import jit
 
 @jit
 def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,pulseZenith,pulsesByPointZenith,
-                                 pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weights):
+                                 pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weights,minHeight):
     """
     Called by runZenithHeightStratification()
     
@@ -62,7 +62,7 @@ def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,ze
                 if weights[j] > 0:
                     if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith):
                         k = int( (pointHeight[j] - heightBins[0]) / heightBinSize )
-                        if (k >= 0) and (k < heightBins.shape[0]):
+                        if (k >= 0) and (k < heightBins.shape[0]) and (pointHeight[j] > minHeight):
                             pointCounts[i,k] += weights[j]
 
 
@@ -146,9 +146,13 @@ def runZenithHeightStratification(data, otherargs):
         pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
         
         if otherargs.weighted:
-            weights = points['RETURN_NUMBER'] / pulsesByPoint['NUMBER_OF_RETURNS'].astype(numpy.float32)
+            weights = 1.0 / pulsesByPoint['NUMBER_OF_RETURNS']
         else:
             weights = numpy.array(points['RETURN_NUMBER'] == 1, dtype=numpy.float32)
+        
+        if len(otherargs.excludedclasses) > 0:
+            mask = numpy.in1d(points['CLASSIFICATION'], otherargs.excludedclasses)
+            weights[mask] = 0.0
         
         if otherargs.planecorrection:
             pointHeights = points['Z'] - (otherargs.planefit["Parameters"][1] * points['X'] + 
@@ -158,7 +162,8 @@ def runZenithHeightStratification(data, otherargs):
         
         countPointsPulsesByZenithHeight(otherargs.zenith,otherargs.minzenith[i],otherargs.maxzenith[i],
             otherargs.zenithbinsize,pulses['ZENITH'],pulsesByPoint['ZENITH'],pointHeights,
-            otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,weights)
+            otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,
+            weights,otherargs.minheight)
 
 
 def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
@@ -225,7 +230,7 @@ def writeProfiles(outfile, zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, sa
     """  
     csvobj = open(outfile, "w")
     
-    headerstr1 = ["vz%04i"%(ring*100) for ring in zenith]
+    headerstr1 = ["vz%05i"%(ring*100) for ring in zenith]
     headerstr2 = ["linearPAI","linearPAVD","linearMLA","hingePAI","juppPAVD"]    
     csvobj.write("%s,%s,%s\n" % ("height",",".join(headerstr1),",".join(headerstr2)))
     
