@@ -548,6 +548,10 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
                         userClassItem.flush()
                 else:
                     userClass.flush()
+
+        # we have completed another one - this var is used below
+        # for calculating block location
+        nBlocksSoFar += 1
         
         if controls.spatialProcessing:
             # update to read in next block
@@ -576,7 +580,6 @@ To suppress this message call Controls.setSpatialProcessing(False)"""
             # bMoreToDo is updated when the pulse range is set (above)
 
         # progress
-        nBlocksSoFar += 1
         if nTotalBlocks != -1:
             percentProgress = int((nBlocksSoFar / nTotalBlocks) * 100)
             controls.progress.setProgress(percentProgress)
