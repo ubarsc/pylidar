@@ -942,8 +942,8 @@ spatial index will be recomputed on the fly"""
             # self.extent is the size of the block without the overlap
             # so just strip out everything outside of it
             mask = ( (pulses[self.si_xPulseColName] >= self.extent.xMin) & 
-                        (pulses[self.si_xPulseColName] <= self.extent.xMax) & 
-                        (pulses[self.si_yPulseColName] >= self.extent.yMin) &
+                        (pulses[self.si_xPulseColName] < self.extent.xMax) & 
+                        (pulses[self.si_yPulseColName] > self.extent.yMin) &
                         (pulses[self.si_yPulseColName] <= self.extent.yMax))
             pulses = pulses[mask]
             self.lastPulsesSpace.updateBoolArray(mask)
@@ -1007,8 +1007,8 @@ spatial index will be recomputed on the fly"""
                     self.lastPulses['NUMBER_OF_RETURNS'])
 
                 mask = ( (x_idx >= self.extent.xMin) & 
-                    (x_idx <= self.extent.xMax) &
-                    (y_idx >= self.extent.yMin) &
+                    (x_idx < self.extent.xMax) &
+                    (y_idx > self.extent.yMin) &
                     (y_idx <= self.extent.yMax))
 
                 # strip out the points connected with pulses that were 
@@ -1058,8 +1058,8 @@ spatial index will be recomputed on the fly"""
                         pulses['NUMBER_OF_RETURNS'])
                 
                 mask = ( (x_idx >= self.extent.xMin) & 
-                        (x_idx <= self.extent.xMax) &
-                        (y_idx >= self.extent.yMin) &
+                        (x_idx < self.extent.xMax) &
+                        (y_idx > self.extent.yMin) &
                         (y_idx <= self.extent.yMax))
                         
                 points = points[mask]
@@ -1102,8 +1102,8 @@ spatial index will be recomputed on the fly"""
 
                 origPulses = self.readPulsesForExtent()
                 mask = ( (origPulses[self.si_xPulseColName] >= self.extent.xMin) & 
-                        (origPulses[self.si_xPulseColName] <= self.extent.xMax) & 
-                        (origPulses[self.si_yPulseColName] >= self.extent.yMin) &
+                        (origPulses[self.si_xPulseColName] < self.extent.xMax) & 
+                        (origPulses[self.si_yPulseColName] > self.extent.yMin) &
                         (origPulses[self.si_yPulseColName] <= self.extent.yMax) )
                 
                 # Repeat the mask so that it is the same shape as the 
@@ -1159,8 +1159,8 @@ spatial index will be recomputed on the fly"""
 
                 origPulses = self.readPulsesForExtent()
                 mask = ( (origPulses[self.si_xPulseColName] >= self.extent.xMin) & 
-                        (origPulses[self.si_xPulseColName] <= self.extent.xMax) & 
-                        (origPulses[self.si_yPulseColName] >= self.extent.yMin) &
+                        (origPulses[self.si_xPulseColName] < self.extent.xMax) & 
+                        (origPulses[self.si_yPulseColName] > self.extent.yMin) &
                         (origPulses[self.si_yPulseColName] <= self.extent.yMax))
 
                 # Repeat the mask so that it is the same shape as the 
