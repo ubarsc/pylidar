@@ -21,6 +21,7 @@ Utility functions for use with pylidar.
 from __future__ import print_function, division
 
 import numpy
+from numba import jit
 
 def addFieldToStructArray(oldArray, newName, newType, newData=0):
     """
@@ -61,3 +62,39 @@ def addFieldToStructArray(oldArray, newName, newType, newData=0):
 
     return newArray
 
+@jit
+def convertArgResultToIndexTuple(input, mask):
+    """
+    Converts the result of the numpy.ma.arg* set of functions into
+    a tuple of arrays that can be used to index the original array.
+    'mask' should be the mask of the result of numpy.ma.all for the same axis.
+    Below is an example::
+
+        zVals = pts['Z']
+        classif = pts['CLASSIFICATION']
+
+        idx = numpy.argmin(zVals, axis=0)
+        idxmask = numpy.ma.all(zVals, axis=0)
+        z, y, x = convertArgResultToIndexTuple(idx, idxmask.mask)
+        
+        classif[z, y, x] = 2
+
+    """
+    nrows, ncols = input.shape
+
+    nIndices = (nrows * ncols) - mask.sum()
+
+    zIdxs = numpy.zeros(nIndices, dtype=numpy.uint64)
+    yIdxs = numpy.zeros(nIndices, dtype=numpy.uint64)
+    xIdxs = numpy.zeros(nIndices, dtype=numpy.uint64)
+
+    count = 0
+    for y in range(nrows):
+        for x in range(ncols):
+            if not mask[y, x]:
+                zIdxs[count] = input[y, x]
+                yIdxs[count] = y
+                xIdxs[count] = x
+                count += 1
+
+    return zIdxs, yIdxs, xIdxs
