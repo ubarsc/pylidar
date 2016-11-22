@@ -9,4 +9,9 @@ syntax: glob
 _build
 _templates
 _static
+MANIFEST
 
+syntax: regexp
+^build/
+^doc/build/
+^dist/
