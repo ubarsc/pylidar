@@ -55,6 +55,12 @@ for wildcard in ('*.spd', '*.img', '*.xml'):
     for fname in glob.glob(wildcard):
         os.remove(fname)
 
+# output of testsuite5 that checks we can export to LAS
+# clobber so we can start from scratch (can't add *.las to above
+# since some of the inputs are .las)
+if os.path.exists('testsuite5.las'):
+    os.remove('testsuite5.las')
+
 # create version.txt info
 versionInfo = {'version' : TESTSUITE_VERSION}
 

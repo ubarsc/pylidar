@@ -97,8 +97,10 @@ def transFunc(data, otherArgs):
     if recv is not None:
         data.output1.setReceived(recv)
 
-def translate(info, infile, outfile, expectRange, scalings, internalrotation, 
-        magneticdeclination, externalrotationfn, nullVals, constCols, epsg=None, wkt=None):
+def translate(info, infile, outfile, expectRange=None, scalings=None, 
+        internalrotation=False, magneticdeclination=0.0, 
+        externalrotationfn=None, nullVals=None, constCols=None, 
+        epsg=None, wkt=None):
     """
     Main function which does the work.
 

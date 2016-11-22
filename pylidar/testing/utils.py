@@ -351,7 +351,7 @@ def pylidarChecksum(data, otherargs):
         header = data.input.getHeader()
         otherargs.checksum.setHeader(header)
 
-def calculateCheckSum(infile):
+def calculateCheckSum(infile, windowSize=None):
     """
     Returns a Checksum instance for the given file
     """
@@ -366,6 +366,8 @@ def calculateCheckSum(infile):
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     controls.setMessageHandler(lidarprocessor.silentMessageFn)
+    if windowSize is not None:
+        controls.setWindowSize(windowSize)
 
     lidarprocessor.doProcessing(pylidarChecksum, dataFiles, otherArgs=otherArgs,
             controls=controls)
@@ -375,13 +377,13 @@ def calculateCheckSum(infile):
 
     return otherArgs.checksum
 
-def compareLiDARFiles(oldfile, newfile):
+def compareLiDARFiles(oldfile, newfile, windowSize=None):
     """
     Compares 2 LiDAR files and raises and exception with information 
     about the differences if they do not match.
     """
-    oldChecksum = calculateCheckSum(oldfile)
-    newChecksum = calculateCheckSum(newfile)
+    oldChecksum = calculateCheckSum(oldfile, windowSize)
+    newChecksum = calculateCheckSum(newfile, windowSize)
     oldChecksum.doCheck(newChecksum)
     print('LiDAR files check ok')
 

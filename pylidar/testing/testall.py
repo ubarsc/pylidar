@@ -93,6 +93,11 @@ def run():
                         print('Skipping', name, 'due to missing format driver', fmt)
                         doTest = False
                         break
+                elif fmt == "RIEGL":
+                    if not lidarprocessor.HAVE_FMT_RIEGL:
+                        print('Skipping', name, 'due to missing format driver', fmt)
+                        doTest = False
+                        break
                 else:
                     msg = 'Unknown required format %s' % fmt
                     raise ValueError(msg)
