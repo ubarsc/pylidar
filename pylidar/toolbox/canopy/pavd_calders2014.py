@@ -229,27 +229,46 @@ def calcSolidAnglePlantProfiles(zenith, pgapz, heightbinsize, zenithbinsize, pai
     
     return pai,pavd
 
+def getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, 
+            sapp_pai, sapp_pavd):
+    """
+    Returns the vertical profile information as a single structured array
+    """
+    arrayDtype = [('height', 'f8')]
+    vzNames = []
+    for ring in zenith:
+        name = "vz%05i"%(ring*100)
+        vzNames.append(name)
+        
+        arrayDtype.append((name, 'f8'))
+
+    for name in ["linearPAI", "linearPAVD", "linearMLA", "hingePAI", "juppPAVD"]:
+        arrayDtype.append((name, 'f8'))
+
+    profileArray = numpy.empty((height.shape[0], ), dtype=arrayDtype)
+
+    profileArray['height'] = height
+    for count, name in enumerate(vzNames):
+        profileArray[name] = pgapz[count]
+
+    profileArray["linearPAI"] = lpp_pai
+    profileArray["linearPAVD"] = lpp_pavd
+    profileArray["linearMLA"] = lpp_mla
+    profileArray["hingePAI"] = sapp_pai
+    profileArray["juppPAVD"] = sapp_pavd
+
+    return profileArray
     
-def writeProfiles(outfile, zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, sapp_pai, sapp_pavd):
+def writeProfiles(outfile, zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, 
+            sapp_pai, sapp_pavd):
     """
     Write out the vertical profiles to file
     """  
-    csvobj = open(outfile, "w")
+    profileArray = getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, 
+            lpp_mla, sapp_pai, sapp_pavd)
     
-    headerstr1 = ["vz%05i"%(ring*100) for ring in zenith]
-    headerstr2 = ["linearPAI","linearPAVD","linearMLA","hingePAI","juppPAVD"]    
-    csvobj.write("%s,%s,%s\n" % ("height",",".join(headerstr1),",".join(headerstr2)))
-    
-    for i in range(height.shape[0]):
-        valstr1 = ["%.4f" % j for j in pgapz[:,i]]
-        
-        canopyz = [lpp_pai[i],lpp_pavd[i],lpp_mla[i],sapp_pai[i],sapp_pavd[i]]
-        valstr2 = ["%.4f" % j for j in canopyz]
-        
-        csvobj.write("%.4f,%s,%s\n" % (height[i], ",".join(valstr1), ",".join(valstr2)))
-    
-    csvobj.close()
-
+    numpy.savetxt(outfile, profileArray, fmt="%.4f", delimiter=',', 
+            header=','.join(profileArray.dtype.names))
 
 def planeFitHubers(x, y, z, reportfile=None):
     """
