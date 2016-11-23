@@ -91,7 +91,8 @@ def run(oldpath, newpath):
     info = generic.getLidarFileInfo(inputRiegl)
 
     importedSPD = os.path.join(newpath, IMPORTED_SPD)
-    translate(info, inputRiegl, importedSPD, scalings=SCALINGS)
+    translate(info, inputRiegl, importedSPD, scalings=SCALINGS, 
+            internalrotation=True)
     utils.compareLiDARFiles(os.path.join(oldpath, IMPORTED_SPD), importedSPD)
 
     indexedSPD = os.path.join(newpath, INDEXED_SPD)
