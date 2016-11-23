@@ -93,7 +93,8 @@ def run(oldpath, newpath):
     importedSPD = os.path.join(newpath, IMPORTED_SPD)
     translate(info, inputRiegl, importedSPD, scalings=SCALINGS, 
             internalrotation=True)
-    utils.compareLiDARFiles(os.path.join(oldpath, IMPORTED_SPD), importedSPD)
+    utils.compareLiDARFiles(os.path.join(oldpath, IMPORTED_SPD), importedSPD,
+            windowSize=WINDOWSIZE)
 
     indexedSPD = os.path.join(newpath, INDEXED_SPD)
     createGridSpatialIndex(importedSPD, indexedSPD, binSize=1.0,

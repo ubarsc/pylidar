@@ -67,8 +67,8 @@ def transFunc(data, otherArgs):
     data.output1.setReceived(revc)
     data.output1.setTransmitted(trans)
 
-def translate(info, infile, outfile, expectRange, spatial, extent, scaling,
-            nullVals, constCols):
+def translate(info, infile, outfile, expectRange=None, spatial=False, 
+            extent=None, scaling=None, nullVals=None, constCols=None):
     """
     Main function which does the work.
 

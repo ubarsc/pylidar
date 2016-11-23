@@ -39,7 +39,7 @@ def run(oldpath, newpath):
     """
     Runs the first basic test suite. Tests:
 
-    Importing
+    Importing LAS
     Creating spatial index
     creating a raster
     """
