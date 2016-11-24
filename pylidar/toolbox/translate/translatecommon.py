@@ -221,7 +221,7 @@ def overRideDefaultScalings(scaling):
     Each value in this dictionary is in turn a dictionary keyed on the 
     column name in which each value is a tuple with gain, offset and dtype.
     """
-    scalingsDict = copy.copy(DEFAULT_SCALING)
+    scalingsDict = copy.deepcopy(DEFAULT_SCALING)
 
     if scaling is not None:
         for (typeName, varName, dtypeName, gainStr, offsetStr) in scaling:
