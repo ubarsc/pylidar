@@ -50,8 +50,9 @@ def transFunc(data, otherArgs):
     data.output1.setPoints(points)
     data.output1.setPulses(pulses)
 
-def translate(info, infile, outfile, expectRange, scaling, colTypes, pulseCols,
-        classificationTranslation=None, nullVals=None, constCols=None):
+def translate(info, infile, outfile, colTypes, pulseCols=None, expectRange=None, 
+        scaling=None, classificationTranslation=None, nullVals=None, 
+        constCols=None):
     """
     Main function which does the work.
 

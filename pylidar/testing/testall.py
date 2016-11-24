@@ -98,6 +98,11 @@ def run():
                         print('Skipping', name, 'due to missing format driver', fmt)
                         doTest = False
                         break
+                elif fmt == "ASCIIGZ":
+                    if not lidarprocessor.HAVE_FMT_ASCII_ZLIB:
+                        print('Skipping', name, 'due to missing format driver', fmt)
+                        doTest = False
+                        break
                 else:
                     msg = 'Unknown required format %s' % fmt
                     raise ValueError(msg)

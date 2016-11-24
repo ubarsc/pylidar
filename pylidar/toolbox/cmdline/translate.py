@@ -197,7 +197,7 @@ def run():
                 classtrans.append((internalCode, lasCode))
 
         ascii2spdv4.translate(info, cmdargs.input, cmdargs.output,
-                cmdargs.range, cmdargs.scaling, cmdargs.coltype, pulsecols,
+                cmdargs.coltype, pulsecols, cmdargs.range, cmdargs.scaling, 
                 classtrans, cmdargs.null, cmdargs.constcol)
 
     else:
