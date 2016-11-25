@@ -1675,7 +1675,7 @@ spatial index will be recomputed on the fly"""
         if self.mode == generic.READ:
             # the processor always calls this so if a reading driver just ignore
             return
-            
+
         elif self.mode == generic.CREATE:
             # we only accept new data in a particular form so we can attach
             # points to pulses
@@ -1706,20 +1706,25 @@ spatial index will be recomputed on the fly"""
                 msg = 'waveformInfo must be 2d as returned by readWaveformInfo'
                 raise generic.LiDARInvalidData(msg)
 
-        writeWavefromInfo = waveformInfo is not None
-        if waveformInfo is None and self.mode == generic.UPDATE:
-            # needed so we can process the waveforms
-            waveformInfo = self.readWaveformInfo()
+        # only set when doing pulses
+        mask = None
+        binidx = None
+            
+        if (pulses is None and self.mode == generic.UPDATE and
+            self.extent is not None and self.controls.spatialProcessing):
+                # we need the mask so we can mask out points.
+                # preparePulsesForWriting does this if there are pulses
+                x_idx = self.readPulsesForExtent(self.si_handler.si_xPulseColName)
+                y_idx = self.readPulsesForExtent(self.si_handler.si_yPulseColName)
+                mask = ((x_idx >= self.extent.xMin) & 
+                        (x_idx < self.extent.xMax) & 
+                        (y_idx > self.extent.yMin) &
+                        (y_idx <= self.extent.yMax))
 
-        writePulses = pulses is not None
-        if pulses is None and self.mode == generic.UPDATE:
-            # needed so we can create the mask
-            if self.controls.spatialProcessing:
-                pulses = self.readPulsesForExtent()
-            else:
-                pulses = self.readPulsesForRange()
-    
-        pulses, mask, binidx = self.preparePulsesForWriting(pulses)
+        if pulses is not None:
+            pulses, mask, binidx = self.preparePulsesForWriting(pulses)
+
+        # now we have the mask we can string the points outside the current extent.
         if mask is not None:
             # strip out the ones outside the current extent
             if points is not None:
@@ -1794,7 +1799,7 @@ spatial index will be recomputed on the fly"""
             
         if self.mode == generic.CREATE:
 
-            if writePulses and pulses is not None and len(pulses) > 0:
+            if pulses is not None and len(pulses) > 0:
                         
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
                 
@@ -1822,7 +1827,7 @@ spatial index will be recomputed on the fly"""
                 self.writeStructuredArray(pointsHandle, points, 
                         generatedColumns, generic.ARRAY_TYPE_POINTS)
                 
-            if waveformInfo is not None and len(waveformInfo) > 0 and writeWavefromInfo:
+            if waveformInfo is not None and len(waveformInfo) > 0:
             
                 waveHandle = self.fileHandle['DATA']['WAVEFORMS']
                 generatedColumns = {'NUMBER_OF_WAVEFORM_RECEIVED_BINS' : nrecv,
@@ -1872,7 +1877,7 @@ spatial index will be recomputed on the fly"""
                         else:
                             self.createDataColumn(pointsHandle, hdfname, data)
                     
-            if writePulses and pulses is not None:
+            if pulses is not None:
                 pulsesHandle = self.fileHandle['DATA']['PULSES']
                 for name in pulses.dtype.names:
                     if (name != 'X_IDX' and name != 'Y_IDX' and 
@@ -1887,7 +1892,7 @@ spatial index will be recomputed on the fly"""
                             else:
                                 self.createDataColumn(pulsesHandle, hdfname, data)
 
-            if writeWavefromInfo and waveformInfo is not None:
+            if waveformInfo is not None:
                 waveHandle = self.fileHandle['DATA']['WAVEFORMS']
                 for name in waveformInfo.dtype.names:
                     data, hdfname = self.prepareDataForWriting(
