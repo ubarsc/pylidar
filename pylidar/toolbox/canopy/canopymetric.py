@@ -53,6 +53,8 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
     
     if metric == "PAVD_CALDERS2014":
         
+        otherargs.returnnumcol = []
+        otherargs.radians = []
         for i in range( len(dataFiles.inList) ):        
             info = generic.getLidarFileInfo(infiles[i])
             if info.getDriverName() == 'riegl':
@@ -60,8 +62,14 @@ def runCanopyMetric(infiles, outfile, metric, otherargs):
                     dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", info.header["ROTATION_MATRIX"])
                 else:
                     msg = 'Input file %s has no valid pitch/roll/yaw data' % infiles[i]
-                    raise CanopyMetricError(msg)                  
-                   
+                    raise CanopyMetricError(msg)
+            if info.getDriverName() == 'SPDV3':
+                otherargs.returnnumcol.append('RETURN_ID')
+                otherargs.radians.append(True)
+            else:
+                otherargs.returnnumcol.append('RETURN_NUMBER')
+                otherargs.radians.append(False)
+                
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
         
