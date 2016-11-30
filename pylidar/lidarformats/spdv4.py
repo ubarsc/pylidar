@@ -802,10 +802,13 @@ spatial index will be recomputed on the fly"""
             
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
-            self.lastPoints is not None and self.lastPointsColumns is not None
-            and self.lastPointsColumns == colNames):
-            # TODO: deal with single column request when cached is multi column
-            return self.lastPoints
+            self.lastPoints is not None and self.lastPointsColumns is not None):
+                if self.lastPointsColumns == colNames:
+                    return self.lastPoints
+                if (isinstance(colNames, str) and 
+                        self.lastPoints.dtype.names is not None and 
+                        colNames in self.lastPoints.dtype.names):
+                    return self.lastPoints[colNames]
         
         point_space, idx, mask_idx = (
                             self.si_handler.getPointsSpaceForExtent(self.extent, 
@@ -840,10 +843,13 @@ spatial index will be recomputed on the fly"""
             
         # returned cached if possible
         if (self.lastExtent is not None and self.lastExtent == self.extent and 
-            self.lastPulses is not None and self.lastPulsesColumns is not None
-            and self.lastPulsesColumns == colNames):
-            # TODO: deal with single column request when cached is multi column
-            return self.lastPulses
+            self.lastPulses is not None and self.lastPulsesColumns is not None):
+                if self.lastPulsesColumns == colNames:
+                    return self.lastPulses
+                if (isinstance(colNames, str) and 
+                        self.lastPulses.dtype.names is not None and 
+                        colNames in self.lastPulses.dtype.names):
+                    return self.lastPulses[colNames]
         
         pulse_space, idx, mask_idx = (
                             self.si_handler.getPulsesSpaceForExtent(self.extent, 
@@ -956,14 +962,12 @@ spatial index will be recomputed on the fly"""
             # TODO: check if is there is a better way of going about this
             # in theory spatial index already exists but may be more work 
             # it is worth to use
-            # TODO: check these fields aren't actually already read in
             x_idx = self.readPulsesForExtent(self.si_handler.si_xPulseColName)
             y_idx = self.readPulsesForExtent(self.si_handler.si_yPulseColName)
             nreturns = self.readPulsesForExtent('NUMBER_OF_RETURNS')
             x_idx = numpy.repeat(x_idx, nreturns)
             y_idx = numpy.repeat(y_idx, nreturns)
         else:
-            # TODO: check these fields aren't actually already read in
             x_idx = self.readPointsForExtent('X')
             y_idx = self.readPointsForExtent('Y')
         
@@ -2002,12 +2006,14 @@ spatial index will be recomputed on the fly"""
         if (self.lastPulseRange is not None and
                 self.lastPulseRange == self.pulseRange and
                 self.lastPoints is not None and
-                self.lastPointsColumns is not None and 
-                colNames == self.lastPointsColumns):
-            return self.lastPoints
+                self.lastPointsColumns is not None): 
+            if colNames == self.lastPointsColumns:
+                return self.lastPoints
+            if (isinstance(colNames, str) and 
+                    self.lastPoints.dtype.names is not None and 
+                    colNames in self.lastPoints.dtype.names):
+                return self.lastPoints[colNames]
             
-        pulses = self.readPulsesForRange()
-        
         nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
         startIdxs = self.readPulsesForRange('PTS_START_IDX')
 
@@ -2044,13 +2050,17 @@ spatial index will be recomputed on the fly"""
         if colNames is None:
             # get all names
             colNames = pulsesHandle.keys()
-            
+
         if (self.lastPulseRange is not None and
                 self.lastPulseRange == self.pulseRange and 
                 self.lastPulses is not None and
-                self.lastPulsesColumns is not None and 
-                self.lastPulsesColumns == colNames):
-            return self.lastPulses
+                self.lastPulsesColumns is not None):
+            if self.lastPulsesColumns == colNames:
+                return self.lastPulses
+            if (isinstance(colNames, str) and 
+                    self.lastPulses.dtype.names is not None and 
+                    colNames in self.lastPulses.dtype.names):
+                return self.lastPulses[colNames]
         
         nOut = pulsesHandle['PULSE_ID'].shape[0]
         space = h5space.createSpaceFromRange(self.pulseRange.startPulse, 
@@ -2060,8 +2070,8 @@ spatial index will be recomputed on the fly"""
         self.lastPulses = pulses
         self.lastPulsesSpace = space
         self.lastPulseRange = copy.copy(self.pulseRange)
+        self.lastPulsesColumns = colNames
         self.lastPoints = None # now invalid
-        self.lastPointsColumns = colNames
         return pulses
 
     def getTotalNumberPulses(self):
