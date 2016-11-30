@@ -44,6 +44,8 @@ def getCmdargs():
             help="Do not clean up files on exit")
     p.add_argument("-t", "--test", action="append",
             help="Just run specified test. Can be given multiple times")
+    p.add_argument("--ignore", action="append",
+            help="Ignore a test. Can be given multiple times")
 
     cmdargs = p.parse_args()
 
@@ -67,6 +69,7 @@ def run():
         sys.exit()
 
     testsRun = 0
+    testsIgnored = 0
     testsIgnoredNoDriver = 0
 
     # get current package name (needed for module importing below)
@@ -77,6 +80,9 @@ def run():
     for name in tests:
 
         if cmdargs.test is not None and name not in cmdargs.test:
+            continue
+        if cmdargs.ignore is not None and name in cmdargs.ignore:
+            testsIgnored += 1
             continue
 
         # import module - should we do something better if there
@@ -115,7 +121,10 @@ def run():
             testsIgnoredNoDriver += 1
 
     print(testsRun, 'tests run successfully')
-    print(testsIgnoredNoDriver, 'tests skipped because of missing format drivers')
+    if testsIgnored != 0:
+        print(testsIgnored, 'test(s) ignored as directed by user')
+    if testsIgnoredNoDriver != 0:
+        print(testsIgnoredNoDriver, 'test(s) skipped because of missing format drivers')
 
     if not cmdargs.noremove:
         shutil.rmtree(oldpath)
