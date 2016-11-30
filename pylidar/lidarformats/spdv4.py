@@ -23,6 +23,9 @@ These are contained in the WRITESUPPORTEDOPTIONS module level variable.
 |                             | this to True to create the index on       |
 |                             | update                                    |
 +-----------------------------+-------------------------------------------+
+| HDF5_CHUNK_SIZE             | Set the HDF5 chunk size when creating     |
+|                             | columns. Defaults to 250.                 |
++-----------------------------+-------------------------------------------+
 
 """
 # This file is part of PyLidar
@@ -54,10 +57,14 @@ from . import h5space
 from . import spdv4_index
 
 WRITESUPPORTEDOPTIONS = ('SCALING_BUT_NO_DATA_WARNING', 
-            'PREFERRED_SPATIAL_INDEX', 'CREATE_INDEX_ON_UPDATE')
+            'PREFERRED_SPATIAL_INDEX', 'CREATE_INDEX_ON_UPDATE', 
+            'HDF5_CHUNK_SIZE')
 "driver options"
 READSUPPORTEDOPTIONS = ()
 "driver options"
+
+"Default hdf5 chunk size set on column creation"
+DEFAULT_HDF5_CHUNK_SIZE = 250
 
 HEADER_FIELDS = {'AZIMUTH_MAX' : numpy.float64, 'AZIMUTH_MIN' : numpy.float64,
 'BANDWIDTHS' : numpy.float32, 'BIN_SIZE' : numpy.float32,
@@ -344,6 +351,11 @@ class SPDV4File(generic.LiDARFile):
         if 'CREATE_INDEX_ON_UPDATE' in userClass.lidarDriverOptions:
             self.createIndexOnUpdate = (
                 userClass.lidarDriverOptions['CREATE_INDEX_ON_UPDATE'])
+
+        # hdf5 chunk size - as a tuple - columns are 1d
+        self.hdf5ChunkSize = (DEFAULT_HDF5_CHUNK_SIZE,)
+        if 'HDF5_CHUNK_SIZE' in userClass.lidarDriverOptions:
+            self.hdf5ChunkSize = (userClass.lidarDriverOptions['HDF5_CHUNK_SIZE'],)
 
         # attempt to open the file
         try:
@@ -1536,18 +1548,20 @@ spatial index will be recomputed on the fly"""
                     
         return outWave, wfm_start, nwaveforms
         
-    @staticmethod
-    def createDataColumn(groupHandle, name, data):
+    def createDataColumn(self, groupHandle, name, data):
         """
         Creates a new data column under groupHandle with the
         given name with standard HDF5 params.
         
         The type is the same as the numpy array data and data
         is written to the column
+
+        sets the chunk size to self.hdf5ChunkSize which can be
+        overridden in the driver options.
         """
         # From SPDLib
         dset = groupHandle.create_dataset(name, data.shape, 
-                chunks=(250,), dtype=data.dtype, shuffle=True, 
+                chunks=self.hdf5ChunkSize, dtype=data.dtype, shuffle=True, 
                 compression="gzip", compression_opts=1, maxshape=(None,))
         dset[:] = data
         
