@@ -1066,8 +1066,10 @@ spatial index will be recomputed on the fly"""
         wave_masked = numpy.ma.array(waveformInfo, mask=wave_idx_mask)
 
         self.lastWaveSpace = wave_space
-        self.lastWave_Idx = wave_idx
-        self.lastWave_IdxMask = wave_idx_mask
+
+        if self.mode == generic.UPDATE:
+            self.lastWave_Idx = wave_idx
+            self.lastWave_IdxMask = wave_idx_mask
         
         return wave_masked
         
@@ -1106,8 +1108,9 @@ spatial index will be recomputed on the fly"""
             trans[:,waveform] = (trans[:,waveform] / gain) + offset
             
         self.lastTransSpace = trans_shape
-        self.lastTrans_Idx = trans_idx
-        self.lastTrans_IdxMask = trans_idx_mask
+        if self.mode == generic.UPDATE:
+            self.lastTrans_Idx = trans_idx
+            self.lastTrans_IdxMask = trans_idx_mask
         
         # create masked array
         trans = numpy.ma.array(trans, mask=trans_idx_mask)
@@ -1150,8 +1153,9 @@ spatial index will be recomputed on the fly"""
             recv[:,waveform] = (recv[:,waveform] / gain) + offset
 
         self.lastRecvSpace = recv_shape
-        self.lastRecv_Idx = recv_idx
-        self.lastRecv_IdxMask = recv_idx_mask
+        if self.mode == generic.UPDATE:
+            self.lastRecv_Idx = recv_idx
+            self.lastRecv_IdxMask = recv_idx_mask
         
         # create masked array
         recv = numpy.ma.array(recv, mask=recv_idx_mask)
