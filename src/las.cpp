@@ -473,13 +473,31 @@ static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
     PyDict_SetItemString(pHeaderDict, "POINT_DATA_RECORD_LENGTH", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->number_of_point_records);
+    // LAS 1.4
+    if( (pHeader->version_major >= 1) && (pHeader->version_minor >= 4 ) )
+    {
+        pVal = PyLong_FromLong(pHeader->extended_number_of_point_records);
+    }
+    else
+    {
+        pVal = PyLong_FromLong(pHeader->number_of_point_records);
+    }
     PyDict_SetItemString(pHeaderDict, "NUMBER_OF_POINT_RECORDS", pVal);
     Py_DECREF(pVal);
 
-    pylidar::CVector<U32> number_of_points_by_returnVector(pHeader->number_of_points_by_return, 
+    // LAS 1.4
+    if( (pHeader->version_major >= 1) && (pHeader->version_minor >= 4 ) )
+    {
+        pylidar::CVector<U64> number_of_points_by_returnVector(pHeader->extended_number_of_points_by_return,
+                            sizeof(pHeader->extended_number_of_points_by_return));
+        pVal = (PyObject*)number_of_points_by_returnVector.getNumpyArray(NPY_UINT64);
+    }
+    else
+    {
+        pylidar::CVector<U32> number_of_points_by_returnVector(pHeader->number_of_points_by_return, 
                             sizeof(pHeader->number_of_points_by_return));    
-    pVal = (PyObject*)number_of_points_by_returnVector.getNumpyArray(NPY_UINT32);
+        pVal = (PyObject*)number_of_points_by_returnVector.getNumpyArray(NPY_UINT32);
+    }
     PyDict_SetItemString(pHeaderDict, "NUMBER_OF_POINTS_BY_RETURN", pVal);
     Py_DECREF(pVal);
 
