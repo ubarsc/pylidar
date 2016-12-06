@@ -333,7 +333,7 @@ class LasFile(generic.LiDARFile):
         
     def readWaveformInfo(self):
         """
-        3d structured masked array containing information
+        2d structured masked array containing information
         about the waveforms.
         """
         self.readData()                            
@@ -343,10 +343,17 @@ class LasFile(generic.LiDARFile):
         colNames = self.lastWaveformInfo.dtype.names
         info = self.subsetColumns(self.lastWaveformInfo, colNames)
         if info is not None:
-            info = numpy.expand_dims(info, axis=0)
-            info = numpy.expand_dims(info, axis=0)
-            mask = numpy.zeros_like(info, dtype=numpy.bool)
-            info = numpy.ma.array(info, mask=mask)
+            # TODO: cache?
+            idx = self.lastPulses['WFM_START_IDX']
+            cnt = self.lastPulses['NUMBER_OF_WAVEFORM_SAMPLES']
+
+            # ok format the waveform info into a 2d (by pulse) structure using
+            # the start and count fields (that connect with the pulse) 
+            wave_idx, wave_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                                        idx, cnt)
+            info = info[wave_idx]
+            info = numpy.ma.array(info, mask=wave_idx_mask)
+
         return info
         
     def readTransmitted(self):
@@ -356,8 +363,22 @@ class LasFile(generic.LiDARFile):
         return None
         
     def readReceived(self):
-        self.readData()
-        return self.lastReceived
+        # need info for the indexing into the waveforms
+        info = self.readWaveformInfo()
+
+        # TODO: cache?
+
+        # now the waveforms. Use the just created 2d array of waveform info's to
+        # create the 3d one. 
+        idx = info['RECEIVED_START_IDX']
+        cnt = info['NUMBER_OF_WAVEFORM_RECEIVED_BINS']
+            
+        recv_idx, recv_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                                        idx, cnt)
+        recv = self.lastReceived[recv_idx]
+        recv = numpy.ma.array(recv, mask=recv_idx_mask)
+
+        return recv
         
     def getTotalNumberPulses(self):
         """

@@ -823,60 +823,77 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
                 // we have waveforms
                 self->pWaveformReader->read_waveform(pPoint);
 
-                // fill in the info                
-                lasWaveformInfo.number_of_waveform_received_bins = self->pWaveformReader->nsamples;
-                lasWaveformInfo.received_start_idx = received.getNumElems();
                 U8 lasindex = pPoint->wavepacket.getIndex();
-                lasWaveformInfo.receive_wave_gain = self->pReader->header.vlr_wave_packet_descr[lasindex]->getDigitizerGain();
-                lasWaveformInfo.receive_wave_offset = self->pReader->header.vlr_wave_packet_descr[lasindex]->getDigitizerOffset();
+                // if lasindex == 0 then it appears that the wave info insn't available
+                // (table 13 in LAS spec)
+                if( lasindex > 0 )
+                {
+                    // fill in the info                
+                    lasWaveformInfo.number_of_waveform_received_bins = self->pWaveformReader->nsamples;
+                    lasWaveformInfo.received_start_idx = received.getNumElems();
+                    lasWaveformInfo.receive_wave_gain = self->pReader->header.vlr_wave_packet_descr[lasindex]->getDigitizerGain();
+                    lasWaveformInfo.receive_wave_offset = self->pReader->header.vlr_wave_packet_descr[lasindex]->getDigitizerOffset();
 
-                /* Get the offset (in ps) from the first digitized value
+                    /* Get the offset (in ps) from the first digitized value
                     to the location within the waveform packet that the associated 
                     return pulse was detected.*/
-                double location = pPoint->wavepacket.getLocation();
+                    double location = pPoint->wavepacket.getLocation();
 
-                // convert to ns
-                lasWaveformInfo.range_to_waveform_start = location*1E3;
+                    // convert to ns
+                    lasWaveformInfo.range_to_waveform_start = location*1E3;
 
-                double pulse_duration = lasWaveformInfo.number_of_waveform_received_bins * 
-                    (self->pReader->header.vlr_wave_packet_descr[lasindex]->getTemporalSpacing());
+                    double pulse_duration = lasWaveformInfo.number_of_waveform_received_bins * 
+                        (self->pReader->header.vlr_wave_packet_descr[lasindex]->getTemporalSpacing());
 
-                lasPulse.number_of_waveform_samples = 1;
-                lasPulse.wfm_start_idx = waveformInfos.getNumElems();
+                    lasPulse.number_of_waveform_samples = 1;
+                    lasPulse.wfm_start_idx = waveformInfos.getNumElems();
 
-                waveformInfos.push(&lasWaveformInfo);
+                    waveformInfos.push(&lasWaveformInfo);
                 
-                // the actual received data
-                U8 data;
-                for( U32 nCount = 0; nCount < lasWaveformInfo.number_of_waveform_received_bins; nCount++ )
-                {
-                    data = self->pWaveformReader->samples[nCount];
-                    received.push(&data);
-                }
+                    // the actual received data
+                    U8 data;
+                    for( U32 nCount = 0; nCount < lasWaveformInfo.number_of_waveform_received_bins; nCount++ )
+                    {
+                        data = self->pWaveformReader->samples[nCount];
+                        received.push(&data);
+                    }
 
-                // Set pulse GPS time (ns)
-                lasPulse.gps_time = lasPulse.gps_time - lasWaveformInfo.range_to_waveform_start;
+                    // Set pulse GPS time (ns)
+                    lasPulse.gps_time = lasPulse.gps_time - lasWaveformInfo.range_to_waveform_start;
 
-                // fill in origin, azimuth etc
+                    // fill in origin, azimuth etc
+    
+                    /* Set the start location of the return pulse
+                       This is calculated as the location of the first return 
+                       minus the time offset multiplied by XYZ(t) which is a vector
+                       away from the laser origin */
+                    lasPulse.x_origin = pLasPoint->x - location * self->pWaveformReader->XYZt[0];
+                    lasPulse.y_origin = pLasPoint->y - location * self->pWaveformReader->XYZt[1];
+                    lasPulse.z_origin = pLasPoint->z - location * self->pWaveformReader->XYZt[2];
 
-                /* Set the start location of the return pulse
-                   This is calculated as the location of the first return 
-                   minus the time offset multiplied by XYZ(t) which is a vector
-                   away from the laser origin */
-                lasPulse.x_origin = pLasPoint->x - location * self->pWaveformReader->XYZt[0];
-                lasPulse.y_origin = pLasPoint->y - location * self->pWaveformReader->XYZt[1];
-                lasPulse.z_origin = pLasPoint->z - location * self->pWaveformReader->XYZt[2];
-
-                /* Get the end location of the return pulse
-                  This is calculated as start location of the pulse
-                  plus the pulse duration multipled by XYZ(t)
-                  It is only used to get the azimuth and zenith angle 
-                  of the pulse */
-                double x1 = lasPulse.x_origin + pulse_duration * self->pWaveformReader->XYZt[0];
-                double y1 = lasPulse.y_origin + pulse_duration * self->pWaveformReader->XYZt[1];
-                double z1 = lasPulse.z_origin + pulse_duration * self->pWaveformReader->XYZt[2];
-                ConvertCoordsToAngles(x1, lasPulse.x_origin, y1, lasPulse.y_origin, 
+                    /* Get the end location of the return pulse
+                      This is calculated as start location of the pulse
+                      plus the pulse duration multipled by XYZ(t)
+                      It is only used to get the azimuth and zenith angle 
+                      of the pulse */
+                    double x1 = lasPulse.x_origin + pulse_duration * self->pWaveformReader->XYZt[0];
+                    double y1 = lasPulse.y_origin + pulse_duration * self->pWaveformReader->XYZt[1];
+                    double z1 = lasPulse.z_origin + pulse_duration * self->pWaveformReader->XYZt[2];
+                    ConvertCoordsToAngles(x1, lasPulse.x_origin, y1, lasPulse.y_origin, 
                         z1, lasPulse.z_origin, &lasPulse.zenith, &lasPulse.azimuth);
+                }
+                else
+                {
+                    // can't determine origin
+                    // might be able to do zenith/azimuth below depending on how many returns
+                    lasPulse.x_origin = 0;
+                    lasPulse.y_origin = 0;
+                    lasPulse.z_origin = 0;
+                    lasPulse.zenith = 0;
+                    lasPulse.azimuth = 0;
+                    lasPulse.number_of_waveform_samples = 0;
+                    lasPulse.wfm_start_idx = 0;
+                }
             }
             else
             {
