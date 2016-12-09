@@ -26,6 +26,14 @@ and are interpreted as floats. Here is an example or overridding the scaling on 
 
     pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --scaling POINT Z UINT32 1 -500
 
+Scaling is applied when saving data to a file using the expression::
+
+    (data - offset) * gain
+
+And un-applied when reading from a file using the expression::
+
+    (data / gain) + offset
+
 ^^^^^^^^^^^^^^^^^^^^^^
 Setting the null value
 ^^^^^^^^^^^^^^^^^^^^^^
