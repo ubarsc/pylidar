@@ -25,6 +25,50 @@ import collections
 import statsmodels.api as sm
 from numba import jit
 
+from pylidar import lidarprocessor
+    
+
+def run_pavd_calders2014(dataFiles, controls, otherargs, outfile):
+    """
+    Main function for PAVD_CALDERS2014
+    """  
+    if otherargs.planecorrection:  
+        print("Applying plane correction to point heights...")
+        
+        otherargs.xgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.ygrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.zgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.gridmask = numpy.ones(otherargs.gridsize**2, dtype=numpy.bool)
+                   
+        lidarprocessor.doProcessing(runXYMinGridding, dataFiles, controls=controls, otherArgs=otherargs)
+        
+        otherargs.planefit = planeFitHubers(otherargs.xgrid[~otherargs.gridmask], otherargs.ygrid[~otherargs.gridmask], 
+            otherargs.zgrid[~otherargs.gridmask], reportfile=otherargs.rptfile)
+    
+    minZenithAll = min(otherargs.minzenith)
+    maxZenithAll = max(otherargs.maxzenith)
+    minHeightBin = min(0.0, otherargs.minheight)  
+    
+    otherargs.zenith = numpy.arange(minZenithAll+otherargs.zenithbinsize/2, maxZenithAll, otherargs.zenithbinsize)
+    otherargs.height = numpy.arange(minHeightBin, otherargs.maxheight, otherargs.heightbinsize)
+    otherargs.counts = numpy.zeros([otherargs.zenith.shape[0],otherargs.height.shape[0]])
+    otherargs.pulses = numpy.zeros([otherargs.zenith.shape[0],1])     
+    
+    print("Calculating vertical plant profiles...")
+    lidarprocessor.doProcessing(runZenithHeightStratification, dataFiles, controls=controls, otherArgs=otherargs)
+    
+    pgapz = numpy.where(otherargs.pulses > 0, 1 - numpy.cumsum(otherargs.counts, axis=1) / otherargs.pulses, numpy.nan)
+    zenithRadians = numpy.radians(otherargs.zenith)
+    zenithBinSizeRadians = numpy.radians(otherargs.zenithbinsize)
+    
+    lpp_pai,lpp_pavd,lpp_mla = calcLinearPlantProfiles(otherargs.height, otherargs.heightbinsize, 
+        zenithRadians, pgapz)
+    sapp_pai,sapp_pavd = calcSolidAnglePlantProfiles(zenithRadians, pgapz, otherargs.heightbinsize,
+        zenithBinSizeRadians)
+    
+    writeProfiles(outfile, otherargs.zenith, otherargs.height, pgapz, 
+                  lpp_pai, lpp_pavd, lpp_mla, sapp_pai, sapp_pavd)
+
 
 @jit
 def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,pulseZenith,pulsesByPointZenith,
