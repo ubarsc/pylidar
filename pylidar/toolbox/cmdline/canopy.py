@@ -50,6 +50,7 @@ def getCmdargs():
     p.add_argument("--maxzenith", nargs="+", default=[70.0], type=float, help="Maximum view zenith angle to use for each input file")
     p.add_argument("--gridsize", default=20, type=int, help="Grid dimension for the point height plane correction (default: %(default)i; PAVD_CALDERS2014 metric only)")
     p.add_argument("--gridbinsize", default=5.0, type=float, help="Grid resolution for the point height plane correction (default: %(default)f m; PAVD_CALDERS2014 metric only)")
+    p.add_argument("--origin", nargs="+", default=[0.0,0.0], type=float, help="Perspective XY centre (origin) of the TLS scan location (PAVD_CALDERS2014 metric only)")
     p.add_argument("--excludedclasses", nargs="+", default=[], type=int, help="Point CLASSIFICATION values to exclude from the metric calculation (default is all points)")
     p.add_argument("--rasterdriver", default="HFA", help="GDAL format for output raster (default is %(default)s)")
        
