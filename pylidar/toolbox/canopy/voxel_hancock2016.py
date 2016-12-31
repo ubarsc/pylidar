@@ -21,6 +21,7 @@ Functions for voxelization of TLS scans (Hancock et al., 2016)
 from __future__ import print_function, division
 
 import numpy
+import collections
 from numba import jit
 from osgeo import gdal
 
@@ -44,7 +45,7 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
     otherargs.voxDimZ = otherargs.bounds[5] - otherargs.bounds[2]    
     
     # initialize voxel arrays    
-    otherargs.outgrids = dict()
+    otherargs.outgrids = collections.OrderedDict()
     nVox = otherargs.nX * otherargs.nY * otherargs.nZ
     otherargs.outgrids["hits"] = numpy.zeros(nVox, dtype=numpy.uint32)
     otherargs.outgrids["miss"] = numpy.zeros(nVox, dtype=numpy.uint32)
@@ -213,7 +214,7 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
                 missArr[vidx] += 1
             
             for i in range(number_of_returns):                
-                if (vidx == voxIdx[i]):
+                if vidx == voxIdx[i]:
                     wcntArr[vidx] += 1.0 / number_of_returns
                     if i == number_of_returns-1:                    
                         foundLast = 1
@@ -246,7 +247,7 @@ def gridIntersection(x0, y0, z0, dx, dy, dz, bounds):
        intersect: 0 = no intersection, 1 = intersection
        tmin: distance from the beam origin
     """
-    if (dx > 0) or (dx < 0):
+    if dx != 0:
         divX = 1.0 / dx
     else:
         divX = 1.0
@@ -258,7 +259,7 @@ def gridIntersection(x0, y0, z0, dx, dy, dz, bounds):
     	tmin = (bounds[3] - x0) * divX
     	tmax = (bounds[0] - x0) * divX
       
-    if (dy > 0) or (dy < 0):
+    if dy != 0:
         divY = 1.0 / dy
     else:
         divY = 1.0
@@ -279,7 +280,7 @@ def gridIntersection(x0, y0, z0, dx, dy, dz, bounds):
         if tymax < tmax:
             tmax = tymax
 
-        if (dz > 0) or (dz < 0):
+        if dz != 0:
             divZ = 1.0 / dz
         else:
             divZ = 1.0
