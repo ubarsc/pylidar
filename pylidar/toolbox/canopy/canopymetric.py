@@ -75,8 +75,8 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
     
     elif metric == "VOXEL_HANCOCK2016":
     
-        dataFiles.inFile = lidarprocessor.LidarFile(infiles[0], lidarprocessor.READ)
-        info = generic.getLidarFileInfo(dataFiles.inFile.fname)
+        dataFiles.inList = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) for fname in infiles]
+        info = generic.getLidarFileInfo(dataFiles.inList[0].fname)
         if len(info.header["SPATIAL_REFERENCE"]) > 0:
             otherargs.proj = info.header["SPATIAL_REFERENCE"]
         else:

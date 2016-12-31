@@ -43,32 +43,28 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
     otherargs.voxDimY = otherargs.bounds[4] - otherargs.bounds[1]
     otherargs.voxDimZ = otherargs.bounds[5] - otherargs.bounds[2]    
     
-    # initialize voxel arrays
+    # initialize voxel arrays    
+    otherargs.outgrids = dict()
     nVox = otherargs.nX * otherargs.nY * otherargs.nZ
-    otherargs.hits = numpy.zeros(nVox, dtype=numpy.uint32)
-    otherargs.miss = numpy.zeros(nVox, dtype=numpy.uint32)
-    otherargs.wcnt = numpy.zeros(nVox, dtype=numpy.uint32)
+    otherargs.outgrids["hits"] = numpy.zeros(nVox, dtype=numpy.uint32)
+    otherargs.outgrids["miss"] = numpy.zeros(nVox, dtype=numpy.uint32)
+    otherargs.outgrids["wcnt"] = numpy.zeros(nVox, dtype=numpy.float32)
+    otherargs.outgrids["scan"] = numpy.zeros(nVox, dtype=numpy.uint8)
     
     # run the voxelization
-    lidarprocessor.doProcessing(runVoxelization, dataFiles, controls=controls, otherArgs=otherargs)
-    
-    # reshape the output arrays
-    otherargs.hits.shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
-    otherargs.miss.shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
-    otherargs.wcnt.shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
+    nScans = len(dataFiles.inList)
+    for i in range(nScans):
+        otherargs.scan = i
+        print("Processing %s" % dataFiles.inList[i].fname)        
+        temphits = numpy.copy(otherargs.outgrids["hits"])
+        lidarprocessor.doProcessing(runVoxelization, dataFiles, controls=controls, otherArgs=otherargs)
+        otherargs.outgrids["scan"] += numpy.uint8(otherargs.outgrids["hits"] > temphits)
     
     # write output to an image file
-    saveVoxels(outfiles[0], otherargs.hits, otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj, drivername=otherargs.rasterdriver)
-    saveVoxels(outfiles[1], otherargs.miss, otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj, drivername=otherargs.rasterdriver)
-    saveVoxels(outfiles[2], otherargs.wcnt, otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj, drivername=otherargs.rasterdriver)    
-    
-    #hits2d = numpy.max(otherargs.hits, axis=0).astype(numpy.uint32)
-    #saveVoxels('test_hits_maxz.img', hits2d, otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=None, drivername='HFA')
-    #miss2d = numpy.max(otherargs.miss, axis=0).astype(numpy.uint32)
-    #saveVoxels('test_misses_maxz.img', miss2d, otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=None, drivername='HFA')    
-    #wcnt2d = numpy.max(otherargs.wcnt, axis=0).astype(numpy.uint32)
-    #saveVoxels('test_wct_maxz.img', wcnt2d, otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=None, drivername='HFA')
-
+    for gridname, outfile in zip(otherargs.outgrids.keys(), outfiles):
+        otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
+        saveVoxels(outfile, otherargs.outgrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj, drivername=otherargs.rasterdriver)
+        
 
 def runVoxelization(data, otherargs):
     """
@@ -77,8 +73,8 @@ def runVoxelization(data, otherargs):
     # read the data
     pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH','AZIMUTH','X_ORIGIN','Y_ORIGIN','Z_ORIGIN']
     pointcolnames = ['X','Y','Z','RETURN_NUMBER']    
-    pulses = data.inFile.getPulses(colNames=pulsecolnames)
-    pointsByPulses = data.inFile.getPointsByPulse(colNames=pointcolnames)
+    pulses = data.inList[otherargs.scan].getPulses(colNames=pulsecolnames)
+    pointsByPulses = data.inList[otherargs.scan].getPointsByPulse(colNames=pointcolnames)
     
     # unit direction vector
     theta = numpy.radians(pulses['ZENITH'])
@@ -95,7 +91,7 @@ def runVoxelization(data, otherargs):
         pointsByPulses['X'].data, pointsByPulses['Y'].data, pointsByPulses['Z'].data, dx, dy, dz, \
         pulses['NUMBER_OF_RETURNS'], otherargs.voxDimX, otherargs.voxDimY, otherargs.voxDimZ, \
         otherargs.nX, otherargs.nY, otherargs.nZ, otherargs.bounds, otherargs.voxelsize, \
-        otherargs.hits, otherargs.miss, otherargs.wcnt, voxIdx)
+        otherargs.outgrids["hits"], otherargs.outgrids["miss"], otherargs.outgrids["wcnt"], voxIdx)
 
 
 @jit(nopython=True)
@@ -318,10 +314,10 @@ def saveVoxels(outfile, vox, xmin, ymax, res, nullval=None, proj=None, drivernam
                     numpy.dtype(numpy.uint8):gdal.GDT_Byte}
     gdalType = gdalTypeDict[vox.dtype]
     
-    if (nullval is None) or (vox.dtype == 'float32'):
-        nullval = numpy.iinfo(vox.dtype).max
-    else:
+    if vox.dtype == 'float32':
         nullval = 0.0
+    else:
+        nullval = numpy.iinfo(vox.dtype).max
     
     drvr = gdal.GetDriverByName(drivername)
     ds = drvr.Create(outfile, nCols, nRows, nBins, gdalType, ['COMPRESS=YES'])

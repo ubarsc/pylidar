@@ -65,13 +65,13 @@ def getCmdargs():
         print("Must specify output CSV file name") 
         p.print_help()
         sys.exit()
-    elif (nOutFiles != 3) and (cmdargs.metric == "VOXEL_HANCOCK2016"):
-        print("Must specify three output GDAL image file names (HITS, MISSES, WEIGHTED_COUNT)") 
+    elif (nOutFiles != 4) and (cmdargs.metric == "VOXEL_HANCOCK2016"):
+        print("Must specify three output GDAL image file names (HITS, MISSES, WEIGHTED_COUNT, NSCANS)") 
         p.print_help()
         sys.exit()
     
     nInfiles = len(cmdargs.infiles)
-    if (len(cmdargs.minzenith) != nInfiles) or (len(cmdargs.maxzenith) != nInfiles):
+    if ( (len(cmdargs.minzenith) != nInfiles) or (len(cmdargs.maxzenith) != nInfiles) ) and (cmdargs.metric == "PAVD_CALDERS2014"):
         print("--minzenith and --maxzenith must have the same length as --infiles")
         p.print_help()
         sys.exit()
