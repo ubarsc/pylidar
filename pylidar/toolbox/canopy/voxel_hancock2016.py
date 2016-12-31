@@ -90,7 +90,7 @@ def runVoxelization(data, otherargs):
 
         # temporary arrays
         max_nreturns = numpy.max(pulses['NUMBER_OF_RETURNS'])
-        voxIdx = numpy.empty(max(1,max_nreturns), dtype=numpy.uint32)
+        voxIdx = numpy.empty(max_nreturns, dtype=numpy.uint32)
 
         # run the voxelization
         runTraverseVoxels(pulses['X_ORIGIN'], pulses['Y_ORIGIN'], pulses['Z_ORIGIN'], \
