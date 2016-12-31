@@ -70,28 +70,33 @@ def runVoxelization(data, otherargs):
     """
     Voxelization function for the lidar processor
     """
-    # read the data
-    pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH','AZIMUTH','X_ORIGIN','Y_ORIGIN','Z_ORIGIN']
-    pointcolnames = ['X','Y','Z','RETURN_NUMBER']    
-    pulses = data.inList[otherargs.scan].getPulses(colNames=pulsecolnames)
-    pointsByPulses = data.inList[otherargs.scan].getPointsByPulse(colNames=pointcolnames)
+    # read the pulse data
+    pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH','AZIMUTH','X_ORIGIN','Y_ORIGIN','Z_ORIGIN']       
+    pulses = data.inList[otherargs.scan].getPulses(colNames=pulsecolnames)   
     
-    # unit direction vector
-    theta = numpy.radians(pulses['ZENITH'])
-    phi = numpy.radians(pulses['AZIMUTH'])
-    dx = numpy.sin(theta) * numpy.sin(phi)
-    dy = numpy.sin(theta) * numpy.cos(phi)
-    dz = numpy.cos(theta)
+    if pulses.shape[0] > 0:
     
-    # temporary arrays
-    voxIdx = numpy.empty(numpy.max(pulses['NUMBER_OF_RETURNS']), dtype=numpy.uint32)
-    
-    # run the voxelization
-    runTraverseVoxels(pulses['X_ORIGIN'], pulses['Y_ORIGIN'], pulses['Z_ORIGIN'], \
-        pointsByPulses['X'].data, pointsByPulses['Y'].data, pointsByPulses['Z'].data, dx, dy, dz, \
-        pulses['NUMBER_OF_RETURNS'], otherargs.voxDimX, otherargs.voxDimY, otherargs.voxDimZ, \
-        otherargs.nX, otherargs.nY, otherargs.nZ, otherargs.bounds, otherargs.voxelsize, \
-        otherargs.outgrids["hits"], otherargs.outgrids["miss"], otherargs.outgrids["wcnt"], voxIdx)
+        # read the point data
+        pointcolnames = ['X','Y','Z','RETURN_NUMBER']
+        pointsByPulses = data.inList[otherargs.scan].getPointsByPulse(colNames=pointcolnames)
+
+        # unit direction vector
+        theta = numpy.radians(pulses['ZENITH'])
+        phi = numpy.radians(pulses['AZIMUTH'])
+        dx = numpy.sin(theta) * numpy.sin(phi)
+        dy = numpy.sin(theta) * numpy.cos(phi)
+        dz = numpy.cos(theta)
+
+        # temporary arrays
+        max_nreturns = numpy.max(pulses['NUMBER_OF_RETURNS'])
+        voxIdx = numpy.empty(max(1,max_nreturns), dtype=numpy.uint32)
+
+        # run the voxelization
+        runTraverseVoxels(pulses['X_ORIGIN'], pulses['Y_ORIGIN'], pulses['Z_ORIGIN'], \
+            pointsByPulses['X'].data, pointsByPulses['Y'].data, pointsByPulses['Z'].data, dx, dy, dz, \
+            pulses['NUMBER_OF_RETURNS'], otherargs.voxDimX, otherargs.voxDimY, otherargs.voxDimZ, \
+            otherargs.nX, otherargs.nY, otherargs.nZ, otherargs.bounds, otherargs.voxelsize, \
+            otherargs.outgrids["hits"], otherargs.outgrids["miss"], otherargs.outgrids["wcnt"], voxIdx)
 
 
 @jit(nopython=True)
