@@ -174,18 +174,25 @@ def runZenithHeightStratification(data, otherargs):
     """
     Derive Pgap(z) profiles following vertical profile procedures outlined in Calders et al. (2014)
     """
-    pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH']
-    
+        
     for i,indata in enumerate(data.inList):
         
-        if otherargs.planecorrection:
-            pointcolnames = ['X','Y','Z','CLASSIFICATION',otherargs.returnnumcol[i]]
-        else:
-            pointcolnames = [otherargs.heightcol,'CLASSIFICATION',otherargs.returnnumcol[i]]
-        
-        points = indata.getPoints(colNames=pointcolnames)
+        pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH']
         pulses = indata.getPulses(colNames=pulsecolnames)
         pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
+        
+        if indata.lidarDriver == "SPDV3":
+            returnnumcol = 'RETURN_ID'
+            pulses['ZENITH'] = numpy.degrees(pulses['ZENITH'])
+            pulsesByPoint['ZENITH'] = numpy.degrees(pulsesByPoint['ZENITH'])
+        else:
+            returnnumcol = 'RETURN_NUMBER'
+        
+        if otherargs.planecorrection:
+            pointcolnames = ['X','Y','Z','CLASSIFICATION',returnnumcol]
+        else:
+            pointcolnames = [otherargs.heightcol,'CLASSIFICATION',returnnumcol]        
+        points = indata.getPoints(colNames=pointcolnames)
         
         if otherargs.weighted:
             weights = 1.0 / pulsesByPoint['NUMBER_OF_RETURNS']
@@ -201,10 +208,6 @@ def runZenithHeightStratification(data, otherargs):
                 otherargs.planefit["Parameters"][2] * points['Y'] + otherargs.planefit["Parameters"][0])
         else:
             pointHeights = points[otherargs.heightcol]
-        
-        if otherargs.radians[i]:
-            pulses['ZENITH'] = numpy.degrees(pulses['ZENITH'])
-            pulsesByPoint['ZENITH'] = numpy.degrees(pulsesByPoint['ZENITH'])
         
         countPointsPulsesByZenithHeight(otherargs.zenith,otherargs.minzenith[i],otherargs.maxzenith[i],
             otherargs.zenithbinsize,pulses['ZENITH'],pulsesByPoint['ZENITH'],pointHeights,

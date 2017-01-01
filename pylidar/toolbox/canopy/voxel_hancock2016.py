@@ -83,7 +83,7 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
         for gridname in scanOutputs:
             outfile = "%s.%s" % (os.path.splitext(dataFiles.inList[i].fname)[0], gridname)
             otherargs.scangrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
-            saveVoxels(outfile, otherargs.scangrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj, drivername=otherargs.rasterdriver)
+            saveVoxels(outfile, otherargs.scangrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj[i], drivername=otherargs.rasterdriver)
     
     # calculate vertical cover profiles
     
@@ -96,7 +96,7 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
     for i,gridname in enumerate(summaryOutputs):
          outfile = os.path.splitext(outfiles[i])[0]
          otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
-         saveVoxels(outfile, otherargs.outgrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj, drivername=otherargs.rasterdriver)
+         saveVoxels(outfile, otherargs.outgrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj[0], drivername=otherargs.rasterdriver)
        
 
 def runVoxelization(data, otherargs):
@@ -110,15 +110,18 @@ def runVoxelization(data, otherargs):
     if pulses.shape[0] > 0:
         
         # read the point data
-        pointcolnames = ['X','Y','Z','RETURN_NUMBER','RANGE','CLASSIFICATION']
+        if data.inList[otherargs.scan].lidarDriver == "SPDV3":
+            pointcolnames = ['X','Y','Z','RANGE','CLASSIFICATION','RETURN_ID']
+        else:
+            pointcolnames = ['X','Y','Z','RANGE','CLASSIFICATION','RETURN_NUMBER']            
+            pulses['ZENITH'] = numpy.radians(pulses['ZENITH'])
+            pulses['AZIMUTH'] = numpy.radians(pulses['AZIMUTH'])
         pointsByPulses = data.inList[otherargs.scan].getPointsByPulse(colNames=pointcolnames)
         
-        # unit direction vector
-        theta = numpy.radians(pulses['ZENITH'])
-        phi = numpy.radians(pulses['AZIMUTH'])
-        dx = numpy.sin(theta) * numpy.sin(phi)
-        dy = numpy.sin(theta) * numpy.cos(phi)
-        dz = numpy.cos(theta)
+        # calculate the unit direction vector
+        dx = numpy.sin(pulses['ZENITH']) * numpy.sin(pulses['AZIMUTH'])
+        dy = numpy.sin(pulses['ZENITH']) * numpy.cos(pulses['AZIMUTH'])
+        dz = numpy.cos(pulses['ZENITH'])
         
         # temporary arrays
         max_nreturns = numpy.max(pulses['NUMBER_OF_RETURNS'])
@@ -138,8 +141,7 @@ def runTraverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, number_of_returns, vox
     """
     Loop through each pulse and run voxel traversal
     """
-    for i in range(number_of_returns.shape[0]):
-        
+    for i in range(number_of_returns.shape[0]):        
         traverseVoxels(x0[i], y0[i], z0[i], x1[:,i], y1[:,i], z1[:,i], dx[i], dy[i], dz[i], \
             nX, nY, nZ, voxDimX, voxDimY, voxDimZ, bounds, voxelSize, number_of_returns[i], \
             hitsArr, missArr, wcntArr, voxIdx)
