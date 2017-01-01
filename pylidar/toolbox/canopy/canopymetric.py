@@ -58,7 +58,10 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
         for i in range( len(dataFiles.inList) ):        
             info = generic.getLidarFileInfo(dataFiles.inList[i].fname)
             if info.getDriverName() == 'riegl':
-                if "ROTATION_MATRIX" in info.header:
+                if otherargs.externaltransformfn is not None:
+                    externaltransform = numpy.loadtxt(otherargs.externaltransformfn[i], ndmin=2, delimiter=" ", dtype=numpy.float32) 
+                    dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", externaltransform)
+                elif "ROTATION_MATRIX" in info.header:
                     dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", info.header["ROTATION_MATRIX"])
                 else:
                     msg = 'Input file %s has no valid pitch/roll/yaw data' % dataFiles.inList[i].fname
@@ -73,14 +76,25 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
         controls.setWindowSize(512)
         pavd_calders2014.run_pavd_calders2014(dataFiles, controls, otherargs, outfiles[0])     
     
-    elif metric == "VOXEL_HANCOCK2016":
-    
-        dataFiles.inList = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) for fname in infiles]
-        info = generic.getLidarFileInfo(dataFiles.inList[0].fname)
-        if len(info.header["SPATIAL_REFERENCE"]) > 0:
-            otherargs.proj = info.header["SPATIAL_REFERENCE"]
-        else:
-            otherargs.proj = None
+    elif metric == "VOXEL_HANCOCK2016":              
+
+        for i in range( len(dataFiles.inList) ):        
+            info = generic.getLidarFileInfo(dataFiles.inList[i].fname)
+            if info.getDriverName() == 'riegl':
+                if otherargs.externaltransformfn is not None:
+                    externaltransform = numpy.loadtxt(otherargs.externaltransformfn[i], ndmin=2, delimiter=" ", dtype=numpy.float32) 
+                    dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", externaltransform)
+                elif "ROTATION_MATRIX" in info.header:
+                    dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", info.header["ROTATION_MATRIX"])
+                else:
+                    msg = 'Input file %s has no valid pitch/roll/yaw data' % dataFiles.inList[i].fname
+                    raise generic.LiDARInvalidData(msg)
+            if i == 0:
+                if len(info.header["SPATIAL_REFERENCE"]) > 0:
+                    otherargs.proj = info.header["SPATIAL_REFERENCE"]
+                else:
+                    otherargs.proj = None
+        
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
         voxel_hancock2016.run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles)     

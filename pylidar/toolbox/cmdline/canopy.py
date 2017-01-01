@@ -53,6 +53,7 @@ def getCmdargs():
     p.add_argument("--origin", nargs="+", default=[0.0,0.0], type=float, help="Perspective XY centre (origin) of the TLS scan location (PAVD_CALDERS2014 metric only)")
     p.add_argument("--excludedclasses", nargs="+", default=[], type=int, help="Point CLASSIFICATION values to exclude from the metric calculation (default is all points)")
     p.add_argument("--rasterdriver", default="HFA", help="GDAL format for output raster (default is %(default)s)")
+    p.add_argument("--externaltransformfn", nargs="+", default=[], help="External transform filenames (for RIEGL RXP input files)")
        
     cmdargs = p.parse_args()
     if cmdargs.infiles is None:
@@ -75,6 +76,15 @@ def getCmdargs():
         print("--minzenith and --maxzenith must have the same length as --infiles")
         p.print_help()
         sys.exit()
+    
+    nExternalTransformFiles = len(cmdargs.externaltransformfn)
+    if (nExternalTransformFiles != nInfiles):
+        if nExternalTransformFiles == 0:
+            cmdargs.externaltransformfn = None
+        else:
+            print("If present --externaltransformfn must have the same length as --infiles")
+            p.print_help()
+            sys.exit()        
     
     return cmdargs
 
@@ -103,12 +113,14 @@ def run():
         otherargs.gridbinsize = cmdargs.gridbinsize
         otherargs.origin = cmdargs.origin
         otherargs.excludedclasses = cmdargs.excludedclasses
+        otherargs.externaltransformfn = cmdargs.externaltransformfn
 
     elif cmdargs.metric == "VOXEL_HANCOCK2016":    
         
         otherargs.voxelsize = numpy.repeat(cmdargs.voxelsize, 3)
         otherargs.bounds = numpy.array(cmdargs.bounds, dtype=numpy.float32)
         otherargs.rasterdriver = cmdargs.rasterdriver
+        otherargs.externaltransformfn = cmdargs.externaltransformfn
         
     elif cmdargs.metric == "PGAP_ARMSTON2013":    
         
