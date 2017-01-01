@@ -41,6 +41,7 @@ def prepareInputFiles(dataFiles, otherargs):
     Prepare input files for calculation of canopy metrics
     """
     otherargs.proj = []
+    otherargs.lidardriver = []
     for i in range( len(dataFiles.inList) ):        
         
         info = generic.getLidarFileInfo(dataFiles.inList[i].fname)
@@ -54,6 +55,8 @@ def prepareInputFiles(dataFiles, otherargs):
             else:
                 msg = 'Input file %s has no valid pitch/roll/yaw data' % dataFiles.inList[i].fname
                 raise generic.LiDARInvalidData(msg)
+        
+        otherargs.lidardriver.append( info.getDriverName() )
         
         if "SPATIAL_REFERENCE" in info.header.keys():
             if len(info.header["SPATIAL_REFERENCE"]) > 0:

@@ -181,7 +181,7 @@ def runZenithHeightStratification(data, otherargs):
         pulses = indata.getPulses(colNames=pulsecolnames)
         pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
         
-        if indata.lidarDriver == "SPDV3":
+        if otherargs.lidardriver[i] == "SPDV3":
             returnnumcol = 'RETURN_ID'
             pulses['ZENITH'] = numpy.degrees(pulses['ZENITH'])
             pulsesByPoint['ZENITH'] = numpy.degrees(pulsesByPoint['ZENITH'])

@@ -78,7 +78,7 @@ def getCmdargs():
         sys.exit()
     
     nExternalTransformFiles = len(cmdargs.externaltransformfn)
-    if (nExternalTransformFiles != nInfiles):
+    if nExternalTransformFiles != nInfiles:
         if nExternalTransformFiles == 0:
             cmdargs.externaltransformfn = None
         else:

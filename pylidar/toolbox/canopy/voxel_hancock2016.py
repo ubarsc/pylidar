@@ -28,7 +28,7 @@ from osgeo import gdal
 
 from pylidar import lidarprocessor
 
-VOXEL_SCALE = 100
+VOXEL_SCALE = 10000
 VOXEL_OFFSET = 0
 
 def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
@@ -61,8 +61,8 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
         
         # initialize scan voxel arrays 
         otherargs.scangrids = collections.OrderedDict()     
-        otherargs.scangrids["hits"] = numpy.zeros(nVox, dtype=numpy.uint32)
-        otherargs.scangrids["miss"] = numpy.zeros(nVox, dtype=numpy.uint32)
+        otherargs.scangrids["hits"] = numpy.zeros(nVox, dtype=numpy.float32)
+        otherargs.scangrids["miss"] = numpy.zeros(nVox, dtype=numpy.float32)
         otherargs.scangrids["wcov"] = numpy.zeros(nVox, dtype=numpy.float32)
 
         # run the voxelization        
@@ -70,8 +70,8 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
         lidarprocessor.doProcessing(runVoxelization, dataFiles, controls=controls, otherArgs=otherargs)
         
         # calculate output metrics
-        otherargs.outgrids["scan"] += numpy.uint8(otherargs.outgrids["hits"] > 0)
-        otherargs.scangrids["btot"] = numpy.uint16(otherargs.scangrids["hits"] + otherargs.scangrids["miss"])
+        otherargs.outgrids["scan"] += numpy.uint8(otherargs.scangrids["hits"] > 0)
+        otherargs.scangrids["btot"] = otherargs.scangrids["hits"] + otherargs.scangrids["miss"]
         otherargs.scangrids["pgap"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["hits"] / otherargs.scangrids["btot"], numpy.nan)
         otherargs.scangrids["wcov"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["wcov"] / otherargs.scangrids["btot"], numpy.nan)
         
@@ -110,7 +110,7 @@ def runVoxelization(data, otherargs):
     if pulses.shape[0] > 0:
         
         # read the point data
-        if data.inList[otherargs.scan].lidarDriver == "SPDV3":
+        if otherargs.lidardriver[otherargs.scan] == "SPDV3":
             pointcolnames = ['X','Y','Z','RANGE','CLASSIFICATION','RETURN_ID']
         else:
             pointcolnames = ['X','Y','Z','RANGE','CLASSIFICATION','RETURN_NUMBER']            
@@ -132,7 +132,7 @@ def runVoxelization(data, otherargs):
             pointsByPulses['X'].data, pointsByPulses['Y'].data, pointsByPulses['Z'].data, dx, dy, dz, \
             pulses['NUMBER_OF_RETURNS'], otherargs.voxDimX, otherargs.voxDimY, otherargs.voxDimZ, \
             otherargs.nX, otherargs.nY, otherargs.nZ, otherargs.bounds, otherargs.voxelsize, \
-            otherargs.outgrids["hits"], otherargs.outgrids["miss"], otherargs.outgrids["wcov"], voxIdx)
+            otherargs.scangrids["hits"], otherargs.scangrids["miss"], otherargs.scangrids["wcov"], voxIdx)
 
 
 @jit(nopython=True)
@@ -355,18 +355,20 @@ def saveVoxels(outfileprefix, vox, xmin, ymax, res, proj=None, drivername='HFA')
                   'ENVI': ''}
     suffix = suffixdict[drivername]
     outfile = "%s.%s" % (outfileprefix,suffix)   
-       
-    if vox.dtype == 'float32':        
+    
+    if (vox.dtype == 'float32') or (vox.dtype == 'float64'):        
         nullval = numpy.iinfo("uint16").max
-        vox = numpy.where( numpy.isnan(vox), nullval, numpy.uint16((vox - VOXEL_OFFSET) * VOXEL_SCALE) )                
-
+        vox = numpy.where( numpy.isnan(vox), nullval, numpy.uint16((vox - VOXEL_OFFSET) * VOXEL_SCALE) )
+    else:
+        nullval = numpy.iinfo(vox.dtype).max
+    
     gdaltypedict = {numpy.dtype(numpy.uint16):gdal.GDT_UInt16,
                     numpy.dtype(numpy.uint32):gdal.GDT_UInt32,
                     numpy.dtype(numpy.uint8):gdal.GDT_Byte}
     gdaltype = gdaltypedict[vox.dtype]   
     
     drvr = gdal.GetDriverByName(drivername)
-    ds = drvr.Create(outfile, nCols, nRows, nBins, gdalType, ['COMPRESS=YES'])
+    ds = drvr.Create(outfile, nCols, nRows, nBins, gdaltype, ['COMPRESS=YES'])
     for i in range(nBins):
         band = ds.GetRasterBand(i+1)
         band.WriteArray(vox[i,:,:])
