@@ -20,6 +20,7 @@ Functions for voxelization of TLS scans (Hancock et al., 2016)
 
 from __future__ import print_function, division
 
+import os
 import numpy
 import collections
 from numba import jit
@@ -27,6 +28,8 @@ from osgeo import gdal
 
 from pylidar import lidarprocessor
 
+VOXEL_SCALE = 100
+VOXEL_OFFSET = 0
 
 def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
     """
@@ -44,28 +47,57 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
     otherargs.voxDimY = otherargs.bounds[4] - otherargs.bounds[1]
     otherargs.voxDimZ = otherargs.bounds[5] - otherargs.bounds[2]    
     
-    # initialize voxel arrays    
+    # initialize summary voxel arrays    
     otherargs.outgrids = collections.OrderedDict()
     nVox = otherargs.nX * otherargs.nY * otherargs.nZ
-    otherargs.outgrids["hits"] = numpy.zeros(nVox, dtype=numpy.uint32)
-    otherargs.outgrids["miss"] = numpy.zeros(nVox, dtype=numpy.uint32)
-    otherargs.outgrids["wcnt"] = numpy.zeros(nVox, dtype=numpy.float32)
     otherargs.outgrids["scan"] = numpy.zeros(nVox, dtype=numpy.uint8)
     
-    # run the voxelization
+    # loop through each scan
     nScans = len(dataFiles.inList)
+    scanOutputs = ["btot","pgap","wcov"]
     for i in range(nScans):
+                        
         otherargs.scan = i
-        print("Processing %s" % dataFiles.inList[i].fname)        
-        temphits = numpy.copy(otherargs.outgrids["hits"])
-        lidarprocessor.doProcessing(runVoxelization, dataFiles, controls=controls, otherArgs=otherargs)
-        otherargs.outgrids["scan"] += numpy.uint8(otherargs.outgrids["hits"] > temphits)
-    
-    # write output to an image file
-    for gridname, outfile in zip(otherargs.outgrids.keys(), outfiles):
-        otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
-        saveVoxels(outfile, otherargs.outgrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj, drivername=otherargs.rasterdriver)
         
+        # initialize scan voxel arrays 
+        otherargs.scangrids = collections.OrderedDict()     
+        otherargs.scangrids["hits"] = numpy.zeros(nVox, dtype=numpy.uint32)
+        otherargs.scangrids["miss"] = numpy.zeros(nVox, dtype=numpy.uint32)
+        otherargs.scangrids["wcov"] = numpy.zeros(nVox, dtype=numpy.float32)
+
+        # run the voxelization        
+        print("Voxel traversing %s" % dataFiles.inList[i].fname)
+        lidarprocessor.doProcessing(runVoxelization, dataFiles, controls=controls, otherArgs=otherargs)
+        
+        # calculate output metrics
+        otherargs.outgrids["scan"] += numpy.uint8(otherargs.outgrids["hits"] > 0)
+        otherargs.scangrids["btot"] = numpy.uint16(otherargs.scangrids["hits"] + otherargs.scangrids["miss"])
+        otherargs.scangrids["pgap"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["hits"] / otherargs.scangrids["btot"], numpy.nan)
+        otherargs.scangrids["wcov"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["wcov"] / otherargs.scangrids["btot"], numpy.nan)
+        
+        # run the silhouette calculation
+        #print("Silhouetting %s" % dataFiles.inList[i].fname)
+        #lidarprocessor.doProcessing(runSilhouette, dataFiles, controls=controls, otherArgs=otherargs)
+                    
+        # write output scan voxel arrays to image files
+        for gridname in scanOutputs:
+            outfile = "%s.%s" % (os.path.splitext(dataFiles.inList[i].fname)[0], gridname)
+            otherargs.scangrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
+            saveVoxels(outfile, otherargs.scangrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj, drivername=otherargs.rasterdriver)
+    
+    # calculate vertical cover profiles
+    
+    
+    # calculate pavd profiles
+    
+    
+    # write output summary voxel arrays to image files
+    summaryOutputs = ["scan"]
+    for i,gridname in enumerate(summaryOutputs):
+         outfile = os.path.splitext(outfiles[i])[0]
+         otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
+         saveVoxels(outfile, otherargs.outgrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj, drivername=otherargs.rasterdriver)
+       
 
 def runVoxelization(data, otherargs):
     """
@@ -76,28 +108,28 @@ def runVoxelization(data, otherargs):
     pulses = data.inList[otherargs.scan].getPulses(colNames=pulsecolnames)   
     
     if pulses.shape[0] > 0:
-    
+        
         # read the point data
-        pointcolnames = ['X','Y','Z','RETURN_NUMBER']
+        pointcolnames = ['X','Y','Z','RETURN_NUMBER','RANGE','CLASSIFICATION']
         pointsByPulses = data.inList[otherargs.scan].getPointsByPulse(colNames=pointcolnames)
-
+        
         # unit direction vector
         theta = numpy.radians(pulses['ZENITH'])
         phi = numpy.radians(pulses['AZIMUTH'])
         dx = numpy.sin(theta) * numpy.sin(phi)
         dy = numpy.sin(theta) * numpy.cos(phi)
         dz = numpy.cos(theta)
-
+        
         # temporary arrays
         max_nreturns = numpy.max(pulses['NUMBER_OF_RETURNS'])
         voxIdx = numpy.empty(max_nreturns, dtype=numpy.uint32)
-
+        
         # run the voxelization
         runTraverseVoxels(pulses['X_ORIGIN'], pulses['Y_ORIGIN'], pulses['Z_ORIGIN'], \
             pointsByPulses['X'].data, pointsByPulses['Y'].data, pointsByPulses['Z'].data, dx, dy, dz, \
             pulses['NUMBER_OF_RETURNS'], otherargs.voxDimX, otherargs.voxDimY, otherargs.voxDimZ, \
             otherargs.nX, otherargs.nY, otherargs.nZ, otherargs.bounds, otherargs.voxelsize, \
-            otherargs.outgrids["hits"], otherargs.outgrids["miss"], otherargs.outgrids["wcnt"], voxIdx)
+            otherargs.outgrids["hits"], otherargs.outgrids["miss"], otherargs.outgrids["wcov"], voxIdx)
 
 
 @jit(nopython=True)
@@ -203,21 +235,26 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
         else:
             tMaxZ = tmin + (voxelMaxZ - startZ) / dz
             tDeltaZ = voxelSize[2] / abs(dz) 
-                
-        foundLast = 0  
+        
+        whit = 1.0
+        wmiss = 0.0
+        if number_of_returns > 0:
+            w = 1.0 / number_of_returns
+        else:
+            w = 0.0
+        
         while (x < nX) and (x >= 0) and (y < nY) and (y >= 0) and (z < nZ) and (z >= 0):
                         
             vidx = int(x + nX * y + nX * nY * z)
-            if foundLast == 0:
-                hitsArr[vidx] += 1
-            else:
-                missArr[vidx] += 1
             
-            for i in range(number_of_returns):                
+            for i in range(number_of_returns):
                 if vidx == voxIdx[i]:
-                    wcntArr[vidx] += 1.0 / number_of_returns
-                    if i == number_of_returns-1:                    
-                        foundLast = 1
+                    wcntArr[vidx] += w
+                    whit -= w
+                    wmiss += w
+            
+            hitsArr[vidx] += whit
+            missArr[vidx] += wmiss
             
             if tMaxX < tMaxY:
                 if tMaxX < tMaxZ:
@@ -305,25 +342,26 @@ def gridIntersection(x0, y0, z0, dx, dy, dz, bounds):
     return intersect,tmin
     
 
-def saveVoxels(outfile, vox, xmin, ymax, res, nullval=None, proj=None, drivername='HFA'):
+def saveVoxels(outfileprefix, vox, xmin, ymax, res, proj=None, drivername='HFA'):
     """
     Save the given 3D voxel array as a multiband GDAL raster file. 
     """
-    if vox.ndim == 2:
-        (nRows, nCols) = vox.shape
-        vox.shape = (1, nRows, nCols)
     (nBins, nRows, nCols) = vox.shape
     
-    gdalTypeDict = {numpy.dtype(numpy.float32):gdal.GDT_Float32,
-                    numpy.dtype(numpy.uint16):gdal.GDT_UInt16,
+    suffixdict = {'HFA': 'img',
+                  'GTiff': 'tif',
+                  'ENVI': ''}
+    suffix = suffixdict[drivername]
+    outfile = "%s.%s" % (outfileprefix,suffix)   
+       
+    if vox.dtype == 'float32':        
+        nullval = numpy.iinfo("uint16").max
+        vox = numpy.where( numpy.isnan(vox), nullval, numpy.uint16((vox - VOXEL_OFFSET) * VOXEL_SCALE) )                
+
+    gdaltypedict = {numpy.dtype(numpy.uint16):gdal.GDT_UInt16,
                     numpy.dtype(numpy.uint32):gdal.GDT_UInt32,
                     numpy.dtype(numpy.uint8):gdal.GDT_Byte}
-    gdalType = gdalTypeDict[vox.dtype]
-    
-    if vox.dtype == 'float32':
-        nullval = 0.0
-    else:
-        nullval = numpy.iinfo(vox.dtype).max
+    gdaltype = gdaltypedict[vox.dtype]   
     
     drvr = gdal.GetDriverByName(drivername)
     ds = drvr.Create(outfile, nCols, nRows, nBins, gdalType, ['COMPRESS=YES'])
