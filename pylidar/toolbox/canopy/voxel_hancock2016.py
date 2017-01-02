@@ -26,12 +26,13 @@ import collections
 from numba import jit
 from osgeo import gdal
 
+from pylidar.toolbox.canopy import canopycommon
 from pylidar import lidarprocessor
 
 VOXEL_SCALE = 10000
 VOXEL_OFFSET = 0
 
-def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
+def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     """
     Main function for VOXEL_HANCOCK2016
     
@@ -53,9 +54,8 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
     otherargs.outgrids["scan"] = numpy.zeros(nVox, dtype=numpy.uint8)
     
     # loop through each scan
-    nScans = len(dataFiles.inList)
     scanOutputs = ["btot","pgap","wcov"]
-    for i in range(nScans):
+    for i,infile in enumerate(infiles):
         
         # initialize scan voxel arrays 
         otherargs.scangrids = collections.OrderedDict()     
@@ -64,8 +64,8 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
         otherargs.scangrids["wcov"] = numpy.zeros(nVox, dtype=numpy.float32)
 
         # run the voxelization                
-        print("Voxel traversing %s" % dataFiles.inList[i].fname)
-        otherargs.scan = i
+        print("Voxel traversing %s" % infile)
+        dataFiles = canopycommon.prepareInputFiles(infiles, otherargs, index=i)       
         lidarprocessor.doProcessing(runVoxelization, dataFiles, controls=controls, otherArgs=otherargs)
         
         # calculate output metrics
@@ -75,14 +75,14 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
         otherargs.scangrids["wcov"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["wcov"] / otherargs.scangrids["hits"], numpy.nan)
         
         # run the silhouette calculation
-        #print("Silhouetting %s" % dataFiles.inList[i].fname)
+        #print("Silhouetting %s" % infile)
         #lidarprocessor.doProcessing(runSilhouette, dataFiles, controls=controls, otherArgs=otherargs)
                     
         # write output scan voxel arrays to image files
         for gridname in scanOutputs:
-            outfile = "%s.%s" % (os.path.splitext(dataFiles.inList[i].fname)[0], gridname)
+            outfile = "%s.%s" % (os.path.splitext(infile)[0], gridname)
             otherargs.scangrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
-            saveVoxels(outfile, otherargs.scangrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj[i], drivername=otherargs.rasterdriver)
+            saveVoxels(outfile, otherargs.scangrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj[0], drivername=otherargs.rasterdriver)
     
     # calculate vertical cover profiles
     
@@ -104,18 +104,18 @@ def runVoxelization(data, otherargs):
     """
     # read the pulse data
     pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH','AZIMUTH','X_ORIGIN','Y_ORIGIN','Z_ORIGIN']       
-    pulses = data.inList[otherargs.scan].getPulses(colNames=pulsecolnames)   
+    pulses = data.inFiles[0].getPulses(colNames=pulsecolnames)   
     
     if pulses.shape[0] > 0:
         
         # read the point data
-        if otherargs.lidardriver[otherargs.scan] == "SPDV3":
+        if otherargs.lidardriver[0] == "SPDV3":
             pointcolnames = ['X','Y','Z','RANGE','CLASSIFICATION','RETURN_ID']
         else:
             pointcolnames = ['X','Y','Z','RANGE','CLASSIFICATION','RETURN_NUMBER']            
             pulses['ZENITH'] = numpy.radians(pulses['ZENITH'])
             pulses['AZIMUTH'] = numpy.radians(pulses['AZIMUTH'])
-        pointsByPulses = data.inList[otherargs.scan].getPointsByPulse(colNames=pointcolnames)
+        pointsByPulses = data.inFiles[0].getPointsByPulse(colNames=pointcolnames)
         
         # calculate the unit direction vector
         dx = numpy.sin(pulses['ZENITH']) * numpy.sin(pulses['AZIMUTH'])

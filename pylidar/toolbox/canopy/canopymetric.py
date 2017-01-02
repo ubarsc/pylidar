@@ -25,56 +25,17 @@ from pylidar.lidarformats import generic
 from pylidar import lidarprocessor
 from rios import cuiprogress
 
+from pylidar.toolbox.canopy import canopycommon
 from pylidar.toolbox.canopy import pavd_calders2014
 from pylidar.toolbox.canopy import voxel_hancock2016
 from pylidar.toolbox.canopy import pgap_armston2013
-
-DEFAULT_CANOPY_METRIC = "PAVD_CALDERS2014"
-
-
-class CanopyMetricError(Exception):
-    "Exception type for canopymetric errors"
-
-
-def prepareInputFiles(dataFiles, otherargs):
-    """
-    Prepare input files for calculation of canopy metrics
-    """
-    otherargs.proj = []
-    otherargs.lidardriver = []
-    for i in range( len(dataFiles.inList) ):        
-        
-        info = generic.getLidarFileInfo(dataFiles.inList[i].fname)
-        
-        if info.getDriverName() == 'riegl':
-            if otherargs.externaltransformfn is not None:
-                externaltransform = numpy.loadtxt(otherargs.externaltransformfn[i], ndmin=2, delimiter=" ", dtype=numpy.float32) 
-                dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", externaltransform)
-            elif "ROTATION_MATRIX" in info.header:
-                dataFiles.inList[i].setLiDARDriverOption("ROTATION_MATRIX", info.header["ROTATION_MATRIX"])
-            else:
-                msg = 'Input file %s has no valid pitch/roll/yaw data' % dataFiles.inList[i].fname
-                raise generic.LiDARInvalidData(msg)
-        
-        otherargs.lidardriver.append( info.getDriverName() )
-        
-        if "SPATIAL_REFERENCE" in info.header.keys():
-            if len(info.header["SPATIAL_REFERENCE"]) > 0:
-                otherargs.proj.append(info.header["SPATIAL_REFERENCE"])
-            else:
-                otherargs.proj.append(None)
-        else:
-            otherargs.proj.append(None)
 
 
 def runCanopyMetric(infiles, outfiles, metric, otherargs):
     """
     Apply canopy metric
     Metric name should be of the form <metric>_<source>
-    """
-    
-    dataFiles = lidarprocessor.DataFiles()
-    
+    """    
     controls = lidarprocessor.Controls()
     
     progress = cuiprogress.GDALProgressBar()
@@ -82,19 +43,16 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
     
     if metric == "PAVD_CALDERS2014":
         
-        dataFiles.inList = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) for fname in infiles]
-        prepareInputFiles(dataFiles, otherargs)        
+        dataFiles = canopycommon.prepareInputFiles(infiles, otherargs)        
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
         pavd_calders2014.run_pavd_calders2014(dataFiles, controls, otherargs, outfiles[0])     
     
     elif metric == "VOXEL_HANCOCK2016":              
-        
-        dataFiles.inList = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) for fname in infiles]
-        prepareInputFiles(dataFiles, otherargs)        
+              
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
-        voxel_hancock2016.run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles)     
+        voxel_hancock2016.run_voxel_hancock2016(infiles, controls, otherargs, outfiles)     
     
     elif metric == "PGAP_ARMSTON2013":
     
@@ -105,7 +63,7 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
     else:
         
         msg = 'Unsupported metric %s' % metric
-        raise CanopyMetricError(msg)
+        raise canopycommon.CanopyMetricError(msg)
         
 
             
