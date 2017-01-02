@@ -56,8 +56,6 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
     nScans = len(dataFiles.inList)
     scanOutputs = ["btot","pgap","wcov"]
     for i in range(nScans):
-                        
-        otherargs.scan = i
         
         # initialize scan voxel arrays 
         otherargs.scangrids = collections.OrderedDict()     
@@ -65,15 +63,16 @@ def run_voxel_hancock2016(dataFiles, controls, otherargs, outfiles):
         otherargs.scangrids["miss"] = numpy.zeros(nVox, dtype=numpy.float32)
         otherargs.scangrids["wcov"] = numpy.zeros(nVox, dtype=numpy.float32)
 
-        # run the voxelization        
+        # run the voxelization                
         print("Voxel traversing %s" % dataFiles.inList[i].fname)
+        otherargs.scan = i
         lidarprocessor.doProcessing(runVoxelization, dataFiles, controls=controls, otherArgs=otherargs)
         
         # calculate output metrics
         otherargs.outgrids["scan"] += numpy.uint8(otherargs.scangrids["hits"] > 0)
-        otherargs.scangrids["btot"] = otherargs.scangrids["hits"] + otherargs.scangrids["miss"]
+        otherargs.scangrids["btot"] = numpy.uint16(otherargs.scangrids["hits"] + otherargs.scangrids["miss"])
         otherargs.scangrids["pgap"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["hits"] / otherargs.scangrids["btot"], numpy.nan)
-        otherargs.scangrids["wcov"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["wcov"] / otherargs.scangrids["btot"], numpy.nan)
+        otherargs.scangrids["wcov"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["wcov"] / otherargs.scangrids["hits"], numpy.nan)
         
         # run the silhouette calculation
         #print("Silhouetting %s" % dataFiles.inList[i].fname)
@@ -165,11 +164,11 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
        missArr
        wcntArr
     """
-    intersect, tmin = gridIntersection(x0, y0, z0, dx, dy, dz, bounds)    
+    intersect, tmin, tmax = gridIntersection(x0, y0, z0, dx, dy, dz, bounds)    
     if intersect == 1:
         
-        if tmin < 0:
-            tmin = 0.0
+        tmin = max(0, tmin)
+        tmax = min(1, tmax)
 
         startX = x0 + tmin * dx
         startY = y0 + tmin * dy
@@ -192,48 +191,57 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
         if z == nZ:
             z -= 1
          
-        if dx >= 0:
+        if dx > 0:
             tVoxelX = (x + 1) / nX
             stepX = 1
-        else:
+        elif dx < 0:
             tVoxelX = x / nX
             stepX = -1
+        else:
+            tVoxelX = (x + 1) / nX
+            stepX = 0
         
-        if dy >= 0:
+        if dy > 0:
             tVoxelY = (y + 1) / nY
             stepY = 1
-        else:
+        elif dy < 0:
             tVoxelY = y / nY
             stepY = -1
+        else:
+            tVoxelY = (y + 1) / nY
+            stepY = 0  
         
-        if dz >= 0:
+        if dz > 0:
             tVoxelZ = (z + 1) / nZ
             stepZ = 1
-        else:
+        elif dz < 0:
             tVoxelZ = z / nZ
             stepZ = -1
+        else:
+            tVoxelZ = (z + 1) / nZ
+            stepZ = 0            
                 
         voxelMaxX = bounds[0] + tVoxelX * voxDimX
         voxelMaxY = bounds[1] + tVoxelY * voxDimY
         voxelMaxZ = bounds[2] + tVoxelZ * voxDimZ
 
         if dx == 0:
-            tMaxX = 1.0
-            tDeltaX = 1.0
+            tMaxX = tmax
+            tDeltaX = tmax
         else:
             tMaxX = tmin + (voxelMaxX - startX) / dx
             tDeltaX = voxelSize[0] / abs(dx)
             
         if dy == 0:    
-            tMaxY = 1.0
-            tDeltaY = 1.0
+            tMaxY = tmax
+            tDeltaY = tmax
         else:
             tMaxY = tmin + (voxelMaxY - startY) / dy
             tDeltaY = voxelSize[1] / abs(dy)
             
         if dz == 0:
-            tMaxZ = 1.0
-            tDeltaZ = 1.0
+            tMaxZ = tmax
+            tDeltaZ = tmax
         else:
             tMaxZ = tmin + (voxelMaxZ - startZ) / dz
             tDeltaZ = voxelSize[2] / abs(dz) 
@@ -249,14 +257,14 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
                         
             vidx = int(x + nX * y + nX * nY * z)
             
+            hitsArr[vidx] += whit
+            missArr[vidx] += wmiss            
+            
             for i in range(number_of_returns):
                 if vidx == voxIdx[i]:
                     wcntArr[vidx] += w
                     whit -= w
                     wmiss += w
-            
-            hitsArr[vidx] += whit
-            missArr[vidx] += wmiss
             
             if tMaxX < tMaxY:
                 if tMaxX < tMaxZ:
@@ -284,14 +292,15 @@ def gridIntersection(x0, y0, z0, dx, dy, dz, bounds):
        bounds
     Outputs:
        intersect: 0 = no intersection, 1 = intersection
-       tmin: distance from the beam origin
+       tmin: min distance from the beam origin
+       tmax: max distance from the beam origin
     """
     if dx != 0:
         divX = 1.0 / dx
     else:
         divX = 1.0
     
-    if divX > 0:
+    if divX >= 0:
     	tmin = (bounds[0] - x0) * divX
     	tmax = (bounds[3] - x0) * divX
     else:
@@ -341,7 +350,7 @@ def gridIntersection(x0, y0, z0, dx, dy, dz, bounds):
                 tmax = tzmax
             intersect = 1
     
-    return intersect,tmin
+    return intersect,tmin,tmax
     
 
 def saveVoxels(outfileprefix, vox, xmin, ymax, res, proj=None, drivername='HFA'):
