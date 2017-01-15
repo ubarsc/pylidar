@@ -234,7 +234,9 @@ if withExtensions:
     addRieglDriver(externalModules, cxxFlags)
     addLasDriver(externalModules, cxxFlags)
     addASCIIDriver(externalModules, cxxFlags)
-    addAdvIndexing(externalModules, cxxFlags)
+    # Advanced indexing commented out for now
+    # wasn't useful, and causing problems for some installs
+    #addAdvIndexing(externalModules, cxxFlags)
 
 if NO_INSTALL_CMDLINE:
     scriptList = None
