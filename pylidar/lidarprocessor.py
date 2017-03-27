@@ -243,7 +243,7 @@ class Controls(object):
         self.footprint = INTERSECTION
         self.windowSize = DEFAULT_WINDOW_SIZE
         self.overlap = 0
-        self.spatialProcessing = True 
+        self.spatialProcessing = False
         self.referenceImage = None
         self.referencePixgrid = None
         self.referenceResolution = None
@@ -278,7 +278,13 @@ class Controls(object):
         Set whether to do processing in a spatial manner. If set to True
         and if one of more LiDAR inputs do not support spatial indexing
         will be reset to False and warning printed.
+
+        Note: setting spatial processing to True now deprecated. Consider
+        updating your code.
         """
+        if spatial:
+            msg = 'Note: spatial processing now deprecated'
+            self.messageHandler(msg, MESSAGE_WARNING)
         self.spatialProcessing = spatial
         
     def setReferenceImage(self, referenceImage):
