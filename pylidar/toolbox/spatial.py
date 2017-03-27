@@ -26,6 +26,7 @@ from numba import jit
 from osgeo import osr
 from osgeo import gdal
 from rios import imageio
+from rios import calcstats
 from pylidar import userclasses
 from pylidar import lidarprocessor # for DEFAULT_RASTERDRIVERNAME etc. Maybe should move?
 from pylidar.lidarformats import generic
@@ -167,7 +168,7 @@ class ImageWriter(object):
             driverName=lidarprocessor.DEFAULT_RASTERDRIVERNAME,
             driverOptions=lidarprocessor.DEFAULT_RASTERCREATIONOPTIONS,
             tlx=0.0, tly=0.0, binSize=0.0, epsg=None, nullVal=None,
-            ncols=None, nrows=None):
+            ncols=None, nrows=None, calcStats=True):
         """
         Constructor. Set the filename, number of bands etc. If gdalDataType, 
         ncols or nrows is None then these are guessed from the first layer 
@@ -186,6 +187,7 @@ class ImageWriter(object):
         self.nullVal = nullVal
         self.ncols = ncols
         self.nrows = nrows
+        self.calcStats = calcStats
 
     def createDataset(self):
         """
@@ -251,7 +253,9 @@ class ImageWriter(object):
 
     def close(self):
         """
-        Close and flush the dataset
+        Close and flush the dataset, plus calculate stats
         """
+        if self.calcStats:
+            calcstats.calcStats(self.ds, ignore=self.nullVal)
         self.ds.FlushCache()
         self.ds = None
