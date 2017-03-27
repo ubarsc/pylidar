@@ -160,6 +160,41 @@ def selectColumns(data, otherargs):
             # Stash in the list of arrays. 
             otherargs.dataArrList.append(dataArr)
 
+def getGridInfoFromData(xdata, ydata, binSize):
+    """
+    Given an array of X coords, an array of Y coords,
+    plus a binSize return a tuple of (xMin, yMax, ncols, nrows)
+    for doing operations on a grid
+    """
+    xMin = xdata.min()
+    yMax = ydata.max()
+    # nasty rounding errors propogated with ceil()
+    ncols = int(numpy.round((xdata.max() - xMin) / binSize))
+    nrows = int(numpy.round((yMax - ydata.min()) / binSize))
+    return (xMin, yMax, ncols, nrows)
+
+def getBlockCoordArrays(xMin, yMax, nCols, nRows, binSize):
+    """
+    Return a tuple of the world coordinates for every pixel
+    in the current block. Each array has the same shape as the 
+    current block. Return value is a tuple::
+
+        (xBlock, yBlock)
+
+    where the values in xBlock are the X coordinates of the centre
+    of each pixel, and similarly for yBlock. 
+                                                    
+    The coordinates returned are for the pixel centres. This is 
+    slightly inconsistent with usual GDAL usage, but more likely to
+    be what one wants.         
+        
+    """
+    # create the indices
+    (rowNdx, colNdx) = numpy.mgrid[0:nRows, 0:nCols]
+    xBlock = (xMin + binSize/2.0 + colNdx * binSize)
+    yBlock = (yMax - binSize/2.0 - rowNdx * binSize)
+    return (xBlock, yBlock)    
+
 class ImageWriter(object):
     """
     Class that handles writing out image data with GDAL

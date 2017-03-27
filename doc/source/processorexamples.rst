@@ -12,32 +12,35 @@ Simple Example
     # output image file with the minimum 'Z' value for 
     # each bin
     import numpy
+    from numba import jit
     from pylidar import lidarprocessor
+    from pylidar.toolbox import spatial
 
-    def writeImageFunc(data):
-        # get a 3d array of data for this block
-        zVals = data.input.getPointsByBins(colNames='Z')
-        # determine the shape
-        (maxPts, nRows, nCols) = zVals.shape
-        nullval = 0
-        if maxPts > 0:
-            # there is data for this block - find minimum
-            minZ = zVals.min(axis=0)
-            # make 3d
-            stack = numpy.ma.expand_dims(minZ, axis=0)
-        else:
-            # no data for this block - set to nullval
-            stack = numpy.empty((1, nRows, nCols), dtype=zVals.dtype)
-            stack.fill(nullval)
+    BINSIZE = 1.0
 
-        # set result
-        data.imageOut.setData(stack)
+    @jit
+    def findMinZs(data, outImage, xMin, yMax):
+        for i in range(data.shape[0]):
+            row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
+                    xMin, yMax, BINSIZE)
+            if outImage[row, col] != 0:
+                if data[i]['Z'] < outImage[row, col]:
+                    outImage[row, col] = data[i]['Z']
+            else:
+                outImage[row, col] = data[i]['Z']
 
-    dataFiles = lidarprocessor.DataFiles()
-    dataFiles.input = lidarprocessor.LidarFile('file.spd', lidarprocessor.READ)
-    dataFiles.imageOut = lidarprocessor.ImageFile('outfile.img', lidarprocessor.CREATE)
+    data = spatial.readLidarPoints(inFile, 
+            classification=lidarprocessor.CLASSIFICATION_GROUND)
 
-    lidarprocessor.doProcessing(writeImageFunc, dataFiles)
+    (xMin, yMax, ncols, nrows) = spatial.getGridInfoFromData(data['X'], data['Y'],
+                BINSIZE)
+
+    outImage = numpy.zeros((nrows, ncols))
+    findMinZs(data, outImage, xMin, yMax)
+
+    iw = spatial.ImageWriter(imageFile, tlx=xMin, tly=yMax, binSize=BINSIZE)
+    iw.setLayer(outImage)
+    iw.close()
 
 The program shown above is complete, and would work assuming file.spd existed and contained
 a 'Z' value for each point. It would create an output raster file with the minimum Z value for each bin. 
@@ -77,43 +80,24 @@ to interpolate with the :func:`pylidar.toolbox.interpolation.interpGrid` functio
 to filter by classification::
 
     from pylidar import lidarprocessor
+    from pylidar.toolbox import spatial
     from pylidar.toolbox import interpolation
 
-    def interpGroundReturns(data):
-        # if given a list of fields, returns a structured array with all of them
-        ptVals = data.input.getPoints(colNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
-        # create mask for ground
-        mask = ptVals['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND
+    BINSIZE = 1.0
 
-        # get the coords for this block
-        pxlCoords = data.info.getBlockCoordArrays()
+    data = spatial.readLidarPoints(sys.argv[1], 
+            classification=lidarprocessor.CLASSIFICATION_GROUND)
 
-        if ptVals.shape[0] > 0:
-            # there is data for this block
-            xVals = ptVals['X'][mask]
-            yVals = ptVals['Y'][mask]
-            zVals = ptVals['Z'][mask]
-            # 'pynn' needs the pynnterp module installed
-            out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, 'pynn')
+    (xMin, yMax, ncols, nrows) = spatial.getGridInfoFromData(data['X'], data['Y'],
+                BINSIZE)
 
-            # mask out where interpolation failed
-            invalid = numpy.isnan(out)
-            out[invalid] = 0
-        else:
-            # no data - set to zero
-            out = numpy.empty(pxlCoords[0].shape, dtype=numpy.float64)
-            out.fill(0)
+    pxlCoords = spatial.getBlockCoordArrays(xMin, yMax, ncols, nrows, BINSIZE)
 
-        # make 3d
-        out = numpy.expand_dims(out, axis=0)
-        data.imageOut.setData(out)
+    dem = interpolation.interpGrid(data['X'], data['Y'], data['Z'], pxlCoords, 'pynn') 
 
-    dataFiles = lidarprocessor.DataFiles()
-    dataFiles.input = lidarprocessor.LidarFile('file.spd', lidarprocessor.READ)
-    dataFiles.imageOut = lidarprocessor.ImageFile('outfile.img', lidarprocessor.CREATE)
-
-    lidarprocessor.doProcessing(interpGroundReturns, dataFiles)
-
+    iw = spatial.ImageWriter(sys.argv[2], tlx=xMin, tly=yMax, binSize=BINSIZE)
+    iw.setLayer(dem)
+    iw.close()
 
 The data.info object is an instance of :class:`pylidar.userclasses.UserInfo` and contains
 some useful functions for obtaining the current processing state.

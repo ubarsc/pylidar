@@ -36,25 +36,35 @@ Example
     the points in each bin
     """
     import numpy
+    from numba import jit
     from pylidar import lidarprocessor
+    from pylidar.toolbox import spatial
 
-    dataFiles = lidarprocessor.DataFiles()
-    dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
-    dataFiles.imageOut1 = lidarprocessor.ImageFile(imageFile, lidarprocessor.CREATE)
-    
-    def writeImageFunc(data):
-        zValues = data.input1.getPointsByBins(colNames='Z')
-        (maxPts, nRows, nCols) = zValues.shape
-        nullval = 0
-        if maxPts > 0:
-            minZ = zValues.min(axis=0)
-            stack = numpy.ma.expand_dims(minZ, axis=0)
-        else:
-            stack = numpy.empty((1, nRows, nCols), dtype=zValues.dtype)
-            stack.fill(nullval)
-        data.imageOut1.setData(stack)
+    BINSIZE = 1.0
 
-    lidarprocessor.doProcessing(writeImageFunc, dataFiles)
+    @jit
+    def findMinZs(data, outImage, xMin, yMax):
+        for i in range(data.shape[0]):
+            row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
+                    xMin, yMax, BINSIZE)
+            if outImage[row, col] != 0:
+                if data[i]['Z'] < outImage[row, col]:
+                    outImage[row, col] = data[i]['Z']
+            else:
+                outImage[row, col] = data[i]['Z']
+
+    data = spatial.readLidarPoints(inFile, 
+            classification=lidarprocessor.CLASSIFICATION_GROUND)
+
+    (xMin, yMax, ncols, nrows) = spatial.getGridInfoFromData(data['X'], data['Y'],
+                BINSIZE)
+
+    outImage = numpy.zeros((nrows, ncols))
+    findMinZs(data, outImage, xMin, yMax)
+
+    iw = spatial.ImageWriter(imageFile, tlx=xMin, tly=yMax, binSize=BINSIZE)
+    iw.setLayer(outImage)
+    iw.close()
 
 See :doc:`processorexamples` for more information. :doc:`commandline` has more information on 
 running the command line utilities.

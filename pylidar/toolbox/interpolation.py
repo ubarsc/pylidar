@@ -81,7 +81,7 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method):
 
     elif method == 'cgalnn':
         if not haveCGALInterpPy:
-            msg = "The cgalinterp python bindings required for natural neighbour interpolation and could not be imported\n\t" + cgalInterpErr
+            msg = "The cgalinterp python bindings required for natural neighbour interpolation and could not be imported"
             raise InterpolationError(msg)
         xVals = xVals.astype(numpy.float64)
         yVals = yVals.astype(numpy.float64)
@@ -94,7 +94,7 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method):
 
     elif method == 'pynn':
         if not havePyNNInterp:
-            msg = "The PyNNInterp python bindings required for natural neighbour interpolation and could not be imported\n\t" + pyNNInterpErr
+            msg = "The PyNNInterp python bindings required for natural neighbour interpolation and could not be imported"
             raise InterpolationError(msg)
         xVals = xVals.astype(numpy.float64)
         yVals = yVals.astype(numpy.float64)
