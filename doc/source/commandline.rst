@@ -58,9 +58,9 @@ The third and fourth are the expected minimum and maximum values respectively. H
 
     pylidar_translate --input data.laz --output data.spdv4 --format SPDV4 --range POINT Z 0 50
 
-^^^^^^^^^^^^^^^^^^
-Spatial Processing
-^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Spatial Processing (deprecated)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For input formats that have a spatial index, the data can be processed in a spatial way and a new spatial index calculated 
 in the output file. The default is to process the data non-spatially. To enable spatial processing, use the --spatial option.
@@ -128,9 +128,9 @@ Use the --classtrans option for this (see "pylidar_translate -h" for more inform
 
     --classtrans 5 INSULATOR --classtrans 6 HIGHVEGE
 
---------------------------------------------------------
-Creating a raster from LiDAR data with pylidar_rasterize
---------------------------------------------------------
+---------------------------------------------------------------------
+Creating a raster from LiDAR data with pylidar_rasterize (deprecated)
+---------------------------------------------------------------------
 
 The pylidar_rasterize command takes one or more input LiDAR files and creates a raster
 from it. You need to specify the attribute name(s) to use. An output layer is created for 
@@ -163,9 +163,9 @@ is then printed on the terminal. Here is an example::
 
     pylidar_info --input data.rxp
     
--------------------------------------------
-Creating a Spatial Index with pylidar_index
--------------------------------------------
+--------------------------------------------------------
+Creating a Spatial Index with pylidar_index (deprecated)
+--------------------------------------------------------
 
 Once you have converted your data to SPV4 format, you can use this
 utility to spatially index the data. Once it is spatially indexed, 
