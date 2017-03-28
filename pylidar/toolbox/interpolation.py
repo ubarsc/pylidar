@@ -51,7 +51,7 @@ except ImportError as pyNNInterpErr:
 class InterpolationError(Exception):
     "Interpolation Error"
     
-def interpGrid(xVals, yVals, zVals, gridCoords, method):
+def interpGrid(xVals, yVals, zVals, gridCoords, method='pynn'):
     """
     A function to interpolate values to a regular gridCoords given 
     an irregular set of input data points
@@ -129,6 +129,31 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method):
         except Exception as e:
             # rethrow pynninterp exception type so it can be more easily caught
             raise InterpolationError(str(e))
+
+    else:
+        raise InterpolationError("Interpolaton method '%s' was not recognised" % method)
+
+    return out
+
+def interpPoints(xVals, yVals, zVals, ptCoords, method='pynn'):
+    """
+    A function to interpolate values to a set of points given 
+    an irregular set of input data points
+    
+    * xVals is an array of X coordinates for known points
+    * yVals is an array of Y coordinates for known points
+    * zVals is an array of values associated with the X,Y points to be interpolated
+    * ptCoords is a 2D array with pairs of xy values (shape: N*2)
+    * method is a string specifying the method of interpolation to use, 'pynn' is the only currently implemented one.
+    
+    returns 1d array with Z values.
+    """
+    if method == 'pynn':
+        if not havePyNNInterp:
+            msg = "The PyNNInterp python bindings required for natural neighbour interpolation and could not be imported"
+            raise InterpolationError(msg)
+
+        out = pynninterp.NaturalNeighbourPts(xVals, yVals, zVals, ptCoords)
 
     else:
         raise InterpolationError("Interpolaton method '%s' was not recognised" % method)
