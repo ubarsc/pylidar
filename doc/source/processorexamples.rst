@@ -15,59 +15,69 @@ Simple Example
     from numba import jit
     from pylidar import lidarprocessor
     from pylidar.toolbox import spatial
+    from pylidar.lidarformats import generic
 
     BINSIZE = 1.0
 
     @jit
     def findMinZs(data, outImage, xMin, yMax):
         for i in range(data.shape[0]):
-            row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
-                    xMin, yMax, BINSIZE)
-            if outImage[row, col] != 0:
-                if data[i]['Z'] < outImage[row, col]:
+            if data[i]['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND:
+                row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
+                        xMin, yMax, BINSIZE)
+                if outImage[row, col] != 0:
+                    if data[i]['Z'] < outImage[row, col]:
+                        outImage[row, col] = data[i]['Z']
+                else:
                     outImage[row, col] = data[i]['Z']
-            else:
-                outImage[row, col] = data[i]['Z']
 
-    data = spatial.readLidarPoints(inFile, 
-            classification=lidarprocessor.CLASSIFICATION_GROUND)
+    def processChunk(data, otherArgs):
+        lidar = data.input1.getPoints(colNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
+        findMinZs(lidar, otherArgs.outImage, otherArgs.xMin, otherArgs.yMax)
 
-    (xMin, yMax, ncols, nrows) = spatial.getGridInfoFromData(data['X'], data['Y'],
-                BINSIZE)
+    info = generic.getLidarFileInfo(inFile)
+    header = info.header
+
+    dataFiles = lidarprocessor.DataFiles()
+    dataFiles.input1 = lidarprocessor.LidarFile(inFile, lidarprocessor.READ)
+
+    xMin, yMax, ncols, nrows = spatial.getGridInfoFromHeader(header, BINSIZE)
 
     outImage = numpy.zeros((nrows, ncols))
-    findMinZs(data, outImage, xMin, yMax)
 
-    iw = spatial.ImageWriter(imageFile, tlx=xMin, tly=yMax, binSize=BINSIZE)
+    otherArgs = lidarprocessor.OtherArgs()
+    otherArgs.outImage = outImage
+    otherArgs.xMin = xMin
+    otherArgs.yMax = yMax
+
+    lidarprocessor.doProcessing(processChunk, dataFiles, otherArgs=otherArgs)
+
+    iw = spatial.ImageWriter(outFile, tlx=xMin, tly=yMax, binSize=BINSIZE)
     iw.setLayer(outImage)
     iw.close()
 
-The program shown above is complete, and would work assuming file.spd existed and contained
+The program shown above is complete, and would work assuming inFile existed and contained
 a 'Z' value for each point. It would create an output raster file with the minimum Z value for each bin. 
 
 The user-supplied function writeImageFunc is passed to the :func:`pylidar.lidarprocessor.doProcessing`
-function which applies it accross the lidar file. By default PyLidar attempts to process a file
-in a spatial manner. Inside the writeImageFunc function the 'data' object has attributes
-named in the same way that the 'dataFiles' input to :func:`pylidar.lidarprocessor.doProcessing` has.
-For inputs and outputs representing lidar files, objects of type :class:`pylidar.userclasses.LidarData`
-are provided. For inputs and outputs representing raster files, objects of type
-:class:`pylidar.userclasses.ImageData` are provided.
+function which applies it through the lidar file in chunks. Inside the processChunk function the 'data' object has attributes
+named in the same way that the 'dataFiles' input to :func:`pylidar.lidarprocessor.doProcessing` has. Each object
+is of type :class:`pylidar.userclasses.LidarData`.
 
-See the help on :class:`pylidar.lidarprocessor.DataFiles`, :class:`pylidar.lidarprocessor.LidarFile` and :class:`pylidar.lidarprocessor.ImageFile`
-for more information on setting up inputs.
-
-To understand more about the types of arrays returned by PyLidar for lidar data, 
-see the :doc:`arrayvisualisation` page.
+See the help on :class:`pylidar.lidarprocessor.DataFiles`, :class:`pylidar.lidarprocessor.LidarFile`
+and :class:`pylidar.lidarprocessor.OtherArgs` for more information on setting up inputs. There is a section below
+which talks about other inputs in more detail.
 
 You can specify which columns you want returned from a lidar file by setting the colNames parameter
 to getPoints (and other lidar reading functions). By default all columns are returned as a structured
 array. If a list of columns is requested, this is also returned as a structured array. However if a
 single column name is requested (as a string, not a list) then a non-structred array is returned.
 
-Raster data is represented as 3-d numpy arrays. The first dimension corresponds to the number of layers in the image file, and will be present even when there is only one layer.
-The datatype of the output file(s) will be inferred from the datatype of the numpy arrays(s) 
-given to :func:`pylidar.userclasses.ImageData.setData`. So, to control the datatype of the output file, 
-use the numpy astype() function to control the datatype of the output arrays.
+The data.info object is an instance of :class:`pylidar.userclasses.UserInfo` and contains
+some useful functions for obtaining the current processing state.
+
+The :mod:`pylidar.toolbox.spatial` module has functions and classes to assist processing LiDAR data
+spatially.
 
 See :func:`pylidar.lidarprocessor.setDefaultDrivers` for discussion of how to set the output GDAL driver.
 
@@ -75,7 +85,9 @@ See :func:`pylidar.lidarprocessor.setDefaultDrivers` for discussion of how to se
 Interpolation
 -------------
 
-Support for interpolation techniques is included with PyLidar. The following example shows how
+Support for interpolation techniques is included with PyLidar. Note that all the data for the area to be
+interpolated needs too be read in - the :func:`pylidar.toolbox.spatial.readLidarPoints` makes
+this easier. The following example shows how
 to interpolate with the :func:`pylidar.toolbox.interpolation.interpGrid` function and also how
 to filter by classification::
 
@@ -85,7 +97,7 @@ to filter by classification::
 
     BINSIZE = 1.0
 
-    data = spatial.readLidarPoints(sys.argv[1], 
+    data = spatial.readLidarPoints(inFile, 
             classification=lidarprocessor.CLASSIFICATION_GROUND)
 
     (xMin, yMax, ncols, nrows) = spatial.getGridInfoFromData(data['X'], data['Y'],
@@ -95,12 +107,9 @@ to filter by classification::
 
     dem = interpolation.interpGrid(data['X'], data['Y'], data['Z'], pxlCoords, 'pynn') 
 
-    iw = spatial.ImageWriter(sys.argv[2], tlx=xMin, tly=yMax, binSize=BINSIZE)
+    iw = spatial.ImageWriter(outFile, tlx=xMin, tly=yMax, binSize=BINSIZE)
     iw.setLayer(dem)
     iw.close()
-
-The data.info object is an instance of :class:`pylidar.userclasses.UserInfo` and contains
-some useful functions for obtaining the current processing state.
 
 ---------------------------------------------
 Arbitrary numbers of Input (and Output) Files
@@ -109,88 +118,98 @@ Arbitrary numbers of Input (and Output) Files
 Each name on the dataFiles object can also be a list of files, instead of a single file. 
 This will cause the corresponding attribute on the dataFiles object to be a list also. 
 This allows the function to process an arbitrary number of files, without having to give each one a separate name 
-within the function. An example might be a function to to interpolate a DEM from many files, 
+within the function. An example might be a function to find the minimum Z from many files, 
 which should work the same regardless of how many files are to be input. This could be written as follows::
 
+    import numpy
+    from numba import jit
     from pylidar import lidarprocessor
-    from pylidar.toolbox import interpolation
+    from pylidar.toolbox import spatial
+    from pylidar.lidarformats import generic
 
-    def interpGroundReturns(data):
-        # read all the files
-        ptVals = [indata.getPoints(colNames=['X','Y','Z','CLASSIFICATION']) 
-                for indata in data.allinputs]
-        # turn into one big array
-        ptVals = numpy.ma.hstack(ptVals)
-        # create mask for ground
-        mask = ptVals['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND
+    BINSIZE = 1.0
 
-        # get the coords for this block
-        pxlCoords = data.info.getBlockCoordArrays()
+    @jit
+    def findMinZs(data, outImage, xMin, yMax):
+        for i in range(data.shape[0]):
+            if data[i]['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND:
+                row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
+                        xMin, yMax, BINSIZE)
+                if outImage[row, col] != 0:
+                    if data[i]['Z'] < outImage[row, col]:
+                        outImage[row, col] = data[i]['Z']
+                else:
+                    outImage[row, col] = data[i]['Z']
 
-        if ptVals.shape[0] > 0:
-            # there is data for this block
-            xVals = ptVals['X'][mask]
-            yVals = ptVals['Y'][mask]
-            zVals = ptVals['Z'][mask]
-            # 'pynn' needs the pynnterp module installed
-            out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, 'pynn')
+    def processChunk(data, otherArgs):
+    
+        for input in data.allinputs:
+            lidar = input.getPoints(colNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
+            findMinZs(lidar, otherArgs.outImage, otherArgs.xMin, otherArgs.yMax)
 
-            # mask out where interpolation failed
-            invalid = numpy.isnan(out)
-            out[invalid] = 0
-        else:
-            # no data - set to zero
-            out = numpy.empty(pxlCoords[0].shape, dtype=numpy.float64)
-            out.fill(0)
-
-        # make 3d
-        out = numpy.expand_dims(out, axis=0)
-        data.imageOut.setData(out)
+    headers = []
+    for inFile in inFiles:
+        info = generic.getLidarFileInfo(inFile)
+        headers.append(info.header)
 
     dataFiles = lidarprocessor.DataFiles()
     dataFiles.allinputs = []
-    for infile in infiles:
-        input = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
-        dataFiles.allinputs.append(input)
-    dataFiles.imageOut = lidarprocessor.ImageFile('outfile.img', lidarprocessor.CREATE)
+    for inFile in inFiles:
+        inp = lidarprocessor.LidarFile(inFile, lidarprocessor.READ)
+        dataFiles.allinputs.append(inp)
 
-    lidarprocessor.doProcessing(interpGroundReturns, dataFiles)
+    xMin, yMax, ncols, nrows = spatial.getGridInfoFromHeader(headers, BINSIZE)
+    outImage = numpy.zeros((nrows, ncols))
+
+    otherArgs = lidarprocessor.OtherArgs()
+    otherArgs.outImage = outImage
+    otherArgs.xMin = xMin
+    otherArgs.yMax = yMax
+
+    lidarprocessor.doProcessing(processChunk, dataFiles, otherArgs=otherArgs)
+
+    iw = spatial.ImageWriter(imageFile, tlx=xMin, tly=yMax, binSize=BINSIZE)
+    iw.setLayer(outImage)
+    iw.close()
+
+
+This assume that inFiles is a list.
 
 ---------------------
 Updating a Lidar File
 ---------------------
 
-This example updates a Lidar file with data from an image raster::
+This example updates a Lidar file by creating a new column with data from an image raster::
 
+    import numpy
+    from numba import jit
     from pylidar import lidarprocessor
+    from pylidar.toolbox import spatial
+    from pylidar.toolbox import arrayutils
 
-    def updatePointFunc(data):
-        pts = data.input.getPointsByBins(colNames=['HEIGHT', 'Z'])
-        (nPts, nRows, nCols) = pts.shape
-        if nPts > 0:
-            # read in the DEM data
-            dem = data.imageIn.getData()
-            # make it match the size of the pts array
-            # ie repeat it for the number of bins
-            dem = numpy.repeat(dem, pts.shape[0], axis=0)
-            
-            # calculate the height
-            # ensure this is a masked array to match pts
-            height = numpy.ma.array(pts['Z'] - dem, mask=pts['Z'].mask)
-            pts['HEIGHT'] = height
+    def processChunk(data, otherArgs):
+        lidar = data.input1.getPoints(colNames=['X', 'Y', 'Z'])
+        rows, cols = spatial.xyToRowCol(lidar['X'], lidar['Y'], 
+                    otherArgs.xMin, otherArgs.yMax, otherArgs.binSize)
 
-            # update the lidar file
-            data.input.setPoints(pts)
+        height = lidar['Z'] - otherArgs.inImage[rows, cols]
+        lidar = arrayutils.addFieldToStructArray(lidar, 'HEIGHT', numpy.float, height)
+        data.input1.setScaling('HEIGHT', lidarprocessor.ARRAY_TYPE_POINTS, 10, -10)
+        data.input1.setPoints(lidar)
 
     dataFiles = lidarprocessor.DataFiles()
-    dataFiles.input = lidarprocessor.LidarFile('file.spd', lidarprocessor.UPDATE)
-    dataFiles.imageIn = lidarprocessor.ImageFile('dem.img', lidarprocessor.READ)
+    dataFiles.input1 = lidarprocessor.LidarFile(lidarFile, lidarprocessor.UPDATE)
 
-    lidarprocessor.doProcessing(updatePointFunc, dataFiles)
+    otherArgs = lidarprocessor.OtherArgs()
+    (otherArgs.inImage, otherArgs.xMin, otherArgs.yMax, otherArgs.binSize) = spatial.readImageLayer(imageFile)
+
+    lidarprocessor.doProcessing(processChunk, dataFiles, otherArgs=otherArgs)
+
+You can also update 'in-place' by changing the values in an existing column before calling setPoints().
 
 If requesting a non-structured array like this::
 
-    height = data.input.getPointsByBins(colNames='HEIGHT')
+    height = data.input.getPoints(colNames='HEIGHT')
 
 You will need to specify the colName when calling :func:`pylidar.userclasses.LidarData.setPoints`::
 
@@ -237,19 +256,13 @@ An example of finding the average 'Z' value accross a Lidar file (showing only r
 Controlling Reading/Writing Example
 -----------------------------------
 
-This example shows how to use the :class:`pylidar.lidarprocessor.Controls` class to restrict 
-processing to the extent of another image file::
+This example shows how to use the :class:`pylidar.lidarprocessor.Controls` class to change the 
+size of the chunk of lidar data read::
 
     controls = lidarprocessor.Controls()
-    controls.setReferenceImage('footprint.img')
-    controls.setFootprint(lidarprocessor.BOUNDS_FROM_REFERENCE)
+    controls.setWindowSize(256) # actually uses 256*256 for legacy reasons...
 
     lidarprocessor.doProcessing(userFunc, dataFiles, controls=controls)
-
-This example shows how to process data non-spatially (default is to process spatially)::
-
-    controls = lidarprocessor.Controls()
-    controls.setSpatialProcessing(False)
 
 ----------------------
 Setting driver options

@@ -27,6 +27,7 @@ from osgeo import osr
 from osgeo import gdal
 from rios import imageio
 from rios import calcstats
+from rios import pixelgrid
 from pylidar import userclasses
 from pylidar import lidarprocessor # for DEFAULT_RASTERDRIVERNAME etc. Maybe should move?
 from pylidar.lidarformats import generic
@@ -51,8 +52,8 @@ def xyToRowCol(x, y, xMin, yMax, pixSize):
         (row, col)
     
     """
-    col = ((x - numpy.floor(xMin)) / pixSize).astype(numpy.uint)
-    row = ((numpy.ceil(yMax) - y) / pixSize).astype(numpy.uint)
+    col = ((x - xMin) / pixSize).astype(numpy.uint)
+    row = ((yMax - y) / pixSize).astype(numpy.uint)
     return (row, col)
 
 @jit
@@ -60,8 +61,8 @@ def xyToRowColNumba(x, y, xMin, yMax, pixSize):
     """
     Same as xyToRowCol bit jitted so can be called from inside Numba
     """
-    col = int((x - numpy.floor(xMin)) / pixSize)
-    row = int((numpy.ceil(yMax) - y) / pixSize)
+    col = int((x - xMin) / pixSize)
+    row = int((yMax - y) / pixSize)
     return (row, col)
 
 def readLidarPoints(filename, classification=None, boundingbox=None, 
@@ -78,7 +79,7 @@ def readLidarPoints(filename, classification=None, boundingbox=None,
     constants.
     
     If boundingbox is given, it is a tuple of
-        (xmin, xmax, ymin, ymax)
+    (xmin, xmax, ymin, ymax)
     and only points within this box are included. 
     
     Return a single recarray with only the selected columns, and only the selected points. 
@@ -173,6 +174,43 @@ def getGridInfoFromData(xdata, ydata, binSize):
     nrows = int(numpy.round((yMax - ydata.min()) / binSize))
     return (xMin, yMax, ncols, nrows)
 
+def getGridInfoFromHeader(header, binSize, footprint=lidarprocessor.UNION):
+    """
+    Given a Lidar file header (or a list of headers - maximum extent 
+    will be calculated)
+    plus a binSize return a tuple of (xMin, yMax, ncols, nrows)
+    for doing operations on a grid
+    Specify lidarprocessor.UNION or lidarprocessor.INTERSECTION to determine
+    how multiple headers are combined.
+    """
+    if isinstance(header, dict):
+        headers = [header]
+    else:
+        headers = header
+
+    # get the dims of the first one
+    pixGrid = pixelgrid.PixelGridDefn(xMin=headers[0]['X_MIN'],
+                xMax=headers[0]['X_MAX'], yMax=headers[0]['Y_MAX'],
+                yMin=headers[0]['Y_MIN'], xRes=binSize, yRes=binSize)
+
+    for header in headers[1:]:
+        newGrid = pixelgrid.PixelGridDefn(xMin=header['X_MIN'],
+                xMax=header['X_MAX'], yMax=header['Y_MAX'],
+                yMin=header['Y_MIN'], xRes=binSize, yRes=binSize)
+
+        if footprint == lidarprocessor.UNION:
+            pixGrid = pixGrid.union(newGrid)
+        elif footprint == lidarprocessor.INTERSECTION:
+            pixGrid = pixGrid.intersection(newGrid)
+        else:
+            msg = 'unsupported footprint value'
+            raise SpatialException(msg)
+
+    # nasty rounding errors propogated with ceil()
+    ncols = int(numpy.round((pixGrid.xMax - pixGrid.xMin) / binSize))
+    nrows = int(numpy.round((pixGrid.yMax - pixGrid.yMin) / binSize))
+    return (pixGrid.xMin, pixGrid.yMax, ncols, nrows)
+
 def getBlockCoordArrays(xMin, yMax, nCols, nRows, binSize):
     """
     Return a tuple of the world coordinates for every pixel
@@ -194,6 +232,21 @@ def getBlockCoordArrays(xMin, yMax, nCols, nRows, binSize):
     xBlock = (xMin + binSize/2.0 + colNdx * binSize)
     yBlock = (yMax - binSize/2.0 - rowNdx * binSize)
     return (xBlock, yBlock)    
+
+def readImageLayer(inFile, layerNum=1):
+    """
+    Read a layer from a GDAL supported dataset and return it as 
+    a 2d numpy array along with georeferencing information.
+
+    Returns a tuple with (data, xMin, yMax, binSize)
+    """
+    ds = gdal.Open(inFile)
+    band = ds.GetRasterBand(layerNum)
+    data = band.ReadAsArray()
+    georef = ds.GetGeoTransform()
+    del ds
+
+    return (data, georef[0], georef[3], georef[1])
 
 class ImageWriter(object):
     """

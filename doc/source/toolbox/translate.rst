@@ -8,7 +8,7 @@ Translation
 Command Line
 ------------------------
 
-.. automodule:: pylidar.toolbox.translate.commandline
+.. automodule:: pylidar.toolbox.cmdline
    :members:
    :undoc-members:
 

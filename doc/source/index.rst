@@ -39,30 +39,44 @@ Example
     from numba import jit
     from pylidar import lidarprocessor
     from pylidar.toolbox import spatial
+    from pylidar.lidarformats import generic
 
     BINSIZE = 1.0
 
     @jit
     def findMinZs(data, outImage, xMin, yMax):
         for i in range(data.shape[0]):
-            row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
-                    xMin, yMax, BINSIZE)
-            if outImage[row, col] != 0:
-                if data[i]['Z'] < outImage[row, col]:
+            if data[i]['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND:
+                row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
+                        xMin, yMax, BINSIZE)
+                if outImage[row, col] != 0:
+                    if data[i]['Z'] < outImage[row, col]:
+                        outImage[row, col] = data[i]['Z']
+                else:
                     outImage[row, col] = data[i]['Z']
-            else:
-                outImage[row, col] = data[i]['Z']
 
-    data = spatial.readLidarPoints(inFile, 
-            classification=lidarprocessor.CLASSIFICATION_GROUND)
+    def processChunk(data, otherArgs):
+        data = data.input1.getPoints(colNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
+        findMinZs(data, otherArgs.outImage, otherArgs.xMin, otherArgs.yMax)
 
-    (xMin, yMax, ncols, nrows) = spatial.getGridInfoFromData(data['X'], data['Y'],
-                BINSIZE)
+    info = generic.getLidarFileInfo(inFile)
+    header = info.header
+
+    dataFiles = lidarprocessor.DataFiles()
+    dataFiles.input1 = lidarprocessor.LidarFile(inFile, lidarprocessor.READ)
+
+    xMin, yMax, ncols, nrows = spatial.getGridInfoFromHeader(header, BINSIZE)
 
     outImage = numpy.zeros((nrows, ncols))
-    findMinZs(data, outImage, xMin, yMax)
 
-    iw = spatial.ImageWriter(imageFile, tlx=xMin, tly=yMax, binSize=BINSIZE)
+    otherArgs = lidarprocessor.OtherArgs()
+    otherArgs.outImage = outImage
+    otherArgs.xMin = xMin
+    otherArgs.yMax = yMax
+
+    lidarprocessor.doProcessing(processChunk, dataFiles, otherArgs=otherArgs)
+
+    iw = spatial.ImageWriter(outFile, tlx=xMin, tly=yMax, binSize=BINSIZE)
     iw.setLayer(outImage)
     iw.close()
 

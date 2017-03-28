@@ -12,6 +12,7 @@ Toolbox
     grdfilters
     interpolation
     visualisation
+    spatial
 
 * :ref:`genindex`
 * :ref:`modindex`

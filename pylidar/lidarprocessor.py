@@ -255,7 +255,12 @@ class Controls(object):
         """
         Set the footprint of the processing area. This should be
         either INTERSECTION, UNION or BOUNDS_FROM_REFERENCE.
+
+        Note: setting spatial processing to True now deprecated. Consider
+        updating your code.
         """
+        msg = 'Note: spatial processing now deprecated'
+        self.messageHandler(msg, MESSAGE_WARNING)
         self.footprint = footprint
         
     def setWindowSize(self, size):
@@ -270,7 +275,12 @@ class Controls(object):
     def setOverlap(self, overlap):
         """
         Sets the overlap between each window. In bins.
+
+        Note: setting spatial processing to True now deprecated. Consider
+        updating your code.
         """
+        msg = 'Note: spatial processing now deprecated'
+        self.messageHandler(msg, MESSAGE_WARNING)
         self.overlap = overlap
 
     def setSpatialProcessing(self, spatial):
@@ -292,7 +302,12 @@ class Controls(object):
         The path to a reference GDAL image to use when the footprint is
         set to BOUNDS_FROM_REFERENCE. Set only one of this or referencePixgrid
         not both.
+
+        Note: setting spatial processing to True now deprecated. Consider
+        updating your code.
         """
+        msg = 'Note: spatial processing now deprecated'
+        self.messageHandler(msg, MESSAGE_WARNING)
         self.referenceImage = referenceImage
         
     def setReferencePixgrid(self, referencePixgrid):
@@ -300,7 +315,12 @@ class Controls(object):
         The instance of rios.pixelgrid.PixelGridDefn to use as a reference
         when footprint is set to BOUNDS_FROM_REFERENCE. Set only one of this
         or referenceImage, not both.
+
+        Note: setting spatial processing to True now deprecated. Consider
+        updating your code.
         """
+        msg = 'Note: spatial processing now deprecated'
+        self.messageHandler(msg, MESSAGE_WARNING)
         self.referencePixgrid = referencePixgrid
         
     def setReferenceResolution(self, resolution):
@@ -308,14 +328,24 @@ class Controls(object):
         Overrides the resolution that the processing happens with. Overrides
         either of the setReferenceImage or setReferencePixgrid calls or the
         default reference.
+
+        Note: setting spatial processing to True now deprecated. Consider
+        updating your code.
         """
+        msg = 'Note: spatial processing now deprecated'
+        self.messageHandler(msg, MESSAGE_WARNING)
         self.referenceResolution = resolution
         
     def setSnapGrid(self, snap):
         """
         Snap the output grid to be multiples of the resolution. This is only
         needed when ReferenceResolution is not set. True or False.
+
+        Note: setting spatial processing to True now deprecated. Consider
+        updating your code.
         """
+        msg = 'Note: spatial processing now deprecated'
+        self.messageHandler(msg, MESSAGE_WARNING)
         self.snapGrid = snap
         
     def setProgress(self, progress):
