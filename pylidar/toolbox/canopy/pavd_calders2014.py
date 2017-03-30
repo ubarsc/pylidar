@@ -25,6 +25,60 @@ import collections
 import statsmodels.api as sm
 from numba import jit
 
+from pylidar import lidarprocessor
+    
+
+def run_pavd_calders2014(dataFiles, controls, otherargs, outfile):
+    """
+    Main function for PAVD_CALDERS2014
+    """  
+    if otherargs.planecorrection:  
+        print("Applying plane correction to point heights...")
+        
+        otherargs.xgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.ygrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.zgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.gridmask = numpy.ones(otherargs.gridsize**2, dtype=numpy.bool)
+                  
+        lidarprocessor.doProcessing(runXYMinGridding, dataFiles, controls=controls, otherArgs=otherargs)
+        
+        otherargs.planefit = planeFitHubers(otherargs.xgrid[~otherargs.gridmask], otherargs.ygrid[~otherargs.gridmask], 
+            otherargs.zgrid[~otherargs.gridmask], reportfile=otherargs.rptfile)
+    
+    minZenithAll = min(otherargs.minzenith)
+    maxZenithAll = max(otherargs.maxzenith)
+    minHeightBin = min(0.0, otherargs.minheight)  
+    
+    otherargs.zenith = numpy.arange(minZenithAll+otherargs.zenithbinsize/2, maxZenithAll, otherargs.zenithbinsize)
+    otherargs.height = numpy.arange(minHeightBin, otherargs.maxheight, otherargs.heightbinsize)
+    otherargs.counts = numpy.zeros([otherargs.zenith.shape[0],otherargs.height.shape[0]])
+    otherargs.pulses = numpy.zeros([otherargs.zenith.shape[0],1])     
+    
+    print("Calculating vertical plant profiles...")
+    lidarprocessor.doProcessing(runZenithHeightStratification, dataFiles, controls=controls, otherArgs=otherargs)
+    
+    pgapz = numpy.where(otherargs.pulses > 0, 1 - numpy.cumsum(otherargs.counts, axis=1) / otherargs.pulses, numpy.nan)
+    zenithRadians = numpy.radians(otherargs.zenith)
+    zenithBinSizeRadians = numpy.radians(otherargs.zenithbinsize)
+    
+    hpp_pai,hpp_pavd = calcHingePlantProfiles(otherargs.heightbinsize, zenithRadians, pgapz)
+    
+    lpp_pai,lpp_pavd,lpp_mla = calcLinearPlantProfiles(otherargs.height, otherargs.heightbinsize, 
+        zenithRadians, pgapz)
+        
+    if otherargs.totalpaimethod == "HINGE":
+        total_pai = numpy.max(hpp_pai)
+    elif otherargs.totalpaimethod == "LINEAR":
+        total_pai = numpy.max(lpp_pai)
+    elif otherargs.totalpaimethod == "EXTERNAL":
+        total_pai = otherargs.externalpai
+    
+    spp_pai,spp_pavd = calcSolidAnglePlantProfiles(zenithRadians, pgapz, otherargs.heightbinsize,
+        zenithBinSizeRadians, total_pai)     
+    
+    writeProfiles(outfile, otherargs.zenith, otherargs.height, pgapz, 
+                  lpp_pai, lpp_pavd, lpp_mla, hpp_pai, hpp_pavd, spp_pai, spp_pavd)
+
 
 @jit
 def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,pulseZenith,pulsesByPointZenith,
@@ -110,57 +164,70 @@ def runXYMinGridding(data, otherargs):
     """
     Derive a minimum Z surface following plane correction procedures outlined in Calders et al. (2014)
     """
+    pulsecolnames = ['X_ORIGIN','Y_ORIGIN','Z_ORIGIN','NUMBER_OF_RETURNS']    
     pointcolnames = ['X','Y','Z']
 
     halfextent = (otherargs.gridsize * otherargs.gridbinsize) / 2.0
 
-    minX = otherargs.origin[0] - halfextent
-    minY = otherargs.origin[1] - halfextent 
-    maxX = otherargs.origin[0] + halfextent
-    maxY = otherargs.origin[1] + halfextent 
+    minX = -halfextent
+    minY = -halfextent 
+    maxX = halfextent
+    maxY = halfextent 
             
-    for indata in data.inList:
+    for indata in data.inFiles:
         
         points = indata.getPoints(colNames=pointcolnames)
+        pulses = indata.getPulses(colNames=pulsecolnames)
+        pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
         
-        minPointsByXYGrid(points['X'], points['Y'], points['Z'], otherargs.xgrid, otherargs.ygrid, otherargs.zgrid, 
+        x = points['X'] - pulsesByPoint['X_ORIGIN']
+        y = points['Y'] - pulsesByPoint['Y_ORIGIN']
+        z = points['Z'] - pulsesByPoint['Z_ORIGIN']
+        
+        minPointsByXYGrid(x, y, z, otherargs.xgrid, otherargs.ygrid, otherargs.zgrid, 
             otherargs.gridmask, minX, maxX, minY, maxY, otherargs.gridbinsize, otherargs.gridsize)
 
 def runZenithHeightStratification(data, otherargs):
     """
     Derive Pgap(z) profiles following vertical profile procedures outlined in Calders et al. (2014)
     """
-    pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH']
-    
-    for i,indata in enumerate(data.inList):
         
-        if otherargs.planecorrection:
-            pointcolnames = ['X','Y','Z','CLASSIFICATION',otherargs.returnnumcol[i]]
-        else:
-            pointcolnames = [otherargs.heightcol,'CLASSIFICATION',otherargs.returnnumcol[i]]
+    for i,indata in enumerate(data.inFiles):
         
-        points = indata.getPoints(colNames=pointcolnames)
+        pulsecolnames = ['X_ORIGIN','Y_ORIGIN','Z_ORIGIN','NUMBER_OF_RETURNS','ZENITH']
         pulses = indata.getPulses(colNames=pulsecolnames)
         pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
+        
+        if otherargs.lidardriver[i] == "SPDV3":
+            returnnumcol = 'RETURN_ID'
+            pulses['ZENITH'] = numpy.degrees(pulses['ZENITH'])
+            pulsesByPoint['ZENITH'] = numpy.degrees(pulsesByPoint['ZENITH'])
+        else:
+            returnnumcol = 'RETURN_NUMBER'
+        
+        if otherargs.planecorrection:
+            pointcolnames = ['X','Y','Z','CLASSIFICATION',returnnumcol]
+        else:
+            pointcolnames = [otherargs.heightcol,'CLASSIFICATION',returnnumcol]        
+        points = indata.getPoints(colNames=pointcolnames)
         
         if otherargs.weighted:
             weights = 1.0 / pulsesByPoint['NUMBER_OF_RETURNS']
         else:
-            weights = numpy.array(points[otherargs.returnnumcol[i]] == 1, dtype=numpy.float32)
+            weights = numpy.array(points[returnnumcol] == 1, dtype=numpy.float32)
         
         if len(otherargs.excludedclasses) > 0:
             mask = numpy.in1d(points['CLASSIFICATION'], otherargs.excludedclasses)
             weights[mask] = 0.0
         
         if otherargs.planecorrection:
-            pointHeights = points['Z'] - (otherargs.planefit["Parameters"][1] * points['X'] + 
-                otherargs.planefit["Parameters"][2] * points['Y'] + otherargs.planefit["Parameters"][0])
+            x = points['X'] - pulsesByPoint['X_ORIGIN']
+            y = points['Y'] - pulsesByPoint['Y_ORIGIN']
+            z = points['Z'] - pulsesByPoint['Z_ORIGIN']            
+            pointHeights = z - (otherargs.planefit["Parameters"][1] * x + 
+                otherargs.planefit["Parameters"][2] * y + otherargs.planefit["Parameters"][0])
         else:
             pointHeights = points[otherargs.heightcol]
-        
-        if otherargs.radians[i]:
-            pulses['ZENITH'] = numpy.degrees(pulses['ZENITH'])
-            pulsesByPoint['ZENITH'] = numpy.degrees(pulsesByPoint['ZENITH'])
         
         countPointsPulsesByZenithHeight(otherargs.zenith,otherargs.minzenith[i],otherargs.maxzenith[i],
             otherargs.zenithbinsize,pulses['ZENITH'],pulsesByPoint['ZENITH'],pointHeights,
@@ -207,7 +274,7 @@ def calcHingePlantProfiles(heightbinsize, zenith, pgapz):
     
     return pai,pavd   
                       
-def calcSolidAnglePlantProfiles(zenith, pgapz, heightbinsize, zenithbinsize, pai=None):
+def calcSolidAnglePlantProfiles(zenith, pgapz, heightbinsize, zenithbinsize, totalpai):
     """
     Calculate the Jupp et al. (2009) solid angle weighted PAI/PAVD
     """
@@ -217,19 +284,15 @@ def calcSolidAnglePlantProfiles(zenith, pgapz, heightbinsize, zenithbinsize, pai
     
     for i in range(zenith.size):
         if (pgapz[i,-1] < 1):
-            ratio += wn[i] * numpy.log(pgapz[i,:]) / numpy.log(pgapz[i,-1])
+            ratio += wn[i] * numpy.log(pgapz[i,:]) / numpy.log(pgapz[i,-1])       
     
-    if pai is None:
-        hingeindex = numpy.argmin(numpy.abs(zenith - numpy.arctan(numpy.pi / 2)))
-        pai = -1.1 * numpy.log(pgapz[hingeindex,-1])
-    
-    pai = pai * ratio
+    pai = totalpai * ratio
     pavd = numpy.gradient(pai, heightbinsize)
     
     return pai,pavd
 
 def getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, 
-            sapp_pai, sapp_pavd):
+            hpp_pai, hpp_pavd, sapp_pai, sapp_pavd):
     """
     Returns the vertical profile information as a single structured array
     """
@@ -241,7 +304,8 @@ def getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla,
         
         arrayDtype.append((name, 'f8'))
 
-    for name in ["linearPAI", "linearPAVD", "linearMLA", "hingePAI", "juppPAVD"]:
+    for name in ["linearPAI", "linearPAVD", "linearMLA", "hingePAI", "hingePAVD", 
+        "weightedPAI", "weightedPAVD"]:
         arrayDtype.append((name, 'f8'))
 
     profileArray = numpy.empty((height.shape[0], ), dtype=arrayDtype)
@@ -253,18 +317,20 @@ def getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla,
     profileArray["linearPAI"] = lpp_pai
     profileArray["linearPAVD"] = lpp_pavd
     profileArray["linearMLA"] = lpp_mla
-    profileArray["hingePAI"] = sapp_pai
-    profileArray["juppPAVD"] = sapp_pavd
-
+    profileArray["hingePAI"] = hpp_pai
+    profileArray["hingePAVD"] = hpp_pavd
+    profileArray["weightedPAI"] = sapp_pai
+    profileArray["weightedPAVD"] = sapp_pavd
+    
     return profileArray
     
 def writeProfiles(outfile, zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, 
-            sapp_pai, sapp_pavd):
+            hpp_pai, hpp_pavd, sapp_pai, sapp_pavd):
     """
     Write out the vertical profiles to file
     """  
     profileArray = getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, 
-            lpp_mla, sapp_pai, sapp_pavd)
+            lpp_mla, hpp_pai, hpp_pavd, sapp_pai, sapp_pavd)
     
     numpy.savetxt(outfile, profileArray, fmt="%.4f", delimiter=',', 
             header=','.join(profileArray.dtype.names))
