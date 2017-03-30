@@ -81,8 +81,8 @@ def run_pavd_calders2014(dataFiles, controls, otherargs, outfile):
 
 
 @jit
-def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,pulseZenith,pulsesByPointZenith,
-                                 pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weights,minHeight):
+def countPointsPulsesByZenithHeight(midZenithBins,minimumAzimuth,maximumAzimuth,minimumZenith,maximumZenith,zenithBinSize,
+    pulseAzimuth,pulsesByPointAzimuth,pulseZenith,pulsesByPointZenith,pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weights,minHeight):
     """
     Called by runZenithHeightStratification()
     
@@ -90,15 +90,20 @@ def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,ze
     
     Parameters:
         midZenithBins           1D array of midpoints of zenith angle bins to use for the stratification
+        minimumAzimuth          Minimum azimuth angle value to consider for this block
+        maximumAzimuth          Maximum azimuth angle value to consider for this block
         minimumZenith           Minimum zenith angle value to consider for this block
         maximumZenith           Maximum zenith angle value to consider for this block
         zenithBinSize           Zenith angle bin size
+        pulseAzimuth            1D array of pulse azimuth angles for this block
+        pulsesByPointAzimuth    1D array of pulse azimuth angles for each point in this block
         pulseZenith             1D array of pulse zenith angles for this block
         pulsesByPointZenith     1D array of pulse zenith angles for each point in this block
         pointHeight             1D array of point heights for this block
         heightBins              1D array of vertical height bin starts to use the stratification
         heightBinSize           Vertical height bin size
         weights                 1D array of points weights to use for calculating point intercept counts
+        minHeight               Minimum height to include in the vertical profile
         
     Returns:    
         pointCounts             2D array (zenith bins, height bins) of point intercept counts to update for this block
@@ -110,11 +115,11 @@ def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,ze
             lowerzenith = midZenithBins[i] - zenithBinSize / 2
             upperzenith = midZenithBins[i] + zenithBinSize / 2
             for j in range(pulseZenith.shape[0]):
-                if (pulseZenith[j] > lowerzenith) and (pulseZenith[j] <= upperzenith):
+                if (pulseZenith[j] > lowerzenith) and (pulseZenith[j] <= upperzenith) and (pulseAzimuth[j] >= minazimuth) and (pulseAzimuth[j] <= maxazimuth):
                     pulseCounts[i,0] += 1.0            
             for j in range(pulsesByPointZenith.shape[0]):
                 if weights[j] > 0:
-                    if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith):
+                    if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith) and (pulseByPointAzimuth[j] >= minazimuth) and (pulseByPointAzimuth[j] <= maxazimuth):
                         k = int( (pointHeight[j] - heightBins[0]) / heightBinSize )
                         if (k >= 0) and (k < heightBins.shape[0]) and (pointHeight[j] > minHeight):
                             pointCounts[i,k] += weights[j]
@@ -194,7 +199,7 @@ def runZenithHeightStratification(data, otherargs):
         
     for i,indata in enumerate(data.inFiles):
         
-        pulsecolnames = ['X_ORIGIN','Y_ORIGIN','Z_ORIGIN','NUMBER_OF_RETURNS','ZENITH']
+        pulsecolnames = ['X_ORIGIN','Y_ORIGIN','Z_ORIGIN','NUMBER_OF_RETURNS','ZENITH','AZIMUTH']
         pulses = indata.getPulses(colNames=pulsecolnames)
         pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
         
@@ -202,6 +207,8 @@ def runZenithHeightStratification(data, otherargs):
             returnnumcol = 'RETURN_ID'
             pulses['ZENITH'] = numpy.degrees(pulses['ZENITH'])
             pulsesByPoint['ZENITH'] = numpy.degrees(pulsesByPoint['ZENITH'])
+            pulses['AZIMUTH'] = numpy.degrees(pulses['AZIMUTH'])
+            pulsesByPoint['AZIMUTH'] = numpy.degrees(pulsesByPoint['AZIMUTH'])
         else:
             returnnumcol = 'RETURN_NUMBER'
         
@@ -229,9 +236,10 @@ def runZenithHeightStratification(data, otherargs):
         else:
             pointHeights = points[otherargs.heightcol]
         
-        countPointsPulsesByZenithHeight(otherargs.zenith,otherargs.minzenith[i],otherargs.maxzenith[i],
-            otherargs.zenithbinsize,pulses['ZENITH'],pulsesByPoint['ZENITH'],pointHeights,
-            otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,
+        countPointsPulsesByZenithHeight(otherargs.zenith,otherargs.minazimuth[i],otherargs.maxazimuth[i],
+            otherargs.minzenith[i],otherargs.maxzenith[i],otherargs.zenithbinsize,
+            pulses['AZIMUTH'],pulsesByPoint['AZIMUTH'],pulses['ZENITH'],pulsesByPoint['ZENITH'],
+            pointHeights,otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,
             weights,otherargs.minheight)
 
 def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
