@@ -59,7 +59,7 @@ def xyToRowCol(x, y, xMin, yMax, pixSize):
 @jit
 def xyToRowColNumba(x, y, xMin, yMax, pixSize):
     """
-    Same as xyToRowCol bit jitted so can be called from inside Numba
+    Same as xyToRowCol but jitted so can be called from inside Numba
     """
     col = int((x - xMin) / pixSize)
     row = int((yMax - y) / pixSize)
