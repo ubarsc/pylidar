@@ -144,6 +144,13 @@ class RieglFile(generic.LiDARFile):
         if arrayType == generic.ARRAY_TYPE_POINTS:
             dict[generic.FIELD_POINTS_RETURN_NUMBER] = 'RETURN_NUMBER'
         return dict
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Nothing yet - empty dict
+        """
+        return {}
         
     def close(self):
         self.range = None
@@ -361,3 +368,10 @@ class RieglFileInfo(generic.LiDARFileInfo):
     @staticmethod        
     def getDriverName():
         return 'riegl'
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Nothing yet - empty dict
+        """
+        return {}

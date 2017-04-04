@@ -495,7 +495,14 @@ class LidarData(object):
         array is returned.
         """
         return self.driver.readReceived()
-        
+
+    def getHeaderTranslationDict(self):
+        """
+        Return a dictionary keyed on HEADER_* values (above)
+        that can be used to translate dictionary field names between the formats
+        """
+        return self.driver.getHeaderTranslationDict()
+
     def getHeader(self):
         """
         Returns the header as a dictionary of header key/value pairs.

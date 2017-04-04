@@ -161,6 +161,9 @@ PULSES_HEADER_UPDATE_DICT = {'ZENITH' : ('ZENITH_MIN', 'ZENITH_MAX'),
         'SCANLINE' : ('SCANLINE_MIN', 'SCANLINE_MAX')}
 "for updating the header"
 
+HEADER_TRANSLATION_DICT = {generic.HEADER_NUMBER_OF_POINTS : 'NUMBER_OF_POINTS'}
+"Translation of header field names"
+
 class SPDV3File(generic.LiDARFile):
     """
     Class to support reading and writing of SPD Version 3.x files.
@@ -428,6 +431,13 @@ class SPDV3File(generic.LiDARFile):
         elif arrayType == generic.ARRAY_TYPE_PULSES:
             dict[generic.FIELD_PULSES_TIMESTAMP] = 'GPS_TIME'
         return dict
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Return dictionary with non-standard header names
+        """
+        return HEADER_TRANSLATION_DICT
 
     def getPixelGrid(self):
         """
@@ -1568,3 +1578,10 @@ class SPDV3FileInfo(generic.LiDARFileInfo):
         Name of this driver
         """
         return "SPDV3"
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Return dictionary with non-standard header names
+        """
+        return HEADER_TRANSLATION_DICT
