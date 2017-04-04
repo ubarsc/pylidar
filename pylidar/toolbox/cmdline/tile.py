@@ -23,6 +23,7 @@ from __future__ import print_function, division
 import sys
 import argparse
 
+from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
 from pylidar.lidarformats import spdv4
 from pylidar.toolbox.indexing import gridindex
@@ -37,7 +38,9 @@ def getCmdargs():
     Get commandline arguments
     """
     p = argparse.ArgumentParser()
-    p.add_argument("-i", "--input", help="Input SPD file name")
+    p.add_argument("-i", "--input", action='append', 
+        help="Input SPD file name. Can be specified multiple times for "
+            +"multiple inputs.", required=True)
     p.add_argument("-r","--resolution", default=DEFAULT_RESOLUTION, 
         type=float, help="Output resolution to use when choosing corners " + 
             "of the tiles (default: %(default)s)")
@@ -55,12 +58,10 @@ def getCmdargs():
             " (default: %(default)s)")
     p.add_argument("-q", "--quiet", default=False, action='store_true',
         help="Suppress the printing of the tile filenames")
+    p.add_argument("-f", "--footprint", choices=['union', 'intersection'],
+        default='union', help='how to combine multiple inputs')
 
     cmdargs = p.parse_args()
-
-    if cmdargs.input is None:
-        p.print_help()
-        sys.exit()
 
     return cmdargs
 
@@ -89,7 +90,12 @@ def run():
                     "SPDV4_PULSE_INDEX_%s" % cmdargs.pulseindexmethod)
     except AttributeError:
         msg = 'Unsupported pulse indexing method %s' % cmdargs.pulseindexmethod
-        raise generic.LiDARPulseIndexUnsupported(msg)            
+        raise generic.LiDARPulseIndexUnsupported(msg)        
+
+    if cmdargs.footprint == 'union':
+        footprint = lidarprocessor.UNION
+    elif cmdargs.footprint == 'intersection':    
+        footprint = lidarprocessor.INTERSECTION
 
     # returns header and extent that we don't use so we ignore.
     # those are useful in the spatial indexing situation
@@ -98,7 +104,8 @@ def run():
                                 blockSize=cmdargs.blocksize,
                                 tempDir=cmdargs.outdir, 
                                 extent=extent, indexType=indexType,
-                                pulseIndexMethod=pulseindexmethod)
+                                pulseIndexMethod=pulseindexmethod,
+                                footprint=footprint)
 
     # now print the names of the tiles to the screen
     if not cmdargs.quiet:

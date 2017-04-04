@@ -20,6 +20,7 @@ Deals with creating a grid spatial index
 from __future__ import print_function, division
 
 import os
+import sys
 import copy
 import numpy
 import tempfile
@@ -29,6 +30,11 @@ from pylidar.lidarformats import generic
 from pylidar.basedriver import Extent
 from rios import cuiprogress
 from rios import pixelgrid
+
+if sys.version_info[0] > 2:
+    # hack for Python 3 which uses str instead of basestring
+    # we just use basestring
+    basestring = str
 
 """
 Number of blocks to divide the extent up into for the longest axis
@@ -108,63 +114,98 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
     if removeTempDir:
         os.rmdir(tempDir)
 
-def splitFileIntoTiles(infile, binSize=1.0, blockSize=None, 
+def splitFileIntoTiles(infiles, binSize=1.0, blockSize=None, 
         tempDir='.', extent=None, indexType=INDEX_CARTESIAN,
-        pulseIndexMethod=PULSE_INDEX_FIRST_RETURN):
+        pulseIndexMethod=PULSE_INDEX_FIRST_RETURN, 
+        footprint=lidarprocessor.UNION):
     """
-    Creates a tempfile for every block (using blockSize).
+    Takes a filename (or list of filenames) and creates a tempfile for every 
+    block (using blockSize).
     If blockSize isn't set then it is picked using BLOCKSIZE_N_BLOCKS.
     binSize is the size of the bins to create the spatial index.
     indexType is one of the INDEX_* constants.
     pulseIndexMethod is one of the PULSE_INDEX_* constants.
+    footprint is one of lidarprocessor.UNION or lidarprocessor.INTERSECTION
+        and is how to combine extents if there is more than one file.
 
-    returns the header of the input file, the extent used and a list
+    returns the header of the first input file, the extent used and a list
     of (fname, extent) tuples that contain the information for 
     each tempfile.
     """
-    info = generic.getLidarFileInfo(infile)
-    header = info.header
+
+    if isinstance(infiles, basestring):
+        infiles = [infiles]
+
+    # use the first file for header. Not
+    # clear how to combine headers from multiple inputs
+    # or if one should.
+    # leave setting this in case we grab it when working out the extent.
+    firstHeader = None
     
     if extent is None:
-        # work out from header
-        try:
-            if indexType == INDEX_CARTESIAN:
-                xMax = header['X_MAX']
-                xMin = header['X_MIN']
-                yMax = header['Y_MAX']
-                yMin = header['Y_MIN']
-            elif indexType == INDEX_SPHERICAL:
-                xMax = header['AZIMUTH_MAX']
-                xMin = header['AZIMUTH_MIN']
-                yMax = header['ZENITH_MAX']
-                yMin = header['ZENITH_MIN']
-            elif indexType == INDEX_SCAN:
-                xMax = header['SCANLINE_IDX_MAX']
-                xMin = header['SCANLINE_IDX_MIN']
-                yMax = header['SCANLINE_MAX']
-                yMin = header['SCANLINE_MIN']
+        # work out from headers
+        pixGrid = None
+        for infile in infiles:
+            info = generic.getLidarFileInfo(infile)
+            header = info.header
+
+            if firstHeader is None:
+                firstHeader = header
+
+            try:
+                if indexType == INDEX_CARTESIAN:
+                    xMax = header['X_MAX']
+                    xMin = header['X_MIN']
+                    yMax = header['Y_MAX']
+                    yMin = header['Y_MIN']
+                elif indexType == INDEX_SPHERICAL:
+                    xMax = header['AZIMUTH_MAX']
+                    xMin = header['AZIMUTH_MIN']
+                    yMax = header['ZENITH_MAX']
+                    yMin = header['ZENITH_MIN']
+                elif indexType == INDEX_SCAN:
+                    xMax = header['SCANLINE_IDX_MAX']
+                    xMin = header['SCANLINE_IDX_MIN']
+                    yMax = header['SCANLINE_MAX']
+                    yMin = header['SCANLINE_MIN']
+                else:
+                    msg = 'unsupported indexing method'
+                    raise generic.LiDARSpatialIndexNotAvailable(msg)
+            except KeyError:
+                msg = 'info for creating bounding box not available'
+                raise generic.LiDARFunctionUnsupported(msg)
+
+            newPixGrid = pixelgrid.PixelGridDefn(xMin=xMin, xMax=xMax, 
+                            yMin=yMin, yMax=yMax, xRes=binSize, yRes=binSize)
+            if pixGrid is None:
+                pixGrid = newPixGrid
+            elif footprint == lidarprocessor.UNION:
+                pixGrid = pixGrid.union(newPixGrid)
+            elif footprint == lidarprocessor.INTERSECTION:
+                pixGrid = pixGrid.intersection(newPixGrid)
             else:
-                msg = 'unsupported indexing method'
-                raise generic.LiDARSpatialIndexNotAvailable(msg)
-        except KeyError:
-            msg = 'info for creating bounding box not available'
-            raise generic.LiDARFunctionUnsupported(msg)
+                msg = 'Unsupported footprint option'
+                raise generic.LiDARFunctionUnsupported(msg)
 
         # TODO: we treat points as being in the block when they are >=
         # the min coords and < the max coords. What happens on the bottom
         # and right margins?? We could possibly miss points that are there.
 
         # round the coords to the nearest multiple
-        xMin = numpy.floor(xMin / binSize) * binSize
-        yMin = numpy.floor(yMin / binSize) * binSize
-        xMax = numpy.ceil(xMax / binSize) * binSize
-        yMax = numpy.ceil(yMax / binSize) * binSize
+        xMin = numpy.floor(pixGrid.xMin / binSize) * binSize
+        yMin = numpy.floor(pixGrid.yMin / binSize) * binSize
+        xMax = numpy.ceil(pixGrid.xMax / binSize) * binSize
+        yMax = numpy.ceil(pixGrid.yMax / binSize) * binSize
             
         extent = Extent(xMin, xMax, yMin, yMax, binSize)
         
     else:
         # ensure that our binSize comes from their exent
         binSize = extent.binSize
+
+        # get the first header since we aren't doing the above
+        info = generic.getLidarFileInfo(infiles[0])
+        firstHeader = info.header
     
     if blockSize is None:
         minAxis = min(extent.xMax - extent.xMin, extent.yMax - extent.yMin)
@@ -240,7 +281,7 @@ def splitFileIntoTiles(infile, binSize=1.0, blockSize=None,
         data = (fname, subExtent)
         newExtentList.append(data)
 
-    return header, extent, newExtentList
+    return firstHeader, extent, newExtentList
 
 def getDefaultWKT():
     """
