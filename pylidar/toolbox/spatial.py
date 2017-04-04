@@ -45,6 +45,8 @@ def xyToRowCol(x, y, xMin, yMax, pixSize):
     For the given pixel size and xMin, yMax, convert the
     given arrays of x and y into arrays of row and column in a regular grid 
     across the tile. 
+
+    xMin and yMax represent the top/left corner of the top/left pixel of the image
     
     Assumes that the bounds of the grid are to be fixed on integer coordinates. 
     
