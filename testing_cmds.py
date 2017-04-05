@@ -157,6 +157,21 @@ from pylidar.testing import testsuite14
 testsuite14.run('.', '.')
 nameList.append('testsuite14')
 
+# testsuite15
+from pylidar.testing import testsuite15
+testsuite15.run('.', '.')
+nameList.append('testsuite15')
+
+# testsuite16
+from pylidar.testing import testsuite16
+testsuite16.run('.', '.')
+nameList.append('testsuite16')
+
+# testsuite17
+from pylidar.testing import testsuite17
+testsuite17.run('.', '.')
+nameList.append('testsuite17')
+
 # add our list of tests
 versionInfo['tests'] = nameList
 

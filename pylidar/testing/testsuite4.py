@@ -61,6 +61,7 @@ def run(oldpath, newpath):
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
+    controls.setSpatialProcessing(True)
     
     lidarprocessor.doProcessing(updatePointFunc, dataFiles, controls=controls)
 

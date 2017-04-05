@@ -71,6 +71,7 @@ def run(oldpath, newpath):
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
+    controls.setSpatialProcessing(True)
 
     # can't use origInterp as projection source as this might not 
     # be created yet (eg called from testing_cmds.sh)

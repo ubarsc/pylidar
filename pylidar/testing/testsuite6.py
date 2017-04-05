@@ -99,6 +99,7 @@ def run(oldpath, newpath):
                     yMin=6944130, xRes=2.0, yRes=2.0, projection=wkt)
     controls.setFootprint(lidarprocessor.BOUNDS_FROM_REFERENCE)
     controls.setReferencePixgrid(pixGrid)
+    controls.setSpatialProcessing(True)
 
     lidarprocessor.doProcessing(interpGroundReturns, dataFiles, controls=controls)
 

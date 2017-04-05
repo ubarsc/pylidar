@@ -118,6 +118,7 @@ def run(oldpath, newpath):
     progress = cuiprogress.GDALProgressBar()
     controls.setProgress(progress)
     controls.setWindowSize(WINDOWSIZE)
+    controls.setSpatialProcessing(True)
     
     lidarprocessor.doProcessing(updatePointFunc, dataFiles, controls=controls)
 
