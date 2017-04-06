@@ -49,7 +49,7 @@ if os.path.split(os.getcwd())[1] != TESTDATA_DIR:
             "the test files") % TESTDATA_DIR
     raise SystemExit(msg)
 
-TARFILE = 'testdata_%d.tar.gz' % TESTSUITE_VERSION
+TARFILE = 'testdata_%d.tar.bz2' % TESTSUITE_VERSION
 
 for wildcard in ('*.spd', '*.img', '*.xml'):
     for fname in glob.glob(wildcard):
@@ -186,6 +186,6 @@ for fname in glob.glob('*.xml'):
 
 # change to one level up and create the tar file
 os.chdir('..')
-fh = tarfile.open(TARFILE, 'w:gz')
+fh = tarfile.open(TARFILE, 'w:bz2')
 fh.add(TESTDATA_DIR, recursive=True)
 fh.close()
