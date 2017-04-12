@@ -50,8 +50,8 @@ def getCmdargs():
     p.add_argument("--zenithbinsize", default=5.0, type=float, help="View zenith bin size (default: %(default)f deg)")
     p.add_argument("--minzenith", nargs="+", default=[35.0], type=float, help="Minimum view zenith angle to use for each input file")
     p.add_argument("--maxzenith", nargs="+", default=[70.0], type=float, help="Maximum view zenith angle to use for each input file")
-    p.add_argument("--minazimuth", nargs="+", default=None, type=float, help="Minimum view azimuth angle to use for each input file")
-    p.add_argument("--maxazimuth", nargs="+", default=None, type=float, help="Maximum view azimuth angle to use for each input file")
+    p.add_argument("--minazimuth", nargs="+", default=[0.0], type=float, help="Minimum view azimuth angle to use for each input file")
+    p.add_argument("--maxazimuth", nargs="+", default=[360.0], type=float, help="Maximum view azimuth angle to use for each input file")
     p.add_argument("--totalpaimethod", choices=['HINGE','LINEAR','EXTERNAL'], default="HINGE",  
         help="Total PAI method for solid angle weighted plant profiles (default: %(default)s; PAVD_CALDERS2014 metric only)")
     p.add_argument("--totalpai", default=1.0, type=float, help="Total PAI to use if --totalpaimethod=EXTERNAL is selected (default: %(default)f m2/m2; PAVD_CALDERS2014 metric only)")
@@ -82,9 +82,6 @@ def getCmdargs():
         print("--minzenith and --maxzenith must have the same length as --infiles")
         p.print_help()
         sys.exit()
-    if (cmdargs.minazimuth is None) or (cmdargs.maxazimuth is None):
-        cmdargs.minazimuth = [0.0] * nInfiles
-        cmdargs.maxazimuth = [360.0] * nInfiles
     if ( (len(cmdargs.minazimuth) != nInfiles) or (len(cmdargs.maxazimuth) != nInfiles) ) and (cmdargs.metric == "PAVD_CALDERS2014"):
         print("--minazimuth and --maxazimuth must have the same length as --infiles")
         p.print_help()

@@ -115,11 +115,11 @@ def countPointsPulsesByZenithHeight(midZenithBins,minimumAzimuth,maximumAzimuth,
             lowerzenith = midZenithBins[i] - zenithBinSize / 2
             upperzenith = midZenithBins[i] + zenithBinSize / 2
             for j in range(pulseZenith.shape[0]):
-                if (pulseZenith[j] > lowerzenith) and (pulseZenith[j] <= upperzenith) and (pulseAzimuth[j] >= minazimuth) and (pulseAzimuth[j] <= maxazimuth):
+                if (pulseZenith[j] > lowerzenith) and (pulseZenith[j] <= upperzenith) and (pulseAzimuth[j] >= minimumAzimuth) and (pulseAzimuth[j] <= maximumAzimuth):
                     pulseCounts[i,0] += 1.0            
             for j in range(pulsesByPointZenith.shape[0]):
                 if weights[j] > 0:
-                    if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith) and (pulseByPointAzimuth[j] >= minazimuth) and (pulseByPointAzimuth[j] <= maxazimuth):
+                    if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith) and (pulsesByPointAzimuth[j] >= minimumAzimuth) and (pulsesByPointAzimuth[j] <= maximumAzimuth):
                         k = int( (pointHeight[j] - heightBins[0]) / heightBinSize )
                         if (k >= 0) and (k < heightBins.shape[0]) and (pointHeight[j] > minHeight):
                             pointCounts[i,k] += weights[j]
