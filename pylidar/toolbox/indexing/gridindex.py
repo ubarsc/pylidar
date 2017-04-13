@@ -308,7 +308,7 @@ def copyScaling(input, output):
             try:
                 gain, offset = input.getScaling(field, arrayType)
                 output.setScaling(field, arrayType, gain, offset)
-            except generic.LiDARArrayColumnError:
+            except generic.LiDARFileException:
                 pass
                 
 def setScalingForCoordField(driver, srcfield, coordfield):
