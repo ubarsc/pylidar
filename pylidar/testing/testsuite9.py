@@ -50,10 +50,9 @@ def run(oldpath, newpath):
     otherargs.minzenith = [35.0]
     otherargs.maxzenith = [70.0]
     otherargs.planecorrection = False
-    otherargs.rptfile = None
+    otherargs.reportfile = None
     otherargs.gridsize = 20
     otherargs.gridbinsize = 5.0
-    otherargs.origin = [0.0,0.0]
     otherargs.excludedclasses = []
 
     inFile = os.path.join(oldpath, IMPORTED_SPD)
