@@ -217,7 +217,7 @@ def runZenithHeightStratification(data, otherargs):
         else:
             returnnumcol = 'RETURN_NUMBER'
         
-        if otherargs.planecorrection:
+        if otherargs.planecorrection or otherargs.externaldem is not None:
             pointcolnames = ['X','Y','Z','CLASSIFICATION',returnnumcol]
         else:
             pointcolnames = [otherargs.heightcol,'CLASSIFICATION',returnnumcol]        
@@ -238,6 +238,8 @@ def runZenithHeightStratification(data, otherargs):
             z = points['Z'] - pulsesByPoint['Z_ORIGIN']            
             pointHeights = z - (otherargs.planefit["Parameters"][1] * x + 
                 otherargs.planefit["Parameters"][2] * y + otherargs.planefit["Parameters"][0])
+        elif otherargs.externaldem is not None:
+            pointHeights = extractPointHeightsFromDEM(points['X'], points['Y'], points['Z'], otherargs)
         else:
             pointHeights = points[otherargs.heightcol]
         
@@ -246,6 +248,34 @@ def runZenithHeightStratification(data, otherargs):
             pulses['AZIMUTH'],pulsesByPoint['AZIMUTH'],pulses['ZENITH'],pulsesByPoint['ZENITH'],
             pointHeights,otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,
             weights,otherargs.minheight)
+
+def extractPointHeightsFromDEM(x, y, z, otherargs):
+    """
+    Extract point heights from an external DEM
+    For points outside the DEM extent, we use nearest neighbour values
+    TODO: Interpolate DEM elevations to actual point locations
+    """
+    col = ((x - otherargs.xMinDem) / otherargs.binSizeDem).astype(numpy.uint)
+    row = ((otherargs.yMaxDem - y) / otherargs.binSizeDem).astype(numpy.uint)           
+    pointHeights = numpy.empty(z.shape, dtype=numpy.float32)
+    
+    inside = (row >= 0) & (row < otherargs.dataDem.shape[0]) & \
+             (col >= 0) & (col < otherargs.dataDem.shape[1])
+    pointHeights[inside] = z[inside] - otherargs.dataDem[row[inside], col[inside]]
+    
+    left = (row >= 0) & (row < otherargs.dataDem.shape[0]) & (col < 0)
+    pointHeights[left] = z[left] - otherargs.dataDem[row[left], 0]
+
+    right = (row >= 0) & (row < otherargs.dataDem.shape[0]) & (col >= otherargs.dataDem.shape[1])
+    pointHeights[right] = z[right] - otherargs.dataDem[row[right], -1]
+
+    top = (col >= 0) & (col < otherargs.dataDem.shape[1]) & (row < 0)
+    pointHeights[top] = z[top] - otherargs.dataDem[0, col[top]]
+
+    bottom = (row >= 0) & (row < otherargs.dataDem.shape[0]) & (row >= otherargs.dataDem.shape[0])
+    pointHeights[bottom] = z[bottom] - otherargs.dataDem[-1, col[bottom]]
+    
+    return pointHeights
 
 def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
     """

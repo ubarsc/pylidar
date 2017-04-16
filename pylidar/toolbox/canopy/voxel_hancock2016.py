@@ -24,7 +24,6 @@ import os
 import numpy
 import collections
 from numba import jit
-from osgeo import gdal
 
 from pylidar.toolbox.canopy import canopycommon
 from pylidar import lidarprocessor
@@ -50,10 +49,11 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     
     # initialize summary voxel arrays    
     otherargs.outgrids = collections.OrderedDict()
-    nVox = otherargs.nX * otherargs.nY * otherargs.nZ
+    nVox = otherargs.nZ * otherargs.nY * otherargs.nX
     otherargs.outgrids["scan"] = numpy.zeros(nVox, dtype=numpy.uint8)
     
     # loop through each scan
+    outputSuffix = os.path.splitext(outfiles[0])[1]
     scanOutputs = ["btot","pgap","wcov"]
     for i,infile in enumerate(infiles):
         
@@ -62,6 +62,20 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         otherargs.scangrids["hits"] = numpy.zeros(nVox, dtype=numpy.float32)
         otherargs.scangrids["miss"] = numpy.zeros(nVox, dtype=numpy.float32)
         otherargs.scangrids["wcov"] = numpy.zeros(nVox, dtype=numpy.float32)
+        
+        # set ground boundary for voxel traversal
+        # TODO: check DEM is aligned to the voxel grid
+        otherargs.scangrids["gvox"] = numpy.zeros(nVox, dtype=numpy.uint8)
+        if otherargs.externaldem is not None:
+            x, y = numpy.meshgrid(numpy.arange(otherargs.nX),numpy.arange(otherargs.nY))
+            x = x.astype(numpy.float32) * otherargs.binSizeDem + otherargs.xMinDem
+            y = otherargs.yMaxDem - y.astype(numpy.float32) * otherargs.binSizeDem 
+            xi = ((x.reshape(nVox) - otherargs.bounds[0]) / otherargs.voxelsize[0]).astype(numpy.uint)
+            yi = ((y.reshape(nVox) - otherargs.bounds[1]) / otherargs.voxelsize[1]).astype(numpy.uint)
+            zi = ((otherargs.dataDem.reshape(nVox) - otherargs.bounds[2]) / otherargs.voxelsize[2]).astype(numpy.uint)
+            inside = (xi >= 0) & (xi < otherargs.nX) & (yi >= 0) & (yi < otherargs.nY) & (zi >= 0) & (zi < otherargs.nZ)    
+            vidx = xi + otherargs.nX * yi + otherargs.nX * otherargs.nY * zi
+            otherargs.scangrids["gvox"][vidx[inside]] = 1
 
         # run the voxelization                
         print("Voxel traversing %s" % infile)
@@ -74,17 +88,17 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         otherargs.scangrids["pgap"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["hits"] / otherargs.scangrids["btot"], numpy.nan)
         otherargs.scangrids["wcov"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["wcov"] / otherargs.scangrids["hits"], numpy.nan)
         
-        # run the silhouette calculation
-        #print("Silhouetting %s" % infile)
-        #lidarprocessor.doProcessing(runSilhouette, dataFiles, controls=controls, otherArgs=otherargs)
-                    
         # write output scan voxel arrays to image files
         for gridname in scanOutputs:
-            outfile = "%s.%s" % (os.path.splitext(infile)[0], gridname)
+            outfile = "%s.%s.%s" % (os.path.splitext(infile)[0], gridname, outputSuffix)
+            iw = canopycommon.ImageWriter(outfile, tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize, \
+                 driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
             otherargs.scangrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
-            saveVoxels(outfile, otherargs.scangrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj[0], drivername=otherargs.rasterdriver)
-    
-    # calculate vertical cover profiles
+            for i in range(otherargs.nZ):
+                iw.setLayer(otherargs.scangrids[gridname][i,:,:], layerNum=i)
+            iw.close()
+   
+    # calculate vertical cover profiles using conditional probability
     
     
     # calculate pavd profiles
@@ -92,11 +106,14 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     
     # write output summary voxel arrays to image files
     summaryOutputs = ["scan"]
-    for i,gridname in enumerate(summaryOutputs):
-         outfile = os.path.splitext(outfiles[i])[0]
-         otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
-         saveVoxels(outfile, otherargs.outgrids[gridname], otherargs.bounds[0], otherargs.bounds[1], otherargs.voxelsize, proj=otherargs.proj[0], drivername=otherargs.rasterdriver)
-       
+    for i,gridname in enumerate(summaryOutputs):   
+        iw = canopycommon.ImageWriter(outfiles[i], tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize, \
+             driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
+        otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
+        for i in range(otherargs.nZ):
+            iw.setLayer(otherargs.outgrids[gridname][i,:,:], layerNum=i)
+        iw.close()
+   
 
 def runVoxelization(data, otherargs):
     """
@@ -131,24 +148,25 @@ def runVoxelization(data, otherargs):
             pointsByPulses['X'].data, pointsByPulses['Y'].data, pointsByPulses['Z'].data, dx, dy, dz, \
             pulses['NUMBER_OF_RETURNS'], otherargs.voxDimX, otherargs.voxDimY, otherargs.voxDimZ, \
             otherargs.nX, otherargs.nY, otherargs.nZ, otherargs.bounds, otherargs.voxelsize, \
-            otherargs.scangrids["hits"], otherargs.scangrids["miss"], otherargs.scangrids["wcov"], voxIdx)
+            otherargs.scangrids["hits"], otherargs.scangrids["miss"], otherargs.scangrids["wcov"], \
+            otherargs.scangrids["gvox"], voxIdx)
 
 
 @jit(nopython=True)
 def runTraverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, number_of_returns, voxDimX, voxDimY, voxDimZ, \
-                      nX, nY, nZ, bounds, voxelSize, hitsArr, missArr, wcntArr, voxIdx):
+                      nX, nY, nZ, bounds, voxelSize, hitsArr, missArr, wcntArr, gvoxArr, voxIdx):
     """
     Loop through each pulse and run voxel traversal
     """
     for i in range(number_of_returns.shape[0]):        
         traverseVoxels(x0[i], y0[i], z0[i], x1[:,i], y1[:,i], z1[:,i], dx[i], dy[i], dz[i], \
             nX, nY, nZ, voxDimX, voxDimY, voxDimZ, bounds, voxelSize, number_of_returns[i], \
-            hitsArr, missArr, wcntArr, voxIdx)
+            hitsArr, missArr, wcntArr, gvoxArr, voxIdx)
     
 
 @jit(nopython=True)
 def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxDimY, voxDimZ, \
-               bounds, voxelSize, number_of_returns, hitsArr, missArr, wcntArr, voxIdx):
+               bounds, voxelSize, number_of_returns, hitsArr, missArr, wcntArr, gvoxArr, voxIdx):
     """
     A fast and simple voxel traversal algorithm through a 3D voxel space (J. Amanatides and A. Woo, 1987)
     Inputs:
@@ -246,6 +264,7 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
             tMaxZ = tmin + (voxelMaxZ - startZ) / dz
             tDeltaZ = voxelSize[2] / abs(dz) 
         
+        g = 0
         whit = 1.0
         wmiss = 0.0
         if number_of_returns > 0:
@@ -257,11 +276,15 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
                         
             vidx = int(x + nX * y + nX * nY * z)
             
-            hitsArr[vidx] += whit
-            missArr[vidx] += wmiss            
-            
+            if (gvoxArr[vidx] > 0) or (g == 1):
+                missArr[vidx] += 1.0                
+                g = 1
+            else:
+                hitsArr[vidx] += whit
+                missArr[vidx] += wmiss
+                
             for i in range(number_of_returns):
-                if vidx == voxIdx[i]:
+                if (vidx == voxIdx[i]) and (g == 0):
                     wcntArr[vidx] += w
                     whit -= w
                     wmiss += w
@@ -352,38 +375,3 @@ def gridIntersection(x0, y0, z0, dx, dy, dz, bounds):
     
     return intersect,tmin,tmax
     
-
-def saveVoxels(outfileprefix, vox, xmin, ymax, res, proj=None, drivername='HFA'):
-    """
-    Save the given 3D voxel array as a multiband GDAL raster file. 
-    """
-    (nBins, nRows, nCols) = vox.shape
-    
-    suffixdict = {'HFA': 'img',
-                  'GTiff': 'tif',
-                  'ENVI': ''}
-    suffix = suffixdict[drivername]
-    outfile = "%s.%s" % (outfileprefix,suffix)   
-    
-    if (vox.dtype == 'float32') or (vox.dtype == 'float64'):        
-        nullval = numpy.iinfo("uint16").max
-        vox = numpy.where( numpy.isnan(vox), nullval, numpy.uint16((vox - VOXEL_OFFSET) * VOXEL_SCALE) )
-    else:
-        nullval = numpy.iinfo(vox.dtype).max
-    
-    gdaltypedict = {numpy.dtype(numpy.uint16):gdal.GDT_UInt16,
-                    numpy.dtype(numpy.uint32):gdal.GDT_UInt32,
-                    numpy.dtype(numpy.uint8):gdal.GDT_Byte}
-    gdaltype = gdaltypedict[vox.dtype]   
-    
-    drvr = gdal.GetDriverByName(drivername)
-    ds = drvr.Create(outfile, nCols, nRows, nBins, gdaltype, ['COMPRESS=YES'])
-    for i in range(nBins):
-        band = ds.GetRasterBand(i+1)
-        band.WriteArray(vox[i,:,:])
-        band.SetNoDataValue(nullval)
-    
-    if proj is not None:
-        ds.SetProjection(proj)
-    
-    ds.SetGeoTransform((xmin, res[0], 0, ymax, 0, -res[1]))

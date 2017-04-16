@@ -60,6 +60,7 @@ def getCmdargs():
     p.add_argument("--excludedclasses", nargs="+", default=[], type=int, help="Point CLASSIFICATION values to exclude from the metric calculation (default is all points)")
     p.add_argument("--rasterdriver", default="HFA", help="GDAL format for output raster (default is %(default)s)")
     p.add_argument("--externaltransformfn", nargs="+", default=[], help="External transform filenames (for RIEGL RXP input files)")
+    p.add_argument("--externaldem", help="External single layer DEM image to use for calculation of point heights (PAVD_CALDERS2014) or lower boundary of voxel traversal (VOXEL_HANCOCK2016)")
        
     cmdargs = p.parse_args()
     if (cmdargs.infiles is None) or (cmdargs.metric is None):
@@ -96,6 +97,11 @@ def getCmdargs():
             p.print_help()
             sys.exit()        
     
+    if cmdargs.planecorrection and (cmdargs.externaldem is not None) and (cmdargs.metric == "PAVD_CALDERS2014"):
+        print("Cannot specify both --planecorrection and --externalDEM. Choose one.") 
+        p.print_help()
+        sys.exit()
+    
     return cmdargs
 
 
@@ -127,6 +133,7 @@ def run():
         otherargs.externaltransformfn = cmdargs.externaltransformfn
         otherargs.totalpaimethod = cmdargs.totalpaimethod
         otherargs.totalpai = cmdargs.totalpai
+        otherargs.externaldem = cmdargs.externaldem
 
     elif cmdargs.metric == "VOXEL_HANCOCK2016":    
         
@@ -134,7 +141,8 @@ def run():
         otherargs.bounds = numpy.array(cmdargs.bounds, dtype=numpy.float32)
         otherargs.rasterdriver = cmdargs.rasterdriver
         otherargs.externaltransformfn = cmdargs.externaltransformfn
-        
+        otherargs.externaldem = cmdargs.externaldem
+
     elif cmdargs.metric == "PGAP_ARMSTON2013":    
         
         pass

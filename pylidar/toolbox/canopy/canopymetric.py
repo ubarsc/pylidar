@@ -43,13 +43,19 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
     
     if metric == "PAVD_CALDERS2014":
         
-        dataFiles = canopycommon.prepareInputFiles(infiles, otherargs)        
+        dataFiles = canopycommon.prepareInputFiles(infiles, otherargs)
+        if otherargs.externaldem is not None:
+            otherargs.dataDem, otherargs.xMinDem, otherargs.yMaxDem, otherargs.binSizeDem = \
+                canopycommon.readImageLayer(otherargs.externaldem)
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
         pavd_calders2014.run_pavd_calders2014(dataFiles, controls, otherargs, outfiles[0])     
     
     elif metric == "VOXEL_HANCOCK2016":              
-              
+        
+        if otherargs.externaldem is not None:
+            otherargs.dataDem, otherargs.xMinDem, otherargs.yMaxDem, otherargs.binSizeDem = \
+                canopycommon.readImageLayer(otherargs.externaldem)              
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
         voxel_hancock2016.run_voxel_hancock2016(infiles, controls, otherargs, outfiles)     

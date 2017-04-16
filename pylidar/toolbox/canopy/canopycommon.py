@@ -1,5 +1,6 @@
 """
-Common functions and classes for the canopy moddule
+Common functions and classes for the canopy module
+There is some temporary duplication of functions from the spatial branch
 """
 
 # This file is part of PyLidar
@@ -21,6 +22,11 @@ Common functions and classes for the canopy moddule
 from __future__ import print_function, division
 
 import numpy
+from osgeo import osr
+from osgeo import gdal
+from rios import imageio
+from rios import calcstats
+from rios import pixelgrid
 from pylidar.lidarformats import generic
 from pylidar import lidarprocessor
 
@@ -69,3 +75,124 @@ def prepareInputFiles(infiles, otherargs, index=None):
             otherargs.proj.append(None)
     
     return dataFiles
+
+
+def readImageLayer(inFile, layerNum=1):
+    """
+    Read a layer from a GDAL supported dataset and return it as 
+    a 2d numpy array along with georeferencing information.
+
+    Returns a tuple with (data, xMin, yMax, binSize)
+    """
+    ds = gdal.Open(inFile)
+    band = ds.GetRasterBand(layerNum)
+    data = band.ReadAsArray()
+    georef = ds.GetGeoTransform()
+    del ds
+
+    return (data, georef[0], georef[3], georef[1])
+
+
+class ImageWriter(object):
+    """
+    Class that handles writing out image data with GDAL
+    """
+    def __init__(self, filename, numBands=1, gdalDataType=None,
+            driverName=lidarprocessor.DEFAULT_RASTERDRIVERNAME,
+            driverOptions=lidarprocessor.DEFAULT_RASTERCREATIONOPTIONS,
+            tlx=0.0, tly=0.0, binSize=0.0, epsg=None, wkt=None, nullVal=None,
+            ncols=None, nrows=None, calcStats=True):
+        """
+        Constructor. Set the filename, number of bands etc. If gdalDataType, 
+        ncols or nrows is None then these are guessed from the first layer 
+        passed to setLayer(). 
+        """
+        self.ds = None
+        self.filename = filename
+        self.numBands = numBands
+        self.gdalDataType = gdalDataType
+        self.driverName = driverName
+        self.driverOptions = driverOptions
+        self.tlx = tlx
+        self.tly = tly
+        self.binSize = binSize
+        self.epsg = epsg
+        self.wkt = wkt
+        self.nullVal = nullVal
+        self.ncols = ncols
+        self.nrows = nrows
+        self.calcStats = calcStats
+
+    def createDataset(self):
+        """
+        Internal method. Assumes self.gdalDataType, 
+        self.ncols and self.nrows is set.
+        """
+        driver = gdal.GetDriverByName(self.driverName)
+        if driver is None:
+            msg = 'Unable to find driver for %s' % driverName
+            raise SpatialException(msg)
+
+        self.ds = driver.Create(self.filename, self.ncols, self.nrows, 
+                    self.numBands, self.gdalDataType, self.driverOptions)
+        if self.ds is None:
+            msg = 'Unable to create %s' % self.filename
+            raise SpatialException(msg)
+
+        self.ds.SetGeoTransform([self.tlx, self.binSize, 0, self.tly, 0, 
+                    -self.binSize])
+
+        if self.epsg is not None:
+            proj = osr.SpatialReference()
+            proj.ImportFromEPSG(self.epsg)
+            self.ds.SetProjection(proj.ExportToWkt())
+        elif self.wkt is not None:
+            self.ds.SetProjection(self.wkt) 
+
+            # Set the null value on every band
+        if self.nullVal is not None:
+            for i in range(self.numBands):
+                band = ds.GetRasterBand(i+1)
+                band.SetNoDataValue(self.nullVal)
+
+    def setLayer(self, array, layerNum=1):
+        """
+        Set a layer in the file as a 2d array
+        """
+        if self.ds is None:
+            # create dataset but only get info from array
+            # when not given to the constructor.
+            if self.gdalDataType is None:
+                self.gdalDataType = imageio.NumpyTypeToGDALType(array.dtype)
+            if self.ncols is None:
+                self.ncols = array.shape[1]
+            if self.nrows is None:
+                self.nrows = array.shape[0]
+
+            self.createDataset()
+
+        # do some sanity checks to ensure what they pass
+        # matches what they have passed/told us before.
+        if self.gdalDataType != imageio.NumpyTypeToGDALType(array.dtype):
+            msg = 'Data type must be the same for all layers'
+            raise SpatialException(msg)
+        if self.ncols != array.shape[1]:
+            msg = 'X size must be the same for all layers'
+            raise SpatialException(msg)
+        if self.nrows != array.shape[0]:
+            msg = 'Y size must be the same for all layers'
+            raise SpatialException(msg)
+
+        band = self.ds.GetRasterBand(layerNum)
+        band.WriteArray(array)
+        self.ds.FlushCache()
+
+    def close(self):
+        """
+        Close and flush the dataset, plus calculate stats
+        """
+        if self.calcStats:
+            calcstats.calcStats(self.ds, ignore=self.nullVal)
+        self.ds.FlushCache()
+        self.ds = None
+
