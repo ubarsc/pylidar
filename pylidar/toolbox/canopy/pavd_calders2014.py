@@ -269,11 +269,11 @@ def extractPointHeightsFromDEM(x, y, z, otherargs):
     right = (row >= 0) & (row < otherargs.dataDem.shape[0]) & (col >= otherargs.dataDem.shape[1])
     pointHeights[right] = z[right] - otherargs.dataDem[row[right], -1]
 
-    top = (col >= 0) & (col < otherargs.dataDem.shape[1]) & (row < 0)
-    pointHeights[top] = z[top] - otherargs.dataDem[0, col[top]]
+    top = (row < 0)
+    pointHeights[top] = z[top] - otherargs.dataDem[0, numpy.clip(col[top],0,otherargs.dataDem.shape[1]-1)]
 
-    bottom = (row >= 0) & (row < otherargs.dataDem.shape[0]) & (row >= otherargs.dataDem.shape[0])
-    pointHeights[bottom] = z[bottom] - otherargs.dataDem[-1, col[bottom]]
+    bottom = (row >= otherargs.dataDem.shape[0])
+    pointHeights[bottom] = z[bottom] - otherargs.dataDem[-1, numpy.clip(col[bottom],0,otherargs.dataDem.shape[0]-1)]
     
     return pointHeights
 
