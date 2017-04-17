@@ -59,7 +59,7 @@ Simple Example
 The program shown above is complete, and would work assuming inFile existed and contained
 a 'Z' value for each point. It would create an output raster file with the minimum Z value for each bin. 
 
-The user-supplied function writeImageFunc is passed to the :func:`pylidar.lidarprocessor.doProcessing`
+The user-supplied function processChunk is passed to the :func:`pylidar.lidarprocessor.doProcessing`
 function which applies it through the lidar file in chunks. Inside the processChunk function the 'data' object has attributes
 named in the same way that the 'dataFiles' input to :func:`pylidar.lidarprocessor.doProcessing` has. Each object
 is of type :class:`pylidar.userclasses.LidarData`.
