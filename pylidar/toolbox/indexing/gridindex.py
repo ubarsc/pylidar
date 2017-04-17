@@ -253,24 +253,25 @@ def splitFileIntoTiles(infiles, binSize=1.0, blockSize=None,
         # done?
         bMoreToDo = subExtent.yMax > extent.yMin
 
-    # ok now set up to read the input file using lidarprocessor
-    dataFiles = lidarprocessor.DataFiles()
-    dataFiles.input = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
-    
-    controls = lidarprocessor.Controls()
-    progress = cuiprogress.GDALProgressBar()
-    progress.setLabelText('Splitting...')
-    controls.setProgress(progress)
-    controls.setSpatialProcessing(False)
-    controls.setMessageHandler(lidarprocessor.silentMessageFn)
-    
-    otherArgs = lidarprocessor.OtherArgs()
-    otherArgs.outList = extentList
-    otherArgs.indexType = indexType
-    otherArgs.pulseIndexMethod = pulseIndexMethod
-    
-    lidarprocessor.doProcessing(classifyFunc, dataFiles, controls=controls, 
-                otherArgs=otherArgs)
+    # ok now set up to read the input files using lidarprocessor
+    for infile in infiles:
+        dataFiles = lidarprocessor.DataFiles()
+        dataFiles.input = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
+        
+        controls = lidarprocessor.Controls()
+        progress = cuiprogress.GDALProgressBar()
+        progress.setLabelText('Splitting...')
+        controls.setProgress(progress)
+        controls.setSpatialProcessing(False)
+        controls.setMessageHandler(lidarprocessor.silentMessageFn)
+        
+        otherArgs = lidarprocessor.OtherArgs()
+        otherArgs.outList = extentList
+        otherArgs.indexType = indexType
+        otherArgs.pulseIndexMethod = pulseIndexMethod
+        
+        lidarprocessor.doProcessing(classifyFunc, dataFiles, controls=controls, 
+                    otherArgs=otherArgs)
     
     # close all the output files and save their names to return
     newExtentList = []
