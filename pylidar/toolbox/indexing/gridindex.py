@@ -254,24 +254,24 @@ def splitFileIntoTiles(infiles, binSize=1.0, blockSize=None,
         bMoreToDo = subExtent.yMax > extent.yMin
 
     # ok now set up to read the input files using lidarprocessor
-    for infile in infiles:
-        dataFiles = lidarprocessor.DataFiles()
-        dataFiles.input = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
+    dataFiles = lidarprocessor.DataFiles()
+    dataFiles.inputs = [lidarprocessor.LidarFile(infile, lidarprocessor.READ)
+                            for infile in infiles]
         
-        controls = lidarprocessor.Controls()
-        progress = cuiprogress.GDALProgressBar()
-        progress.setLabelText('Splitting...')
-        controls.setProgress(progress)
-        controls.setSpatialProcessing(False)
-        controls.setMessageHandler(lidarprocessor.silentMessageFn)
+    controls = lidarprocessor.Controls()
+    progress = cuiprogress.GDALProgressBar()
+    progress.setLabelText('Splitting...')
+    controls.setProgress(progress)
+    controls.setSpatialProcessing(False)
+    controls.setMessageHandler(lidarprocessor.silentMessageFn)
         
-        otherArgs = lidarprocessor.OtherArgs()
-        otherArgs.outList = extentList
-        otherArgs.indexType = indexType
-        otherArgs.pulseIndexMethod = pulseIndexMethod
+    otherArgs = lidarprocessor.OtherArgs()
+    otherArgs.outList = extentList
+    otherArgs.indexType = indexType
+    otherArgs.pulseIndexMethod = pulseIndexMethod
         
-        lidarprocessor.doProcessing(classifyFunc, dataFiles, controls=controls, 
-                    otherArgs=otherArgs)
+    lidarprocessor.doProcessing(classifyFunc, dataFiles, controls=controls, 
+                otherArgs=otherArgs)
     
     # close all the output files and save their names to return
     newExtentList = []
@@ -338,69 +338,70 @@ def classifyFunc(data, otherArgs):
     Called by lidarprocessor. Looks at the input data and splits into 
     the appropriate output files.
     """
-    pulses = data.input.getPulses()
-    points = data.input.getPointsByPulse()
-    waveformInfo = data.input.getWaveformInfo()
-    recv = data.input.getReceived()
-    trans = data.input.getTransmitted()
+    for input in data.inputs:
+        pulses = input.getPulses()
+        points = input.getPointsByPulse()
+        waveformInfo = input.getWaveformInfo()
+        recv = input.getReceived()
+        trans = input.getTransmitted()
 
-    for extent, driver in otherArgs.outList:
+        for extent, driver in otherArgs.outList:
     
-        if data.info.isFirstBlock():
-            # deal with scaling. There must be a better way to do this.
-            copyScaling(data.input, driver)
+            if data.info.isFirstBlock():
+                # deal with scaling. There must be a better way to do this.
+                copyScaling(input, driver)
 
-        # TODO: should we always be able to rely on X_IDX, Y_IDX for
-        # whatever index we are building?
-        # No - as the values of these columns may have to change if the
-        # properties of the spatial indexing method change   
-        if otherArgs.indexType == INDEX_CARTESIAN:
-            xIdxFieldName = 'X'
-            yIdxFieldName = 'Y'
-            xIdx, yIdx = indexPulses(pulses, points, otherArgs.pulseIndexMethod)
-        elif otherArgs.indexType == INDEX_SPHERICAL:
-            xIdxFieldName = 'AZIMUTH'
-            yIdxFieldName = 'ZENITH'
-            xIdx, yIdx = pulses[xIdxFieldName], pulses[yIdxFieldName]
-        elif otherArgs.indexType == INDEX_SCAN:
-            xIdxFieldName = 'SCANLINE_IDX'
-            yIdxFieldName = 'SCANLINE'
-            xIdx, yIdx = pulses[xIdxFieldName], pulses[yIdxFieldName]              
-        else:
-            msg = 'unsupported indexing method'
-            raise generic.LiDARSpatialIndexNotAvailable(msg)
+            # TODO: should we always be able to rely on X_IDX, Y_IDX for
+            # whatever index we are building?
+            # No - as the values of these columns may have to change if the
+            # properties of the spatial indexing method change   
+            if otherArgs.indexType == INDEX_CARTESIAN:
+                xIdxFieldName = 'X'
+                yIdxFieldName = 'Y'
+                xIdx, yIdx = indexPulses(pulses, points, otherArgs.pulseIndexMethod)
+            elif otherArgs.indexType == INDEX_SPHERICAL:
+                xIdxFieldName = 'AZIMUTH'
+                yIdxFieldName = 'ZENITH'
+                xIdx, yIdx = pulses[xIdxFieldName], pulses[yIdxFieldName]
+            elif otherArgs.indexType == INDEX_SCAN:
+                xIdxFieldName = 'SCANLINE_IDX'
+                yIdxFieldName = 'SCANLINE'
+                xIdx, yIdx = pulses[xIdxFieldName], pulses[yIdxFieldName]              
+            else:
+                msg = 'unsupported indexing method'
+                raise generic.LiDARSpatialIndexNotAvailable(msg)
 
-        # ensure the scaling of X_IDX & Y_IDX matches the data we are putting in it
-        setScalingForCoordField(driver, xIdxFieldName, 'X_IDX')
-        setScalingForCoordField(driver, yIdxFieldName, 'Y_IDX')
+            # ensure the scaling of X_IDX & Y_IDX matches the data we are putting in it
+            setScalingForCoordField(driver, xIdxFieldName, 'X_IDX')
+            setScalingForCoordField(driver, yIdxFieldName, 'Y_IDX')
         
-        # this the expression used in the spatial index building
-        # so we are consistent. 
-        mask = ((xIdx >= extent.xMin) & (xIdx < extent.xMax) & 
-                (yIdx > extent.yMin) & (yIdx <= extent.yMax))
+            # this the expression used in the spatial index building
+            # so we are consistent. 
+            mask = ((xIdx >= extent.xMin) & (xIdx < extent.xMax) & 
+                    (yIdx > extent.yMin) & (yIdx <= extent.yMax))
 
-        # subset the data
-        pulsesSub = pulses[mask]
-        # this is required otherwise the pulses get stripped out
-        # when we write the pulses in spatial mode (in indexAndMerge)
-        pulsesSub['X_IDX'] = xIdx[mask]
-        pulsesSub['Y_IDX'] = yIdx[mask]
+            # subset the data
+            pulsesSub = pulses[mask]
+            # this is required otherwise the pulses get stripped out
+            # when we write the pulses in spatial mode (in indexAndMerge)
+            pulsesSub['X_IDX'] = xIdx[mask]
+            pulsesSub['Y_IDX'] = yIdx[mask]
         
-        # subset the other data also to match
-        pointsSub = points[..., mask]
+            # subset the other data also to match
+            pointsSub = points[..., mask]
         
-        waveformInfoSub = None
-        recvSub = None
-        transSub = None
-        if waveformInfo is not None and waveformInfo.size > 0:
-            waveformInfoSub = waveformInfo[...,mask]
-        if recv is not None and recv.size > 0:
-            recvSub = recv[:,:,mask]
-        if trans is not None and trans.size > 0:
-            transSub = trans[:,:,mask]
+            waveformInfoSub = None
+            recvSub = None
+            transSub = None
+            if waveformInfo is not None and waveformInfo.size > 0:
+                waveformInfoSub = waveformInfo[...,mask]
+            if recv is not None and recv.size > 0:
+                recvSub = recv[:,:,mask]
+            if trans is not None and trans.size > 0:
+                transSub = trans[:,:,mask]
            
-        driver.writeData(pulsesSub, pointsSub, transSub, recvSub, 
-                    waveformInfoSub)
+            driver.writeData(pulsesSub, pointsSub, transSub, recvSub, 
+                        waveformInfoSub)
 
 def indexPulses(pulses, points, pulseIndexMethod):
     """
