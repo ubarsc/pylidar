@@ -276,6 +276,9 @@ SPDV4_CLASSIFICATION_WALL = 12
 SPDV4_CLASSIFICATION_RAIL = 13
 "classification codes"
 
+HEADER_TRANSLATION_DICT = {generic.HEADER_NUMBER_OF_POINTS : 'NUMBER_OF_POINTS'}
+"Translation of header field names"
+
 @jit
 def flatten3dWaveformData(wavedata, inmask, nrecv, flattened):
     """
@@ -528,6 +531,13 @@ class SPDV4File(generic.LiDARFile):
         elif arrayType == generic.ARRAY_TYPE_PULSES:
             dict[generic.FIELD_PULSES_TIMESTAMP] = 'TIMESTAMP'
         return dict
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Return dictionary with non-standard header names
+        """
+        return HEADER_TRANSLATION_DICT
 
     def setExtent(self, extent):
         """
@@ -2418,3 +2428,10 @@ class SPDV4FileInfo(generic.LiDARFileInfo):
         Name of this driver
         """
         return "SPDV4"
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Return dictionary with non-standard header names
+        """
+        return HEADER_TRANSLATION_DICT

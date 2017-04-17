@@ -165,6 +165,13 @@ class ASCIIFile(generic.LiDARFile):
         """
         return False
 
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        No header so not really supported. Return empty dict.
+        """
+        return {}
+
     def setPulseRange(self, pulseRange):
         """
         Sets the PulseRange object to use for non spatial
@@ -325,3 +332,10 @@ class ASCIIFileInfo(generic.LiDARFileInfo):
     @staticmethod        
     def getDriverName():
         return 'ASCII'
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        No header so not really supported. Return empty dict.
+        """
+        return {}

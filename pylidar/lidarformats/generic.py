@@ -43,6 +43,9 @@ FIELD_POINTS_RETURN_NUMBER = 1
 FIELD_PULSES_TIMESTAMP = 2
 "'standard' fields that have different names for different formats"
 
+HEADER_NUMBER_OF_POINTS = 1
+"'standard' header fields that have different names for different formats"
+
 ARRAY_TYPE_POINTS = 0
 """
 For use in userclass.LidarData.translateFieldNames() and 
@@ -208,7 +211,18 @@ class LiDARFile(basedriver.Driver):
         """
         Return a dictionary keyed on FIELD_* values (above)
         that can be used to translate field names between the formats
-        arrayType is the type of array that is to be translates (ARRAY_TYPE_*)
+        arrayType is the type of array that is to be translated (ARRAY_TYPE_*)
+
+        For use by the :func:`pylidar.userclases.LidarData.translateFieldNames`
+        function.
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Return a dictionary keyed on HEADER_* values (above)
+        that can be used to translate dictionary field names between the formats
         """
         raise NotImplementedError()
 
@@ -563,6 +577,14 @@ class LiDARFileInfo(basedriver.FileInfo):
         Return name of driver - just a short unique name is fine.
         should match the :func:`pylidar.lidarformats.generic.LiDARFile.getDriverName`
         call for the same format.
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Return a dictionary keyed on HEADER_* values (above)
+        that can be used to translate dictionary field names between the formats
         """
         raise NotImplementedError()
         

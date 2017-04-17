@@ -135,6 +135,10 @@ DEFAULT_HEADER = {"GENERATING_SOFTWARE" : generic.SOFTWARE_NAME,
 "FILE_CREATION_YEAR" : today.year}
 "for new files"
 
+HEADER_TRANSLATION_DICT = {generic.HEADER_NUMBER_OF_POINTS : 
+                        'NUMBER_OF_POINT_RECORDS'}
+"Non standard header names"
+
 def isLasFile(fname):
     """
     Helper function that looks at the start of the file
@@ -221,6 +225,13 @@ class LasFile(generic.LiDARFile):
         self.lastReceived = None
         self.extent = None
         self.lastExtent = None
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Return dictionary with non-standard header names
+        """
+        return HEADER_TRANSLATION_DICT
 
     def readPointsByPulse(self, colNames=None):
         """
@@ -840,6 +851,13 @@ class LasFileInfo(generic.LiDARFileInfo):
     @staticmethod        
     def getDriverName():
         return 'LAS'
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Return dictionary with non-standard header names
+        """
+        return HEADER_TRANSLATION_DICT
     
 def getWavePacketDescriptions(fname):
     """
