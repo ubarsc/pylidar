@@ -60,6 +60,8 @@ def getCmdargs():
         help="Suppress the printing of the tile filenames")
     p.add_argument("-f", "--footprint", choices=['union', 'intersection'],
         default='union', help='how to combine multiple inputs')
+    p.add_argument("--format", choices=['SPDV4', 'LAS'], default='SPDV4',
+        help="Format to output the tiles as (default: %(default)s)")
 
     cmdargs = p.parse_args()
 
@@ -105,7 +107,8 @@ def run():
                                 tempDir=cmdargs.outdir, 
                                 extent=extent, indexType=indexType,
                                 pulseIndexMethod=pulseindexmethod,
-                                footprint=footprint)
+                                footprint=footprint, 
+                                outputFormat=cmdargs.format)
 
     # now print the names of the tiles to the screen
     if not cmdargs.quiet:

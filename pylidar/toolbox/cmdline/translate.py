@@ -42,7 +42,8 @@ def getCmdargs():
     p = argparse.ArgumentParser()
     p.add_argument("-i", "--input", help="Input file name")
     p.add_argument("-o", "--output", help="Output file name")
-    p.add_argument("-f", "--format", help="Output format. One of [SPDV4, LAS]")
+    p.add_argument("-f", "--format", help="Output format", 
+        choices=['SPDV4', 'LAS'])
     p.add_argument("--spatial", default=False, action="store_true", 
         help="Process the data spatially. Default is False and if True " + 
             "requires a spatial index in the input.")

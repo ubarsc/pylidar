@@ -26,6 +26,7 @@ import numpy
 import tempfile
 from pylidar import lidarprocessor
 from pylidar.lidarformats import spdv4
+from pylidar.lidarformats import las
 from pylidar.lidarformats import generic
 from pylidar.basedriver import Extent
 from rios import cuiprogress
@@ -117,7 +118,7 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
 def splitFileIntoTiles(infiles, binSize=1.0, blockSize=None, 
         tempDir='.', extent=None, indexType=INDEX_CARTESIAN,
         pulseIndexMethod=PULSE_INDEX_FIRST_RETURN, 
-        footprint=lidarprocessor.UNION):
+        footprint=lidarprocessor.UNION, outputFormat='SPDV4'):
     """
     Takes a filename (or list of filenames) and creates a tempfile for every 
     block (using blockSize).
@@ -228,14 +229,22 @@ def splitFileIntoTiles(infiles, binSize=1.0, blockSize=None,
     controls = lidarprocessor.Controls()
     controls.setSpatialProcessing(False)
 
+    tmpSuffix = '.' + outputFormat.lower()
+
     bMoreToDo = True
     while bMoreToDo:
-        fd, fname = tempfile.mkstemp(suffix='.spdv4', dir=tempDir)
+        fd, fname = tempfile.mkstemp(suffix=tmpSuffix, dir=tempDir)
         os.close(fd)
         
         userClass = lidarprocessor.LidarFile(fname, generic.CREATE)
-        userClass.setLiDARDriverOption('SCALING_BUT_NO_DATA_WARNING', False)
-        driver = spdv4.SPDV4File(fname, generic.CREATE, controls, userClass)
+        if outputFormat == 'SPDV4':
+            userClass.setLiDARDriverOption('SCALING_BUT_NO_DATA_WARNING', False)
+            driver = spdv4.SPDV4File(fname, generic.CREATE, controls, userClass)
+        elif outputFormat == 'LAS':
+            driver = las.LasFile(fname, generic.CREATE, controls, userClass)
+        else:
+            msg = 'Unsupported output format %s' % outputFormat
+            raise generic.LiDARFunctionUnsupported(msg)
         data = (copy.copy(subExtent), driver)
         extentList.append(data)
 
@@ -305,7 +314,11 @@ def copyScaling(input, output):
     """
     for arrayType in (lidarprocessor.ARRAY_TYPE_PULSES, 
             lidarprocessor.ARRAY_TYPE_POINTS, lidarprocessor.ARRAY_TYPE_WAVEFORMS):
-        for field in output.getScalingColumns(arrayType):
+        try:
+            fields = output.getScalingColumns(arrayType)
+        except generic.LiDARInvalidSetting:
+            continue
+        for field in fields:
             try:
                 gain, offset = input.getScaling(field, arrayType)
                 output.setScaling(field, arrayType, gain, offset)
@@ -344,6 +357,9 @@ def classifyFunc(data, otherArgs):
         waveformInfo = input.getWaveformInfo()
         recv = input.getReceived()
         trans = input.getTransmitted()
+        # With LAS sometimes this happens. Not sure why...
+        if len(pulses) == 0:
+            continue
 
         for extent, driver in otherArgs.outList:
     
@@ -372,8 +388,10 @@ def classifyFunc(data, otherArgs):
                 raise generic.LiDARSpatialIndexNotAvailable(msg)
 
             # ensure the scaling of X_IDX & Y_IDX matches the data we are putting in it
-            setScalingForCoordField(driver, xIdxFieldName, 'X_IDX')
-            setScalingForCoordField(driver, yIdxFieldName, 'Y_IDX')
+            if driver.getDriverName() == 'SPDV4':
+                # only makes sense for SPDV4 since LAS doesn't really have an X_IDX etc
+                setScalingForCoordField(driver, xIdxFieldName, 'X_IDX')
+                setScalingForCoordField(driver, yIdxFieldName, 'Y_IDX')
         
             # this the expression used in the spatial index building
             # so we are consistent. 
