@@ -45,8 +45,9 @@ def getCmdargs():
         type=float, help="Output resolution to use when choosing corners " + 
             "of the tiles (default: %(default)s)")
     p.add_argument("-b","--blocksize", type=float,
-        help=("The size (in world coordinates) of the tiles into which the data will be dividied. "+
-            "The default wil be calculated internally. "))
+        help=("The size (in world coordinates, i.e. metres) of the tiles into which the "+
+            "data will be divided. The default will be calculated internally, and is "+
+            "probably not what you want. "))
     p.add_argument("--indextype", default=DEFAULT_INDEXTYPE,
         choices=['CARTESIAN', 'SPHERICAL', 'SCAN'],
         help="Spatial index type. (default: %(default)s)")
