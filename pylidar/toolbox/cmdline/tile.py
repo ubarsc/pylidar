@@ -21,6 +21,7 @@ Does the creation of a spatial index
 from __future__ import print_function, division
 
 import sys
+import os
 import argparse
 
 from pylidar import lidarprocessor
@@ -64,6 +65,8 @@ def getCmdargs():
         default='union', help='how to combine multiple inputs')
     p.add_argument("--format", choices=['SPDV4', 'LAS'], default='SPDV4',
         help="Format to output the tiles as (default: %(default)s)")
+    p.add_argument("--keepemptytiles", default=False, action="store_true",
+        help="Do not delete the tiles which turn out to be empty. Default will remove them")
 
     cmdargs = p.parse_args()
 
@@ -111,8 +114,31 @@ def run():
                                 pulseIndexMethod=pulseindexmethod,
                                 footprint=footprint, 
                                 outputFormat=cmdargs.format)
+    
+    # Delete the empty ones
+    if not cmdargs.keepemptytiles:
+        fnameList = deleteEmptyTiles(fnameList)
 
     # now print the names of the tiles to the screen
     if not cmdargs.quiet:
         for fname, subExtent in fnameList:
             print(fname)
+
+
+def deleteEmptyTiles(fnameList):
+    """
+    After creating all the tiles, some of them will have ended up being empty. Delete them. 
+    """
+    newFileList = []
+    for (fname, subExtent) in fnameList:
+        info = generic.getLidarFileInfo(fname)
+        header = info.header
+        translator = info.getHeaderTranslationDict()
+        numPointsField = translator[generic.HEADER_NUMBER_OF_POINTS]
+        if header[numPointsField] > 0:
+            newFileList.append((fname, subExtent))
+        else:
+            if os.path.exists(fname):
+                os.remove(fname)
+
+    return newFileList
