@@ -38,14 +38,15 @@ def getCmdargs():
     Get commandline arguments
     """
     p = argparse.ArgumentParser()
-    p.add_argument("-i", "--input", action='append', 
-        help="Input SPD file name. Can be specified multiple times for "
-            +"multiple inputs.", required=True)
+    p.add_argument("input", nargs='+', 
+        help=("Input lidar file name. Can be specified multiple times, or using wild cards, for "
+            +"multiple inputs."))
     p.add_argument("-r","--resolution", default=DEFAULT_RESOLUTION, 
         type=float, help="Output resolution to use when choosing corners " + 
             "of the tiles (default: %(default)s)")
     p.add_argument("-b","--blocksize", type=float,
-        help="Override the default blocksize")
+        help=("The size (in world coordinates) of the tiles into which the data will be dividied. "+
+            "The default wil be calculated internally. "))
     p.add_argument("--indextype", default=DEFAULT_INDEXTYPE,
         choices=['CARTESIAN', 'SPHERICAL', 'SCAN'],
         help="Spatial index type. (default: %(default)s)")
