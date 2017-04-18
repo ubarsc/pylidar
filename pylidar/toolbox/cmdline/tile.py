@@ -38,7 +38,9 @@ def getCmdargs():
     """
     Get commandline arguments
     """
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description="""
+        Split one or more input lidar files into separate tiles, on a regular grid. 
+    """)
     p.add_argument("input", nargs='+', 
         help=("Input lidar file name. Can be specified multiple times, or using wild cards, for "
             +"multiple inputs."))
@@ -64,7 +66,8 @@ def getCmdargs():
     p.add_argument("-f", "--footprint", choices=['union', 'intersection'],
         default='union', help='how to combine multiple inputs')
     p.add_argument("--format", choices=['SPDV4', 'LAS'], default='SPDV4',
-        help="Format to output the tiles as (default: %(default)s)")
+        help=("Format to output the tiles as (default: %(default)s). This is not as orthogonal "+
+            "as it should be, i.e. not all combinations of input and output format actually work. "))
     p.add_argument("--keepemptytiles", default=False, action="store_true",
         help="Do not delete the tiles which turn out to be empty. Default will remove them")
 
