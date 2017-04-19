@@ -70,6 +70,8 @@ def getCmdargs():
             "as it should be, i.e. not all combinations of input and output format actually work. "))
     p.add_argument("--keepemptytiles", default=False, action="store_true",
         help="Do not delete the tiles which turn out to be empty. Default will remove them")
+    p.add_argument("--buildpulses", default=False, action="store_true",
+            help="Build pulse data structure. Default is False (only for LAS inputs)")
 
     cmdargs = p.parse_args()
 
@@ -116,7 +118,8 @@ def run():
                                 extent=extent, indexType=indexType,
                                 pulseIndexMethod=pulseindexmethod,
                                 footprint=footprint, 
-                                outputFormat=cmdargs.format)
+                                outputFormat=cmdargs.format,
+                                buildPulses=cmdargs.buildpulses)
     
     # Delete the empty ones
     if not cmdargs.keepemptytiles:

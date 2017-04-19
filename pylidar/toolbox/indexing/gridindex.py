@@ -118,7 +118,8 @@ def createGridSpatialIndex(infile, outfile, binSize=1.0, blockSize=None,
 def splitFileIntoTiles(infiles, binSize=1.0, blockSize=None, 
         tempDir='.', extent=None, indexType=INDEX_CARTESIAN,
         pulseIndexMethod=PULSE_INDEX_FIRST_RETURN, 
-        footprint=lidarprocessor.UNION, outputFormat='SPDV4'):
+        footprint=lidarprocessor.UNION, outputFormat='SPDV4',
+        buildPulses=False):
     """
     Takes a filename (or list of filenames) and creates a tempfile for every 
     block (using blockSize).
@@ -128,6 +129,10 @@ def splitFileIntoTiles(infiles, binSize=1.0, blockSize=None,
     pulseIndexMethod is one of the PULSE_INDEX_* constants.
     footprint is one of lidarprocessor.UNION or lidarprocessor.INTERSECTION
         and is how to combine extents if there is more than one file.
+    outputFormat is either 'SPDV4' or 'LAS'. 'LAS' outputs only supported
+        when input is 'LAS'.
+    buildPulses relevant for 'LAS' and determines whether to build the 
+        pulse structure or not. 
 
     returns the header of the first input file, the extent used and a list
     of (fname, extent) tuples that contain the information for 
@@ -264,8 +269,19 @@ def splitFileIntoTiles(infiles, binSize=1.0, blockSize=None,
 
     # ok now set up to read the input files using lidarprocessor
     dataFiles = lidarprocessor.DataFiles()
-    dataFiles.inputs = [lidarprocessor.LidarFile(infile, lidarprocessor.READ)
-                            for infile in infiles]
+    dataFiles.inputs = []
+
+    for infile in infiles:
+        input = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
+
+        # must be a better way of doing this, but this is what 
+        # translate does. We don't know what formats we are getting ahead of time
+        info = generic.getLidarFileInfo(infile)
+        inFormat = info.getDriverName()
+        if inFormat == 'LAS':
+            input.setLiDARDriverOption('BUILD_PULSES', buildPulses)
+
+        dataFiles.inputs.append(input)
         
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
