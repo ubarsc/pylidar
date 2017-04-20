@@ -30,7 +30,7 @@ from pylidar.lidarformats import spdv4
 from pylidar.toolbox.indexing import gridindex
 from pylidar.basedriver import Extent
 
-DEFAULT_RESOLUTION = 1.0
+DEFAULT_BLOCKSIZE = 1000.0
 DEFAULT_INDEXTYPE = "CARTESIAN"
 DEFAULT_PULSEINDEXMETHOD = "FIRST_RETURN"
 
@@ -44,13 +44,12 @@ def getCmdargs():
     p.add_argument("input", nargs='+', 
         help=("Input lidar file name. Can be specified multiple times, or using wild cards, for "
             +"multiple inputs."))
-    p.add_argument("-r","--resolution", default=DEFAULT_RESOLUTION, 
+    p.add_argument("-r","--resolution", 
         type=float, help="Output resolution to use when choosing corners " + 
-            "of the tiles (default: %(default)s)")
-    p.add_argument("-b","--blocksize", type=float,
+            "of the tiles (default: same value as --blocksize)")
+    p.add_argument("-b","--blocksize", type=float, default=DEFAULT_BLOCKSIZE, 
         help=("The size (in world coordinates, i.e. metres) of the tiles into which the "+
-            "data will be divided. The default will be calculated internally, and is "+
-            "probably not what you want. "))
+            "data will be divided (default: %(default)s) "))
     p.add_argument("--indextype", default=DEFAULT_INDEXTYPE,
         choices=['CARTESIAN', 'SPHERICAL', 'SCAN'],
         help="Spatial index type. (default: %(default)s)")
@@ -74,6 +73,9 @@ def getCmdargs():
             help="Build pulse data structure. Default is False (only for LAS inputs)")
 
     cmdargs = p.parse_args()
+    
+    if cmdargs.resolution is None:
+        cmdargs.resolution = cmdargs.blocksize
 
     return cmdargs
 
