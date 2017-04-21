@@ -225,6 +225,48 @@ def addAdvIndexing(extModules, cxxFlags):
         print('libspatialindex library not found.')
         print('If installed set $LIBSPATIALINDEX_ROOT to the install location of libspatialindex https://libspatialindex.github.io/')
 
+def addInsidePoly(extModules):
+    """
+    Adds the insidepoly C toolbox module. Currently requires GDAL to be 
+    present. Could be ignored if GDAL not available, but that sounds confusing
+    so left it as compulsory for now.
+    """
+    extraargs = {}
+    # don't use the deprecated numpy api
+    extraargs['define_macros'] = [NUMPY_MACROS]
+
+    if sys.platform == 'win32':
+        # Windows - rely on %GDAL_HOME% being set and set 
+        # paths appropriately
+        gdalhome = os.getenv('GDAL_HOME')
+        if gdalhome is None:
+            raise SystemExit("need to define %GDAL_HOME%")
+        extraargs['include_dirs'] = [os.path.join(gdalhome, 'include')]
+        extraargs['library_dirs'] = [os.path.join(gdalhome, 'lib')]
+        extraargs['libraries'] = ['gdal_i']
+    else:
+        # Unix - can do better with actual flags using gdal-config
+        import subprocess
+        try:
+            cflags = subprocess.check_output(['gdal-config', '--cflags'])
+            if sys.version_info[0] >= 3:
+                cflags = cflags.decode()
+            extraargs['extra_compile_args'] = cflags.strip().split()
+
+            ldflags = subprocess.check_output(['gdal-config', '--libs'])
+            if sys.version_info[0] >= 3:
+                ldflags = ldflags.decode()
+            extraargs['extra_link_args'] = ldflags.strip().split()
+        except OSError:
+            raise SystemExit("can't find gdal-config - GDAL development files need to be installed")
+
+    extraargs['name'] = 'pylidar.toolbox.insidepoly'
+    extraargs['sources'] = ['src/insidepoly.c']
+    print('Building InsidePoly Toolbox Extension...')
+
+    insidePolyModule = Extension(**extraargs)
+    extModules.append(insidePolyModule)
+
 # get any C++ flags
 cxxFlags = getExtraCXXFlags()
 # work out if we need to build any of the C/C++ extension
@@ -237,6 +279,7 @@ if withExtensions:
     # Advanced indexing commented out for now
     # wasn't useful, and causing problems for some installs
     #addAdvIndexing(externalModules, cxxFlags)
+    addInsidePoly(externalModules)
 
 if NO_INSTALL_CMDLINE:
     scriptList = None
