@@ -402,13 +402,13 @@ PyObject *pylidar_stringArrayToTuple(const char *data[])
     PyObject *pStr;
     const char *psz;
 
-     // how many do we have?
+    /* how many do we have? */
     for( n = 0; data[n] != NULL; n++ )
     {
-        // do nothing
+        /* do nothing */
     }
 
-    // now do it for real
+    /* now do it for real */
     pTuple = PyTuple_New(n);
     for( n = 0; data[n] != NULL; n++ )
     {

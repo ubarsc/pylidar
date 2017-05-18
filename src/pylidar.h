@@ -64,11 +64,11 @@ PyObject *pylidar_stringArrayToTuple(const char *data[]);
 typedef struct
 {
     const char *pszName;
-    char cKind; // 'i' for signed int, 'u' for unsigned int, 'f' for float
+    char cKind; /* 'i' for signed int, 'u' for unsigned int, 'f' for float */
     int nSize;
     int nOffset;
     int nStructTotalSize;
-    char bIgnore; // set to 1 to not report this field to numpy
+    char bIgnore; /* set to 1 to not report this field to numpy */
 } SpylidarFieldDefn;
 
 /* workaround for gcc 4.7.4 (maybe other versions?) where offsetof isn't recognised from 
@@ -83,14 +83,14 @@ las.cpp (but is from riegl.cpp). */
 
 /* 
 Here is an example of use:
-//Say you had a structure like this:
+Say you had a structure like this:
 typedef struct {
     double x,
     double y,
     int count
 } SMyStruct;
 
-//Create an array of structures defining the fields like this:
+Create an array of structures defining the fields like this:
 static SpylidarFieldDefn fields[] = {
     CREATE_FIELD_DEFN(SMyStruct, x, 'f'),
     CREATE_FIELD_DEFN(SMyStruct, y, 'f'),
@@ -98,7 +98,7 @@ static SpylidarFieldDefn fields[] = {
     {NULL} // Sentinel 
 };
 
-// Kind is one of the following (see http://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html)
+Kind is one of the following (see http://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html)
 'b'     boolean
 'i'     (signed) integer
 'u'     unsigned integer
@@ -120,7 +120,7 @@ PyArrayObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, S
 PyArray_Descr *pylidar_getDtypeForField(SpylidarFieldDefn *pDefn, const char *pszFieldname);
 
 #ifdef __cplusplus
-} // extern C
+} /* extern C */
 #endif
 
 #endif /*PYLIDAR_H*/
