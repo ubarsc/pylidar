@@ -444,40 +444,52 @@ char *pszName;
     pOffsetList = PyList_New(0);
     while( pDefn->pszName != NULL )
     {
-        /* Convert to upper case */
-        pszName = strdup(pDefn->pszName);
-        for( i = 0; pszName[i] != '\0'; i++ )
+        if( !pDefn->bIgnore )
         {
-            pszName[i] = toupper(pszName[i]);
+            /* Convert to upper case */
+            pszName = strdup(pDefn->pszName);
+            for( i = 0; pszName[i] != '\0'; i++ )
+            {
+                pszName[i] = toupper(pszName[i]);
+            }
+#if PY_MAJOR_VERSION >= 3
+            pNameString = PyUnicode_FromString(pszName);
+#else
+            pNameString = PyString_FromString(pszName);
+#endif
+            PyList_Append(pNameList, pNameString);
+            free(pszName);
+            Py_DECREF(pNameString);
+
+#if PY_MAJOR_VERSION >= 3
+            pFormatString = PyUnicode_FromFormat("%c%d", (int)pDefn->cKind, pDefn->nSize);
+#else
+            pFormatString = PyString_FromFormat("%c%d", (int)pDefn->cKind, pDefn->nSize);
+#endif
+            PyList_Append(pFormatList, pFormatString);
+            Py_DECREF(pFormatString);
+
+#if PY_MAJOR_VERSION >= 3
+            pOffsetInt = PyLong_FromLong(pDefn->nOffset);
+#else
+            pOffsetInt = PyInt_FromLong(pDefn->nOffset);
+#endif
+            PyList_Append(pOffsetList, pOffsetInt);
+            Py_DECREF(pOffsetInt);
+
+            nStructTotalSize = pDefn->nStructTotalSize;
         }
-#if PY_MAJOR_VERSION >= 3
-        pNameString = PyUnicode_FromString(pszName);
-#else
-        pNameString = PyString_FromString(pszName);
-#endif
-        PyList_Append(pNameList, pNameString);
-        free(pszName);
-        Py_DECREF(pNameString);
-
-#if PY_MAJOR_VERSION >= 3
-        pFormatString = PyUnicode_FromFormat("%c%d", (int)pDefn->cKind, pDefn->nSize);
-#else
-        pFormatString = PyString_FromFormat("%c%d", (int)pDefn->cKind, pDefn->nSize);
-#endif
-        PyList_Append(pFormatList, pFormatString);
-        Py_DECREF(pFormatString);
-
-#if PY_MAJOR_VERSION >= 3
-        pOffsetInt = PyLong_FromLong(pDefn->nOffset);
-#else
-        pOffsetInt = PyInt_FromLong(pDefn->nOffset);
-#endif
-        PyList_Append(pOffsetList, pOffsetInt);
-        Py_DECREF(pOffsetInt);
-
-        nStructTotalSize = pDefn->nStructTotalSize;
 
         pDefn++;
+    }
+
+    if( PyList_Size(pNameList) == 0)
+    {
+        Py_DECREF(pNameList);
+        Py_DECREF(pFormatList);
+        Py_DECREF(pOffsetList);
+        pylidar_error("All fields were ignored");
+        return NULL;
     }
             
     pDtypeDict = PyDict_New();
