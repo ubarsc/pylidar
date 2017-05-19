@@ -203,6 +203,20 @@ def addASCIIDriver(extModules, cxxFlags):
 
     extModules.append(asciiModule)
 
+def addLVISDriver(extModules, cxxFlags):
+    """
+    Adds the LVIS driver (which is always built).
+    """
+    print('Building LVIS Extension....')
+    defineMacros = [NUMPY_MACROS]
+
+    lvisModule = Extension(name='pylidar.lidarformats._lvis',
+        sources=['src/lvis.cpp', 'src/pylidar.c'],
+        extra_compile_args=cxxFlags,
+        define_macros=defineMacros)
+
+    extModules.append(lvisModule)
+
 def addAdvIndexing(extModules, cxxFlags):
     """
     Decides if the Advanced Indexing is to be built. If so
@@ -276,6 +290,7 @@ if withExtensions:
     addRieglDriver(externalModules, cxxFlags)
     addLasDriver(externalModules, cxxFlags)
     addASCIIDriver(externalModules, cxxFlags)
+    addLVISDriver(externalModules, cxxFlags)
     # Advanced indexing commented out for now
     # wasn't useful, and causing problems for some installs
     #addAdvIndexing(externalModules, cxxFlags)
@@ -307,5 +322,6 @@ setup(name='pylidar',
           'Programming Language :: Python :: 3.2',
           'Programming Language :: Python :: 3.3',
           'Programming Language :: Python :: 3.4',
-          'Programming Language :: Python :: 3.5'])
+          'Programming Language :: Python :: 3.5',
+          'Programming Language :: Python :: 3.6'])
       

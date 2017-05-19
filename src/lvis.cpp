@@ -9,18 +9,7 @@
 #include "numpy/arrayobject.h"
 
 #include "lvis.h"
-
-#ifndef  DEFAULT_DATA_RELEASE_VERSION
-#define  DEFAULT_DATA_RELEASE_VERSION ((float) 1.03)
-#endif
-
-#ifndef  LVIS_RELEASE_READER_VERSION
-#define  LVIS_RELEASE_READER_VERSION  ((float) 1.04)
-#endif
-
-#ifndef  LVIS_RELEASE_READER_VERSION_DATE
-#define  LVIS_RELEASE_READER_VERSION_DATE 20120131
-#endif
+#include "pylidar.h"
 
 #ifndef  GENLIB_LITTLE_ENDIAN
 #define  GENLIB_LITTLE_ENDIAN 0x00
@@ -47,13 +36,14 @@
 #define  VERSION_TESTBLOCK_LENGTH (128 * 1024) // 128k should be enough to figure it out
 #endif
 
+// if you want a little more info to start...uncomment this
+/* #define DEBUG_ON */
+
 // prototypes we need
 double host_double(double input_double,int host_endian);
 float  host_float(float input_float,int host_endian);
 
-// if you want a little more info to start...uncomment this
-/* #define DEBUG_ON */
-
+// taken from lvis_release_reader.c. See https://lvis.gsfc.nasa.gov/
 // self contained file version detection routine
 int detect_release_version(char * filename, int * fileType, float * fileVersion, int myendian)
 {
@@ -68,7 +58,8 @@ int detect_release_version(char * filename, int * fileType, float * fileVersion,
    struct lvis_lce_v1_04 * lce104; struct lvis_lge_v1_04 * lge104; struct lvis_lgw_v1_04 * lgw104;
 
    long          fileSize;
-   int           i,mintype,type,minversion,version,status=0,maxpackets,maxsize;
+   int           i,mintype,type,minversion,version,status=0,maxpackets;
+   size_t        maxsize;
    FILE          *fptest=NULL;
    double        testTotal;
    double        testTotalMin = (double) 0.0;
@@ -335,9 +326,9 @@ float host_float(float input_float,int host_endian)
      return return_value;
 }
 
-dword host_dword(dword input_dword,int host_endian)
+uint32_t host_dword(uint32_t input_dword,int host_endian)
 {
-   dword return_value=0;
+   uint32_t return_value=0;
    unsigned char * inptr, * outptr;
    
    inptr = (unsigned char *) &input_dword;
@@ -357,9 +348,9 @@ dword host_dword(dword input_dword,int host_endian)
      return return_value;
 }
 
-word host_word(word input_word,int host_endian)
+uint16_t host_word(uint16_t input_word,int host_endian)
 {
-   word return_value=0;
+   uint16_t return_value=0;
    unsigned char * inptr, * outptr;
    
    inptr = (unsigned char *) &input_word;
@@ -394,7 +385,7 @@ static struct LVISState _state;
 typedef struct {
     float lceVersion;
     float lgeVersion;
-    float lcwVersion;
+    float lgwVersion;
 
     // LCE - see lvis.h
     uint32_t lce_lfid; // >= v1.01
@@ -408,18 +399,419 @@ typedef struct {
     float  lce_zt;
 
     // LGE
-   uint32_t lge_lfid; // >= v1.01
-   uint32_t lge_shotnumber;  
-   float lge_azimuth;
-   float lge_incidentangle;
-   float lge_range;
-   double lge_lvistime;
-   double lge_glon;
-   double lge_glat;
-   float  lge_zg;
-   float  lge_rh25;
-   float  lge_rh50;
-   float  lge_rh75;
-   float  lge_rh100;
-    
+    uint32_t lge_lfid; // >= v1.01
+    uint32_t lge_shotnumber; // >= v1.01
+    float lge_azimuth; // >= v1.03
+    float lge_incidentangle; // >= v1.03
+    float lge_range; // >= v1.03
+    double lge_lvistime; // >= v1.02
+    double lge_glon;
+    double lge_glat;
+    float  lge_zg;
+    float  lge_rh25;
+    float  lge_rh50;
+    float  lge_rh75;
+    float  lge_rh100;
+
+    // LGW
+    uint32_t lgw_lfid; // >= v1.01
+    uint32_t lgw_shotnumber; // >= v1.01
+    float lgw_azimuth; // >= v1.03
+    float lgw_incidentangle; // >= v1.03
+    float lgw_range; // >= v1.03
+    double lgw_lvistime; // >= v1.02
+    double lgw_lon0;
+    double lgw_lat0;
+    float  lgw_z0;
+    double lgw_lonend;
+    double lgw_latend;
+    float  lgw_zend;
+    float  lgw_sigmean;
+
+    npy_uint32 wfm_start_idx;
+    npy_uint8 number_of_waveform_samples;
+    npy_uint8 number_of_returns;
+    npy_uint64 pts_start_idx;
 } SLVISPulse;
+
+/* field info for CVector::getNumpyArray */
+static SpylidarFieldDefn LVISPulseFields[] = {
+    CREATE_FIELD_DEFN(SLVISPulse, lceVersion, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgeVersion, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgwVersion, 'f'),
+
+    CREATE_FIELD_DEFN(SLVISPulse, lce_lfid, 'u'),
+    CREATE_FIELD_DEFN(SLVISPulse, lce_shotnumber, 'u'),
+    CREATE_FIELD_DEFN(SLVISPulse, lce_azimuth, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lce_incidentangle, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lce_range, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lce_lvistime, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lce_tlon, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lce_tlat, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lce_zt, 'f'),
+
+    CREATE_FIELD_DEFN(SLVISPulse, lge_lfid, 'u'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_shotnumber, 'u'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_azimuth, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_incidentangle, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_range, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_lvistime, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_glon, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_glat, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_zg, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_rh25, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_rh50, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_rh75, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lge_rh100, 'f'),
+
+    // LGW
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_lfid, 'u'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_shotnumber, 'u'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_azimuth, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_incidentangle, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_range, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_lvistime, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_lon0, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_lat0, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_z0, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_lonend, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_latend, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_zend, 'f'),
+    CREATE_FIELD_DEFN(SLVISPulse, lgw_sigmean, 'f'),
+
+    CREATE_FIELD_DEFN(SLVISPulse, wfm_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SLVISPulse, number_of_waveform_samples, 'u'),    
+    CREATE_FIELD_DEFN(SLVISPulse, number_of_returns, 'u'),
+    CREATE_FIELD_DEFN(SLVISPulse, pts_start_idx, 'u'),
+
+    {NULL} // Sentinel
+};
+
+/* Structure for waveform Info */
+typedef struct {
+    npy_uint16 number_of_waveform_received_bins;
+    npy_uint64 received_start_idx;
+    npy_uint16 number_of_waveform_transmitted_bins;
+    npy_uint64 transmitted_start_idx;
+} SLVISWaveformInfo;
+
+/* field info for CVector::getNumpyArray */
+static SpylidarFieldDefn LVISWaveformInfoFields[] = {
+    CREATE_FIELD_DEFN(SLVISWaveformInfo, number_of_waveform_received_bins, 'u'),
+    CREATE_FIELD_DEFN(SLVISWaveformInfo, received_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SLVISWaveformInfo, number_of_waveform_transmitted_bins, 'u'),
+    CREATE_FIELD_DEFN(SLVISWaveformInfo, transmitted_start_idx, 'u'),
+    {NULL} // Sentinel
+};
+
+typedef struct {
+    double x;
+    double y;
+    float z;
+} LVISPoint;
+
+/* field info for CVector::getNumpyArray */
+static SpylidarFieldDefn LVISPointFields[] = {
+    CREATE_FIELD_DEFN(LVISPoint, x, 'f'),
+    CREATE_FIELD_DEFN(LVISPoint, y, 'f'),
+    CREATE_FIELD_DEFN(LVISPoint, z, 'f'),
+};
+
+/* Python object for reading LVIS LCE/LGE/LGW files */
+typedef struct
+{
+    PyObject_HEAD
+    FILE *fpLCE;
+    FILE *fpLGE;
+    FILE *fpLGW;
+    float lceVersion;
+    float lgeVersion;
+    float lgwVersion;
+} PyLVISFiles;
+
+#if PY_MAJOR_VERSION >= 3
+static int lvis_traverse(PyObject *m, visitproc visit, void *arg) 
+{
+    Py_VISIT(GETSTATE(m)->error);
+    return 0;
+}
+
+static int lvis_clear(PyObject *m) 
+{
+    Py_CLEAR(GETSTATE(m)->error);
+    return 0;
+}
+
+static struct PyModuleDef moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "_lvis",
+        NULL,
+        sizeof(struct LVISState),
+        NULL,
+        NULL,
+        lvis_traverse,
+        lvis_clear,
+        NULL
+};
+#endif
+
+/* destructor - close and delete tc */
+static void 
+PyLVISFiles_dealloc(PyLVISFiles *self)
+{
+    if( self->fpLCE != NULL )
+    {
+        fclose(self->fpLCE);
+        self->fpLCE = NULL;
+    }
+    if( self->fpLGE != NULL )
+    {
+        fclose(self->fpLGE);
+        self->fpLGE = NULL;
+    }
+    if( self->fpLGW != NULL )
+    {
+        fclose(self->fpLGW);
+        self->fpLGW = NULL;
+    }
+
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int 
+PyLVISFiles_init(PyLVISFiles *self, PyObject *args, PyObject *kwds)
+{
+char *pszLCE_Fname = NULL, *pszLGE_Fname = NULL, *pszLGW_Fname = NULL;
+
+    if( !PyArg_ParseTuple(args, "zzz", &pszLCE_Fname, &pszLGE_Fname, &pszLGW_Fname ) )
+    {
+        return -1;
+    }
+
+    self->fpLCE = NULL;
+    self->fpLGE = NULL;
+    self->fpLGW = NULL;
+    self->lceVersion = 0;
+    self->lgeVersion = 0;
+    self->lgwVersion = 0;
+
+    PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+    // best way I could find for obtaining module reference
+    // from inside a class method. Not needed for Python < 3.
+    m = PyState_FindModule(&moduledef);
+#endif
+    int nFileType;
+
+    if( pszLCE_Fname != NULL )
+    {
+        self->fpLCE = fopen(pszLCE_Fname, "rb");
+        if( self->fpLCE == NULL )
+        {
+            PyErr_Format(GETSTATE(m)->error, "Cannot open %s", pszLCE_Fname);
+            return -1;
+        }
+
+        nFileType = 999;
+        detect_release_version(pszLCE_Fname, &nFileType, &self->lceVersion, GENLIB_OUR_ENDIAN);
+        if( nFileType != LVIS_RELEASE_FILETYPE_LCE )
+        {
+            PyErr_Format(GETSTATE(m)->error, "File %s does not contain LCE data", pszLCE_Fname);
+            fclose(self->fpLCE);
+            self->fpLCE = NULL;
+            return -1;
+        }
+    }
+
+    if( pszLGE_Fname != NULL )
+    {
+        self->fpLGE = fopen(pszLGE_Fname, "rb");
+        if( self->fpLGE == NULL )
+        {
+            if( self->fpLCE != NULL )
+            {
+                fclose(self->fpLCE);
+                self->fpLCE = NULL;
+            }
+            PyErr_Format(GETSTATE(m)->error, "Cannot open %s", pszLGE_Fname);
+            return -1;
+        }
+
+        nFileType = 999;
+        detect_release_version(pszLGE_Fname, &nFileType, &self->lgeVersion, GENLIB_OUR_ENDIAN);
+        if( nFileType != LVIS_RELEASE_FILETYPE_LGE )
+        {
+            PyErr_Format(GETSTATE(m)->error, "File %s does not contain LGE data", pszLGE_Fname);
+            fclose(self->fpLGE);
+            self->fpLGE = NULL;
+            if( self->fpLCE != NULL )
+            {
+                fclose(self->fpLCE);
+                self->fpLCE = NULL;
+            }
+            return -1;
+        }
+    }
+
+    if( pszLGW_Fname != NULL )
+    {
+        self->fpLGW = fopen(pszLGW_Fname, "rb");
+        if( self->fpLGW == NULL )
+        {
+            if( self->fpLCE != NULL )
+            {
+                fclose(self->fpLCE);
+                self->fpLCE = NULL;
+            }
+            if( self->fpLGE != NULL )
+            {
+                fclose(self->fpLGE);
+                self->fpLGE = NULL;
+            }
+            PyErr_Format(GETSTATE(m)->error, "Cannot open %s", pszLGW_Fname);
+            return -1;
+        }
+
+        nFileType = 999;
+        detect_release_version(pszLGW_Fname, &nFileType, &self->lgwVersion, GENLIB_OUR_ENDIAN);
+        if( nFileType != LVIS_RELEASE_FILETYPE_LGW )
+        {
+            PyErr_Format(GETSTATE(m)->error, "File %s does not contain LGE data", pszLGE_Fname);
+            fclose(self->fpLGW);
+            self->fpLGW = NULL;
+            if( self->fpLCE != NULL )
+            {
+                fclose(self->fpLCE);
+                self->fpLCE = NULL;
+            }
+            if( self->fpLGE != NULL )
+            {
+                fclose(self->fpLGE);
+                self->fpLGE = NULL;
+            }
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static PyObject *PyLVISFiles_readData(PyLVISFiles *self, PyObject *args)
+{
+    Py_ssize_t nPulseStart, nPulseEnd, nPulses;
+    if( !PyArg_ParseTuple(args, "nn:readData", &nPulseStart, &nPulseEnd ) )
+        return NULL;
+
+    nPulses = nPulseEnd - nPulseStart;
+
+    Py_RETURN_NONE;
+}
+
+/* Table of methods */
+static PyMethodDef PyLVISFiles_methods[] = {
+    {"readData", (PyCFunction)PyLVISFiles_readData, METH_VARARGS, NULL},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject PyLVISFilesType = {
+#if PY_MAJOR_VERSION >= 3
+    PyVarObject_HEAD_INIT(NULL, 0)
+#else
+    PyObject_HEAD_INIT(NULL)
+    0,                         /*ob_size*/
+#endif
+    "_lvis.File",         /*tp_name*/
+    sizeof(PyLVISFiles),   /*tp_basicsize*/
+    0,                         /*tp_itemsize*/
+    (destructor)PyLVISFiles_dealloc, /*tp_dealloc*/
+    0,                         /*tp_print*/
+    0,                         /*tp_getattr*/
+    0,                         /*tp_setattr*/
+    0,                         /*tp_compare*/
+    0,                         /*tp_repr*/
+    0,                         /*tp_as_number*/
+    0,                         /*tp_as_sequence*/
+    0,                         /*tp_as_mapping*/
+    0,                         /*tp_hash */
+    0,                         /*tp_call*/
+    0,                         /*tp_str*/
+    0,                         /*tp_getattro*/
+    0,                         /*tp_setattro*/
+    0,                         /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
+    "LVIS File object",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    PyLVISFiles_methods,             /* tp_methods */
+    0,             /* tp_members */
+    0,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)PyLVISFiles_init,      /* tp_init */
+    0,                         /* tp_alloc */
+    0,                 /* tp_new */
+};
+#if PY_MAJOR_VERSION >= 3
+
+#define INITERROR return NULL
+
+PyMODINIT_FUNC 
+PyInit__lvis(void)
+
+#else
+#define INITERROR return
+
+PyMODINIT_FUNC
+init_lvis(void)
+#endif
+{
+    PyObject *pModule;
+    struct LVISState *state;
+
+    /* initialize the numpy stuff */
+    import_array();
+    /* same for pylidar functions */
+    pylidar_init();
+
+#if PY_MAJOR_VERSION >= 3
+    pModule = PyModule_Create(&moduledef);
+#else
+    pModule = Py_InitModule("_lvis", module_methods);
+#endif
+    if( pModule == NULL )
+        INITERROR;
+
+    state = GETSTATE(pModule);
+
+    /* Create and add our exception type */
+    state->error = PyErr_NewException("_lvis.error", NULL, NULL);
+    if( state->error == NULL )
+    {
+        Py_DECREF(pModule);
+        INITERROR;
+    }
+    PyModule_AddObject(pModule, "error", state->error);
+
+    /* Scan file type */
+    PyLVISFilesType.tp_new = PyType_GenericNew;
+    if( PyType_Ready(&PyLVISFilesType) < 0 )
+#if PY_MAJOR_VERSION >= 3
+        return NULL;
+#else
+        return;
+#endif
+
+    Py_INCREF(&PyLVISFilesType);
+    PyModule_AddObject(pModule, "LVISFile", (PyObject *)&PyLVISFilesType);
+
+#if PY_MAJOR_VERSION >= 3
+    return pModule;
+#endif
+}
