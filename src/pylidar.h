@@ -119,6 +119,9 @@ PyArrayObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, S
 /* On success, a new reference is returned */
 PyArray_Descr *pylidar_getDtypeForField(SpylidarFieldDefn *pDefn, const char *pszFieldname);
 
+/* Set the ignore state of a named field in pDefn */
+int pylidar_setIgnore(SpylidarFieldDefn *pDefn, const char *pszFieldname, char bIgnore);
+
 #ifdef __cplusplus
 } /* extern C */
 #endif

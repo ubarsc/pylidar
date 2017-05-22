@@ -581,3 +581,26 @@ char *pszName;
     return pDescr;
 }
 
+/* Set the ignore state of a named field in pDefn */
+int pylidar_setIgnore(SpylidarFieldDefn *pDefn, const char *pszFieldname, char bIgnore)
+{
+    int bFound = 0;
+    while( pDefn->pszName != NULL )
+    {
+        /* should this be case insensitive? */
+        if( strcmp(pDefn->pszName, pszFieldname) == 0 )
+        {
+            pDefn->bIgnore = bIgnore;
+            bFound = 1;
+            break;
+        }
+
+        pDefn++;
+    }
+
+    if( !bFound )
+        fprintf(stderr, "Field %s not found in pylidar_setIgnore\n", pszFieldname);
+
+    return bFound;
+}
+

@@ -10,6 +10,7 @@
 
 #include "lvis.h"
 #include "pylidar.h"
+#include "pylvector.h"
 
 #ifndef  GENLIB_LITTLE_ENDIAN
 #define  GENLIB_LITTLE_ENDIAN 0x00
@@ -19,7 +20,17 @@
 #define  GENLIB_BIG_ENDIAN 0x01
 #endif
 
-/* define WKB_BYTE_ORDER depending on endian setting
+// to determine how the pulses are found
+#define POINT_FROM_LCE 0
+#define POINT_FROM_LGE 1
+#define POINT_FROM_LGW0 2
+#define POINT_FROM_LGWEND 3
+
+// for CVector
+static const int nGrowBy = 1000;
+static const int nInitSize = 40000;
+
+/* define GENLIB_OUR_ENDIAN depending on endian setting
  from pyconfig.h */
 #if WORDS_BIGENDIAN == 1
     #define GENLIB_OUR_ENDIAN GENLIB_BIG_ENDIAN
@@ -508,13 +519,13 @@ typedef struct {
     double x;
     double y;
     float z;
-} LVISPoint;
+} SLVISPoint;
 
 /* field info for CVector::getNumpyArray */
 static SpylidarFieldDefn LVISPointFields[] = {
-    CREATE_FIELD_DEFN(LVISPoint, x, 'f'),
-    CREATE_FIELD_DEFN(LVISPoint, y, 'f'),
-    CREATE_FIELD_DEFN(LVISPoint, z, 'f'),
+    CREATE_FIELD_DEFN(SLVISPoint, x, 'f'),
+    CREATE_FIELD_DEFN(SLVISPoint, y, 'f'),
+    CREATE_FIELD_DEFN(SLVISPoint, z, 'f'),
 };
 
 /* Python object for reading LVIS LCE/LGE/LGW files */
@@ -527,6 +538,10 @@ typedef struct
     float lceVersion;
     float lgeVersion;
     float lgwVersion;
+    bool bFinished;
+    bool bRecordsRead; // so we know whether to set bIgnore fields
+    SpylidarFieldDefn *pPulseDefn; // we take a copy of LVISPulseFields so we can set bIgnore
+    int nPointFrom; // POINT_FROM_LCE etc
 } PyLVISFiles;
 
 #if PY_MAJOR_VERSION >= 3
@@ -574,6 +589,8 @@ PyLVISFiles_dealloc(PyLVISFiles *self)
         fclose(self->fpLGW);
         self->fpLGW = NULL;
     }
+    free(self->pPulseDefn);
+    self->pPulseDefn = NULL;
 
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -582,9 +599,23 @@ static int
 PyLVISFiles_init(PyLVISFiles *self, PyObject *args, PyObject *kwds)
 {
 char *pszLCE_Fname = NULL, *pszLGE_Fname = NULL, *pszLGW_Fname = NULL;
+int nPointFrom;
 
-    if( !PyArg_ParseTuple(args, "zzz", &pszLCE_Fname, &pszLGE_Fname, &pszLGW_Fname ) )
+    if( !PyArg_ParseTuple(args, "zzzi", &pszLCE_Fname, &pszLGE_Fname, &pszLGW_Fname, &nPointFrom ) )
     {
+        return -1;
+    }
+
+    PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+    // best way I could find for obtaining module reference
+    // from inside a class method. Not needed for Python < 3.
+    m = PyState_FindModule(&moduledef);
+#endif
+
+    if( ( nPointFrom < POINT_FROM_LCE) || ( nPointFrom > POINT_FROM_LGWEND ) )
+    {
+        PyErr_SetString(GETSTATE(m)->error, "nPointFrom out of range");
         return -1;
     }
 
@@ -594,13 +625,33 @@ char *pszLCE_Fname = NULL, *pszLGE_Fname = NULL, *pszLGW_Fname = NULL;
     self->lceVersion = 0;
     self->lgeVersion = 0;
     self->lgwVersion = 0;
+    self->bFinished = false;
+    self->bRecordsRead = false;
+    self->nPointFrom = nPointFrom;
 
-    PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-    // best way I could find for obtaining module reference
-    // from inside a class method. Not needed for Python < 3.
-    m = PyState_FindModule(&moduledef);
-#endif
+    // take a copy of LVISPulseFields so we can fiddle about with 
+    // the bIgnore field without breaking other instances of this class
+    // Note: this is a shallow copy (does not copy pszName) but I think this is ok
+    self->pPulseDefn = (SpylidarFieldDefn*)malloc(sizeof(LVISPulseFields));
+    memcpy(self->pPulseDefn, LVISPulseFields, sizeof(LVISPulseFields));
+    
+    // set all to ignore and then we selectively turn them on
+    // when we use them. 
+    int i = 0;
+    while( self->pPulseDefn[i].pszName != NULL )
+    {
+        self->pPulseDefn[i].bIgnore = 1;
+        i++;
+    }
+    // these ones are always used
+    pylidar_setIgnore(self->pPulseDefn, "lceVersion", 0);
+    pylidar_setIgnore(self->pPulseDefn, "lgeVersion", 0);
+    pylidar_setIgnore(self->pPulseDefn, "lgwVersion", 0);
+    pylidar_setIgnore(self->pPulseDefn, "wfm_start_idx", 0);
+    pylidar_setIgnore(self->pPulseDefn, "number_of_waveform_samples", 0);
+    pylidar_setIgnore(self->pPulseDefn, "number_of_returns", 0);
+    pylidar_setIgnore(self->pPulseDefn, "pts_start_idx", 0);
+
     int nFileType;
 
     if( pszLCE_Fname != NULL )
@@ -696,6 +747,571 @@ char *pszLCE_Fname = NULL, *pszLGE_Fname = NULL, *pszLGW_Fname = NULL;
     return 0;
 }
 
+size_t getStructSize(PyLVISFiles *self, int fileType)
+{
+    if( fileType == LVIS_RELEASE_FILETYPE_LCE )
+    {
+        if(self->lceVersion == ((float)1.00))
+            return sizeof(struct lvis_lce_v1_00);
+        if(self->lceVersion == ((float)1.01))
+            return sizeof(struct lvis_lce_v1_01);
+        if(self->lceVersion == ((float)1.02))
+            return sizeof(struct lvis_lce_v1_02);
+        if(self->lceVersion == ((float)1.03))
+            return sizeof(struct lvis_lce_v1_03);
+        if(self->lceVersion == ((float)1.04))
+            return sizeof(struct lvis_lce_v1_04);
+    }
+
+    if( fileType == LVIS_RELEASE_FILETYPE_LGE )
+    {
+        if(self->lgeVersion == ((float)1.00))
+            return sizeof(struct lvis_lge_v1_00);
+        if(self->lgeVersion == ((float)1.01))
+            return sizeof(struct lvis_lge_v1_01);
+        if(self->lgeVersion == ((float)1.02))
+            return sizeof(struct lvis_lge_v1_02);
+        if(self->lgeVersion == ((float)1.03))
+            return sizeof(struct lvis_lge_v1_03);
+        if(self->lgeVersion == ((float)1.04))
+            return sizeof(struct lvis_lge_v1_04);
+    }
+
+    if( fileType == LVIS_RELEASE_FILETYPE_LGW )
+    {
+        if(self->lgwVersion == ((float)1.00))
+            return sizeof(struct lvis_lgw_v1_00);
+        if(self->lgwVersion == ((float)1.01))
+            return sizeof(struct lvis_lgw_v1_01);
+        if(self->lgwVersion == ((float)1.02))
+            return sizeof(struct lvis_lgw_v1_02);
+        if(self->lgwVersion == ((float)1.03))
+            return sizeof(struct lvis_lgw_v1_03);
+        if(self->lgwVersion == ((float)1.04))
+            return sizeof(struct lvis_lgw_v1_04);
+    }
+
+    // should never get here...
+    fprintf(stderr, "Failed to find size in getStructSize()\n");
+    return 0;
+}
+
+void saveLCEToStruct(float lceVersion, char *pLCERecord, SLVISPulse *plvisPulse, SLVISPoint *plvisPoint, 
+            SpylidarFieldDefn *pLVISPulseFields, bool bRecordsRead)
+{
+    if(lceVersion == ((float)1.00))
+    {
+        struct lvis_lce_v1_00 *p = reinterpret_cast<struct lvis_lce_v1_00*>(pLCERecord);
+        plvisPulse->lce_tlon = p->tlon;
+        plvisPulse->lce_tlat = p->tlat;
+        plvisPulse->lce_zt = p->zt;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_zt", 0);
+        }
+    }
+    else if(lceVersion == ((float)1.01))
+    {
+        struct lvis_lce_v1_01 *p = reinterpret_cast<struct lvis_lce_v1_01*>(pLCERecord);
+        plvisPulse->lce_lfid = p->lfid;
+        plvisPulse->lce_shotnumber = p->shotnumber;
+        plvisPulse->lce_tlon = p->tlon;
+        plvisPulse->lce_tlat = p->tlat;
+        plvisPulse->lce_zt = p->zt;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lce_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_zt", 0);
+        }
+    }
+    else if(lceVersion == ((float)1.02))
+    {
+        struct lvis_lce_v1_02 *p = reinterpret_cast<struct lvis_lce_v1_02*>(pLCERecord);
+        plvisPulse->lce_lfid = p->lfid;
+        plvisPulse->lce_shotnumber = p->shotnumber;
+        plvisPulse->lce_lvistime = p->lvistime;
+        plvisPulse->lce_tlon = p->tlon;
+        plvisPulse->lce_tlat = p->tlat;
+        plvisPulse->lce_zt = p->zt;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lce_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_lvistime", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_zt", 0);
+        }
+    }
+    else if(lceVersion == ((float)1.03))
+    {
+        struct lvis_lce_v1_03 *p = reinterpret_cast<struct lvis_lce_v1_03*>(pLCERecord);
+        plvisPulse->lce_lfid = p->lfid;
+        plvisPulse->lce_shotnumber = p->shotnumber;
+        plvisPulse->lce_lvistime = p->lvistime;
+        plvisPulse->lce_azimuth = p->azimuth;
+        plvisPulse->lce_incidentangle = p->incidentangle;
+        plvisPulse->lce_range = p->range;
+        plvisPulse->lce_tlon = p->tlon;
+        plvisPulse->lce_tlat = p->tlat;
+        plvisPulse->lce_zt = p->zt;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lce_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_lvistime", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_azimuth", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_incidentangle", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_range", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_zt", 0);
+        }
+    }
+    else if(lceVersion == ((float)1.04))
+    {
+        // Note: same fields as v1.03
+        struct lvis_lce_v1_04 *p = reinterpret_cast<struct lvis_lce_v1_04*>(pLCERecord);
+        plvisPulse->lce_lfid = p->lfid;
+        plvisPulse->lce_shotnumber = p->shotnumber;
+        plvisPulse->lce_lvistime = p->lvistime;
+        plvisPulse->lce_azimuth = p->azimuth;
+        plvisPulse->lce_incidentangle = p->incidentangle;
+        plvisPulse->lce_range = p->range;
+        plvisPulse->lce_tlon = p->tlon;
+        plvisPulse->lce_tlat = p->tlat;
+        plvisPulse->lce_zt = p->zt;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lce_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_lvistime", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_azimuth", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_incidentangle", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_range", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_tlat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lce_zt", 0);
+        }
+    }
+
+    if( plvisPoint != NULL )
+    {
+        // set the point from LCE
+        plvisPoint->x = plvisPulse->lce_tlon;
+        plvisPoint->y = plvisPulse->lce_tlat;
+        plvisPoint->z = plvisPulse->lce_zt;
+    }
+}
+
+void saveLGEToStruct(float lgeVersion, char *pLGERecord, SLVISPulse *plvisPulse, SLVISPoint *plvisPoint, 
+            SpylidarFieldDefn *pLVISPulseFields, bool bRecordsRead)
+{
+    if(lgeVersion == ((float)1.00))
+    {
+        struct lvis_lge_v1_00 *p = reinterpret_cast<struct lvis_lge_v1_00 *>(pLGERecord);
+        plvisPulse->lge_glon = p->glon;
+        plvisPulse->lge_glat = p->glat;
+        plvisPulse->lge_zg = p->zg;
+        plvisPulse->lge_rh25 = p->rh25;
+        plvisPulse->lge_rh50 = p->rh50;
+        plvisPulse->lge_rh75 = p->rh75;
+        plvisPulse->lge_rh100 = p->rh100;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lge_glon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_glat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_zg", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh25", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh50", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh75", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh100", 0);
+        }
+    }
+    else if(lgeVersion == ((float)1.01))
+    {
+        struct lvis_lge_v1_01 *p = reinterpret_cast<struct lvis_lge_v1_01 *>(pLGERecord);
+        plvisPulse->lge_lfid = p->lfid;
+        plvisPulse->lge_shotnumber = p->shotnumber;
+        plvisPulse->lge_glon = p->glon;
+        plvisPulse->lge_glat = p->glat;
+        plvisPulse->lge_zg = p->zg;
+        plvisPulse->lge_rh25 = p->rh25;
+        plvisPulse->lge_rh50 = p->rh50;
+        plvisPulse->lge_rh75 = p->rh75;
+        plvisPulse->lge_rh100 = p->rh100;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lge_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_glon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_glat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_zg", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh25", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh50", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh75", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh100", 0);
+        }
+    }
+    else if(lgeVersion == ((float)1.02))
+    {
+        struct lvis_lge_v1_02 *p = reinterpret_cast<struct lvis_lge_v1_02 *>(pLGERecord);
+        plvisPulse->lge_lfid = p->lfid;
+        plvisPulse->lge_shotnumber = p->shotnumber;
+        plvisPulse->lge_lvistime = p->lvistime;
+        plvisPulse->lge_glon = p->glon;
+        plvisPulse->lge_glat = p->glat;
+        plvisPulse->lge_zg = p->zg;
+        plvisPulse->lge_rh25 = p->rh25;
+        plvisPulse->lge_rh50 = p->rh50;
+        plvisPulse->lge_rh75 = p->rh75;
+        plvisPulse->lge_rh100 = p->rh100;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lge_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_lvistime", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_glon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_glat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_zg", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh25", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh50", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh75", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh100", 0);
+        }
+    }
+    else if(lgeVersion == ((float)1.03))
+    {
+        struct lvis_lge_v1_03 *p = reinterpret_cast<struct lvis_lge_v1_03 *>(pLGERecord);
+        plvisPulse->lge_lfid = p->lfid;
+        plvisPulse->lge_shotnumber = p->shotnumber;
+        plvisPulse->lge_azimuth = p->azimuth;
+        plvisPulse->lge_incidentangle = p->incidentangle;
+        plvisPulse->lge_range = p->range;
+        plvisPulse->lge_lvistime = p->lvistime;
+        plvisPulse->lge_glon = p->glon;
+        plvisPulse->lge_glat = p->glat;
+        plvisPulse->lge_zg = p->zg;
+        plvisPulse->lge_rh25 = p->rh25;
+        plvisPulse->lge_rh50 = p->rh50;
+        plvisPulse->lge_rh75 = p->rh75;
+        plvisPulse->lge_rh100 = p->rh100;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lge_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_azimuth", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_incidentangle", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_range", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_lvistime", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_glon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_glat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_zg", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh25", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh50", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh75", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh100", 0);
+        }
+    }
+    else if(lgeVersion == ((float)1.04))
+    {
+        // Note: fields are the same as v1.03
+        struct lvis_lge_v1_04 *p = reinterpret_cast<struct lvis_lge_v1_04 *>(pLGERecord);
+        plvisPulse->lge_lfid = p->lfid;
+        plvisPulse->lge_shotnumber = p->shotnumber;
+        plvisPulse->lge_azimuth = p->azimuth;
+        plvisPulse->lge_incidentangle = p->incidentangle;
+        plvisPulse->lge_range = p->range;
+        plvisPulse->lge_lvistime = p->lvistime;
+        plvisPulse->lge_glon = p->glon;
+        plvisPulse->lge_glat = p->glat;
+        plvisPulse->lge_zg = p->zg;
+        plvisPulse->lge_rh25 = p->rh25;
+        plvisPulse->lge_rh50 = p->rh50;
+        plvisPulse->lge_rh75 = p->rh75;
+        plvisPulse->lge_rh100 = p->rh100;
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lge_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_azimuth", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_incidentangle", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_range", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_lvistime", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_glon", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_glat", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_zg", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh25", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh50", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh75", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lge_rh100", 0);
+        }
+    }
+
+    if( plvisPoint != NULL )
+    {
+        // set the point from LGE
+        plvisPoint->x = plvisPulse->lge_glon;
+        plvisPoint->y = plvisPulse->lge_glat;
+        plvisPoint->z = plvisPulse->lge_zg;
+    }
+}
+
+void saveLGWToStruct(float lgwVersion, char *pLGWRecord, SLVISWaveformInfo *plvisWaveformInfo, 
+        SLVISPulse *plvisPulse, SLVISPoint *plvisPoint, pylidar::CVector<uint16_t> *pTransmitted, 
+        pylidar::CVector<uint16_t> *pReceived, 
+        SpylidarFieldDefn *pLVISPulseFields, bool bRecordsRead, int nPointFrom)
+{
+    if(lgwVersion == ((float)1.00))
+    {
+        struct lvis_lgw_v1_00 *p = reinterpret_cast<struct lvis_lgw_v1_00*>(pLGWRecord);
+        plvisPulse->lgw_lon0 = p->lon0;
+        plvisPulse->lgw_lat0 = p->lat0;
+        plvisPulse->lgw_z0 = p->z0;
+        plvisPulse->lgw_lonend = p->lon431;
+        plvisPulse->lgw_latend = p->lat431;
+        plvisPulse->lgw_zend = p->z431;
+        plvisPulse->lgw_sigmean = p->sigmean;
+        plvisWaveformInfo->number_of_waveform_received_bins = sizeof(p->wave) / sizeof(p->wave[0]);
+        plvisWaveformInfo->received_start_idx = pReceived->getNumElems();
+        plvisWaveformInfo->number_of_waveform_transmitted_bins = 0;
+        plvisWaveformInfo->transmitted_start_idx = 0;
+        uint16_t data;
+        for( npy_uint16 i = 0; i < plvisWaveformInfo->number_of_waveform_received_bins; i++ )
+        {
+            data = static_cast<uint16_t>(p->wave[i]);
+            pReceived->push(&data);
+        }
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lon0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lat0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_z0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lonend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_latend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_zend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_sigmean", 0);
+        }
+    }
+    else if(lgwVersion == ((float)1.01))
+    {
+        struct lvis_lgw_v1_01 *p = reinterpret_cast<struct lvis_lgw_v1_01*>(pLGWRecord);
+        plvisPulse->lgw_lfid = p->lfid;
+        plvisPulse->lgw_shotnumber = p->shotnumber;
+        plvisPulse->lgw_lon0 = p->lon0;
+        plvisPulse->lgw_lat0 = p->lat0;
+        plvisPulse->lgw_z0 = p->z0;
+        plvisPulse->lgw_lonend = p->lon431;
+        plvisPulse->lgw_latend = p->lat431;
+        plvisPulse->lgw_zend = p->z431;
+        plvisPulse->lgw_sigmean = p->sigmean;
+        plvisWaveformInfo->number_of_waveform_received_bins = sizeof(p->wave) / sizeof(p->wave[0]);
+        plvisWaveformInfo->received_start_idx = pReceived->getNumElems();
+        plvisWaveformInfo->number_of_waveform_transmitted_bins = 0;
+        plvisWaveformInfo->transmitted_start_idx = 0;
+        uint16_t data;
+        for( npy_uint16 i = 0; i < plvisWaveformInfo->number_of_waveform_received_bins; i++ )
+        {
+            data = static_cast<uint16_t>(p->wave[i]);
+            pReceived->push(&data);
+        }
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lon0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lat0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_z0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lonend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_latend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_zend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_sigmean", 0);
+        }
+    }
+    else if(lgwVersion == ((float)1.02))
+    {
+        struct lvis_lgw_v1_02 *p = reinterpret_cast<struct lvis_lgw_v1_02*>(pLGWRecord);
+        plvisPulse->lgw_lfid = p->lfid;
+        plvisPulse->lgw_shotnumber = p->shotnumber;
+        plvisPulse->lgw_lvistime = p->lvistime;
+        plvisPulse->lgw_lon0 = p->lon0;
+        plvisPulse->lgw_lat0 = p->lat0;
+        plvisPulse->lgw_z0 = p->z0;
+        plvisPulse->lgw_lonend = p->lon431;
+        plvisPulse->lgw_latend = p->lat431;
+        plvisPulse->lgw_zend = p->z431;
+        plvisPulse->lgw_sigmean = p->sigmean;
+        plvisWaveformInfo->number_of_waveform_received_bins = sizeof(p->wave) / sizeof(p->wave[0]);
+        plvisWaveformInfo->received_start_idx = pReceived->getNumElems();
+        plvisWaveformInfo->number_of_waveform_transmitted_bins = 0;
+        plvisWaveformInfo->transmitted_start_idx = 0;
+        uint16_t data;
+        for( npy_uint16 i = 0; i < plvisWaveformInfo->number_of_waveform_received_bins; i++ )
+        {
+            data = static_cast<uint16_t>(p->wave[i]);
+            pReceived->push(&data);
+        }
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lvistime", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lon0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lat0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_z0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lonend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_latend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_zend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_sigmean", 0);
+        }
+    }
+    else if(lgwVersion == ((float)1.03))
+    {
+        struct lvis_lgw_v1_03 *p = reinterpret_cast<struct lvis_lgw_v1_03*>(pLGWRecord);
+        plvisPulse->lgw_lfid = p->lfid;
+        plvisPulse->lgw_shotnumber = p->shotnumber;
+        plvisPulse->lgw_azimuth = p->azimuth;
+        plvisPulse->lgw_incidentangle = p->incidentangle;
+        plvisPulse->lgw_range = p->range;
+        plvisPulse->lgw_lvistime = p->lvistime;
+        plvisPulse->lgw_lon0 = p->lon0;
+        plvisPulse->lgw_lat0 = p->lat0;
+        plvisPulse->lgw_z0 = p->z0;
+        plvisPulse->lgw_lonend = p->lon431;
+        plvisPulse->lgw_latend = p->lat431;
+        plvisPulse->lgw_zend = p->z431;
+        plvisPulse->lgw_sigmean = p->sigmean;
+        plvisWaveformInfo->number_of_waveform_received_bins = sizeof(p->rxwave) / sizeof(p->rxwave[0]);
+        plvisWaveformInfo->received_start_idx = pReceived->getNumElems();
+        plvisWaveformInfo->number_of_waveform_transmitted_bins = sizeof(p->txwave) / sizeof(p->txwave[0]);
+        plvisWaveformInfo->transmitted_start_idx = pTransmitted->getNumElems();
+        uint16_t data;
+        for( npy_uint16 i = 0; i < plvisWaveformInfo->number_of_waveform_received_bins; i++ )
+        {
+            data = static_cast<uint16_t>(p->rxwave[i]);
+            pReceived->push(&data);
+        }
+        for( npy_uint16 i = 0; i < plvisWaveformInfo->number_of_waveform_transmitted_bins; i++ )
+        {
+            data = static_cast<uint16_t>(p->txwave[i]);
+            pTransmitted->push(&data);
+        }
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_azimuth", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_incidentangle", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_range", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lvistime", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lon0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lat0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_z0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lonend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_latend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_zend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_sigmean", 0);
+        }
+    }
+    else if(lgwVersion == ((float)1.04))
+    {
+        struct lvis_lgw_v1_04 *p = reinterpret_cast<struct lvis_lgw_v1_04*>(pLGWRecord);
+        plvisPulse->lgw_lfid = p->lfid;
+        plvisPulse->lgw_shotnumber = p->shotnumber;
+        plvisPulse->lgw_azimuth = p->azimuth;
+        plvisPulse->lgw_incidentangle = p->incidentangle;
+        plvisPulse->lgw_range = p->range;
+        plvisPulse->lgw_lvistime = p->lvistime;
+        plvisPulse->lgw_lon0 = p->lon0;
+        plvisPulse->lgw_lat0 = p->lat0;
+        plvisPulse->lgw_z0 = p->z0;
+        plvisPulse->lgw_lonend = p->lon527;
+        plvisPulse->lgw_latend = p->lat527;
+        plvisPulse->lgw_zend = p->z527;
+        plvisPulse->lgw_sigmean = p->sigmean;
+        plvisWaveformInfo->number_of_waveform_received_bins = sizeof(p->rxwave) / sizeof(p->rxwave[0]);
+        plvisWaveformInfo->received_start_idx = pReceived->getNumElems();
+        plvisWaveformInfo->number_of_waveform_transmitted_bins = sizeof(p->txwave) / sizeof(p->txwave[0]);
+        plvisWaveformInfo->transmitted_start_idx = pTransmitted->getNumElems();
+        for( npy_uint16 i = 0; i < plvisWaveformInfo->number_of_waveform_received_bins; i++ )
+        {
+            pReceived->push(&p->rxwave[i]);
+        }
+        for( npy_uint16 i = 0; i < plvisWaveformInfo->number_of_waveform_transmitted_bins; i++ )
+        {
+            pTransmitted->push(&p->txwave[i]);
+        }
+        // these fields are used on this version - only need to do 
+        // this first time
+        if( !bRecordsRead )
+        {
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lfid", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_shotnumber", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_azimuth", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_incidentangle", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_range", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lvistime", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lon0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lat0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_z0", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_lonend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_latend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_zend", 0);
+            pylidar_setIgnore(pLVISPulseFields, "lgw_sigmean", 0);
+        }
+    }
+
+    if( plvisPoint != NULL )
+    {
+        // set the point from LGW
+        if( nPointFrom == POINT_FROM_LGW0 )
+        {
+            plvisPoint->x = plvisPulse->lgw_lon0;
+            plvisPoint->y = plvisPulse->lgw_lat0;
+            plvisPoint->z = plvisPulse->lgw_z0;
+        }
+        else
+        {
+            plvisPoint->x = plvisPulse->lgw_lonend;
+            plvisPoint->y = plvisPulse->lgw_latend;
+            plvisPoint->z = plvisPulse->lgw_zend;
+        }
+    }
+}
+
 static PyObject *PyLVISFiles_readData(PyLVISFiles *self, PyObject *args)
 {
     Py_ssize_t nPulseStart, nPulseEnd, nPulses;
@@ -704,12 +1320,174 @@ static PyObject *PyLVISFiles_readData(PyLVISFiles *self, PyObject *args)
 
     nPulses = nPulseEnd - nPulseStart;
 
-    Py_RETURN_NONE;
+    pylidar::CVector<SLVISPulse> pulses(nPulses, nGrowBy);
+    pylidar::CVector<SLVISPoint> points(nPulses, nGrowBy);
+    pylidar::CVector<SLVISWaveformInfo> waveforms(nPulses, nGrowBy);
+
+    // TODO: better estimate of initial size based on nPulses and size of 
+    // waveform array for the LGW version.
+    pylidar::CVector<uint16_t> transmitted(nInitSize, nGrowBy);
+    pylidar::CVector<uint16_t> received(nInitSize, nGrowBy);
+
+    SLVISPulse lvisPulse;
+    lvisPulse.lceVersion = self->lceVersion;
+    lvisPulse.lgeVersion = self->lgeVersion;
+    lvisPulse.lgwVersion = self->lgwVersion;
+    lvisPulse.wfm_start_idx = 0;
+    lvisPulse.number_of_waveform_samples = 0;
+    lvisPulse.number_of_returns = 1; // always just one return
+    lvisPulse.pts_start_idx = 0;
+
+    SLVISPoint lvisPoint;
+    SLVISWaveformInfo lvisWaveformInfo;
+
+    // seek to the right spot in the files
+    size_t lceSize = 0;
+    size_t lgeSize = 0;
+    size_t lgwSize = 0;
+
+    if( self->fpLCE != NULL )
+    {
+        lceSize = getStructSize(self, LVIS_RELEASE_FILETYPE_LCE);
+        if( !fseek(self->fpLCE, lceSize * nPulseStart, SEEK_SET) )
+        {
+            self->bFinished = true;            
+        }
+    }
+
+    if( self->fpLGE != NULL )
+    {
+        lgeSize = getStructSize(self, LVIS_RELEASE_FILETYPE_LGE);
+        if( !fseek(self->fpLGE, lgeSize * nPulseStart, SEEK_SET) )
+        {
+            self->bFinished = true;            
+        }
+    }
+
+    if( self->fpLGW != NULL )
+    {
+        lgwSize = getStructSize(self, LVIS_RELEASE_FILETYPE_LGW);
+        if( !fseek(self->fpLGW, lgwSize * nPulseStart, SEEK_SET) )
+        {
+            self->bFinished = true;            
+        }
+    }
+
+    // read the data out
+    if( !self->bFinished )
+    {
+        char *pLCERecord = NULL, *pLGERecord = NULL, *pLGWRecord = NULL;
+        for( Py_ssize_t nPulseCount = 0; nPulseCount < nPulses; nPulseCount++ )
+        {
+            lvisPulse.pts_start_idx = points.getNumElems();
+
+            // allocate some space for each record first time around
+            if( self->fpLCE != NULL )
+            { 
+                if(pLCERecord == NULL)
+                    pLCERecord = (char*)malloc(lceSize);
+
+                if( fread(pLCERecord, lceSize, 1, self->fpLCE) < 1 )
+                {
+                    self->bFinished = true;
+                    break;
+                }
+
+                SLVISPoint *p = NULL;
+                if( self->nPointFrom == POINT_FROM_LCE )
+                    p = &lvisPoint;
+                saveLCEToStruct(self->lceVersion, pLCERecord, &lvisPulse, p, 
+                        self->pPulseDefn, self->bRecordsRead);
+            }
+            if( self->fpLGE != NULL )
+            {
+                if(pLGERecord == NULL )
+                    pLGERecord = (char*)malloc(lgeSize);
+
+                if( fread(pLGERecord, lgeSize, 1, self->fpLGE) < 1 )
+                {
+                    self->bFinished = true;
+                    break;
+                }
+
+                SLVISPoint *p = NULL;
+                if( self->nPointFrom == POINT_FROM_LGE )
+                    p = &lvisPoint;
+                saveLGEToStruct(self->lgeVersion, pLGERecord, &lvisPulse, p, 
+                        self->pPulseDefn, self->bRecordsRead);
+            }
+            if( self->fpLGW != NULL )
+            {
+                if(pLGWRecord == NULL )
+                    pLGWRecord = (char*)malloc(lgwSize);
+
+                if( fread(pLGWRecord, lgwSize, 1, self->fpLGW) < 1 )
+                {
+                    self->bFinished = true;
+                    break;
+                }
+
+                SLVISPoint *p = NULL;
+                if( ( self->nPointFrom == POINT_FROM_LGW0 ) || ( self->nPointFrom == POINT_FROM_LGWEND) )
+                    p = &lvisPoint;
+                saveLGWToStruct(self->lgwVersion, pLGWRecord, &lvisWaveformInfo, 
+                        &lvisPulse, p, &transmitted, &received, self->pPulseDefn, 
+                        self->bRecordsRead, self->nPointFrom);
+
+                lvisPulse.wfm_start_idx = waveforms.getNumElems();
+                lvisPulse.number_of_waveform_samples = 1; // only one per pulse
+            }
+
+            self->bRecordsRead = true;
+
+            pulses.push(&lvisPulse);
+            points.push(&lvisPoint);
+            if( self->fpLGW != NULL )
+                waveforms.push(&lvisWaveformInfo);
+        }
+        if( pLCERecord != NULL )
+            free(pLCERecord);
+        if( pLGERecord != NULL )
+            free(pLGERecord);
+        if( pLGWRecord != NULL )
+            free(pLGWRecord);
+    }
+
+    PyArrayObject *pNumpyPoints = points.getNumpyArray(LVISPointFields);
+    PyArrayObject *pNumpyPulses = pulses.getNumpyArray(self->pPulseDefn);
+    PyArrayObject *pNumpyInfos = waveforms.getNumpyArray(LVISWaveformInfoFields);
+    PyArrayObject *pNumpyReceived = received.getNumpyArray(NPY_UINT16);
+    PyArrayObject *pNumpyTransmitted = transmitted.getNumpyArray(NPY_UINT16);
+
+    // build tuple
+    PyObject *pTuple = PyTuple_Pack(5, pNumpyPulses, pNumpyPoints, pNumpyInfos, pNumpyReceived, pNumpyTransmitted);
+
+    // decref the objects since we have finished with them (PyTuple_Pack increfs)
+    Py_DECREF(pNumpyPulses);
+    Py_DECREF(pNumpyPoints);
+    Py_DECREF(pNumpyInfos);
+    Py_DECREF(pNumpyReceived);
+    Py_DECREF(pNumpyTransmitted);
+
+    return pTuple;
 }
 
 /* Table of methods */
 static PyMethodDef PyLVISFiles_methods[] = {
     {"readData", (PyCFunction)PyLVISFiles_readData, METH_VARARGS, NULL},
+    {NULL}  /* Sentinel */
+};
+
+static PyObject *PyLVISFiles_getFinished(PyLVISFiles* self, void *closure)
+{
+    if( self->bFinished )
+        Py_RETURN_TRUE;
+    else
+        Py_RETURN_FALSE;
+}
+
+static PyGetSetDef PyLVISFiles_getseters[] = {
+    {(char*)"finished", (getter)PyLVISFiles_getFinished, NULL, (char*)"Get Finished reading state", NULL},
     {NULL}  /* Sentinel */
 };
 
@@ -748,7 +1526,7 @@ static PyTypeObject PyLVISFilesType = {
     0,                     /* tp_iternext */
     PyLVISFiles_methods,             /* tp_methods */
     0,             /* tp_members */
-    0,           /* tp_getset */
+    PyLVISFiles_getseters,     /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
@@ -810,6 +1588,12 @@ init_lvis(void)
 
     Py_INCREF(&PyLVISFilesType);
     PyModule_AddObject(pModule, "LVISFile", (PyObject *)&PyLVISFilesType);
+
+    // module constants
+    PyModule_AddIntConstant(pModule, "POINT_FROM_LCE", POINT_FROM_LCE);
+    PyModule_AddIntConstant(pModule, "POINT_FROM_LGE", POINT_FROM_LGE);
+    PyModule_AddIntConstant(pModule, "POINT_FROM_LGW0", POINT_FROM_LGW0);
+    PyModule_AddIntConstant(pModule, "POINT_FROM_LGWEND", POINT_FROM_LGWEND);
 
 #if PY_MAJOR_VERSION >= 3
     return pModule;
