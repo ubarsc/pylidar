@@ -203,15 +203,15 @@ def addASCIIDriver(extModules, cxxFlags):
 
     extModules.append(asciiModule)
 
-def addLVISDriver(extModules, cxxFlags):
+def addLVISBinDriver(extModules, cxxFlags):
     """
-    Adds the LVIS driver (which is always built).
+    Adds the LVIS Binary driver (which is always built).
     """
-    print('Building LVIS Extension....')
+    print('Building LVIS Binary Extension....')
     defineMacros = [NUMPY_MACROS]
 
-    lvisModule = Extension(name='pylidar.lidarformats._lvis',
-        sources=['src/lvis.cpp', 'src/pylidar.c'],
+    lvisModule = Extension(name='pylidar.lidarformats._lvisbin',
+        sources=['src/lvisbin.cpp', 'src/pylidar.c'],
         extra_compile_args=cxxFlags,
         define_macros=defineMacros)
 
@@ -290,7 +290,7 @@ if withExtensions:
     addRieglDriver(externalModules, cxxFlags)
     addLasDriver(externalModules, cxxFlags)
     addASCIIDriver(externalModules, cxxFlags)
-    addLVISDriver(externalModules, cxxFlags)
+    addLVISBinDriver(externalModules, cxxFlags)
     # Advanced indexing commented out for now
     # wasn't useful, and causing problems for some installs
     #addAdvIndexing(externalModules, cxxFlags)

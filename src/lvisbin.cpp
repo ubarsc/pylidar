@@ -8,7 +8,7 @@
 #include <Python.h>
 #include "numpy/arrayobject.h"
 
-#include "lvis.h"
+#include "lvisbin.h"
 #include "pylidar.h"
 #include "pylvector.h"
 
@@ -380,16 +380,16 @@ uint16_t host_word(uint16_t input_word,int host_endian)
 
 /* An exception object for this module */
 /* created in the init function */
-struct LVISState
+struct LVISBinState
 {
     PyObject *error;
 };
 
 #if PY_MAJOR_VERSION >= 3
-#define GETSTATE(m) ((struct LVISState*)PyModule_GetState(m))
+#define GETSTATE(m) ((struct LVISBinState*)PyModule_GetState(m))
 #else
 #define GETSTATE(m) (&_state)
-static struct LVISState _state;
+static struct LVISBinState _state;
 #endif
 
 /* Pulses */
@@ -545,13 +545,13 @@ typedef struct
 } PyLVISFiles;
 
 #if PY_MAJOR_VERSION >= 3
-static int lvis_traverse(PyObject *m, visitproc visit, void *arg) 
+static int lvisbin_traverse(PyObject *m, visitproc visit, void *arg) 
 {
     Py_VISIT(GETSTATE(m)->error);
     return 0;
 }
 
-static int lvis_clear(PyObject *m) 
+static int lvisbin_clear(PyObject *m) 
 {
     Py_CLEAR(GETSTATE(m)->error);
     return 0;
@@ -559,13 +559,13 @@ static int lvis_clear(PyObject *m)
 
 static struct PyModuleDef moduledef = {
         PyModuleDef_HEAD_INIT,
-        "_lvis",
+        "_lvisbin",
         NULL,
-        sizeof(struct LVISState),
+        sizeof(struct LVISBinState),
         NULL,
         NULL,
-        lvis_traverse,
-        lvis_clear,
+        lvisbin_traverse,
+        lvisbin_clear,
         NULL
 };
 #endif
@@ -1498,7 +1498,7 @@ static PyTypeObject PyLVISFilesType = {
     PyObject_HEAD_INIT(NULL)
     0,                         /*ob_size*/
 #endif
-    "_lvis.File",         /*tp_name*/
+    "_lvisbin.File",         /*tp_name*/
     sizeof(PyLVISFiles),   /*tp_basicsize*/
     0,                         /*tp_itemsize*/
     (destructor)PyLVISFiles_dealloc, /*tp_dealloc*/
@@ -1517,7 +1517,7 @@ static PyTypeObject PyLVISFilesType = {
     0,                         /*tp_setattro*/
     0,                         /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
-    "LVIS File object",           /* tp_doc */
+    "LVIS Binary File object",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
     0,                     /* tp_richcompare */
@@ -1541,17 +1541,17 @@ static PyTypeObject PyLVISFilesType = {
 #define INITERROR return NULL
 
 PyMODINIT_FUNC 
-PyInit__lvis(void)
+PyInit__lvisbin(void)
 
 #else
 #define INITERROR return
 
 PyMODINIT_FUNC
-init_lvis(void)
+init_lvisbin(void)
 #endif
 {
     PyObject *pModule;
-    struct LVISState *state;
+    struct LVISBinState *state;
 
     /* initialize the numpy stuff */
     import_array();
@@ -1561,7 +1561,7 @@ init_lvis(void)
 #if PY_MAJOR_VERSION >= 3
     pModule = PyModule_Create(&moduledef);
 #else
-    pModule = Py_InitModule("_lvis", module_methods);
+    pModule = Py_InitModule("_lvisbin", module_methods);
 #endif
     if( pModule == NULL )
         INITERROR;
@@ -1569,7 +1569,7 @@ init_lvis(void)
     state = GETSTATE(pModule);
 
     /* Create and add our exception type */
-    state->error = PyErr_NewException("_lvis.error", NULL, NULL);
+    state->error = PyErr_NewException("_lvisbin.error", NULL, NULL);
     if( state->error == NULL )
     {
         Py_DECREF(pModule);
