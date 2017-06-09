@@ -1472,9 +1472,57 @@ static PyObject *PyLVISFiles_readData(PyLVISFiles *self, PyObject *args)
     return pTuple;
 }
 
+// helper method to find the number of records in a file
+// given a structure size
+size_t getNumRecords(FILE *fp, size_t structSize)
+{
+    size_t currpos = ftell(fp);
+
+    // seek to end
+    fseek(fp, 0, SEEK_END);
+    size_t endpos = ftell(fp);
+
+    // back to where we where
+    fseek(fp, currpos, SEEK_SET);
+    
+    // this should round down
+    return endpos / structSize;
+}
+
+// return an estimate of the number of pulses based on the size
+// of the file and the size of the structs for the file version 
+// we are using. Assumes the size for the different file types 
+// (lce, lge, lgw) are the same since it just uses the first type
+// that is available.
+static PyObject *PyLVISFiles_getNumPulses(PyLVISFiles *self, PyObject *args)
+{
+    size_t structSize = 0;
+    size_t numPulses = 0;
+    if( self->fpLCE != NULL )
+    {
+        structSize = getStructSize(self, LVIS_RELEASE_FILETYPE_LCE);
+        numPulses = getNumRecords(self->fpLCE, structSize);
+    }
+
+    if( self->fpLGE != NULL )
+    {
+        structSize = getStructSize(self, LVIS_RELEASE_FILETYPE_LGE);
+        numPulses = getNumRecords(self->fpLGE, structSize);
+    }
+
+    if( self->fpLGW != NULL )
+    {
+        structSize = getStructSize(self, LVIS_RELEASE_FILETYPE_LGW);
+        numPulses = getNumRecords(self->fpLGW, structSize);
+    }
+
+    return PyLong_FromSize_t(numPulses);
+}
+
 /* Table of methods */
 static PyMethodDef PyLVISFiles_methods[] = {
     {"readData", (PyCFunction)PyLVISFiles_readData, METH_VARARGS, NULL},
+    {"getNumPulses", (PyCFunction)PyLVISFiles_getNumPulses, METH_NOARGS, NULL},
     {NULL}  /* Sentinel */
 };
 

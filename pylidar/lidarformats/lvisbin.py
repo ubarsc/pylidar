@@ -1,5 +1,5 @@
 """
-Driver for LVIS Binary files
+Driver for LVIS Binary files. Read only.
 
 Read Driver Options
 -------------------
@@ -46,12 +46,13 @@ if os.getenv('READTHEDOCS', default='False') != 'True':
     POINT_FROM_LGE = _lvisbin.POINT_FROM_LGE
     POINT_FROM_LGW0 = _lvisbin.POINT_FROM_LGW0
     POINT_FROM_LGWEND = _lvisbin.POINT_FROM_LGWEND
+    "How the points are set"
 else:
     POINT_FROM_LCE = None
     POINT_FROM_LGE = None
     POINT_FROM_LGW0 = None
     POINT_FROM_LGWEND = None
-    "How the pulses are found"
+    "How the points are set"
 
 READSUPPORTEDOPTIONS = ('POINT_FROM',)
 "Supported read options"
@@ -154,6 +155,7 @@ class LVISBinFile(generic.LiDARFile):
         self.lastPulses = None
         self.lastWaveformInfo = None
         self.lastReceived = None
+        self.lastTransmitted = None
 
     @staticmethod        
     def getDriverName():
@@ -166,6 +168,7 @@ class LVISBinFile(generic.LiDARFile):
         self.lastPulses = None
         self.lastWaveformInfo = None
         self.lastReceived = None
+        self.lastTransmitted = None
 
     def readPointsByPulse(self, colNames=None):
         pass
@@ -189,6 +192,14 @@ class LVISBinFile(generic.LiDARFile):
         """
         Internal method. Just reads into the self.last* fields
         """
+        pulses, points, info, recv, trans = self.lvisFile.readData(
+                    self.range.startPulse, self.range.endPulse)
+        self.lastRange = copy.copy(self.range)
+        self.lastPoints = points
+        self.lastPulses = pulses
+        self.lastWaveformInfo = info
+        self.lastReceived = recv
+        self.lastTransmitted = trans
 
     def readPointsForRange(self, colNames=None):
         """
@@ -240,10 +251,22 @@ class LVISBinFile(generic.LiDARFile):
         return info
 
     def readTransmitted(self):
-        """
-        lvis (AFAIK) doesn't support transmitted
-        """
-        return None
+        # need info for the indexing into the waveforms
+        info = self.readWaveformInfo()
+
+        # TODO: cache?
+
+        # now the waveforms. Use the just created 2d array of waveform info's to
+        # create the 3d one. 
+        idx = info['TRANSMITTED_START_IDX']
+        cnt = info['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS']
+            
+        trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+                                        idx, cnt)
+        trans = self.lastTransmitted[reans_idx]
+        trans = numpy.ma.array(trans, mask=trans_idx_mask)
+
+        return trans
         
     def readReceived(self):
         # need info for the indexing into the waveforms
@@ -264,10 +287,12 @@ class LVISBinFile(generic.LiDARFile):
         return recv
         
     def getTotalNumberPulses(self):
-        "No way of knowing, maybe fseek/ftell?"
-        raise generic.LiDARFunctionUnsupported()
+        return self.lvisFile.getNumPulses()
 
     def getHeader(self):
+        """
+        No header for LVIS files
+        """
         return {}
 
     def getHeaderValue(self, name):
