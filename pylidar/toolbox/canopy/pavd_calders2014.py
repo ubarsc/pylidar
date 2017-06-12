@@ -25,10 +25,65 @@ import collections
 import statsmodels.api as sm
 from numba import jit
 
+from pylidar import lidarprocessor
+
+
+def run_pavd_calders2014(dataFiles, controls, otherargs, outfile):
+    """
+    Main function for PAVD_CALDERS2014
+    """  
+    if otherargs.planecorrection:  
+        print("Applying plane correction to point heights...")
+        
+        otherargs.xgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.ygrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.zgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.rgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
+        otherargs.gridmask = numpy.ones(otherargs.gridsize**2, dtype=numpy.bool)
+                  
+        lidarprocessor.doProcessing(runXYMinGridding, dataFiles, controls=controls, otherArgs=otherargs)
+        
+        otherargs.planefit = planeFitHubers(otherargs.xgrid[~otherargs.gridmask], otherargs.ygrid[~otherargs.gridmask], 
+            otherargs.zgrid[~otherargs.gridmask], otherargs.rgrid[~otherargs.gridmask], reportfile=otherargs.rptfile)
+    
+    minZenithAll = min(otherargs.minzenith)
+    maxZenithAll = max(otherargs.maxzenith)
+    minHeightBin = min(0.0, otherargs.minheight)  
+    
+    otherargs.zenith = numpy.arange(minZenithAll+otherargs.zenithbinsize/2, maxZenithAll, otherargs.zenithbinsize)
+    otherargs.height = numpy.arange(minHeightBin, otherargs.maxheight, otherargs.heightbinsize)
+    otherargs.counts = numpy.zeros([otherargs.zenith.shape[0],otherargs.height.shape[0]])
+    otherargs.pulses = numpy.zeros([otherargs.zenith.shape[0],1])     
+    
+    print("Calculating vertical plant profiles...")
+    lidarprocessor.doProcessing(runZenithHeightStratification, dataFiles, controls=controls, otherArgs=otherargs)
+    
+    pgapz = numpy.where(otherargs.pulses > 0, 1 - numpy.cumsum(otherargs.counts, axis=1) / otherargs.pulses, numpy.nan)
+    zenithRadians = numpy.radians(otherargs.zenith)
+    zenithBinSizeRadians = numpy.radians(otherargs.zenithbinsize)
+    
+    hpp_pai,hpp_pavd = calcHingePlantProfiles(otherargs.heightbinsize, zenithRadians, pgapz)
+    
+    lpp_pai,lpp_pavd,lpp_mla = calcLinearPlantProfiles(otherargs.height, otherargs.heightbinsize, 
+        zenithRadians, pgapz)
+        
+    if otherargs.totalpaimethod == "HINGE":
+        total_pai = numpy.max(hpp_pai)
+    elif otherargs.totalpaimethod == "LINEAR":
+        total_pai = numpy.max(lpp_pai)
+    elif otherargs.totalpaimethod == "EXTERNAL":
+        total_pai = otherargs.externalpai
+    
+    spp_pai,spp_pavd = calcSolidAnglePlantProfiles(zenithRadians, pgapz, otherargs.heightbinsize,
+        zenithBinSizeRadians, total_pai)     
+    
+    writeProfiles(outfile, otherargs.zenith, otherargs.height, pgapz, 
+                  lpp_pai, lpp_pavd, lpp_mla, hpp_pai, hpp_pavd, spp_pai, spp_pavd)
+
 
 @jit
-def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,zenithBinSize,pulseZenith,pulsesByPointZenith,
-                                 pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weights,minHeight):
+def countPointsPulsesByZenithHeight(midZenithBins,minimumAzimuth,maximumAzimuth,minimumZenith,maximumZenith,zenithBinSize,
+    pulseAzimuth,pulsesByPointAzimuth,pulseZenith,pulsesByPointZenith,pointHeight,heightBins,heightBinSize,pointCounts,pulseCounts,weights,minHeight):
     """
     Called by runZenithHeightStratification()
     
@@ -36,15 +91,20 @@ def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,ze
     
     Parameters:
         midZenithBins           1D array of midpoints of zenith angle bins to use for the stratification
+        minimumAzimuth          Minimum azimuth angle value to consider for this block
+        maximumAzimuth          Maximum azimuth angle value to consider for this block
         minimumZenith           Minimum zenith angle value to consider for this block
         maximumZenith           Maximum zenith angle value to consider for this block
         zenithBinSize           Zenith angle bin size
+        pulseAzimuth            1D array of pulse azimuth angles for this block
+        pulsesByPointAzimuth    1D array of pulse azimuth angles for each point in this block
         pulseZenith             1D array of pulse zenith angles for this block
         pulsesByPointZenith     1D array of pulse zenith angles for each point in this block
         pointHeight             1D array of point heights for this block
         heightBins              1D array of vertical height bin starts to use the stratification
         heightBinSize           Vertical height bin size
         weights                 1D array of points weights to use for calculating point intercept counts
+        minHeight               Minimum height to include in the vertical profile
         
     Returns:    
         pointCounts             2D array (zenith bins, height bins) of point intercept counts to update for this block
@@ -56,17 +116,17 @@ def countPointsPulsesByZenithHeight(midZenithBins,minimumZenith,maximumZenith,ze
             lowerzenith = midZenithBins[i] - zenithBinSize / 2
             upperzenith = midZenithBins[i] + zenithBinSize / 2
             for j in range(pulseZenith.shape[0]):
-                if (pulseZenith[j] > lowerzenith) and (pulseZenith[j] <= upperzenith):
+                if (pulseZenith[j] > lowerzenith) and (pulseZenith[j] <= upperzenith) and (pulseAzimuth[j] >= minimumAzimuth) and (pulseAzimuth[j] <= maximumAzimuth):
                     pulseCounts[i,0] += 1.0            
             for j in range(pulsesByPointZenith.shape[0]):
                 if weights[j] > 0:
-                    if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith):
+                    if (pulsesByPointZenith[j] > lowerzenith) and (pulsesByPointZenith[j] <= upperzenith) and (pulsesByPointAzimuth[j] >= minimumAzimuth) and (pulsesByPointAzimuth[j] <= maximumAzimuth):
                         k = int( (pointHeight[j] - heightBins[0]) / heightBinSize )
                         if (k >= 0) and (k < heightBins.shape[0]) and (pointHeight[j] > minHeight):
                             pointCounts[i,k] += weights[j]
 
 @jit
-def minPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask,
+def minPointsByXYGrid(pointX, pointY, pointZ, pointR, gridX, gridY, gridZ, gridR, gridMask,
                            minX, maxX, minY, maxY, resolution, nbinsX):
     """
     Called by runXYMinGridding()
@@ -77,6 +137,7 @@ def minPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask,
         pointX          1D array of point X coordinates for this block
         pointY          1D array of point Y coordinates for this block
         pointZ          1D array of point Z coordinates for this block
+        pointR          1D array of point range coordinates for this block
         minX            Minimum X coordinate to consider
         maxX            Maximum X coordinate to consider
         minY            Minimum Y coordinate to consider
@@ -88,6 +149,7 @@ def minPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask,
         gridX           A 1D array representation of a 2D grid of minumum Z point X coordinates
         gridY           A 1D array representation of a 2D grid of minumum Z point Y coordinates
         gridZ           A 1D array representation of a 2D grid of minumum Z point Z coordinates
+        gridR           A 1D array representation of a 2D grid of minumum Z point range coordinates
         gridMask        A 1D array representation of a 2D bool grid of missing values
     
     """
@@ -100,72 +162,120 @@ def minPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask,
                         gridX[j] = pointX[i]
                         gridY[j] = pointY[i]
                         gridZ[j] = pointZ[i]
+                        gridR[j] = pointR[i]
                 else:
                     gridX[j] = pointX[i]
                     gridY[j] = pointY[i]
                     gridZ[j] = pointZ[i]
+                    gridR[j] = pointR[i]
                     gridMask[j] = False
     
 def runXYMinGridding(data, otherargs):
     """
     Derive a minimum Z surface following plane correction procedures outlined in Calders et al. (2014)
     """
-    pointcolnames = ['X','Y','Z']
+    pulsecolnames = ['X_ORIGIN','Y_ORIGIN','Z_ORIGIN','NUMBER_OF_RETURNS']    
+    pointcolnames = ['X','Y','Z','RANGE']
 
     halfextent = (otherargs.gridsize * otherargs.gridbinsize) / 2.0
 
-    minX = otherargs.origin[0] - halfextent
-    minY = otherargs.origin[1] - halfextent 
-    maxX = otherargs.origin[0] + halfextent
-    maxY = otherargs.origin[1] + halfextent 
+    minX = -halfextent
+    minY = -halfextent 
+    maxX = halfextent
+    maxY = halfextent 
             
-    for indata in data.inList:
+    for indata in data.inFiles:
         
         points = indata.getPoints(colNames=pointcolnames)
+        pulses = indata.getPulses(colNames=pulsecolnames)
+        pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
         
-        minPointsByXYGrid(points['X'], points['Y'], points['Z'], otherargs.xgrid, otherargs.ygrid, otherargs.zgrid, 
+        x = points['X'] - pulsesByPoint['X_ORIGIN']
+        y = points['Y'] - pulsesByPoint['Y_ORIGIN']
+        z = points['Z'] - pulsesByPoint['Z_ORIGIN']
+        
+        minPointsByXYGrid(x, y, z, points['RANGE'], otherargs.xgrid, otherargs.ygrid, otherargs.zgrid, otherargs.rgrid, 
             otherargs.gridmask, minX, maxX, minY, maxY, otherargs.gridbinsize, otherargs.gridsize)
 
 def runZenithHeightStratification(data, otherargs):
     """
     Derive Pgap(z) profiles following vertical profile procedures outlined in Calders et al. (2014)
     """
-    pulsecolnames = ['NUMBER_OF_RETURNS','ZENITH']
-    
-    for i,indata in enumerate(data.inList):
         
-        if otherargs.planecorrection:
-            pointcolnames = ['X','Y','Z','CLASSIFICATION',otherargs.returnnumcol[i]]
-        else:
-            pointcolnames = [otherargs.heightcol,'CLASSIFICATION',otherargs.returnnumcol[i]]
+    for i,indata in enumerate(data.inFiles):
         
-        points = indata.getPoints(colNames=pointcolnames)
+        pulsecolnames = ['X_ORIGIN','Y_ORIGIN','Z_ORIGIN','NUMBER_OF_RETURNS','ZENITH','AZIMUTH']
         pulses = indata.getPulses(colNames=pulsecolnames)
         pulsesByPoint = numpy.ma.repeat(pulses, pulses['NUMBER_OF_RETURNS'])
+        
+        if otherargs.lidardriver[i] == "SPDV3":
+            returnnumcol = 'RETURN_ID'
+            pulses['ZENITH'] = numpy.degrees(pulses['ZENITH'])
+            pulsesByPoint['ZENITH'] = numpy.degrees(pulsesByPoint['ZENITH'])
+            pulses['AZIMUTH'] = numpy.degrees(pulses['AZIMUTH'])
+            pulsesByPoint['AZIMUTH'] = numpy.degrees(pulsesByPoint['AZIMUTH'])
+        else:
+            returnnumcol = 'RETURN_NUMBER'
+        
+        if otherargs.planecorrection or otherargs.externaldem is not None:
+            pointcolnames = ['X','Y','Z','CLASSIFICATION',returnnumcol]
+        else:
+            pointcolnames = [otherargs.heightcol,'CLASSIFICATION',returnnumcol]        
+        points = indata.getPoints(colNames=pointcolnames)
         
         if otherargs.weighted:
             weights = 1.0 / pulsesByPoint['NUMBER_OF_RETURNS']
         else:
-            weights = numpy.array(points[otherargs.returnnumcol[i]] == 1, dtype=numpy.float32)
+            weights = numpy.array(points[returnnumcol] == 1, dtype=numpy.float32)
         
         if len(otherargs.excludedclasses) > 0:
             mask = numpy.in1d(points['CLASSIFICATION'], otherargs.excludedclasses)
             weights[mask] = 0.0
         
         if otherargs.planecorrection:
-            pointHeights = points['Z'] - (otherargs.planefit["Parameters"][1] * points['X'] + 
-                otherargs.planefit["Parameters"][2] * points['Y'] + otherargs.planefit["Parameters"][0])
+            x = points['X'] - pulsesByPoint['X_ORIGIN']
+            y = points['Y'] - pulsesByPoint['Y_ORIGIN']
+            z = points['Z'] - pulsesByPoint['Z_ORIGIN']            
+            pointHeights = z - (otherargs.planefit["Parameters"][1] * x + 
+                otherargs.planefit["Parameters"][2] * y + otherargs.planefit["Parameters"][0])
+        elif otherargs.externaldem is not None:
+            pointHeights = extractPointHeightsFromDEM(points['X'], points['Y'], points['Z'], otherargs)
         else:
             pointHeights = points[otherargs.heightcol]
         
-        if otherargs.radians[i]:
-            pulses['ZENITH'] = numpy.degrees(pulses['ZENITH'])
-            pulsesByPoint['ZENITH'] = numpy.degrees(pulsesByPoint['ZENITH'])
-        
-        countPointsPulsesByZenithHeight(otherargs.zenith,otherargs.minzenith[i],otherargs.maxzenith[i],
-            otherargs.zenithbinsize,pulses['ZENITH'],pulsesByPoint['ZENITH'],pointHeights,
-            otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,
+        countPointsPulsesByZenithHeight(otherargs.zenith,otherargs.minazimuth[i],otherargs.maxazimuth[i],
+            otherargs.minzenith[i],otherargs.maxzenith[i],otherargs.zenithbinsize,
+            pulses['AZIMUTH'],pulsesByPoint['AZIMUTH'],pulses['ZENITH'],pulsesByPoint['ZENITH'],
+            pointHeights,otherargs.height,otherargs.heightbinsize,otherargs.counts,otherargs.pulses,
             weights,otherargs.minheight)
+
+def extractPointHeightsFromDEM(x, y, z, otherargs):
+    """
+    Extract point heights from an external DEM
+    For points outside the DEM extent, we use nearest neighbour values
+    TODO: Interpolate DEM elevations to actual point locations
+    """
+    col = ((x - otherargs.xMinDem) / otherargs.binSizeDem).astype(numpy.uint)
+    row = ((otherargs.yMaxDem - y) / otherargs.binSizeDem).astype(numpy.uint)           
+    pointHeights = numpy.empty(z.shape, dtype=numpy.float32)
+    
+    inside = (row >= 0) & (row < otherargs.dataDem.shape[0]) & \
+             (col >= 0) & (col < otherargs.dataDem.shape[1])
+    pointHeights[inside] = z[inside] - otherargs.dataDem[row[inside], col[inside]]
+    
+    left = (row >= 0) & (row < otherargs.dataDem.shape[0]) & (col < 0)
+    pointHeights[left] = z[left] - otherargs.dataDem[row[left], 0]
+
+    right = (row >= 0) & (row < otherargs.dataDem.shape[0]) & (col >= otherargs.dataDem.shape[1])
+    pointHeights[right] = z[right] - otherargs.dataDem[row[right], -1]
+
+    top = (row < 0)
+    pointHeights[top] = z[top] - otherargs.dataDem[0, numpy.clip(col[top],0,otherargs.dataDem.shape[1]-1)]
+
+    bottom = (row >= otherargs.dataDem.shape[0])
+    pointHeights[bottom] = z[bottom] - otherargs.dataDem[-1, numpy.clip(col[bottom],0,otherargs.dataDem.shape[0]-1)]
+    
+    return pointHeights
 
 def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
     """
@@ -207,7 +317,7 @@ def calcHingePlantProfiles(heightbinsize, zenith, pgapz):
     
     return pai,pavd   
                       
-def calcSolidAnglePlantProfiles(zenith, pgapz, heightbinsize, zenithbinsize, pai=None):
+def calcSolidAnglePlantProfiles(zenith, pgapz, heightbinsize, zenithbinsize, totalpai):
     """
     Calculate the Jupp et al. (2009) solid angle weighted PAI/PAVD
     """
@@ -217,19 +327,15 @@ def calcSolidAnglePlantProfiles(zenith, pgapz, heightbinsize, zenithbinsize, pai
     
     for i in range(zenith.size):
         if (pgapz[i,-1] < 1):
-            ratio += wn[i] * numpy.log(pgapz[i,:]) / numpy.log(pgapz[i,-1])
+            ratio += wn[i] * numpy.log(pgapz[i,:]) / numpy.log(pgapz[i,-1])       
     
-    if pai is None:
-        hingeindex = numpy.argmin(numpy.abs(zenith - numpy.arctan(numpy.pi / 2)))
-        pai = -1.1 * numpy.log(pgapz[hingeindex,-1])
-    
-    pai = pai * ratio
+    pai = totalpai * ratio
     pavd = numpy.gradient(pai, heightbinsize)
     
     return pai,pavd
 
 def getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, 
-            sapp_pai, sapp_pavd):
+            hpp_pai, hpp_pavd, sapp_pai, sapp_pavd):
     """
     Returns the vertical profile information as a single structured array
     """
@@ -241,7 +347,8 @@ def getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla,
         
         arrayDtype.append((name, 'f8'))
 
-    for name in ["linearPAI", "linearPAVD", "linearMLA", "hingePAI", "juppPAVD"]:
+    for name in ["linearPAI", "linearPAVD", "linearMLA", "hingePAI", "hingePAVD", 
+        "weightedPAI", "weightedPAVD"]:
         arrayDtype.append((name, 'f8'))
 
     profileArray = numpy.empty((height.shape[0], ), dtype=arrayDtype)
@@ -253,30 +360,32 @@ def getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla,
     profileArray["linearPAI"] = lpp_pai
     profileArray["linearPAVD"] = lpp_pavd
     profileArray["linearMLA"] = lpp_mla
-    profileArray["hingePAI"] = sapp_pai
-    profileArray["juppPAVD"] = sapp_pavd
-
+    profileArray["hingePAI"] = hpp_pai
+    profileArray["hingePAVD"] = hpp_pavd
+    profileArray["weightedPAI"] = sapp_pai
+    profileArray["weightedPAVD"] = sapp_pavd
+    
     return profileArray
     
 def writeProfiles(outfile, zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla, 
-            sapp_pai, sapp_pavd):
+            hpp_pai, hpp_pavd, sapp_pai, sapp_pavd):
     """
     Write out the vertical profiles to file
     """  
     profileArray = getProfileAsArray(zenith, height, pgapz, lpp_pai, lpp_pavd, 
-            lpp_mla, sapp_pai, sapp_pavd)
+            lpp_mla, hpp_pai, hpp_pavd, sapp_pai, sapp_pavd)
     
     numpy.savetxt(outfile, profileArray, fmt="%.4f", delimiter=',', 
             header=','.join(profileArray.dtype.names))
 
-def planeFitHubers(x, y, z, reportfile=None):
+def planeFitHubers(x, y, z, r, reportfile=None):
     """
     Plane fitting (Huber's T norm with median absolute deviation scaling)
-    Weighting by 1 / point range yet to be implemented in statsmodels.api
-    """    
-    xy = numpy.vstack((x,y)).T
+    Prior weights are set to 1 / point range.
+    """
+    xy = numpy.vstack((x/r,y/r)).T
     xy = sm.add_constant(xy)
-    huber_t = sm.RLM(z, xy, M=sm.robust.norms.HuberT())
+    huber_t = sm.RLM(z/r, xy, M=sm.robust.norms.HuberT())
     huber_results = huber_t.fit()
             
     outdictn = collections.OrderedDict()
@@ -288,7 +397,9 @@ def planeFitHubers(x, y, z, reportfile=None):
     if reportfile is not None:
         f = open(reportfile,'w')
         for k,v in outdictn.items():
-            f.write("%s:\n%s\n" % (k,v))
+            # Parameters are in the summary output
+            if k != "Parameters":
+                f.write("%s:\n%s\n" % (k,v))
         f.close()
        
     return outdictn
