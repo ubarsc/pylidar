@@ -171,7 +171,15 @@ class LVISBinFile(generic.LiDARFile):
         self.lastTransmitted = None
 
     def readPointsByPulse(self, colNames=None):
-        pass
+        """
+        Return a 2d masked structured array of point that matches
+        the pulses.
+        """
+        # just read the points and add a dimensions
+        # since there is one point per pulse
+        points = self.readPointsForRange(colNames)
+        points = numpy.expand_dims(points, 1)
+        return nump.ma.array(points, mask=False)
 
     def hasSpatialIndex(self):
         "LVIS does not have a spatial index"
@@ -263,7 +271,7 @@ class LVISBinFile(generic.LiDARFile):
             
         trans_idx, trans_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                                         idx, cnt)
-        trans = self.lastTransmitted[reans_idx]
+        trans = self.lastTransmitted[trans_idx]
         trans = numpy.ma.array(trans, mask=trans_idx_mask)
 
         return trans
@@ -287,7 +295,20 @@ class LVISBinFile(generic.LiDARFile):
         return recv
         
     def getTotalNumberPulses(self):
+        """
+        Return the total number of pulses
+        """
         return self.lvisFile.getNumPulses()
+
+    def writeData(self, pulses=None, points=None, transmitted=None, 
+                received=None, waveformInfo=None):
+        """
+        Write all the updated data. Pass None for data that do not need to be up
+        It is assumed that each parameter has been read by the reading functions
+        """
+        if self.mode == generic.READ:
+            # the processor always calls this so if a reading driver just ignore
+            return
 
     def getHeader(self):
         """
@@ -303,7 +324,7 @@ class LVISBinFile(generic.LiDARFile):
     
 class LVISBinFileInfo(generic.LiDARFileInfo):
     """
-    Class that gets information about a .las file
+    Class that gets information about a LVIS file
     and makes it available as fields.
     """
     def __init__(self, fname):

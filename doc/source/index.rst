@@ -164,6 +164,8 @@ Drivers
    lidarformats/las
    lidarformats/riegl
    lidarformats/ascii
+   lidarformats/lvisbin
+   lidarformats/lvishdf5
    lidarformats/h5space
    lidarformats/gridindexutils
 
