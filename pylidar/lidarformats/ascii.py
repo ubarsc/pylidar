@@ -38,6 +38,11 @@ These are contained in the SUPPORTEDOPTIONS module level variable.
 |                       | Codes without a translation will be       |
 |                       | copied through without change.            |
 +-----------------------+-------------------------------------------+
+| COMMENT_CHAR          | A single character that defines what is   |
+|                       | used in the file to denote comments.      |
+|                       | Lines that start with this character are  |
+|                       | ignored. Defaults to '#'                  |
++-----------------------+-------------------------------------------+
 
 """
 
@@ -74,7 +79,7 @@ if os.getenv('READTHEDOCS', default='False') != 'True':
 else:
     HAVE_ZLIB = False
 
-SUPPORTEDOPTIONS = ('COL_TYPES', 'PULSE_COLS', 'CLASSIFICATION_CODES')
+SUPPORTEDOPTIONS = ('COL_TYPES', 'PULSE_COLS', 'CLASSIFICATION_CODES', 'COMMENT_CHAR')
 "driver options"
 COMPULSARYOPTIONS = ('COL_TYPES',)
 "necessary driver options"
@@ -133,9 +138,13 @@ class ASCIIFile(generic.LiDARFile):
 
         bTimeSequential = len(self.pulseDTypes) > 0
 
+        commentChar = '#'
+        if 'COMMENT_CHAR' in userClass.lidarDriverOptions:
+            commentChar = userClass.lidarDriverOptions['COMMENT_CHAR']
+
         # create reader
         self.reader = _ascii.Reader(fname, self.typeCode, self.pulseDTypes, 
-                            self.pointDTypes, bTimeSequential)
+                            self.pointDTypes, bTimeSequential, commentChar)
 
         self.range = None
         self.lastRange = None

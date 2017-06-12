@@ -464,10 +464,10 @@ class RieglParamReader : public scanlib::pointcloud
 {
 public:
     RieglParamReader() : scanlib::pointcloud(false),
-        m_fLat(NPY_NAN), 
-        m_fLong(NPY_NAN),
-        m_fHeight(NPY_NAN),
-        m_fHMSL(NPY_NAN),
+        m_fLat(0), 
+        m_fLong(0),
+        m_fHeight(0),
+        m_fHMSL(0),
         m_fRoll(NPY_NAN),
         m_fPitch(NPY_NAN),
         m_fYaw(NPY_NAN),
@@ -479,12 +479,11 @@ public:
         m_phiMax(0),
         m_thetaInc(0),
         m_phiInc(0),
-        m_n_hk_incl(0),
         m_scanline(0),
         m_scanlineIdx(0),
         m_maxScanlineIdx(0),
-        m_numPulses(0),        
-        m_bHaveData(false)        
+        m_numPulses(0),
+        m_bHaveData(false)
     {
 
     }
@@ -534,37 +533,25 @@ public:
         Py_DECREF(pString);
         
         // now the fields that are valid if we have gathered 
-        // from the 'pose' and 'hk_incl' records
+        // from the 'pose' records
         if( m_bHaveData )
         {
-            if( !npy_isnan(m_fLat) )
-            {
-                pVal = PyFloat_FromDouble(m_fLat);
-                PyDict_SetItemString(pDict, "LATITUDE", pVal);
-                Py_DECREF(pVal);
-            }
-            
-            if( !npy_isnan(m_fLong) )
-            {            
-                pVal = PyFloat_FromDouble(m_fLong);
-                PyDict_SetItemString(pDict, "LONGITUDE", pVal);
-                Py_DECREF(pVal);
-            }
-            
-            if( !npy_isnan(m_fHeight) )
-            {
-                pVal = PyFloat_FromDouble(m_fHeight);
-                PyDict_SetItemString(pDict, "HEIGHT", pVal);
-                Py_DECREF(pVal);
-            }
-            
-            if( !npy_isnan(m_fHMSL) )
-            {
-                pVal = PyFloat_FromDouble(m_fHMSL);
-                PyDict_SetItemString(pDict, "HMSL", pVal);
-                Py_DECREF(pVal);
-            }
-            
+            pVal = PyFloat_FromDouble(m_fLat);
+            PyDict_SetItemString(pDict, "LATITUDE", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_fLong);
+            PyDict_SetItemString(pDict, "LONGITUDE", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_fHeight);
+            PyDict_SetItemString(pDict, "HEIGHT", pVal);
+            Py_DECREF(pVal);
+
+            pVal = PyFloat_FromDouble(m_fHMSL);
+            PyDict_SetItemString(pDict, "HMSL", pVal);
+            Py_DECREF(pVal);
+
             pVal = PyFloat_FromDouble(m_beamDivergence);
             PyDict_SetItemString(pDict, "BEAM_DIVERGENCE", pVal);
             Py_DECREF(pVal);
@@ -727,7 +714,7 @@ protected:
         if( !npy_isnan(arg.yaw))
             m_fYaw = arg.yaw * pi / 180.0;
         else
-            m_fYaw = 0;
+            m_fYaw = 0; // same as original code. Correct??
     }
 
     void on_scanner_pose_hr(const scanlib::scanner_pose_hr<iterator_type>& arg)
@@ -745,7 +732,7 @@ protected:
         if( !npy_isnan(arg.yaw))
             m_fYaw = arg.yaw * pi / 180.0;
         else
-            m_fYaw = 0;
+            m_fYaw = 0; // same as original code. Correct??
     }
 
     void on_scanner_pose(const scanlib::scanner_pose<iterator_type>& arg)
@@ -763,22 +750,7 @@ protected:
         if( !npy_isnan(arg.yaw))
             m_fYaw = arg.yaw * pi / 180.0;
         else
-            m_fYaw = 0;
-    }
-    
-    // inclinometer data when there is no GPS attached
-    void on_hk_incl(const scanlib::hk_incl<iterator_type>& arg)
-    {
-        scanlib::pointcloud::on_hk_incl(arg);
-        m_bHaveData = true;
-        m_n_hk_incl += 1;
-        if( npy_isnan(m_fRoll))
-            m_fRoll = 0;
-        m_fRoll += ( (arg.ROLL / 1000.0 * pi / 180.0) - m_fRoll ) / m_n_hk_incl;
-        if( npy_isnan(m_fPitch))
-            m_fPitch = 0;
-        m_fPitch += ( (arg.PITCH / 1000.0 * pi / 180.0) - m_fPitch ) / m_n_hk_incl;
-        m_fYaw = 0;     
+            m_fYaw = 0; // same as original code. Correct??
     }
 
     // start of a scan line going in the up direction
@@ -842,7 +814,6 @@ private:
     double m_phiMax;
     double m_thetaInc;
     double m_phiInc;
-    double m_n_hk_incl;
     long m_scanline;
     long m_scanlineIdx;
     long m_maxScanlineIdx;

@@ -64,32 +64,33 @@ PyObject *pylidar_stringArrayToTuple(const char *data[]);
 typedef struct
 {
     const char *pszName;
-    char cKind; // 'i' for signed int, 'u' for unsigned int, 'f' for float
+    char cKind; /* 'i' for signed int, 'u' for unsigned int, 'f' for float */
     int nSize;
     int nOffset;
     int nStructTotalSize;
+    char bIgnore; /* set to 1 to not report this field to numpy */
 } SpylidarFieldDefn;
 
 /* workaround for gcc 4.7.4 (maybe other versions?) where offsetof isn't recognised from 
 las.cpp (but is from riegl.cpp). */
 #ifdef __GNUC__
 #define CREATE_FIELD_DEFN(STRUCT, FIELD, KIND) \
-    {#FIELD, KIND, sizeof(((STRUCT*)0)->FIELD), __builtin_offsetof(STRUCT, FIELD), sizeof(STRUCT)}
+    {#FIELD, KIND, sizeof(((STRUCT*)0)->FIELD), __builtin_offsetof(STRUCT, FIELD), sizeof(STRUCT), 0}
 #else
 #define CREATE_FIELD_DEFN(STRUCT, FIELD, KIND) \
-    {#FIELD, KIND, sizeof(((STRUCT*)0)->FIELD), offsetof(STRUCT, FIELD), sizeof(STRUCT)}
+    {#FIELD, KIND, sizeof(((STRUCT*)0)->FIELD), offsetof(STRUCT, FIELD), sizeof(STRUCT), 0}
 #endif
 
 /* 
 Here is an example of use:
-//Say you had a structure like this:
+Say you had a structure like this:
 typedef struct {
     double x,
     double y,
     int count
 } SMyStruct;
 
-//Create an array of structures defining the fields like this:
+Create an array of structures defining the fields like this:
 static SpylidarFieldDefn fields[] = {
     CREATE_FIELD_DEFN(SMyStruct, x, 'f'),
     CREATE_FIELD_DEFN(SMyStruct, y, 'f'),
@@ -97,7 +98,7 @@ static SpylidarFieldDefn fields[] = {
     {NULL} // Sentinel 
 };
 
-// Kind is one of the following (see http://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html)
+Kind is one of the following (see http://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html)
 'b'     boolean
 'i'     (signed) integer
 'u'     unsigned integer
@@ -118,8 +119,11 @@ PyArrayObject *pylidar_structArrayToNumpy(void *pStructArray, npy_intp nElems, S
 /* On success, a new reference is returned */
 PyArray_Descr *pylidar_getDtypeForField(SpylidarFieldDefn *pDefn, const char *pszFieldname);
 
+/* Set the ignore state of a named field in pDefn */
+int pylidar_setIgnore(SpylidarFieldDefn *pDefn, const char *pszFieldname, char bIgnore);
+
 #ifdef __cplusplus
-} // extern C
+} /* extern C */
 #endif
 
 #endif /*PYLIDAR_H*/

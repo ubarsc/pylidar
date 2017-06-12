@@ -78,7 +78,15 @@ static PyObject *ascii_getFileType(PyObject *self, PyObject *args)
     if( i < 0 )
         i = nLen;
 
-    const char *pszLastExt = &pszFileName[i];
+    // take a copy of the extension part so we can make
+    // it lower case
+    char *pszLastExt = strdup(&pszFileName[i]);
+    i = 0;
+    while( pszLastExt[i] != '\0' )
+    {
+        pszLastExt[i] = tolower(pszLastExt[i]);
+        i++;
+    }
 
     int nType = ASCII_UNKNOWN;
     FILE *pFH = fopen(pszFileName, "rb");
@@ -110,16 +118,20 @@ static PyObject *ascii_getFileType(PyObject *self, PyObject *args)
 
     // not gzip. Try uncompressed
     if( (nType == ASCII_UNKNOWN ) && ( nLen >= 4 ) && ((strcmp(pszLastExt, ".dat") == 0 ) ||
-            (strcmp(pszLastExt, ".csv") == 0 ) ) )
+            (strcmp(pszLastExt, ".csv") == 0 ) || (strcmp(pszLastExt, ".txt") == 0 )) )
     {
-        // just check first char is a digit or a space
-        if( (aData[0] == ' ') || isdigit(aData[0]) )
+        // just check first char is a digit or a space or a comment
+        // TODO: should we able to configure what is a comment like we do below in the reader?
+        // not always able to - eg from file info we don't have the driver opyions
+        if( (aData[0] == ' ') || isdigit(aData[0]) || (aData[0] == '#') )
         {
             nType = ASCII_UNCOMPRESSED;
         }
     }
 
     // insert other tests here
+
+    free(pszLastExt);
 
     if( nType == ASCII_UNKNOWN )
     {
@@ -177,6 +189,7 @@ typedef struct
     Py_ssize_t nPulsesRead;
     bool bFinished;
     bool bTimeSequential;
+    char cCommentChar;
 
     int nPulseFields;
     SpylidarFieldDefn *pPulseDefn;
@@ -349,12 +362,12 @@ SpylidarFieldDefn *DTypeListToFieldDef(PyObject *pList, int *pnFields, int **ppn
 static int 
 PyASCIIReader_init(PyASCIIReader *self, PyObject *args, PyObject *kwds)
 {
-    const char *pszFname = NULL;
+    const char *pszFname = NULL, *pszCommentChar = NULL;
     int nType, nTimeSequential;
     PyObject *pPulseDTypeList, *pPointDTypeList;
 
-    if( !PyArg_ParseTuple(args, "siOOi", &pszFname, &nType, &pPulseDTypeList,
-                &pPointDTypeList, &nTimeSequential ) )
+    if( !PyArg_ParseTuple(args, "siOOis", &pszFname, &nType, &pPulseDTypeList,
+                &pPointDTypeList, &nTimeSequential, &pszCommentChar ) )
     {
         return -1;
     }
@@ -408,6 +421,12 @@ PyASCIIReader_init(PyASCIIReader *self, PyObject *args, PyObject *kwds)
         self->bTimeSequential = true;
     else
         self->bTimeSequential = false;
+
+    self->cCommentChar = '\0';
+    // if empty turns this feature off
+    if( strlen(pszCommentChar) > 0 )
+        self->cCommentChar = pszCommentChar[0]; 
+
     self->pPulseLineIdxs = NULL;
     self->pPointLineIdxs = NULL;
 
@@ -467,10 +486,11 @@ PyASCIIReader_dealloc(PyASCIIReader *self)
 class CReadState
 {
 public:
-    CReadState(int nFields)
+    CReadState(int nFields, char cCommentChar)
     {
         m_bFirst = true;
         m_nFields = nFields;
+        m_cCommentChar = cCommentChar;
         m_pszCurrentLine = (char*)malloc(nMaxLineSize * sizeof(char));
         if( m_pszCurrentLine == NULL )
         {
@@ -511,21 +531,33 @@ public:
     {
         // read into last line then clobber
         // try the various reader handles...
+        bool bIsComment = true;
+        int nStartIdx;
+        while(bIsComment)
+        {
 #ifdef HAVE_ZLIB
-        if( self->gz_file != NULL )
-        {
-            if( gzgets(self->gz_file, m_pszLastLine, nMaxLineSize) == NULL)
+            if( self->gz_file != NULL )
             {
-                return false;
+                if( gzgets(self->gz_file, m_pszLastLine, nMaxLineSize) == NULL)
+                {
+                    return false;
+                }
             }
-        }
 #endif
-        if( self->unc_file != NULL )
-        {
-            if( fgets(m_pszLastLine, nMaxLineSize, self->unc_file) == NULL)
+            if( self->unc_file != NULL )
             {
-                return false;
+                if( fgets(m_pszLastLine, nMaxLineSize, self->unc_file) == NULL)
+                {
+                    return false;
+                }
             }
+
+            // find first idx, some files have spaces etc at the start of the line
+            nStartIdx = 0;
+            while(isspace(m_pszLastLine[nStartIdx]) && (nStartIdx < nMaxLineSize))
+                nStartIdx++;
+
+            bIsComment = (m_pszLastLine[nStartIdx] == m_cCommentChar);
         }
 
         char *pszOldCurrent = m_pszCurrentLine;
@@ -537,16 +569,11 @@ public:
         m_pnLastColIdxs = m_pnCurrentColIdxs;
         m_pnCurrentColIdxs = pnOldLast;
 
-        // find first idx, some files have spaces etc at the start of the line
-        int nStartIdx = 0;
-        while(isspace(m_pszCurrentLine[nStartIdx]) && (nStartIdx < nMaxLineSize))
-            nStartIdx++;
-
         m_pnCurrentColIdxs[0] = nStartIdx;
         for( int i = 1; i < m_nFields; i++ )
         {
             // go through all the numbers
-            while((isdigit(m_pszCurrentLine[nStartIdx]) || (m_pszCurrentLine[nStartIdx] == '.')) 
+            while((isdigit(m_pszCurrentLine[nStartIdx]) || (m_pszCurrentLine[nStartIdx] == '.') || (m_pszCurrentLine[nStartIdx] == '-')) 
                         && (nStartIdx < nMaxLineSize))
                 nStartIdx++;
 
@@ -633,7 +660,7 @@ public:
                         if( (data < NPY_MIN_INT8) || (data > NPY_MAX_INT8))
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                            fprintf(stderr, "Column %s data outside range of type (%lld)\n", pElDefn->pszName, data);
                         }
                         npy_int8 d = (npy_int8)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -644,7 +671,7 @@ public:
                         if( (data < NPY_MIN_INT16) || (data > NPY_MAX_INT16))
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                            fprintf(stderr, "Column %s data outside range of type (%lld)\n", pElDefn->pszName, data);
                         }
                         npy_int16 d = (npy_int16)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -655,7 +682,7 @@ public:
                         if( (data < NPY_MIN_INT32) || (data > NPY_MAX_INT32))
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                            fprintf(stderr, "Column %s data outside range of type (%lld)\n", pElDefn->pszName, data);
                         }
                         npy_int32 d = (npy_int32)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -666,7 +693,7 @@ public:
                         if( (data < NPY_MIN_INT64) || (data > NPY_MAX_INT64))
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                            fprintf(stderr, "Column %s data outside range of type (%lld)\n", pElDefn->pszName, data);
                         }
                         npy_int64 d = (npy_int64)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -692,7 +719,7 @@ public:
                         if( data > NPY_MAX_UINT8 )
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                            fprintf(stderr, "Column %s data outside range of type (%llu)\n", pElDefn->pszName, data);
                         }
                         npy_uint8 d = (npy_uint8)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -703,7 +730,7 @@ public:
                         if( data > NPY_MAX_UINT16 )
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                            fprintf(stderr, "Column %s data outside range of type (%llu)\n", pElDefn->pszName, data);
                         }
                         npy_uint16 d = (npy_uint16)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -714,7 +741,7 @@ public:
                         if( data > NPY_MAX_UINT32 )
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                            fprintf(stderr, "Column %s data outside range of type (%llu)\n", pElDefn->pszName, data);
                         }
                         npy_uint32 d = (npy_uint32)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -725,7 +752,7 @@ public:
                         if( data > NPY_MAX_UINT64 )
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type\n", pElDefn->pszName);
+                            fprintf(stderr, "Column %s data outside range of type (%llu)\n", pElDefn->pszName, data);
                         }
                         npy_uint64 d = (npy_uint64)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -767,6 +794,7 @@ public:
 private:
     bool m_bFirst;
     int m_nFields;
+    char m_cCommentChar;
     char *m_pszCurrentLine;
     char *m_pszLastLine;
     int *m_pnCurrentColIdxs;
@@ -784,7 +812,7 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
 
     try
     {
-        CReadState state(self->nPulseFields + self->nPointFields);
+        CReadState state(self->nPulseFields + self->nPointFields, self->cCommentChar);
 
         Py_ssize_t nPulsesToIgnore = 0;
         if(nPulseStart < self->nPulsesRead)

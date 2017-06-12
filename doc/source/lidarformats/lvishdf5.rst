@@ -1,7 +1,6 @@
-Visualisation
-==============
-
-.. automodule:: pylidar.toolbox.visualisation
+LVIS HDF5
+=========
+.. automodule:: pylidar.lidarformats.lvishdf5
    :members:
    :undoc-members:
 
