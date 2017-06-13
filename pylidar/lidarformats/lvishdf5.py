@@ -10,8 +10,8 @@ These are contained in the READSUPPORTEDOPTIONS module level variable.
 | Name                  | Use                                        |
 +=======================+============================================+
 | POINT_FROM            | A 3 element tuple defining which fields to |
-|                       | create a fake point from. Default is       |
-|                       | ('LON0', 'LAT0', 'Z0')                     |
+|                       | create a fake point from (x,y,z). Default  |
+|                       | is ('LON0', 'LAT0', 'Z0')                  |
 +-----------------------+--------------------------------------------+
 """
 
@@ -107,7 +107,11 @@ class LVISHDF5File(generic.LiDARFile):
         # since there is one point per pulse
         points = self.readPointsForRange(colNames)
         points = numpy.expand_dims(points, 1)
-        return nump.ma.array(points, mask=False)
+
+        # make mask (can't just supply False as numpy gives an error)
+        mask = numpy.zeros_like(points, dtype=numpy.bool)
+
+        return numpy.ma.array(points, mask=mask)
 
     def hasSpatialIndex(self):
         "LVIS does not have a spatial index"
@@ -144,9 +148,6 @@ class LVISHDF5File(generic.LiDARFile):
             return self.fileHandle[colNames][self.range.startPulse:self.range.endPulse]
         else:
             # a list etc. Have to build structured array first
-            if colNames is None:
-                colNames = self.pointFrom
-
             dtypeList = []
             for name in colNames:
                 if name not in self.fileHandle:
@@ -172,17 +173,30 @@ class LVISHDF5File(generic.LiDARFile):
         colNames can be a list of column names to return. By default
         all columns are returned.
         """
-        if colNames is None:
-            colNames = self.pointFrom
-        elif not isinstance(colNames, str):
-            # check that all the colNames are in self.pointFrom
-            # Not sure if this check really needed?
-            for name in colNames:
-                if name not in self.pointFrom:
-                    msg = 'column %s not found a point column' % name
-                    raise generic.LiDARArrayColumnError(msg)
+        # we only accept 'X', 'Y', 'Z' and do the translation 
+        # from the self.pointFrom names
+        dictn = {'X' : self.pointFrom[0], 'Y' : self.pointFrom[1], 
+                    'Z' : self.pointFrom[2]}
 
-        return self.readRange(colNames)
+        if colNames is None:
+            colNames = ['X', 'Y', 'Z']
+
+        if isinstance(colNames, str):
+            # translate
+            tranColName = dictn[colNames]
+            # no need to translate on output as not a structured array
+            data = self.readRange(tranColName)
+        else:
+            # a list. Do the translation
+            tranColNames = [dictn[colName] for colName in colNames]
+
+            # get the structured array
+            data = self.readRange(tranColNames)
+
+            # rename the columns to make it match requested names
+            data.dtype.names = colNames
+
+        return data
         
     def readPulsesForRange(self, colNames=None):
         """
