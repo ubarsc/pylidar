@@ -526,6 +526,7 @@ static SpylidarFieldDefn LVISPointFields[] = {
     CREATE_FIELD_DEFN(SLVISPoint, x, 'f'),
     CREATE_FIELD_DEFN(SLVISPoint, y, 'f'),
     CREATE_FIELD_DEFN(SLVISPoint, z, 'f'),
+    {NULL} // Sentinel
 };
 
 /* Python object for reading LVIS LCE/LGE/LGW files */
@@ -1349,7 +1350,7 @@ static PyObject *PyLVISFiles_readData(PyLVISFiles *self, PyObject *args)
     if( self->fpLCE != NULL )
     {
         lceSize = getStructSize(self, LVIS_RELEASE_FILETYPE_LCE);
-        if( !fseek(self->fpLCE, lceSize * nPulseStart, SEEK_SET) )
+        if( fseek(self->fpLCE, lceSize * nPulseStart, SEEK_SET) == -1 )
         {
             self->bFinished = true;            
         }
@@ -1358,7 +1359,7 @@ static PyObject *PyLVISFiles_readData(PyLVISFiles *self, PyObject *args)
     if( self->fpLGE != NULL )
     {
         lgeSize = getStructSize(self, LVIS_RELEASE_FILETYPE_LGE);
-        if( !fseek(self->fpLGE, lgeSize * nPulseStart, SEEK_SET) )
+        if( fseek(self->fpLGE, lgeSize * nPulseStart, SEEK_SET) == -1 )
         {
             self->bFinished = true;            
         }
@@ -1367,7 +1368,7 @@ static PyObject *PyLVISFiles_readData(PyLVISFiles *self, PyObject *args)
     if( self->fpLGW != NULL )
     {
         lgwSize = getStructSize(self, LVIS_RELEASE_FILETYPE_LGW);
-        if( !fseek(self->fpLGW, lgwSize * nPulseStart, SEEK_SET) )
+        if( fseek(self->fpLGW, lgwSize * nPulseStart, SEEK_SET) == -1 )
         {
             self->bFinished = true;            
         }
@@ -1635,7 +1636,7 @@ init_lvisbin(void)
 #endif
 
     Py_INCREF(&PyLVISFilesType);
-    PyModule_AddObject(pModule, "LVISFile", (PyObject *)&PyLVISFilesType);
+    PyModule_AddObject(pModule, "File", (PyObject *)&PyLVISFilesType);
 
     // module constants
     PyModule_AddIntConstant(pModule, "POINT_FROM_LCE", POINT_FROM_LCE);

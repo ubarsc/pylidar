@@ -250,7 +250,7 @@ class LVISHDF5File(generic.LiDARFile):
         data['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS'] = numTx
         data['TRANSMITTED_START_IDX'] = numpy.arange(0, nPulses * numTx, numTx)
         # make 2d
-        data = numpy.expand_dims(data, 1)
+        data = numpy.expand_dims(data, 0)
 
         # can't just set the whole thing to False since you get
         # the 'bool' object is not iterable error

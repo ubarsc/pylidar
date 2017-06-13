@@ -38,6 +38,7 @@ import copy
 import numpy
 
 from . import generic
+from . import gridindexutils
 # Fail slightly less drastically when running from ReadTheDocs
 if os.getenv('READTHEDOCS', default='False') != 'True':
     from . import _lvisbin
@@ -71,60 +72,60 @@ def translateChars(input, old, new):
 
 def getFilenames(fname):
     """
-    Given a filename, determines if it is one of the .lce, .lcw, .lgw 
+    Given a filename, determines if it is one of the .lce, .lge, .lgw 
     files and determines the other ones.
-    Returns name of lce, lcw and lgw
+    Returns name of lce, lge and lgw
     """
     root, ext = os.path.splitext(fname)
     ext_lwr = ext.lower()
 
     lcename = None
-    lcwname = None
+    lgename = None
     lgwname = None
 
     # just do checks based on extension, not sure if we should
     # be calling detect_release_version() in the C++ code here...
     if ext_lwr == '.lce':
         lcename = fname
-        lcwext = translateChars(ext, 'e', 'w')
-        lcwname = root + lcwext
-        if not os.path.exists(lcwname):
-            lcwname = None
+        lgeext = translateChars(ext, 'c', 'g')
+        lgename = root + lgeext
+        if not os.path.exists(lgename) or not os.access(lgename, os.R_OK):
+            lgename = None
             
-        lgwext = translateChars(lcwext, 'c', 'g')
+        lgwext = translateChars(lgeext, 'e', 'w')
         lgwname = root + lgwext
-        if not os.path.exists(lgwname):
+        if not os.path.exists(lgwname) or not os.access(lgwname, os.R_OK):
             lgwname = None
             
-    elif ext_lwr == '.lcw':
-        lcwname = fname
-        lceext = translateChars(ext, 'w', 'e')
+    elif ext_lwr == '.lge':
+        lgename = fname
+        lceext = translateChars(ext, 'g', 'c')
         lcename = root + lceext
-        if not os.path.exists(lcename):
+        if not os.path.exists(lcename) or not os.access(lcename, os.R_OK):
             lcename = None
             
-        lgwext = translateChars(ext, 'c', 'g')
+        lgwext = translateChars(ext, 'e', 'w')
         lgwname = root + lgwext
-        if not os.path.exists(lgwname):
+        if not os.path.exists(lgwname) or not os.access(lgwname, os.R_OK):
             lgwname = None
             
     elif ext_lwr == '.lgw':
         lgwname = fname
-        lcwext = translateChars(ext, 'g', 'c')
-        lcename = root + lcwext
-        if not os.path.exists(lcwname):
-            lcwname = None
+        lgeext = translateChars(ext, 'w', 'e')
+        lgename = root + lgeext
+        if not os.path.exists(lgename) or not os.access(lgename, os.R_OK):
+            lgename = None
             
-        lceext = translateChars(lcwext, 'w', 'e')
+        lceext = translateChars(lgeext, 'g', 'c')
         lcename = root + lceext
-        if not os.path.exists(lcename):
+        if not os.path.exists(lcename) or not os.access(lcename, os.R_OK):
             lcename = None
             
     else:
         msg = 'not a lvis binary file'
         raise generic.LiDARFormatNotUnderstood(msg)
     
-    return lcename, lcwname, lgwname
+    return lcename, lgename, lgwname
 
 class LVISBinFile(generic.LiDARFile):
     """
@@ -142,14 +143,13 @@ class LVISBinFile(generic.LiDARFile):
                 msg = '%s not a supported lvis option' % repr(key)
                 raise generic.LiDARInvalidSetting(msg)
 
-        lcename, lcwname, lgwname = getFilenames(fname)
-        print(lcename, lcwname, lgwname)
+        lcename, lgename, lgwname = getFilenames(fname)
 
         point_from = POINT_FROM_LCE
         if 'POINT_FROM' in userClass.lidarDriverOptions:
             point_from = userClass.lidarDriverOptions['POINT_FROM']
 
-        self.lvisFile = _lvisbin.File(lcename, lcwname, lgwname, point_from)
+        self.lvisFile = _lvisbin.File(lcename, lgename, lgwname, point_from)
         self.range = None
         self.lastPoints = None
         self.lastPulses = None
@@ -179,7 +179,9 @@ class LVISBinFile(generic.LiDARFile):
         # since there is one point per pulse
         points = self.readPointsForRange(colNames)
         points = numpy.expand_dims(points, 1)
-        return nump.ma.array(points, mask=False)
+        mask = numpy.zeros_like(points, dtype=numpy.bool)
+
+        return numpy.ma.array(points, mask=mask)
 
     def hasSpatialIndex(self):
         "LVIS does not have a spatial index"
@@ -330,7 +332,7 @@ class LVISBinFileInfo(generic.LiDARFileInfo):
     def __init__(self, fname):
         generic.LiDARFileInfo.__init__(self, fname)
         
-        self.lcename, self.lcwname, self.lgwname = getFilenames(fname)
+        self.lcename, self.lgename, self.lgwname = getFilenames(fname)
             
     @staticmethod        
     def getDriverName():
