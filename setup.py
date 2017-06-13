@@ -281,6 +281,28 @@ def addInsidePoly(extModules):
     insidePolyModule = Extension(**extraargs)
     extModules.append(insidePolyModule)
 
+def addPulseWavesDriver(extModules, cxxFlags):
+    """
+    Decides if the PulseWaves driver is to be built. If so
+    adds the Extension class to extModules.
+    """
+    if 'PULSEWAVES_ROOT' in os.environ:
+        print('Building PulseWaves Extension...')
+        pulseWavesRoot = os.environ['PULSEWAVES_ROOT']
+
+        pulseWavesModule = Extension(name='pylidar.lidarformats._pulsewaves',
+                sources=['src/pulsewaves.cpp', 'src/pylidar.c'],
+                include_dirs=[os.path.join(pulseWavesRoot, 'include')],
+                extra_compile_args=cxxFlags,
+                define_macros = [NUMPY_MACROS],
+                libraries=['pulsewaves'],
+                library_dirs=[os.path.join(pulseWavesRoot, 'lib')])
+                
+        extModules.append(pulseWavesModule)
+    else:
+        print('PulseWaves library not found.')
+        print('If installed set $PULSEWAVES_ROOT to the install location of pulsewaves https://github.com/PulseWaves/PulseWaves')
+
 # get any C++ flags
 cxxFlags = getExtraCXXFlags()
 # work out if we need to build any of the C/C++ extension
@@ -295,6 +317,7 @@ if withExtensions:
     # wasn't useful, and causing problems for some installs
     #addAdvIndexing(externalModules, cxxFlags)
     addInsidePoly(externalModules)
+    addPulseWavesDriver(externalModules, cxxFlags)
 
 if NO_INSTALL_CMDLINE:
     scriptList = None
