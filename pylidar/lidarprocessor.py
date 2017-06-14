@@ -51,6 +51,13 @@ try:
 except ImportError:
     # library not available
     HAVE_FMT_LAS = False
+
+HAVE_FMT_PULSEWAVES = True
+try:
+    from .lidarformats import pulsewaves
+except ImportError:
+    # library not available
+    HAVE_FMT_PULSEWAVES = False
     
 from . import userclasses
 

@@ -391,23 +391,23 @@ static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
     PyDict_SetItemString(pHeaderDict, "FILE_SIGNATURE", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->file_source_ID);
+    pVal = PyLong_FromUnsignedLong(pHeader->file_source_ID);
     PyDict_SetItemString(pHeaderDict, "FILE_SOURCE_ID", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->global_encoding);
+    pVal = PyLong_FromUnsignedLong(pHeader->global_encoding);
     PyDict_SetItemString(pHeaderDict, "GLOBAL_ENCODING", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_1);
+    pVal = PyLong_FromUnsignedLong(pHeader->project_ID_GUID_data_1);
     PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_1", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_2);
+    pVal = PyLong_FromUnsignedLong(pHeader->project_ID_GUID_data_2);
     PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_2", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->project_ID_GUID_data_3);
+    pVal = PyLong_FromUnsignedLong(pHeader->project_ID_GUID_data_3);
     PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_3", pVal);
     Py_DECREF(pVal);
 
@@ -445,42 +445,42 @@ static PyObject *PyLasFileRead_readHeader(PyLasFileRead *self, PyObject *args)
     PyDict_SetItemString(pHeaderDict, "GENERATING_SOFTWARE", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->file_creation_day);
+    pVal = PyLong_FromUnsignedLong(pHeader->file_creation_day);
     PyDict_SetItemString(pHeaderDict, "FILE_CREATION_DAY", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->file_creation_year);
+    pVal = PyLong_FromUnsignedLong(pHeader->file_creation_year);
     PyDict_SetItemString(pHeaderDict, "FILE_CREATION_YEAR", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->header_size);
+    pVal = PyLong_FromUnsignedLong(pHeader->header_size);
     PyDict_SetItemString(pHeaderDict, "HEADER_SIZE", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->offset_to_point_data);
+    pVal = PyLong_FromUnsignedLong(pHeader->offset_to_point_data);
     PyDict_SetItemString(pHeaderDict, "OFFSET_TO_POINT_DATA", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->number_of_variable_length_records);
+    pVal = PyLong_FromUnsignedLong(pHeader->number_of_variable_length_records);
     PyDict_SetItemString(pHeaderDict, "NUMBER_OF_VARIABLE_LENGTH_RECORDS", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->point_data_format);
+    pVal = PyLong_FromUnsignedLong(pHeader->point_data_format);
     PyDict_SetItemString(pHeaderDict, "POINT_DATA_FORMAT", pVal);
     Py_DECREF(pVal);
 
-    pVal = PyLong_FromLong(pHeader->point_data_record_length);
+    pVal = PyLong_FromUnsignedLong(pHeader->point_data_record_length);
     PyDict_SetItemString(pHeaderDict, "POINT_DATA_RECORD_LENGTH", pVal);
     Py_DECREF(pVal);
 
     // LAS 1.4
     if( (pHeader->version_major >= 1) && (pHeader->version_minor >= 4 ) )
     {
-        pVal = PyLong_FromLong(pHeader->extended_number_of_point_records);
+        pVal = PyLong_FromUnsignedLongLong(pHeader->extended_number_of_point_records);
     }
     else
     {
-        pVal = PyLong_FromLong(pHeader->number_of_point_records);
+        pVal = PyLong_FromUnsignedLongLong(pHeader->number_of_point_records);
     }
     PyDict_SetItemString(pHeaderDict, "NUMBER_OF_POINT_RECORDS", pVal);
     Py_DECREF(pVal);
