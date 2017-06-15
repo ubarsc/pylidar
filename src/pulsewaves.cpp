@@ -249,8 +249,7 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
             pwPulse.descriptor_index = self->pReader->pulse.descriptor_index;
             pwPulse.intensity = self->pReader->pulse.intensity;
         
-            // TODO: Waveforms
-            pwPulse.wfm_start_idx = 0;
+            pwPulse.wfm_start_idx = waveformInfos.getNumElems();
             pwPulse.number_of_waveform_samples = 0;
         
             pwPulse.number_of_returns = 1;
@@ -262,6 +261,54 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
             pwPoint.y = pwPulse.y_origin;
             pwPoint.z = pwPulse.z_origin;
             pwPoint.classification = self->pReader->pulse.classification;
+
+            // now waveforms
+            if(self->pReader->read_waves())
+            {
+                // init these values to 0
+                pwWaveformInfo.number_of_waveform_received_bins = 0;
+                pwWaveformInfo.received_start_idx = received.getNumElems();
+                pwWaveformInfo.number_of_waveform_transmitted_bins = 0;
+                pwWaveformInfo.transmitted_start_idx = transmitted.getNumElems();
+
+                for( U16 nSampling = 0; nSampling < self->pReader->waves->get_number_of_samplings(); nSampling++ )
+                {
+                    WAVESsampling *pSampling = self->pReader->waves->get_sampling(nSampling);
+                    for( U16 nSegment = 0; nSegment < pSampling->get_number_of_segments(); nSegment++ )
+                    {
+                        pSampling->set_active_segment(nSegment);
+
+                        pwWaveformInfo.channel = pSampling->get_channel();
+                        pwWaveformInfo.range_to_waveform_start = pSampling->get_duration_from_anchor_for_segment();
+
+                        for( I32 nSample = 0; nSample < pSampling->get_number_of_samples(); nSample++ )
+                        {
+                            I32 nSampleVal = pSampling->get_sample(nSample);
+                            if( pSampling->get_type() == PULSEWAVES_OUTGOING )
+                            {
+                                transmitted.push(&nSampleVal);
+                                pwWaveformInfo.number_of_waveform_transmitted_bins++;
+                            }
+                            else if( pSampling->get_type() == PULSEWAVES_RETURNING )
+                            {
+                                received.push(&nSampleVal);
+                                pwWaveformInfo.number_of_waveform_received_bins++;
+                            }
+                            // Not sure if there are other types? Ignore for now
+                        }
+
+                        // if the count is 0 then set the index to 0. Not strictly needed...
+                        if( pwWaveformInfo.number_of_waveform_transmitted_bins == 0 )
+                            pwWaveformInfo.transmitted_start_idx = 0;
+                        if( pwWaveformInfo.number_of_waveform_received_bins == 0 )
+                            pwWaveformInfo.received_start_idx = 0;
+
+                        waveformInfos.push(&pwWaveformInfo);
+                        pwPulse.number_of_waveform_samples++;
+                    }
+                }
+                
+            }
 
             pulses.push(&pwPulse);
             points.push(&pwPoint);
