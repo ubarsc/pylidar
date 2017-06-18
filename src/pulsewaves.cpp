@@ -262,7 +262,8 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
             pwPoint.z = pwPulse.z_origin;
             pwPoint.classification = self->pReader->pulse.classification;
 
-            // now waveforms
+            // now waveforms - we have to do this every time whether or not
+            // waveforms are required right now since this is the only time to get them.
             if(self->pReader->read_waves())
             {
                 // init these values to 0
@@ -303,8 +304,14 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
                         if( pwWaveformInfo.number_of_waveform_received_bins == 0 )
                             pwWaveformInfo.received_start_idx = 0;
 
-                        waveformInfos.push(&pwWaveformInfo);
-                        pwPulse.number_of_waveform_samples++;
+                        if( ( pwWaveformInfo.number_of_waveform_transmitted_bins > 0 ) ||
+                            ( pwWaveformInfo.number_of_waveform_received_bins > 0 ) )
+                        {
+                            // only do this if we did actually get a waveform we can use
+                            // - see note about other types from pSampling->get_type() above
+                            waveformInfos.push(&pwWaveformInfo);
+                            pwPulse.number_of_waveform_samples++;
+                        }
                     }
                 }
                 
