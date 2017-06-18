@@ -27,6 +27,9 @@
 #include "pulsereader.hpp"
 #include "pulsewriter.hpp"
 
+#define POINT_FROM_ANCHOR 0
+#define POINT_FROM_TARGET 1
+
 // for CVector
 static const int nGrowBy = 1000;
 static const int nInitSize = 40000;
@@ -130,6 +133,7 @@ typedef struct {
     PyObject_HEAD
     PULSEreader *pReader;
     bool bFinished;
+    int nPointFrom;
 } PyPulseWavesFileRead;
 
 #if PY_MAJOR_VERSION >= 3
@@ -176,13 +180,15 @@ static int
 PyPulseWavesFileRead_init(PyPulseWavesFileRead *self, PyObject *args, PyObject *kwds)
 {
 char *pszFname = NULL;
+int nPointFrom = POINT_FROM_ANCHOR;
 
-    if( !PyArg_ParseTuple(args, "s", &pszFname) )
+    if( !PyArg_ParseTuple(args, "s|i", &pszFname, &nPointFrom) )
     {
         return -1;
     }
 
     self->bFinished = false;
+    self->nPointFrom = nPointFrom;
 
     PULSEreadOpener pulsereadopener;
     pulsereadopener.set_file_name(pszFname);
@@ -256,10 +262,18 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
             pwPulse.pts_start_idx = points.getNumElems();
 
             // TODO: is there always just one point per pulse? (no return_number like in LAS)
-            // TODO: point x,y,z from anchor or target?
-            pwPoint.x = pwPulse.x_origin;
-            pwPoint.y = pwPulse.y_origin;
-            pwPoint.z = pwPulse.z_origin;
+            if( self->nPointFrom == POINT_FROM_ANCHOR )
+            {
+                pwPoint.x = self->pReader->pulse.get_anchor_x();
+                pwPoint.y = self->pReader->pulse.get_anchor_y();
+                pwPoint.z = self->pReader->pulse.get_anchor_z();
+            }
+            else
+            {
+                pwPoint.x = self->pReader->pulse.get_target_x();
+                pwPoint.y = self->pReader->pulse.get_target_y();
+                pwPoint.z = self->pReader->pulse.get_target_z();
+            }
             pwPoint.classification = self->pReader->pulse.classification;
 
             // now waveforms - we have to do this every time whether or not
@@ -593,6 +607,10 @@ init_pulsewaves(void)
 
     Py_INCREF(&PyPulseWavesFileReadType);
     PyModule_AddObject(pModule, "FileRead", (PyObject *)&PyPulseWavesFileReadType);
+
+    // module constants
+    PyModule_AddIntConstant(pModule, "POINT_FROM_ANCHOR", POINT_FROM_ANCHOR);
+    PyModule_AddIntConstant(pModule, "POINT_FROM_TARGET", POINT_FROM_TARGET);
 
 #if PY_MAJOR_VERSION >= 3
     return pModule;

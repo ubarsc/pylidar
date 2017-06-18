@@ -1,6 +1,19 @@
 """
 Driver for PulseWaves.
 
+Read Driver Options
+-------------------
+
+These are contained in the READSUPPORTEDOPTIONS module level variable.
+
++-----------------------+---------------------------------------------+
+| Name                  | Use                                         |
++=======================+=============================================+
+| POINT_FROM            | an integer. Set to one of the POINT_FROM_*  |
+|                       | module level constants. Determines which    |
+|                       | file the coordinates for the point is       |
+|                       | created from. Defaults to POINT_FROM_ANCHOR |
++-----------------------+---------------------------------------------+
 """
 
 # This file is part of PyLidar
@@ -29,6 +42,17 @@ from . import gridindexutils
 # Fail slightly less drastically when running from ReadTheDocs
 if os.getenv('READTHEDOCS', default='False') != 'True':
     from . import _pulsewaves
+    # bring constants over
+    POINT_FROM_ANCHOR = _pulsewaves.POINT_FROM_ANCHOR
+    POINT_FROM_TARGET = _pulsewaves.POINT_FROM_TARGET
+    "How the points are set"
+else:
+    POINT_FROM_ANCHOR = None
+    POINT_FROM_TARGET = None
+    "How the points are set"
+
+READSUPPORTEDOPTIONS = ('POINT_FROM',)
+"Supported read options"
 
 def isPulseWavesFile(fname):
     """
@@ -57,12 +81,21 @@ class PulseWavesFile(generic.LiDARFile):
             msg = 'PulseWaves driver is read or create only'
             raise generic.LiDARInvalidSetting(msg)
 
+        for key in userClass.lidarDriverOptions:
+            if key not in READSUPPORTEDOPTIONS:
+                msg = '%s not a supported pulsewaves option' % repr(key)
+                raise generic.LiDARInvalidSetting(msg)
+
         if mode == generic.READ and not isPulseWavesFile(fname):
             msg = 'not a PulseWaves file'
             raise generic.LiDARFileException(msg)
 
+        point_from = POINT_FROM_ANCHOR
+        if 'POINT_FROM' in userClass.lidarDriverOptions:
+            point_from = userClass.lidarDriverOptions['POINT_FROM']
+
         try:
-            self.pulsewavesFile = _pulsewaves.FileRead(fname)
+            self.pulsewavesFile = _pulsewaves.FileRead(fname, point_from)
         except _pulsewaves.error:
             msg = 'error opening pulsewaves file'
             raise generic.LiDARFormatNotUnderstood(msg)
