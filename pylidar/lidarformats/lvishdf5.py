@@ -45,6 +45,8 @@ READSUPPORTEDOPTIONS = ('POINT_FROM',)
 DEFAULT_POINT_FROM = ('LON0', 'LAT0', 'Z0')
 EXPECTED_HEADER_FIELDS = ['level', 'title', 'description', 'short_name']
 ANCILLARY_DATA = 'ancillary_data'
+CLASSIFICATION_NAME = 'CLASSIFICATION'
+"LVIS Files don't have a CLASSIFICATION column so we have to create a blank one for SPDV4"
 
 class LVISHDF5File(generic.LiDARFile):
     """
@@ -106,7 +108,7 @@ class LVISHDF5File(generic.LiDARFile):
         # just read the points and add a dimensions
         # since there is one point per pulse
         points = self.readPointsForRange(colNames)
-        points = numpy.expand_dims(points, 1)
+        points = numpy.expand_dims(points, 0)
 
         # make mask (can't just supply False as numpy gives an error)
         mask = numpy.zeros_like(points, dtype=numpy.bool)
@@ -145,22 +147,32 @@ class LVISHDF5File(generic.LiDARFile):
         Assumes colName is not None
         """
         if isinstance(colNames, str):
+            if colNames == CLASSIFICATION_NAME and colNames not in self.fileHandle:
+                # hack so we can fake a CLASSIFICATION column
+                numRecords = self.range.endPulse - self.range.startPulse
+                return numpy.zeros(numRecords, dtype='U8')
+
             return self.fileHandle[colNames][self.range.startPulse:self.range.endPulse]
         else:
             # a list etc. Have to build structured array first
             dtypeList = []
             for name in colNames:
-                if name not in self.fileHandle:
+                if name == CLASSIFICATION_NAME and name not in self.fileHandle:
+                    dtypeList.append((CLASSIFICATION_NAME, 'U8'))
+                elif name not in self.fileHandle:
                     msg = 'column %s not found in file' % name
                     raise generic.LiDARArrayColumnError(msg)
-
-                s = self.fileHandle[name].dtype.str
-                dtypeList.append((str(name), s))
+                else:
+                    s = self.fileHandle[name].dtype.str
+                    dtypeList.append((str(name), s))
 
             numRecords = self.range.endPulse - self.range.startPulse
             data = numpy.empty(numRecords, dtypeList)
             for name in colNames:
-                data[str(name)] = self.fileHandle[name][self.range.startPulse:self.range.endPulse]
+                if name == CLASSIFICATION_NAME and name not in self.fileHandle:
+                    data[CLASSIFICATION_NAME].fill(0)
+                else:
+                    data[str(name)] = self.fileHandle[name][self.range.startPulse:self.range.endPulse]
 
         return data
 
@@ -176,10 +188,11 @@ class LVISHDF5File(generic.LiDARFile):
         # we only accept 'X', 'Y', 'Z' and do the translation 
         # from the self.pointFrom names
         dictn = {'X' : self.pointFrom[0], 'Y' : self.pointFrom[1], 
-                    'Z' : self.pointFrom[2]}
+                    'Z' : self.pointFrom[2], 
+                    CLASSIFICATION_NAME : CLASSIFICATION_NAME}
 
         if colNames is None:
-            colNames = ['X', 'Y', 'Z']
+            colNames = ['X', 'Y', 'Z', CLASSIFICATION_NAME]
 
         if isinstance(colNames, str):
             # translate
@@ -241,7 +254,9 @@ class LVISHDF5File(generic.LiDARFile):
         data = numpy.empty(nPulses, dtype=[('NUMBER_OF_WAVEFORM_RECEIVED_BINS', 'U16'),
                     ('RECEIVED_START_IDX', 'U64'), 
                     ('NUMBER_OF_WAVEFORM_TRANSMITTED_BINS', 'U16'), 
-                    ('TRANSMITTED_START_IDX', 'U64')])
+                    ('TRANSMITTED_START_IDX', 'U64'),
+                    ('RECEIVE_WAVE_OFFSET', 'float32'), ('RECEIVE_WAVE_GAIN', 'float32'),
+                    ('TRANS_WAVE_OFFSET', 'float32'), ('TRANS_WAVE_GAIN', 'float32')])
 
         # TODO: are we actually interested in this information
         # since we don't need it to build the structure?
@@ -249,6 +264,11 @@ class LVISHDF5File(generic.LiDARFile):
         data['RECEIVED_START_IDX'] = numpy.arange(0, nPulses * numRx, numRx)
         data['NUMBER_OF_WAVEFORM_TRANSMITTED_BINS'] = numTx
         data['TRANSMITTED_START_IDX'] = numpy.arange(0, nPulses * numTx, numTx)
+        # need for SPDV4
+        data['RECEIVE_WAVE_OFFSET'] = 0
+        data['RECEIVE_WAVE_GAIN'] = 1
+        data['TRANS_WAVE_OFFSET'] = 0
+        data['TRANS_WAVE_GAIN'] = 1
         # make 2d
         data = numpy.expand_dims(data, 0)
 
@@ -270,6 +290,7 @@ class LVISHDF5File(generic.LiDARFile):
 
         # read as 2d
         trans = self.fileHandle['TXWAVE'][self.range.startPulse:self.range.endPulse]
+        trans = numpy.rot90(trans)
         # add another axis for the waveform number - empty in this case as 
         # LVIS only has one waveform frequency
         trans = numpy.expand_dims(trans, 1)
@@ -288,6 +309,7 @@ class LVISHDF5File(generic.LiDARFile):
 
         # read as 2d
         recv = self.fileHandle['RXWAVE'][self.range.startPulse:self.range.endPulse]
+        recv = numpy.rot90(recv)
         # add another axis for the waveform number - empty in this case as 
         # LVIS only has one waveform frequency
         recv = numpy.expand_dims(recv, 1)
