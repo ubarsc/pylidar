@@ -504,6 +504,11 @@ typedef struct {
     npy_uint64 received_start_idx;
     npy_uint16 number_of_waveform_transmitted_bins;
     npy_uint64 transmitted_start_idx;
+    npy_uint8 wfm_wavelength_idx;
+    float receive_wave_gain;
+    float receive_wave_offset;
+    float trans_wave_gain;
+    float trans_wave_offset;
 } SLVISWaveformInfo;
 
 /* field info for CVector::getNumpyArray */
@@ -512,6 +517,11 @@ static SpylidarFieldDefn LVISWaveformInfoFields[] = {
     CREATE_FIELD_DEFN(SLVISWaveformInfo, received_start_idx, 'u'),
     CREATE_FIELD_DEFN(SLVISWaveformInfo, number_of_waveform_transmitted_bins, 'u'),
     CREATE_FIELD_DEFN(SLVISWaveformInfo, transmitted_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SLVISWaveformInfo, wfm_wavelength_idx, 'u'),
+    CREATE_FIELD_DEFN(SLVISWaveformInfo, receive_wave_gain, 'f'),
+    CREATE_FIELD_DEFN(SLVISWaveformInfo, receive_wave_offset, 'f'),
+    CREATE_FIELD_DEFN(SLVISWaveformInfo, trans_wave_gain, 'f'),
+    CREATE_FIELD_DEFN(SLVISWaveformInfo, trans_wave_offset, 'f'),
     {NULL} // Sentinel
 };
 
@@ -519,6 +529,8 @@ typedef struct {
     double x;
     double y;
     float z;
+    float height;
+    npy_uint8 classification;
 } SLVISPoint;
 
 /* field info for CVector::getNumpyArray */
@@ -526,6 +538,8 @@ static SpylidarFieldDefn LVISPointFields[] = {
     CREATE_FIELD_DEFN(SLVISPoint, x, 'f'),
     CREATE_FIELD_DEFN(SLVISPoint, y, 'f'),
     CREATE_FIELD_DEFN(SLVISPoint, z, 'f'),
+    CREATE_FIELD_DEFN(SLVISPoint, height, 'f'),
+    CREATE_FIELD_DEFN(SLVISPoint, classification, 'u'),
     {NULL} // Sentinel
 };
 
@@ -1340,7 +1354,20 @@ static PyObject *PyLVISFiles_readData(PyLVISFiles *self, PyObject *args)
     lvisPulse.pts_start_idx = 0;
 
     SLVISPoint lvisPoint;
+    // these not really supported (but needed by SPDv4) to init to 0
+    lvisPoint.height = 0;
+    lvisPoint.classification = 0; // created
+
     SLVISWaveformInfo lvisWaveformInfo;
+
+    // we don't really support these fields but they are needed
+    // by SPDV4 and in theory make sense to have anyway. 
+    // Set them so they don't do anything. Data comes as int from LVIS
+    lvisWaveformInfo.receive_wave_gain = 1.0;
+    lvisWaveformInfo.receive_wave_offset = 0.0;
+    lvisWaveformInfo.trans_wave_gain = 1.0;
+    lvisWaveformInfo.trans_wave_offset = 0.0;
+    lvisWaveformInfo.wfm_wavelength_idx = 0;
 
     // seek to the right spot in the files
     size_t lceSize = 0;

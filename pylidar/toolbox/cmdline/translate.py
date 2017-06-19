@@ -34,6 +34,7 @@ from pylidar.toolbox.translate import spdv32spdv4
 from pylidar.toolbox.translate import riegl2spdv4
 from pylidar.toolbox.translate import spdv42las
 from pylidar.toolbox.translate import ascii2spdv4
+from pylidar.toolbox.translate import lvisbin2spdv4
 
 def getCmdargs():
     """
@@ -200,6 +201,12 @@ def run():
         ascii2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.coltype, pulsecols, cmdargs.range, cmdargs.scaling, 
                 classtrans, cmdargs.null, cmdargs.constcol)
+
+    elif inFormat == 'LVIS Binary' and cmdargs.format == 'SPDV4':
+
+        lvisbin2spdv4.translate(info, cmdargs.input, cmdargs.output,
+                cmdargs.range, cmdargs.scaling, 
+                cmdargs.null, cmdargs.constcol)
 
     else:
         msg = 'Cannot convert between formats %s and %s' 
