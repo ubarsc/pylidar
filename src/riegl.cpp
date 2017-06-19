@@ -32,7 +32,7 @@
 #include "fwifc.h"
 
 static const int nGrowBy = 10000;
-static const int nInitSize = 100000;
+static const int nInitSize = 256*256;
 
 /* An exception object for this module */
 /* created in the init function */

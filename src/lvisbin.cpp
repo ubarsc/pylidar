@@ -27,8 +27,8 @@
 #define POINT_FROM_LGWEND 3
 
 // for CVector
-static const int nGrowBy = 1000;
-static const int nInitSize = 40000;
+static const int nGrowBy = 10000;
+static const int nInitSize = 256*256;
 
 /* define GENLIB_OUR_ENDIAN depending on endian setting
  from pyconfig.h */

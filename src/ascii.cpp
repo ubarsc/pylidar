@@ -39,8 +39,8 @@
 #endif
 
 // for CVector
-static const int nGrowBy = 1000;
-static const int nInitSize = 40000;
+static const int nGrowBy = 10000;
+static const int nInitSize = 256*256;
 
 static const int nMaxLineSize = 8192;
 

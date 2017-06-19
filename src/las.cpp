@@ -34,8 +34,8 @@
 #include "laswriter.hpp"
 
 // for CVector
-static const int nGrowBy = 1000;
-static const int nInitSize = 40000;
+static const int nGrowBy = 10000;
+static const int nInitSize = 256*256;
 // for creating pulses
 static const long FIRST_RETURN = 0;
 static const long LAST_RETURN = 1;
