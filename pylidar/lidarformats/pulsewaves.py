@@ -128,7 +128,7 @@ class PulseWavesFile(generic.LiDARFile):
         # just read the points and add a dimensions
         # since there is one point per pulse
         points = self.readPointsForRange(colNames)
-        points = numpy.expand_dims(points, 1)
+        points = numpy.expand_dims(points, 0)
         mask = numpy.zeros_like(points, dtype=numpy.bool)
 
         return numpy.ma.array(points, mask=mask)

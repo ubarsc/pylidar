@@ -115,6 +115,10 @@ typedef struct {
     npy_uint64 transmitted_start_idx;
     double      range_to_waveform_start;
     npy_uint8 channel;
+    float receive_wave_gain;
+    float receive_wave_offset;
+    float trans_wave_gain;
+    float trans_wave_offset;
 } SPulseWavesWaveformInfo;
 
 /* field info for CVector::getNumpyArray */
@@ -125,6 +129,10 @@ static SpylidarFieldDefn PulseWavesWaveformInfoFields[] = {
     CREATE_FIELD_DEFN(SPulseWavesWaveformInfo, transmitted_start_idx, 'u'),
     CREATE_FIELD_DEFN(SPulseWavesWaveformInfo, range_to_waveform_start, 'f'),
     CREATE_FIELD_DEFN(SPulseWavesWaveformInfo, channel, 'u'),
+    CREATE_FIELD_DEFN(SPulseWavesWaveformInfo, receive_wave_gain, 'f'),
+    CREATE_FIELD_DEFN(SPulseWavesWaveformInfo, receive_wave_offset, 'f'),
+    CREATE_FIELD_DEFN(SPulseWavesWaveformInfo, trans_wave_gain, 'f'),
+    CREATE_FIELD_DEFN(SPulseWavesWaveformInfo, trans_wave_offset, 'f'),
     {NULL} // Sentinel
 };
 
@@ -226,6 +234,13 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
     SPulseWavesPulse pwPulse;
     SPulseWavesPoint pwPoint;
     SPulseWavesWaveformInfo pwWaveformInfo;
+    // we don't support these fields but they are required
+    // by SPDV4 so set them so they do nothing.
+    pwWaveformInfo.receive_wave_gain = 1.0;
+    pwWaveformInfo.receive_wave_offset = 0.0;
+    pwWaveformInfo.trans_wave_gain = 1.0;
+    pwWaveformInfo.trans_wave_offset = 0.0;
+
 
     // seek to the first pulse
     if( !self->pReader->seek(nPulseStart) )
@@ -280,12 +295,6 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
             // waveforms are required right now since this is the only time to get them.
             if(self->pReader->read_waves())
             {
-                // init these values to 0
-                pwWaveformInfo.number_of_waveform_received_bins = 0;
-                pwWaveformInfo.received_start_idx = received.getNumElems();
-                pwWaveformInfo.number_of_waveform_transmitted_bins = 0;
-                pwWaveformInfo.transmitted_start_idx = transmitted.getNumElems();
-
                 for( U16 nSampling = 0; nSampling < self->pReader->waves->get_number_of_samplings(); nSampling++ )
                 {
                     WAVESsampling *pSampling = self->pReader->waves->get_sampling(nSampling);
@@ -295,6 +304,11 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
 
                         pwWaveformInfo.channel = pSampling->get_channel();
                         pwWaveformInfo.range_to_waveform_start = pSampling->get_duration_from_anchor_for_segment();
+                        // init these values
+                        pwWaveformInfo.number_of_waveform_received_bins = 0;
+                        pwWaveformInfo.received_start_idx = received.getNumElems();
+                        pwWaveformInfo.number_of_waveform_transmitted_bins = 0;
+                        pwWaveformInfo.transmitted_start_idx = transmitted.getNumElems();
 
                         for( I32 nSample = 0; nSample < pSampling->get_number_of_samples(); nSample++ )
                         {

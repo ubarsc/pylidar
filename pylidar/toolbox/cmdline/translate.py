@@ -36,6 +36,7 @@ from pylidar.toolbox.translate import spdv42las
 from pylidar.toolbox.translate import ascii2spdv4
 from pylidar.toolbox.translate import lvisbin2spdv4
 from pylidar.toolbox.translate import lvishdf52spdv4
+from pylidar.toolbox.translate import pulsewaves2spdv4
 
 def getCmdargs():
     """
@@ -212,6 +213,12 @@ def run():
     elif inFormat == 'LVIS HDF5' and cmdargs.format == 'SPDV4':
 
         lvishdf52spdv4.translate(info, cmdargs.input, cmdargs.output,
+                cmdargs.range, cmdargs.scaling, 
+                cmdargs.null, cmdargs.constcol)
+
+    elif inFormat == 'PulseWaves' and cmdargs.format == 'SPDV4':
+
+        pulsewaves2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.scaling, 
                 cmdargs.null, cmdargs.constcol)
 
