@@ -150,7 +150,7 @@ class LVISHDF5File(generic.LiDARFile):
             if colNames == CLASSIFICATION_NAME and colNames not in self.fileHandle:
                 # hack so we can fake a CLASSIFICATION column
                 numRecords = self.range.endPulse - self.range.startPulse
-                return numpy.zeros(numRecords, dtype='U8')
+                return numpy.zeros(numRecords, dtype=numpy.uint8)
 
             return self.fileHandle[colNames][self.range.startPulse:self.range.endPulse]
         else:
@@ -158,7 +158,7 @@ class LVISHDF5File(generic.LiDARFile):
             dtypeList = []
             for name in colNames:
                 if name == CLASSIFICATION_NAME and name not in self.fileHandle:
-                    dtypeList.append((CLASSIFICATION_NAME, 'U8'))
+                    dtypeList.append((CLASSIFICATION_NAME, numpy.uint8))
                 elif name not in self.fileHandle:
                     msg = 'column %s not found in file' % name
                     raise generic.LiDARArrayColumnError(msg)

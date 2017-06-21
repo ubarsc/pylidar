@@ -530,10 +530,7 @@ class LiDARFile(basedriver.Driver):
                 maskList.append((mask, lasCode))
 
         for mask, code in maskList:
-            # don't do anything with scalar False's which seem to
-            # appear when above comparison fails on modern numpy
-            if not numpy.isscalar(mask) or mask:
-                classification[mask] = code
+            classification[mask] = code
 
     @staticmethod
     def subsetColumns(array, colNames):
