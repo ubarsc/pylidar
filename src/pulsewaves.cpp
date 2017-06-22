@@ -23,6 +23,7 @@
 #include <Python.h>
 #include "numpy/arrayobject.h"
 #include "pylvector.h"
+#include "pylfieldinfomap.h"
 
 #include "pulsereader.hpp"
 #include "pulsewriter.hpp"
@@ -406,6 +407,12 @@ static PyObject *PyPulseWavesFileRead_readHeader(PyPulseWavesFileRead *self, PyO
     PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_3", pVal);
     Py_DECREF(pVal);
 
+    pylidar::CVector<U8> project_ID_GUID_data_4Vector(pHeader->project_ID_GUID_data_4, 
+                            sizeof(pHeader->project_ID_GUID_data_4));    
+    pVal = (PyObject*)project_ID_GUID_data_4Vector.getNumpyArray(NPY_UINT8);
+    PyDict_SetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_4", pVal);
+    Py_DECREF(pVal);
+
 #if PY_MAJOR_VERSION >= 3
     pVal = PyUnicode_FromStringAndSize(pHeader->system_identifier, 
                 GET_LENGTH(pHeader->system_identifier));
@@ -569,6 +576,456 @@ static PyTypeObject PyPulseWavesFileReadType = {
     0,                 /* tp_new */
 };
 
+/* Python object wrapping a PULSEwriter */
+typedef struct {
+    PyObject_HEAD
+    // set by _init so we can create PULSEwriteOpener
+    // when writing the first block
+    char *pszFilename;
+    // created when writing first block
+    PULSEwriter *pWriter;
+    PULSEheader *pHeader;
+} PyPulseWavesFileWrite;
+
+/* destructor - close and delete */
+static void 
+PyPulseWavesFileWrite_dealloc(PyPulseWavesFileWrite *self)
+{
+    if(self->pszFilename != NULL)
+    {
+        free(self->pszFilename);
+    }
+    if(self->pWriter != NULL)
+    {
+        self->pWriter->update_header(self->pHeader, TRUE);
+        self->pWriter->close();
+        delete self->pWriter;
+    }
+    if(self->pHeader != NULL)
+    {
+        delete self->pHeader;
+    }
+}
+
+/* init method - open file */
+static int 
+PyPulseWavesFileWrite_init(PyPulseWavesFileWrite *self, PyObject *args, PyObject *kwds)
+{
+char *pszFname = NULL;
+
+    if( !PyArg_ParseTuple(args, "s", &pszFname ) )
+    {
+        return -1;
+    }
+
+    // copy filename so we can open later
+    self->pszFilename = strdup(pszFname);
+    self->pWriter = NULL;
+    self->pHeader = NULL;
+
+    return 0;
+}
+
+// copies recognised fields from pHeaderDict into pHeader
+void setHeaderFromDictionary(PyObject *pHeaderDict, PULSEheader *pHeader)
+{
+    PyObject *pVal;
+    // TODO: be better at checking types
+    // TODO: error if key not recognised? maybe copying (PyDict_Copy) then
+    // deleting recognised keys - if stuff left then error etc.
+
+    pVal = PyDict_GetItemString(pHeaderDict, "FILE_SIGNATURE");
+    if( pVal != NULL )
+    {
+#if PY_MAJOR_VERSION >= 3
+        PyObject *bytesKey = PyUnicode_AsEncodedString(pVal, NULL, NULL);
+        char *pszSignature = PyBytes_AsString(bytesKey);
+#else
+        char *pszSignature = PyString_AsString(pVal);
+#endif
+        strncpy(pHeader->file_signature, pszSignature, GET_LENGTH(pHeader->file_signature));
+#if PY_MAJOR_VERSION >= 3
+        Py_DECREF(bytesKey);
+#endif
+    }
+
+    pVal = PyDict_GetItemString(pHeaderDict, "GLOBAL_PARAMETERS");
+    if( pVal != NULL )
+        pHeader->global_parameters = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "FILE_SOURCE_ID");
+    if( pVal != NULL )
+        pHeader->file_source_ID = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_1");
+    if( pVal != NULL )
+        pHeader->project_ID_GUID_data_1 = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_2");
+    if( pVal != NULL )
+        pHeader->project_ID_GUID_data_2 = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_3");
+    if( pVal != NULL )
+        pHeader->project_ID_GUID_data_3 = PyLong_AsLong(pVal);
+
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PROJECT_ID_GUID_DATA_4");
+    if( pVal != NULL )
+    {    
+        PyObject *pArray = PyArray_FROM_OT(pVal, NPY_UINT8);
+        // TODO: check 1d?
+        for( npy_intp i = 0; (i < PyArray_DIM((PyArrayObject*)pArray, 0)) &&
+                            (i < (npy_intp)GET_LENGTH(pHeader->project_ID_GUID_data_4)); i++ )
+        {
+            pHeader->project_ID_GUID_data_4[i] = *((U8*)PyArray_GETPTR1((PyArrayObject*)pArray, i));
+        }
+        Py_DECREF(pArray);
+    }
+
+    pVal = PyDict_GetItemString(pHeaderDict, "SYSTEM_IDENTIFIER");
+    if( pVal != NULL )
+    {
+#if PY_MAJOR_VERSION >= 3
+        PyObject *bytesKey = PyUnicode_AsEncodedString(pVal, NULL, NULL);
+        char *pszIdent = PyBytes_AsString(bytesKey);
+#else
+        char *pszIdent = PyString_AsString(pVal);
+#endif
+        strncpy(pHeader->system_identifier, pszIdent, GET_LENGTH(pHeader->system_identifier));
+#if PY_MAJOR_VERSION >= 3
+        Py_DECREF(bytesKey);
+#endif
+    }
+
+    pVal = PyDict_GetItemString(pHeaderDict, "GENERATING_SOFTWARE");
+    if( pVal != NULL )
+    {
+#if PY_MAJOR_VERSION >= 3
+        PyObject *bytesKey = PyUnicode_AsEncodedString(pVal, NULL, NULL);
+        char *pszSW = PyBytes_AsString(bytesKey);
+#else
+        char *pszSW = PyString_AsString(pVal);
+#endif
+        strncpy(pHeader->generating_software, pszSW, GET_LENGTH(pHeader->generating_software));
+#if PY_MAJOR_VERSION >= 3
+        Py_DECREF(bytesKey);
+#endif
+    }
+
+    pVal = PyDict_GetItemString(pHeaderDict, "FILE_CREATION_DAY");
+    if( pVal != NULL )
+        pHeader->file_creation_day = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "FILE_CREATION_YEAR");
+    if( pVal != NULL )
+        pHeader->file_creation_year = PyLong_AsLong(pVal);
+
+    // should this be set at all?
+    pVal = PyDict_GetItemString(pHeaderDict, "HEADER_SIZE");
+    if( pVal != NULL )
+        pHeader->header_size = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "OFFSET_TO_PULSE_DATA");
+    if( pVal != NULL )
+        pHeader->offset_to_pulse_data = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "NUMBER_OF_PULSES");
+    if( pVal != NULL )
+        pHeader->number_of_pulses = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PULSE_FORMAT");
+    if( pVal != NULL )
+        pHeader->pulse_format = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PULSE_ATTRIBUTES");
+    if( pVal != NULL )
+        pHeader->pulse_attributes = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PULSE_SIZE");
+    if( pVal != NULL )
+        pHeader->pulse_size = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "PULSE_COMPRESSION");
+    if( pVal != NULL )
+        pHeader->pulse_size = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "NUMBER_OF_VARIABLE_LENGTH_RECORDS");
+    if( pVal != NULL )
+        pHeader->number_of_variable_length_records = PyLong_AsLong(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "X_MAX");
+    if( pVal != NULL )
+        pHeader->max_x = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "X_MIN");
+    if( pVal != NULL )
+        pHeader->min_x = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "Y_MAX");
+    if( pVal != NULL )
+        pHeader->max_y = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "Y_MIN");
+    if( pVal != NULL )
+        pHeader->min_y = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "Z_MAX");
+    if( pVal != NULL )
+        pHeader->max_z = PyFloat_AsDouble(pVal);
+
+    pVal = PyDict_GetItemString(pHeaderDict, "Z_MIN");
+    if( pVal != NULL )
+        pHeader->min_z = PyFloat_AsDouble(pVal);
+}
+
+
+static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, PyObject *args)
+{
+    PyObject *pHeader, *pPulses, *pPoints, *pWaveformInfos, *pReceived, *pTransmitted;
+    if( !PyArg_ParseTuple(args, "OOOOOO:writeData", &pHeader, &pPulses, &pPoints, 
+                    &pWaveformInfos, &pReceived, &pTransmitted ) )
+        return NULL;
+
+    if( pHeader != Py_None )
+    {
+        if( !PyDict_Check(pHeader) )
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, "First parameter to writeData must be header dictionary");
+            return NULL;
+        }
+    }
+
+    bool bArraysOk = true;
+    const char *pszMessage = "";
+    if( (pPulses == Py_None) || (pPoints == Py_None) )
+    {
+        bArraysOk = false;
+        pszMessage = "Both points and pulses must be set for writing";
+    }
+    if( bArraysOk && (!PyArray_Check(pPulses) || !PyArray_Check(pPoints)))
+    {
+        bArraysOk = false;
+        pszMessage = "Both points and pulses must be numpy arrays";
+    }
+    bool bHaveWaveformInfos = (pWaveformInfos != Py_None);
+    bool bHaveReceived = (pReceived != Py_None);
+    bool bHaveTransmitted = (pTransmitted != Py_None);
+    if( bArraysOk && (bHaveWaveformInfos != bHaveReceived) )
+    {
+        bArraysOk = false;
+        pszMessage = "Either both waveform info and reveived must be set, or neither";
+    }
+    if( bArraysOk && (bHaveWaveformInfos != bHaveTransmitted) )
+    {
+        bArraysOk = false;
+        pszMessage = "Either both waveform info and transmitted must be set, or neither";
+    }
+    if( bArraysOk && bHaveWaveformInfos && !PyArray_Check(pWaveformInfos) )
+    {
+        bArraysOk = false;
+        pszMessage = "Waveform info must be a numpy array";
+    }
+    if( bArraysOk && bHaveReceived && !PyArray_Check(pReceived) )
+    {
+        bArraysOk = false;
+        pszMessage = "received must be a numpy array";
+    }
+    if( bArraysOk && bHaveTransmitted && !PyArray_Check(pTransmitted) )
+    {
+        bArraysOk = false;
+        pszMessage = "transmitted must be a numpy array";
+    }
+    if( bArraysOk && ((PyArray_NDIM((PyArrayObject*)pPulses) != 1) || (PyArray_NDIM((PyArrayObject*)pPoints) != 2) || 
+            (bHaveWaveformInfos && (PyArray_NDIM((PyArrayObject*)pWaveformInfos) != 2)) || 
+            (bHaveReceived && (PyArray_NDIM((PyArrayObject*)pReceived) != 3)) ||
+            (bHaveTransmitted && (PyArray_NDIM((PyArrayObject*)pTransmitted) != 3)) ) )
+    {
+        bArraysOk = false;
+        pszMessage = "pulses must be 1d, points and waveforminfo 2d, received and transmitted 3d";
+    }
+    /*if( bArraysOk && bHaveReceived && (PyArray_TYPE((PyArrayObject*)pReceived) != NPY_UINT16))
+    {
+        bArraysOk = false;
+        pszMessage = "received must be 16bit";
+    }*/
+
+    if( !bArraysOk )
+    {
+        // raise Python exception
+        PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+        // best way I could find for obtaining module reference
+        // from inside a class method. Not needed for Python < 3.
+        m = PyState_FindModule(&moduledef);
+#endif
+        PyErr_SetString(GETSTATE(m)->error, pszMessage);
+        return NULL;
+    }
+
+    pylidar::CFieldInfoMap pulseMap((PyArrayObject*)pPulses);
+    pylidar::CFieldInfoMap pointMap((PyArrayObject*)pPoints);
+    pylidar::CFieldInfoMap waveInfoMap((PyArrayObject*)pWaveformInfos);
+
+    if( self->pWriter == NULL )
+    {
+        // create header for opening file
+        self->pHeader = new PULSEheader;
+        // populate header from pHeader dictionary
+        if( pHeader != Py_None )
+        {
+            setHeaderFromDictionary(pHeader, self->pHeader);
+        }
+
+        // create writer
+        PULSEwriteOpener writeOpener;
+        writeOpener.set_file_name(self->pszFilename);
+
+        self->pWriter = writeOpener.open(self->pHeader);
+        if( self->pWriter == NULL )
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, "Unable to open pulsewaves file");
+            return NULL;
+        }
+
+    }
+
+    PULSEpulse pulse;
+
+    // now write all the pulses
+    for( npy_intp nPulseIdx = 0; nPulseIdx < PyArray_DIM((PyArrayObject*)pPulses, 0); nPulseIdx++)
+    {
+        void *pPulseRow = PyArray_GETPTR1((PyArrayObject*)pPulses, nPulseIdx);
+
+        pulse.set_T(pulseMap.getDoubleValue("TIME", pPulseRow));
+        pulse.set_anchor_x(pulseMap.getDoubleValue("X_ORIGIN", pPulseRow));
+        pulse.set_anchor_y(pulseMap.getDoubleValue("Y_ORIGIN", pPulseRow));
+        pulse.set_anchor_z(pulseMap.getDoubleValue("Z_ORIGIN", pPulseRow));
+        pulse.set_target_x(pulseMap.getDoubleValue("X_TARGET", pPulseRow));
+        pulse.set_target_y(pulseMap.getDoubleValue("Y_TARGET", pPulseRow));
+        pulse.set_target_z(pulseMap.getDoubleValue("Z_TARGET", pPulseRow));
+        pulse.first_returning_sample = pulseMap.getIntValue("FIRST_RETURNING_SAMPLE", pPulseRow);
+        pulse.last_returning_sample = pulseMap.getIntValue("FIRST_RETURNING_SAMPLE", pPulseRow);
+        pulse.descriptor_index = pulseMap.getIntValue("DESCRIPTOR_INDEX", pPulseRow);
+        pulse.intensity = pulseMap.getIntValue("INTENSITY", pPulseRow);
+
+        // classification from point
+        void *pPointRow = PyArray_GETPTR2((PyArrayObject*)pPoints, 0, nPulseIdx);
+        pulse.classification = pointMap.getIntValue("CLASSIFICATION", pPointRow);
+
+        if( !self->pWriter->write_pulse(&pulse) )
+        {
+            // raise Python exception
+            PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+            // best way I could find for obtaining module reference
+            // from inside a class method. Not needed for Python < 3.
+            m = PyState_FindModule(&moduledef);
+#endif
+            PyErr_SetString(GETSTATE(m)->error, "Failed to write pulse");
+            return NULL;
+        }
+
+/*
+                        pwWaveformInfo.channel = pSampling->get_channel();
+                        pwWaveformInfo.range_to_waveform_start = pSampling->get_duration_from_anchor_for_segment();
+                        // init these values
+                        pwWaveformInfo.number_of_waveform_received_bins = 0;
+                        pwWaveformInfo.received_start_idx = received.getNumElems();
+                        pwWaveformInfo.number_of_waveform_transmitted_bins = 0;
+                        pwWaveformInfo.transmitted_start_idx = transmitted.getNumElems();
+
+                                pwWaveformInfo.number_of_waveform_transmitted_bins++;
+                        pwWaveformInfo.number_of_waveform_received_bins;
+
+pwPulse.number_of_waveform_samples++
+*/
+
+        // now waves
+        if( bHaveWaveformInfos ) 
+        {
+            WAVESwaves waves; // re-init each time around
+            npy_int64 nNumWaveSamples = pulseMap.getIntValue("NUMBER_OF_WAVEFORM_SAMPLES", pPulseRow);
+
+            for( npy_intp nWaveIdx = 0; nWaveIdx < nNumWaveSamples; nWaveIdx++ )
+            {
+                void *pInfoRow = PyArray_GETPTR2((PyArrayObject*)pWaveformInfos, nWaveIdx, nPulseIdx);
+            }
+
+        }
+
+    }
+
+    Py_RETURN_NONE;
+}
+
+/* Table of methods */
+static PyMethodDef PyPulseWavesFileWrite_methods[] = {
+    {"writeData", (PyCFunction)PyPulseWavesFileWrite_writeData, METH_VARARGS, NULL}, 
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject PyPulseWavesFileWriteType = {
+#if PY_MAJOR_VERSION >= 3
+    PyVarObject_HEAD_INIT(NULL, 0)
+#else
+    PyObject_HEAD_INIT(NULL)
+    0,                         /*ob_size*/
+#endif
+    "_pulsewaves.FileWrite",         /*tp_name*/
+    sizeof(PyPulseWavesFileWrite),   /*tp_basicsize*/
+    0,                         /*tp_itemsize*/
+    (destructor)PyPulseWavesFileWrite_dealloc, /*tp_dealloc*/
+    0,                         /*tp_print*/
+    0,                         /*tp_getattr*/
+    0,                         /*tp_setattr*/
+    0,                         /*tp_compare*/
+    0,                         /*tp_repr*/
+    0,                         /*tp_as_number*/
+    0,                         /*tp_as_sequence*/
+    0,                         /*tp_as_mapping*/
+    0,                         /*tp_hash */
+    0,                         /*tp_call*/
+    0,                         /*tp_str*/
+    0,                         /*tp_getattro*/
+    0,                         /*tp_setattro*/
+    0,                         /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
+    "PulseWaves File Writer object",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    PyPulseWavesFileWrite_methods,             /* tp_methods */
+    0,             /* tp_members */
+    0,           /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)PyPulseWavesFileWrite_init,      /* tp_init */
+    0,                         /* tp_alloc */
+    0,                 /* tp_new */
+};
+
+
 #if PY_MAJOR_VERSION >= 3
 
 #define INITERROR return NULL
@@ -621,6 +1078,18 @@ init_pulsewaves(void)
 
     Py_INCREF(&PyPulseWavesFileReadType);
     PyModule_AddObject(pModule, "FileRead", (PyObject *)&PyPulseWavesFileReadType);
+
+    /* PulseWaves file write type */
+    PyPulseWavesFileWriteType.tp_new = PyType_GenericNew;
+    if( PyType_Ready(&PyPulseWavesFileWriteType) < 0 )
+#if PY_MAJOR_VERSION >= 3
+        return NULL;
+#else
+        return;
+#endif
+
+    Py_INCREF(&PyPulseWavesFileWriteType);
+    PyModule_AddObject(pModule, "FileWrite", (PyObject *)&PyPulseWavesFileWriteType);
 
     // module constants
     PyModule_AddIntConstant(pModule, "POINT_FROM_ANCHOR", POINT_FROM_ANCHOR);
