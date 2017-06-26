@@ -304,7 +304,7 @@ class PulseWavesFile(generic.LiDARFile):
             if transmitted is not None:
                 transmitted = transmitted.astype(numpy.uint16)
 
-        print(pulses.shape, points.shape, received.shape, transmitted, waveformInfo.shape)
+        #print(pulses.shape, points.shape, received.shape, transmitted, waveformInfo.shape)
         #print(pulses.shape, points.shape, received.shape, transmitted.shape, waveformInfo.shape)
         # TODO: flatten if necessary
         self.pulsewavesFile.writeData(self.header, pulses, points, waveformInfo,

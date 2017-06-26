@@ -1790,7 +1790,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
     }
     if( bArraysOk && bHaveReceived && (PyArray_TYPE((PyArrayObject*)pReceived) != NPY_UINT16))
     {
-        // set by las.py
+        // uint16 set by las.py
         bArraysOk = false;
         pszMessage = "received must be 16bit";
     }

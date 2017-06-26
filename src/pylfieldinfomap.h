@@ -85,7 +85,7 @@ public:
     }
 
     // get a field as int64
-    npy_int64 getIntValue(std::string sName, void *pRow)
+    npy_int64 getIntValue(std::string sName, void *pRow, npy_int64 nDefault=0)
     {
         npy_char nCharVal;
         npy_bool nBoolVal;
@@ -99,12 +99,12 @@ public:
         npy_ulong nULongVal;
         npy_float fFloatVal;
         npy_double fDoubleVal;
-        npy_int64 nRetVal=0;
+        npy_int64 nRetVal=nDefault;
 
         iterator it = find(sName);
         if( it == end() )
         {
-            return 0;
+            return nDefault;
         }
         SFieldInfo info = it->second;
         if( ( info.cKind == 'b' ) && ( info.nSize == 1 ) )
@@ -159,7 +159,7 @@ public:
     }
 
     // get a field as double
-    double getDoubleValue(std::string sName, void *pRow)
+    double getDoubleValue(std::string sName, void *pRow, double dDefault=0.0)
     {
         npy_char nCharVal;
         npy_bool nBoolVal;
@@ -173,12 +173,12 @@ public:
         npy_ulong nULongVal;
         npy_float fFloatVal;
         npy_double fDoubleVal;
-        double dRetVal=0;
+        double dRetVal=dDefault;
 
         iterator it = find(sName);
         if( it == end() )
         {
-            return 0;
+            return dDefault;
         }
 
         SFieldInfo info = it->second;
