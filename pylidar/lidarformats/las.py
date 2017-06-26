@@ -640,7 +640,7 @@ class LasFile(generic.LiDARFile):
             for waveform in range(waveformInfo.shape[0]):
                 gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
                 offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
-                received[...,waveform,...] = (received[...,waveform,...] - gain) / offset
+                received[:,waveform] = (received[:,waveform] - gain) / offset
             received = received.astype(numpy.uint16)
 
         #print(pulses.shape, points.shape, received.shape, waveformInfo.shape)

@@ -292,19 +292,20 @@ class PulseWavesFile(generic.LiDARFile):
                 if received is not None:
                     gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
                     offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
-                    received[...,waveform,...] = (received[...,waveform,...] - gain) / offset
+                    received[:,waveform] = (received[:,waveform] - gain) / offset
 
                 if transmitted is not None:
                     gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
                     offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
-                    transmitted[...,waveform,...] = (transmitted[...,waveform,...] - gain) / offset
+                    transmitted[:,waveform] = (transmitted[:,waveform] - gain) / offset
             
             if received is not None:
                 received = received.astype(numpy.uint16)
             if transmitted is not None:
                 transmitted = transmitted.astype(numpy.uint16)
 
-        #print(pulses.shape, points.shape, received.shape, waveformInfo.shape)
+        print(pulses.shape, points.shape, received.shape, transmitted, waveformInfo.shape)
+        #print(pulses.shape, points.shape, received.shape, transmitted.shape, waveformInfo.shape)
         # TODO: flatten if necessary
         self.pulsewavesFile.writeData(self.header, pulses, points, waveformInfo,
                                 received, transmitted)

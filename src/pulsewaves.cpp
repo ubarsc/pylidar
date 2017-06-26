@@ -833,6 +833,8 @@ public:
             PyObject *pReceived, PyObject *pTransmitted) :
         WAVESwaves::WAVESwaves()
     {
+        number_of_extra_bytes = 0;
+        extra_bytes = NULL;
         // this is incremented each time we get a new one
         number_of_samplings = 0; 
         // worst case scenario there will be a transmitted and received for each waveforminfo
@@ -849,6 +851,9 @@ public:
             npy_int64 number_of_waveform_transmitted_bins = waveInfoMap.getIntValue("NUMBER_OF_WAVEFORM_TRANSMITTED_BINS", pInfoRow);
             npy_int64 transmitted_start_idx = waveInfoMap.getIntValue("TRANSMITTED_START_IDX", pInfoRow);
 
+            fprintf(stderr, "%ld %ld %ld %ld %p %p %p\n", number_of_waveform_received_bins,
+                received_start_idx, number_of_waveform_transmitted_bins, transmitted_start_idx, 
+                pReceived, pTransmitted, Py_None);
             // WAVESwaves destructor deletes these
             // note: assumes no stride etc on transmitted and received
             if( number_of_waveform_received_bins > 0 )
@@ -905,15 +910,15 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
     bool bHaveWaveformInfos = (pWaveformInfos != Py_None);
     bool bHaveReceived = (pReceived != Py_None);
     bool bHaveTransmitted = (pTransmitted != Py_None);
-    if( bArraysOk && (bHaveWaveformInfos != bHaveReceived) )
+    if( bArraysOk && bHaveWaveformInfos && !bHaveReceived && !bHaveTransmitted )
     {
         bArraysOk = false;
-        pszMessage = "Either both waveform info and reveived must be set, or neither";
+        pszMessage = "if a waveform info is set, then either must have transmitted or received";
     }
-    if( bArraysOk && (bHaveWaveformInfos != bHaveTransmitted) )
+    if( bArraysOk && !bHaveWaveformInfos && (bHaveReceived || bHaveTransmitted) )
     {
         bArraysOk = false;
-        pszMessage = "Either both waveform info and transmitted must be set, or neither";
+        pszMessage = "if a waveform info not set, then don't pass received or transmitted";
     }
     if( bArraysOk && bHaveWaveformInfos && !PyArray_Check(pWaveformInfos) )
     {
@@ -996,9 +1001,25 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
             return NULL;
         }
 
-    }
+        if( bHaveWaveformInfos )
+        {
+            if( !writeOpener.open_waves(self->pWriter) )
+            {
+                // raise Python exception
+                PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+                // best way I could find for obtaining module reference
+                // from inside a class method. Not needed for Python < 3.
+                m = PyState_FindModule(&moduledef);
+#endif
+                PyErr_SetString(GETSTATE(m)->error, "Unable to open waves file");
+                return NULL;
+            }
+        }
 
+    }
     PULSEpulse pulse;
+    pulse.init(self->pHeader);
 
     // now write all the pulses
     for( npy_intp nPulseIdx = 0; nPulseIdx < PyArray_DIM((PyArrayObject*)pPulses, 0); nPulseIdx++)
@@ -1034,6 +1055,8 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
             return NULL;
         }
 
+        self->pWriter->update_inventory(&pulse);
+
         // now waves
         if( bHaveWaveformInfos ) 
         {
@@ -1041,7 +1064,18 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
             PyLidarWAVESwaves waveswaves(nNumWaveSamples, pWaveformInfos,
                     waveInfoMap, nPulseIdx, pReceived, pTransmitted);
 
-            self->pWriter->write_waves(&waveswaves);
+            if( !self->pWriter->write_waves(&waveswaves) )
+            {
+                // raise Python exception
+                PyObject *m;
+#if PY_MAJOR_VERSION >= 3
+                // best way I could find for obtaining module reference
+                // from inside a class method. Not needed for Python < 3.
+                m = PyState_FindModule(&moduledef);
+#endif
+                PyErr_SetString(GETSTATE(m)->error, "Failed to write wave");
+                return NULL;
+            }
         }
 
     }
