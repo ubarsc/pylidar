@@ -690,7 +690,7 @@ class LasFile(generic.LiDARFile):
         Update our cached dictionary
         """
         if self.mode == generic.READ:
-            msg = 'Can only set header values on read or create'
+            msg = 'Can only set header values on create'
             raise generic.LiDARInvalidSetting(msg)
             
         if self.firstBlockWritten:
@@ -705,7 +705,7 @@ class LasFile(generic.LiDARFile):
         Just update one value in the header
         """
         if self.mode == generic.READ:
-            msg = 'Can only set header values on read or create'
+            msg = 'Can only set header values on create'
             raise generic.LiDARInvalidSetting(msg)
 
         if self.firstBlockWritten:

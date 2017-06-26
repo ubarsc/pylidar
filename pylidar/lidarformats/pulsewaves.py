@@ -36,6 +36,7 @@ from __future__ import print_function, division
 import os
 import copy
 import numpy
+import datetime
 
 from . import generic
 from . import gridindexutils
@@ -53,6 +54,12 @@ else:
 
 READSUPPORTEDOPTIONS = ('POINT_FROM',)
 "Supported read options"
+
+today = datetime.date.today()
+DEFAULT_HEADER = {"GENERATING_SOFTWARE" : generic.SOFTWARE_NAME, 
+"FILE_CREATION_DAY" : today.toordinal() - datetime.date(today.year, 1, 1).toordinal(), 
+"FILE_CREATION_YEAR" : today.year}
+"for new files"
 
 def isPulseWavesFile(fname):
     """
@@ -94,11 +101,26 @@ class PulseWavesFile(generic.LiDARFile):
         if 'POINT_FROM' in userClass.lidarDriverOptions:
             point_from = userClass.lidarDriverOptions['POINT_FROM']
 
-        try:
-            self.pulsewavesFile = _pulsewaves.FileRead(fname, point_from)
-        except _pulsewaves.error:
-            msg = 'error opening pulsewaves file'
-            raise generic.LiDARFormatNotUnderstood(msg)
+        if mode == generic.READ:
+            # read
+            try:
+                self.pulsewavesFile = _pulsewaves.FileRead(fname, point_from)
+            except _pulsewaves.error:
+                msg = 'error opening pulsewaves file'
+                raise generic.LiDARFormatNotUnderstood(msg)
+
+        else:
+            # create
+            try:
+                self.pulsewavesFile = _pulsewaves.FileWrite(fname)
+            except _pulsewaves.error as e:
+                msg = 'cannot create pulsewaves file' + str(e)
+                raise generic.LiDARFileException(msg)
+
+        if mode == generic.READ:
+            self.header = None
+        else:
+            self.header = DEFAULT_HEADER
             
         self.range = None
         self.lastPoints = None
@@ -106,6 +128,7 @@ class PulseWavesFile(generic.LiDARFile):
         self.lastWaveformInfo = None
         self.lastReceived = None
         self.lastTransmitted = None
+        self.firstBlockWritten = False # can't write header values when this is True
 
     @staticmethod        
     def getDriverName():
@@ -262,17 +285,74 @@ class PulseWavesFile(generic.LiDARFile):
             # the processor always calls this so if a reading driver just ignore
             return
 
+        if waveformInfo is not None:
+            # must convert received to uint16. In theory liblas can handle
+            # uint8 also, but for simplicity have made it uint16
+            for waveform in range(waveformInfo.shape[0]):
+                if received is not None:
+                    gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
+                    offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
+                    received[...,waveform,...] = (received[...,waveform,...] - gain) / offset
+
+                if transmitted is not None:
+                    gain = waveformInfo[waveform]['TRANS_WAVE_GAIN']
+                    offset = waveformInfo[waveform]['TRANS_WAVE_OFFSET']
+                    transmitted[...,waveform,...] = (transmitted[...,waveform,...] - gain) / offset
+            
+            if received is not None:
+                received = received.astype(numpy.uint16)
+            if transmitted is not None:
+                transmitted = transmitted.astype(numpy.uint16)
+
+        #print(pulses.shape, points.shape, received.shape, waveformInfo.shape)
+        # TODO: flatten if necessary
+        self.pulsewavesFile.writeData(self.header, pulses, points, waveformInfo,
+                                received, transmitted)
+        self.firstBlockWritten = True
+
     def getHeader(self):
         """
-        No header for LVIS files
+        Get header as a dictionary
         """
-        return self.pulsewavesFile.readHeader()
+        if self.header is None:
+            self.header = self.pulsewavesFile.readHeader()
+            
+        return self.header
 
     def getHeaderValue(self, name):
         """
         Just extract the one value and return it
         """
         return self.getHeader()[name]
+
+    def setHeader(self, newHeaderDict):
+        """
+        Update our cached dictionary
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on create'
+            raise generic.LiDARInvalidSetting(msg)
+            
+        if self.firstBlockWritten:
+            msg = 'Header can only be updated before first block written'
+            raise generic.LiDARFunctionUnsupported(msg)
+            
+        for key in newHeaderDict.keys():
+            self.header[key] = newHeaderDict[key]
+
+    def setHeaderValue(self, name, value):
+        """
+        Just update one value in the header
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on create'
+            raise generic.LiDARInvalidSetting(msg)
+
+        if self.firstBlockWritten:
+            msg = 'Header can only be updated before first block written'
+            raise generic.LiDARFunctionUnsupported(msg)
+
+        self.header[name] = value
     
 class PulseWavesFileInfo(generic.LiDARFileInfo):
     """

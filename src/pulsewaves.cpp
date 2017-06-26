@@ -779,6 +779,93 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, PULSEheader *pHeader)
         pHeader->min_z = PyFloat_AsDouble(pVal);
 }
 
+// an implementation of PulseWaves WAVESsampling class
+class PyLidarWAVESsampling : public WAVESsampling
+{
+public:
+    PyLidarWAVESsampling(U8 inchannel, F32 inrange_to_waveform_start, U8 intype,
+            U32 innumber_of_samples, U8 *insamples) :
+        WAVESsampling()
+    {
+        WAVESsampling::clean();
+        bits_per_sample = 16; // not sure why this can't be 32...
+        channel = inchannel;
+        type = intype;
+        number_of_samples = innumber_of_samples;
+        samples = insamples;
+        number_of_segments = 1; // I think this is right, we have lots of samples each with 1 segment
+        range_to_waveform_start = inrange_to_waveform_start;
+    }
+
+    BOOL set_active_segment(U16 segment_idx) { if (segment_idx == 0) return TRUE; return FALSE; };
+    U16 get_active_segment() const { return 0; };
+    F32 get_duration_from_anchor_for_segment() const { return range_to_waveform_start; };
+    BOOL set_number_of_segments(I32 number_of_segments) { if (number_of_segments != 1) return FALSE; return TRUE; };
+    BOOL set_duration_from_anchor_for_segment(F32 duration) { quantized_duration = I32_QUANTIZE((duration - offset_for_duration_from_anchor)/scale_for_duration_from_anchor); return TRUE; };
+    BOOL set_quantized_duration_from_anchor_for_segment(I32 quantized_duration) { this->quantized_duration = quantized_duration; range_to_waveform_start = scale_for_duration_from_anchor*quantized_duration + offset_for_duration_from_anchor; return TRUE; };
+    I32 get_quantized_duration_from_anchor_for_segment() const { return quantized_duration; };
+    BOOL set_number_of_samples_for_segment(I32 num_samples) { if ((I32)this->number_of_samples != num_samples) return FALSE; return TRUE; };
+    I32 get_number_of_samples_for_segment() const { return number_of_samples; };
+    U32 size() const { return number_of_samples * 2; }; // note: 16bit
+    U8* get_samples() const { return samples; };
+    I32 get_sample(I32 sample_idx) { if (sample_idx < (I32)number_of_samples) { sample = ((U16*)samples)[sample_idx]; return sample; } return 0; };
+    BOOL get_sample_xyz(const PULSEpulse* pulse, I32 sample_idx)
+    {
+        xyz[0] = pulse->get_anchor_x() + pulse->get_dir_x()*(range_to_waveform_start + sample_idx);
+        xyz[1] = pulse->get_anchor_y() + pulse->get_dir_y()*(range_to_waveform_start + sample_idx);
+        xyz[2] = pulse->get_anchor_z() + pulse->get_dir_z()*(range_to_waveform_start + sample_idx);
+        return TRUE;
+    }
+
+protected:
+    F32 range_to_waveform_start;
+    I32 quantized_duration;
+    U8 *samples;
+};
+
+// An implementation of PulseWaves WAVESwaves class that gets the
+// info out of the waveforminfo array
+class PyLidarWAVESwaves : public WAVESwaves
+{
+public:
+    PyLidarWAVESwaves(U16 nSamplings, PyObject *pWaveformInfos,
+            pylidar::CFieldInfoMap &waveInfoMap, npy_intp nPulseIdx,
+            PyObject *pReceived, PyObject *pTransmitted) :
+        WAVESwaves::WAVESwaves()
+    {
+        // this is incremented each time we get a new one
+        number_of_samplings = 0; 
+        // worst case scenario there will be a transmitted and received for each waveforminfo
+        // saves trying to realloc etc
+        samplings = new WAVESsampling*[nSamplings * 2]; 
+        for( U16 n = 0; n < nSamplings; n++ )
+        {
+            void *pInfoRow = PyArray_GETPTR2((PyArrayObject*)pWaveformInfos, n, nPulseIdx);
+
+            npy_int64 channel = waveInfoMap.getIntValue("CHANNEL", pInfoRow);
+            double range_to_waveform_start = waveInfoMap.getDoubleValue("RANGE_TO_WAVEFORM_START", pInfoRow);
+            npy_int64 number_of_waveform_received_bins = waveInfoMap.getIntValue("NUMBER_OF_WAVEFORM_RECEIVED_BINS", pInfoRow);
+            npy_int64 received_start_idx = waveInfoMap.getIntValue("RECEIVED_START_IDX", pInfoRow);
+            npy_int64 number_of_waveform_transmitted_bins = waveInfoMap.getIntValue("NUMBER_OF_WAVEFORM_TRANSMITTED_BINS", pInfoRow);
+            npy_int64 transmitted_start_idx = waveInfoMap.getIntValue("TRANSMITTED_START_IDX", pInfoRow);
+
+            // WAVESwaves destructor deletes these
+            // note: assumes no stride etc on transmitted and received
+            if( number_of_waveform_received_bins > 0 )
+                samplings[number_of_samplings++] = new PyLidarWAVESsampling(channel, 
+                            range_to_waveform_start, PULSEWAVES_RETURNING, 
+                            number_of_waveform_received_bins, 
+                            (U8*)PyArray_GETPTR1((PyArrayObject*)pReceived, received_start_idx));
+
+            if( number_of_waveform_transmitted_bins > 0 )
+                samplings[number_of_samplings++] = new PyLidarWAVESsampling(channel, 
+                            range_to_waveform_start, PULSEWAVES_OUTGOING,
+                            number_of_waveform_transmitted_bins,
+                            (U8*)PyArray_GETPTR1((PyArrayObject*)pTransmitted, transmitted_start_idx));
+        }
+    }
+
+};
 
 static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, PyObject *args)
 {
@@ -851,11 +938,18 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
         bArraysOk = false;
         pszMessage = "pulses must be 1d, points and waveforminfo 2d, received and transmitted 3d";
     }
-    /*if( bArraysOk && bHaveReceived && (PyArray_TYPE((PyArrayObject*)pReceived) != NPY_UINT16))
+    if( bArraysOk && bHaveReceived && (PyArray_TYPE((PyArrayObject*)pReceived) != NPY_UINT16))
     {
+        // should be set to uint16 by pulsewaves.py
         bArraysOk = false;
         pszMessage = "received must be 16bit";
-    }*/
+    }
+    if( bArraysOk && bHaveTransmitted && (PyArray_TYPE((PyArrayObject*)pTransmitted) != NPY_UINT16))
+    {
+        // should be set to uint16 by pulsewaves.py
+        bArraysOk = false;
+        pszMessage = "received must be 16bit";
+    }
 
     if( !bArraysOk )
     {
@@ -940,32 +1034,14 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
             return NULL;
         }
 
-/*
-                        pwWaveformInfo.channel = pSampling->get_channel();
-                        pwWaveformInfo.range_to_waveform_start = pSampling->get_duration_from_anchor_for_segment();
-                        // init these values
-                        pwWaveformInfo.number_of_waveform_received_bins = 0;
-                        pwWaveformInfo.received_start_idx = received.getNumElems();
-                        pwWaveformInfo.number_of_waveform_transmitted_bins = 0;
-                        pwWaveformInfo.transmitted_start_idx = transmitted.getNumElems();
-
-                                pwWaveformInfo.number_of_waveform_transmitted_bins++;
-                        pwWaveformInfo.number_of_waveform_received_bins;
-
-pwPulse.number_of_waveform_samples++
-*/
-
         // now waves
         if( bHaveWaveformInfos ) 
         {
-            WAVESwaves waves; // re-init each time around
             npy_int64 nNumWaveSamples = pulseMap.getIntValue("NUMBER_OF_WAVEFORM_SAMPLES", pPulseRow);
+            PyLidarWAVESwaves waveswaves(nNumWaveSamples, pWaveformInfos,
+                    waveInfoMap, nPulseIdx, pReceived, pTransmitted);
 
-            for( npy_intp nWaveIdx = 0; nWaveIdx < nNumWaveSamples; nWaveIdx++ )
-            {
-                void *pInfoRow = PyArray_GETPTR2((PyArrayObject*)pWaveformInfos, nWaveIdx, nPulseIdx);
-            }
-
+            self->pWriter->write_waves(&waveswaves);
         }
 
     }
