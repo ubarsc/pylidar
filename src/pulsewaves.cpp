@@ -1142,7 +1142,7 @@ init_pulsewaves(void)
 #if PY_MAJOR_VERSION >= 3
     pModule = PyModule_Create(&moduledef);
 #else
-    pModule = Py_InitModule("_pulsewaves", module_methods);
+    pModule = Py_InitModule("_pulsewaves", NULL);
 #endif
     if( pModule == NULL )
         INITERROR;
