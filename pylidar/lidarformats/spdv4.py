@@ -13,16 +13,6 @@ These are contained in the WRITESUPPORTEDOPTIONS module level variable.
 | SCALING_BUT_NO_DATA_WARNING | Warn when scaling set for a column that   |
 |                             | doesn't get created. Defaults to True     |
 +-----------------------------+-------------------------------------------+
-| PREFERRED_SPATIAL_INDEX     | The spatial index to use on creation of   |
-|                             | index, or for reading the preferred one   |
-|                             | to use. Defaults to                       |
-|                             | SPDV4_INDEXTYPE_SIMPLEGRID                |
-+-----------------------------+-------------------------------------------+
-| CREATE_INDEX_ON_UPDATE      | If PREFERRED_SPATIAL_INDEX is             |
-|                             | SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE set |
-|                             | this to True to create the index on       |
-|                             | update                                    |
-+-----------------------------+-------------------------------------------+
 | HDF5_CHUNK_SIZE             | Set the HDF5 chunk size when creating     |
 |                             | columns. Defaults to 250.                 |
 +-----------------------------+-------------------------------------------+
@@ -57,7 +47,6 @@ from . import h5space
 from . import spdv4_index
 
 WRITESUPPORTEDOPTIONS = ('SCALING_BUT_NO_DATA_WARNING', 
-            'PREFERRED_SPATIAL_INDEX', 'CREATE_INDEX_ON_UPDATE', 
             'HDF5_CHUNK_SIZE')
 "driver options"
 READSUPPORTEDOPTIONS = ()
@@ -345,15 +334,9 @@ class SPDV4File(generic.LiDARFile):
 
         # type of spatial index to use
         self.preferredSpatialIndex = SPDV4_INDEXTYPE_SIMPLEGRID
-        if 'PREFERRED_SPATIAL_INDEX' in userClass.lidarDriverOptions:
-            self.preferredSpatialIndex = (
-                userClass.lidarDriverOptions['PREFERRED_SPATIAL_INDEX'])
 
         # create index on update - only valid for more advanced indices
         self.createIndexOnUpdate = False
-        if 'CREATE_INDEX_ON_UPDATE' in userClass.lidarDriverOptions:
-            self.createIndexOnUpdate = (
-                userClass.lidarDriverOptions['CREATE_INDEX_ON_UPDATE'])
 
         # hdf5 chunk size - as a tuple - columns are 1d
         self.hdf5ChunkSize = (DEFAULT_HDF5_CHUNK_SIZE,)
