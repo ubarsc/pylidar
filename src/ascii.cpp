@@ -53,8 +53,10 @@ struct ASCIIState
 
 #if PY_MAJOR_VERSION >= 3
 #define GETSTATE(m) ((struct ASCIIState*)PyModule_GetState(m))
+#define GETSTATE_FC GETSTATE(PyState_FindModule(&moduledef))
 #else
 #define GETSTATE(m) (&_state)
+#define GETSTATE_FC (&_state)
 static struct ASCIIState _state;
 #endif
 
@@ -372,13 +374,7 @@ PyASCIIReader_init(PyASCIIReader *self, PyObject *args, PyObject *kwds)
         return -1;
     }
 
-    PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-    // best way I could find for obtaining module reference
-    // from inside a class method. Not needed for Python < 3.
-    m = PyState_FindModule(&moduledef);
-#endif
-    PyObject *error = GETSTATE(m)->error;
+    PyObject *error = GETSTATE_FC->error;
 
     // nType should come from getFileType()
 #ifdef HAVE_ZLIB
@@ -850,13 +846,7 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
             {
                 if( pszErrorString != NULL )
                 {
-                    PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                    // best way I could find for obtaining module reference
-                    // from inside a class method. Not needed for Python < 3.
-                    m = PyState_FindModule(&moduledef);
-#endif
-                    PyErr_SetString(GETSTATE(m)->error, pszErrorString);
+                    PyErr_SetString(GETSTATE_FC->error, pszErrorString);
                     return NULL;
                 }
                 self->bFinished = true;
@@ -907,13 +897,7 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
             {
                 if( pszErrorString != NULL )
                 {
-                    PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                    // best way I could find for obtaining module reference
-                    // from inside a class method. Not needed for Python < 3.
-                    m = PyState_FindModule(&moduledef);
-#endif
-                    PyErr_SetString(GETSTATE(m)->error, pszErrorString);
+                    PyErr_SetString(GETSTATE_FC->error, pszErrorString);
                     delete[] pulseItem;
                     delete[] pointItem;
                     return NULL;
@@ -972,13 +956,7 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
     }
     catch(std::bad_alloc& ba)
     {
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Out of memory");
+        PyErr_SetString(GETSTATE_FC->error, "Out of memory");
         return NULL;
     }
 

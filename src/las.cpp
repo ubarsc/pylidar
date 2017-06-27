@@ -50,8 +50,10 @@ struct LasState
 
 #if PY_MAJOR_VERSION >= 3
 #define GETSTATE(m) ((struct LasState*)PyModule_GetState(m))
+#define GETSTATE_FC GETSTATE(PyState_FindModule(&moduledef))
 #else
 #define GETSTATE(m) (&_state)
+#define GETSTATE_FC (&_state)
 static struct LasState _state;
 #endif
 
@@ -272,14 +274,7 @@ PyObject *pOptionDict;
 
     if( !PyDict_Check(pOptionDict) )
     {
-        // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
+        PyErr_SetString(GETSTATE_FC->error, "Last parameter to init function must be a dictionary");
         return -1;
     }
 
@@ -301,14 +296,7 @@ PyObject *pOptionDict;
         }
         else
         {
-            // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "BUILD_PULSES must be true or false");    
+            PyErr_SetString(GETSTATE_FC->error, "BUILD_PULSES must be true or false");    
             return -1;
         }
     }
@@ -340,13 +328,7 @@ PyObject *pOptionDict;
         else
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "PULSE_INDEX must be an int");    
+            PyErr_SetString(GETSTATE_FC->error, "PULSE_INDEX must be an int");    
             return -1;
         }
     }
@@ -358,13 +340,7 @@ PyObject *pOptionDict;
     if( self->pReader == NULL )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Unable to open las file");
+        PyErr_SetString(GETSTATE_FC->error, "Unable to open las file");
         return -1;
     }
 
@@ -589,13 +565,7 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
     else if( PyTuple_Size(args) != 0 )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "readData either takes 2 params for non-spatial reads, or 0 params for spatial reads");
+        PyErr_SetString(GETSTATE_FC->error, "readData either takes 2 params for non-spatial reads, or 0 params for spatial reads");
         return NULL;
 
     }
@@ -1032,13 +1002,7 @@ static PyObject *PyLasFileRead_getEPSG(PyLasFileRead *self, PyObject *args)
     if( !foundProjection )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Cannot find EPSG code for Coordinate System");
+        PyErr_SetString(GETSTATE_FC->error, "Cannot find EPSG code for Coordinate System");
         return NULL;
     }
     
@@ -1102,13 +1066,7 @@ static PyObject *PyLasFileRead_getScaling(PyLasFileRead *self, PyObject *args)
         if( !bFound )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_Format(GETSTATE(m)->error, "Unable to get scaling for field %s", pszField);
+            PyErr_Format(GETSTATE_FC->error, "Unable to get scaling for field %s", pszField);
             return NULL;
         }
     }
@@ -1153,13 +1111,7 @@ static PyObject *PyLasFileRead_getNativeDataType(PyLasFileRead *self, PyObject *
         if( pDescr == NULL )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_Format(GETSTATE(m)->error, "Unable to find data type for %s", pszField);
+            PyErr_Format(GETSTATE_FC->error, "Unable to find data type for %s", pszField);
             return NULL;
         }
     }    
@@ -1397,13 +1349,7 @@ PyObject *pOptionDict;
         if( !PyDict_Check(pOptionDict) )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
+            PyErr_SetString(GETSTATE_FC->error, "Last parameter to init function must be a dictionary");
             return -1;
         }
 
@@ -1413,13 +1359,7 @@ PyObject *pOptionDict;
             if( !PyLong_Check(pVal) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "FORMAT parameter must be integer");
+                PyErr_SetString(GETSTATE_FC->error, "FORMAT parameter must be integer");
                 return -1;
             }
             self->point_data_format = PyLong_AsLong(pVal);
@@ -1431,13 +1371,7 @@ PyObject *pOptionDict;
             if( !PyLong_Check(pVal) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "RECORD_LENGTH parameter must be integer");
+                PyErr_SetString(GETSTATE_FC->error, "RECORD_LENGTH parameter must be integer");
                 return -1;
             }
             self->point_data_record_length = PyLong_AsLong(pVal);
@@ -1449,25 +1383,13 @@ PyObject *pOptionDict;
             if( !PyArray_Check(pVal) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "WAVEFORM_DESCR parameter must be an array");
+                PyErr_SetString(GETSTATE_FC->error, "WAVEFORM_DESCR parameter must be an array");
                 return -1;
             }
             if( PyArray_SIZE((PyArrayObject*)pVal) > 256 )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "WAVEFORM_DESCR parameter must be shorter than 256 - LAS restriction");
+                PyErr_SetString(GETSTATE_FC->error, "WAVEFORM_DESCR parameter must be shorter than 256 - LAS restriction");
                 return -1;
             }
             Py_INCREF(pVal);
@@ -1741,13 +1663,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         if( !PyDict_Check(pHeader) )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "First parameter to writeData must be header dictionary");
+            PyErr_SetString(GETSTATE_FC->error, "First parameter to writeData must be header dictionary");
             return NULL;
         }
     }
@@ -1798,13 +1714,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
     if( !bArraysOk )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, pszMessage);
+        PyErr_SetString(GETSTATE_FC->error, pszMessage);
         return NULL;
     }
 
@@ -1821,13 +1731,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         if( !self->bXScalingSet || !self->bYScalingSet || !self->bZScalingSet )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "Must set scaling for X, Y and Z columns before writing data");
+            PyErr_SetString(GETSTATE_FC->error, "Must set scaling for X, Y and Z columns before writing data");
             return NULL;
         }
 
@@ -1955,13 +1859,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         if( self->pWriter == NULL )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "Unable to open las file");
+            PyErr_SetString(GETSTATE_FC->error, "Unable to open las file");
             return NULL;
         }
 
@@ -1973,13 +1871,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             if( !self->pWaveformWriter->open(self->pszFilename, self->pHeader->vlr_wave_packet_descr) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "Unable to open las waveform file");
+                PyErr_SetString(GETSTATE_FC->error, "Unable to open las waveform file");
                 return NULL;
             }
         }
@@ -2197,13 +2089,7 @@ static PyObject *PyLasFileWrite_setScaling(PyLasFileWrite *self, PyObject *args)
         {
             // is an essential field that we can't store scaling for.
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_Format(GETSTATE(m)->error, "Unable to set scaling for field %s", pszField);
+            PyErr_Format(GETSTATE_FC->error, "Unable to set scaling for field %s", pszField);
             return NULL;
         }
         else
@@ -2313,13 +2199,7 @@ static PyObject *PyLasFileWrite_getNativeDataType(PyLasFileWrite *self, PyObject
     if( pDescr == NULL )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_Format(GETSTATE(m)->error, "Unable to find data type for %s", pszField);
+        PyErr_Format(GETSTATE_FC->error, "Unable to find data type for %s", pszField);
         return NULL;
     }
 
@@ -2336,13 +2216,7 @@ static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject
     if( !PyType_Check(pPythonType) )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Last argument needs to be python type");
+        PyErr_SetString(GETSTATE_FC->error, "Last argument needs to be python type");
         return NULL;
     }
 
@@ -2351,13 +2225,7 @@ static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject
     if( !PyArray_DescrConverter(pPythonType, &pDtype) )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Could not convert python type to numpy dtype");
+        PyErr_SetString(GETSTATE_FC->error, "Could not convert python type to numpy dtype");
         return NULL;
     }
 
@@ -2365,13 +2233,7 @@ static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject
     if( nonAttrPointSet.find(pszField) != nonAttrPointSet.end() )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_Format(GETSTATE(m)->error, "Can't set data type for %s", pszField);
+        PyErr_Format(GETSTATE_FC->error, "Can't set data type for %s", pszField);
         return NULL;
     }
 

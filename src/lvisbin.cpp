@@ -387,8 +387,10 @@ struct LVISBinState
 
 #if PY_MAJOR_VERSION >= 3
 #define GETSTATE(m) ((struct LVISBinState*)PyModule_GetState(m))
+#define GETSTATE_FC GETSTATE(PyState_FindModule(&moduledef))
 #else
 #define GETSTATE(m) (&_state)
+#define GETSTATE_FC (&_state)
 static struct LVISBinState _state;
 #endif
 
@@ -617,16 +619,9 @@ int nPointFrom;
         return -1;
     }
 
-    PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-    // best way I could find for obtaining module reference
-    // from inside a class method. Not needed for Python < 3.
-    m = PyState_FindModule(&moduledef);
-#endif
-
     if( ( nPointFrom < POINT_FROM_LCE) || ( nPointFrom > POINT_FROM_LGWEND ) )
     {
-        PyErr_SetString(GETSTATE(m)->error, "nPointFrom out of range");
+        PyErr_SetString(GETSTATE_FC->error, "nPointFrom out of range");
         return -1;
     }
 
@@ -670,7 +665,7 @@ int nPointFrom;
         self->fpLCE = fopen(pszLCE_Fname, "rb");
         if( self->fpLCE == NULL )
         {
-            PyErr_Format(GETSTATE(m)->error, "Cannot open %s", pszLCE_Fname);
+            PyErr_Format(GETSTATE_FC->error, "Cannot open %s", pszLCE_Fname);
             return -1;
         }
 
@@ -678,7 +673,7 @@ int nPointFrom;
         detect_release_version(pszLCE_Fname, &nFileType, &self->lceVersion, GENLIB_OUR_ENDIAN);
         if( nFileType != LVIS_RELEASE_FILETYPE_LCE )
         {
-            PyErr_Format(GETSTATE(m)->error, "File %s does not contain LCE data", pszLCE_Fname);
+            PyErr_Format(GETSTATE_FC->error, "File %s does not contain LCE data", pszLCE_Fname);
             fclose(self->fpLCE);
             self->fpLCE = NULL;
             return -1;
@@ -695,7 +690,7 @@ int nPointFrom;
                 fclose(self->fpLCE);
                 self->fpLCE = NULL;
             }
-            PyErr_Format(GETSTATE(m)->error, "Cannot open %s", pszLGE_Fname);
+            PyErr_Format(GETSTATE_FC->error, "Cannot open %s", pszLGE_Fname);
             return -1;
         }
 
@@ -703,7 +698,7 @@ int nPointFrom;
         detect_release_version(pszLGE_Fname, &nFileType, &self->lgeVersion, GENLIB_OUR_ENDIAN);
         if( nFileType != LVIS_RELEASE_FILETYPE_LGE )
         {
-            PyErr_Format(GETSTATE(m)->error, "File %s does not contain LGE data", pszLGE_Fname);
+            PyErr_Format(GETSTATE_FC->error, "File %s does not contain LGE data", pszLGE_Fname);
             fclose(self->fpLGE);
             self->fpLGE = NULL;
             if( self->fpLCE != NULL )
@@ -730,7 +725,7 @@ int nPointFrom;
                 fclose(self->fpLGE);
                 self->fpLGE = NULL;
             }
-            PyErr_Format(GETSTATE(m)->error, "Cannot open %s", pszLGW_Fname);
+            PyErr_Format(GETSTATE_FC->error, "Cannot open %s", pszLGW_Fname);
             return -1;
         }
 
@@ -738,7 +733,7 @@ int nPointFrom;
         detect_release_version(pszLGW_Fname, &nFileType, &self->lgwVersion, GENLIB_OUR_ENDIAN);
         if( nFileType != LVIS_RELEASE_FILETYPE_LGW )
         {
-            PyErr_Format(GETSTATE(m)->error, "File %s does not contain LGE data", pszLGE_Fname);
+            PyErr_Format(GETSTATE_FC->error, "File %s does not contain LGE data", pszLGE_Fname);
             fclose(self->fpLGW);
             self->fpLGW = NULL;
             if( self->fpLCE != NULL )

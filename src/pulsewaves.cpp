@@ -44,8 +44,10 @@ struct PulseWavesState
 
 #if PY_MAJOR_VERSION >= 3
 #define GETSTATE(m) ((struct PulseWavesState*)PyModule_GetState(m))
+#define GETSTATE_FC GETSTATE(PyState_FindModule(&moduledef))
 #else
 #define GETSTATE(m) (&_state)
+#define GETSTATE_FC (&_state)
 static struct PulseWavesState _state;
 #endif
 
@@ -206,13 +208,7 @@ int nPointFrom = POINT_FROM_ANCHOR;
     if( self->pReader == NULL )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Unable to open pulsewaves file");
+        PyErr_SetString(GETSTATE_FC->error, "Unable to open pulsewaves file");
         return -1;
     }
 
@@ -905,13 +901,7 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
         if( !PyDict_Check(pHeader) )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "First parameter to writeData must be header dictionary");
+            PyErr_SetString(GETSTATE_FC->error, "First parameter to writeData must be header dictionary");
             return NULL;
         }
     }
@@ -980,13 +970,7 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
     if( !bArraysOk )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, pszMessage);
+        PyErr_SetString(GETSTATE_FC->error, pszMessage);
         return NULL;
     }
 
@@ -1012,13 +996,7 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
         if( self->pWriter == NULL )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "Unable to open pulsewaves file");
+            PyErr_SetString(GETSTATE_FC->error, "Unable to open pulsewaves file");
             return NULL;
         }
 
@@ -1027,13 +1005,7 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
             if( !writeOpener.open_waves(self->pWriter) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "Unable to open waves file");
+                PyErr_SetString(GETSTATE_FC->error, "Unable to open waves file");
                 return NULL;
             }
         }
@@ -1066,13 +1038,7 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
         if( !self->pWriter->write_pulse(&pulse) )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "Failed to write pulse");
+            PyErr_SetString(GETSTATE_FC->error, "Failed to write pulse");
             return NULL;
         }
 
@@ -1088,13 +1054,7 @@ static PyObject *PyPulseWavesFileWrite_writeData(PyPulseWavesFileWrite *self, Py
             if( !self->pWriter->write_waves(&waveswaves) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "Failed to write wave");
+                PyErr_SetString(GETSTATE_FC->error, "Failed to write wave");
                 return NULL;
             }
         }
