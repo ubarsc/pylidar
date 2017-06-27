@@ -252,6 +252,8 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
                 self->bFinished = true;
                 break;
             }
+
+            self->pReader->pulse.compute_anchor_and_target(); // important
     
             // copy it into our data structures
             pwPulse.time = self->pReader->pulse.get_T();

@@ -31,13 +31,6 @@ REQUIRED_FORMATS = ["PULSEWAVES"]
 INPUT_PULSEWAVES = 'test.pls' # from the PulseWaves github repo
 IMPORTED_SPD = 'testsuite18.spd'
 
-# some of the columns seem to have rubbish in them
-# leading to errors in import. Scale them away.
-SCALING = [('PULSE', 'Z_ORIGIN', 'DFLT', 0, 0),
-('PULSE', 'X_ORIGIN', 'DFLT', 1e-310, 0), ('PULSE', 'Y_ORIGIN', 'DFLT', 1e-310, 0),
-('POINT', 'Z', 'DFLT', 1e-310, 0), ('POINT', 'X', 'DFLT', 1e-310, 0), 
-('POINT', 'Y', 'DFLT', 1e-310, 0),]
-
 def run(oldpath, newpath):
     """
     Runs the 18th basic test suite. Tests:
@@ -48,5 +41,5 @@ def run(oldpath, newpath):
     info = generic.getLidarFileInfo(inputPW)
 
     importedSPD = os.path.join(newpath, IMPORTED_SPD)
-    translate(info, inputPW, importedSPD, scaling=SCALING)
+    translate(info, inputPW, importedSPD)
     utils.compareLiDARFiles(os.path.join(oldpath, IMPORTED_SPD), importedSPD)
