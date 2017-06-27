@@ -37,6 +37,7 @@ def transFunc(data, otherArgs):
     points = data.input1.getPointsByPulse()
     waveformInfo = data.input1.getWaveformInfo()
     revc = data.input1.getReceived()
+    trans = data.input1.getTransmitted()
     
     # set scaling and write header
     if data.info.isFirstBlock():
@@ -57,6 +58,8 @@ def transFunc(data, otherArgs):
         data.output1.setWaveformInfo(waveformInfo)
     if revc is not None and revc.size > 0:
         data.output1.setReceived(revc)
+    if trans is not None and trans.size > 0:
+        data.output1.setTransmitted(trans)
 
 def translate(info, infile, outfile, expectRange=None,  
         scaling=None, nullVals=None, constCols=None):

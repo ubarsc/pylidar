@@ -32,7 +32,7 @@ from pylidar import lidarprocessor
 from rios import cuiprogress
 from rios.parallel.jobmanager import find_executable
 
-TESTSUITE_VERSION = 6
+TESTSUITE_VERSION = 7
 """
 Version of the test suite. Increment each change.
 Used to ensure the tarfile matches what we expect.

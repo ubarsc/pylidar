@@ -292,8 +292,6 @@ def flatten3dWaveformData(wavedata, inmask, nrecv, flattened):
             if c > 0:
                 nrecv[nrecv_idx] = c
                 nrecv_idx += 1
-    
-
 
 class SPDV4File(generic.LiDARFile):
     """
@@ -1419,10 +1417,10 @@ spatial index will be recomputed on the fly"""
 
             # create arrays for flatten3dWaveformData
             firstField = waveformInfo.dtype.names[0]
-            ntrans = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
+            ntrans = numpy.zeros(waveformInfo[firstField].count(), dtype=numpy.uint16)
             flattened =  numpy.empty(transmitted.count(), dtype=transmitted.dtype)
             
-            flatten3dWaveformData(received.data, received.mask, nrecv, flattened)
+            flatten3dWaveformData(transmitted.data, transmitted.mask, ntrans, flattened)
             currTransCount = 0
             if 'TRANSMITTED' in self.fileHandle['DATA']:
                 transHandle = self.fileHandle['DATA']['TRANSMITTED']
@@ -1477,7 +1475,7 @@ spatial index will be recomputed on the fly"""
     
             # create arrays for flatten3dWaveformData
             firstField = waveformInfo.dtype.names[0]
-            nrecv = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
+            nrecv = numpy.zeros(waveformInfo[firstField].count(), dtype=numpy.uint16)
             flattened =  numpy.empty(received.count(), dtype=received.dtype)
             
             flatten3dWaveformData(received.data, received.mask, nrecv, flattened)
