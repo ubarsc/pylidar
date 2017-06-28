@@ -46,6 +46,10 @@ def getCmdargs():
             help="Just run specified test. Can be given multiple times")
     p.add_argument("--ignore", action="append",
             help="Ignore a test. Can be given multiple times")
+    p.add_argument("--noversioncheck", action="store_true", default=False,
+            help="Don't do version check on supplied tar file")
+    p.add_argument("--ignorefailures", action="store_true", default=False,
+            help="Ignore failed tests and continue. Use with caution.")
 
     cmdargs = p.parse_args()
 
@@ -58,7 +62,8 @@ def getCmdargs():
 def run():
     cmdargs = getCmdargs()
 
-    oldpath, newpath, tests = utils.extractTarFile(cmdargs.input, cmdargs.path)
+    oldpath, newpath, tests = utils.extractTarFile(cmdargs.input, cmdargs.path,
+                                    not cmdargs.noversioncheck)
 
     if cmdargs.list:
         for name in tests:
@@ -71,6 +76,7 @@ def run():
     testsRun = 0
     testsIgnored = 0
     testsIgnoredNoDriver = 0
+    testsFailed = 0
 
     # get current package name (needed for module importing below)
     # should be pylidar.testing (remove .testall)
@@ -120,7 +126,15 @@ def run():
 
         if doTest:
             print('Running', name)
-            mod.run(oldpath, newpath)
+            if cmdargs.ignorefailures:
+                try:
+                    mod.run(oldpath, newpath)
+                except Exception:
+                    testsFailed += 1
+
+            else:
+                # just run it and let exception exit 
+                mod.run(oldpath, newpath)
             testsRun += 1
         else:
             testsIgnoredNoDriver += 1
@@ -134,3 +148,9 @@ def run():
     if not cmdargs.noremove:
         shutil.rmtree(oldpath)
         shutil.rmtree(newpath)
+
+    # return error code 
+    if testsFailed == 0:
+        return 0
+    else:
+        return 1

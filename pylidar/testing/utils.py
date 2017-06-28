@@ -403,7 +403,7 @@ def compareImageFiles(oldfile, newfile):
         raise TestingDataMismatch(msg)
     print('Image files check ok')
 
-def extractTarFile(tarFile, pathToUse='.'):
+def extractTarFile(tarFile, pathToUse='.', doVersionCheck=True):
     """
     Extracts the tarFile to the given path and checks the version matches
     what was expected. 
@@ -428,7 +428,7 @@ def extractTarFile(tarFile, pathToUse='.'):
 
     dataDict = json.loads(data)
 
-    if dataDict['version'] != TESTSUITE_VERSION:
+    if doVersionCheck and dataDict['version'] != TESTSUITE_VERSION:
         msg = "Version is match. Expected %d but tarfile is version %d"
         msg = msg % (TESTSUITE_VERSION, dataDict['version'])
         raise TestingVersionError(msg)
