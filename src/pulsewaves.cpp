@@ -847,7 +847,7 @@ public:
     PyLidarWAVESwaves(U16 nSamplings, PyObject *pWaveformInfos,
             pylidar::CFieldInfoMap &waveInfoMap, npy_intp nPulseIdx,
             PyObject *pReceived, PyObject *pTransmitted) :
-        WAVESwaves::WAVESwaves()
+        WAVESwaves()
     {
         number_of_extra_bytes = 0;
         extra_bytes = NULL;

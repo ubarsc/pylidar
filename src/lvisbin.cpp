@@ -51,6 +51,11 @@
 static const int nGrowBy = 10000;
 static const int nInitSize = 256*256;
 
+// For onld versions of VC
+#if defined(_MSC_VER) && _MSC_VER < 1900
+    #define isnan(x) _isnan(x)
+#endif
+
 /* define GENLIB_OUR_ENDIAN depending on endian setting
  from pyconfig.h */
 #if WORDS_BIGENDIAN == 1

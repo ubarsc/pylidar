@@ -25,6 +25,7 @@
 
 #include <Python.h>
 #include "numpy/arrayobject.h"
+#include <string>
 #include <string.h> // for memcpy
 #include <map>
 
