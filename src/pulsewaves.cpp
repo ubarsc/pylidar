@@ -311,7 +311,7 @@ static PyObject *PyPulseWavesFileRead_readData(PyPulseWavesFileRead *self, PyObj
 
                         for( I32 nSample = 0; nSample < pSampling->get_number_of_samples(); nSample++ )
                         {
-                            I32 nSampleVal = pSampling->get_sample(nSample);
+                            npy_int32 nSampleVal = pSampling->get_sample(nSample);
                             if( pSampling->get_type() == PULSEWAVES_OUTGOING )
                             {
                                 transmitted.push(&nSampleVal);
