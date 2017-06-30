@@ -61,9 +61,11 @@ for wildcard in ('*.spd', '*.img', '*.xml'):
 if os.path.exists('testsuite5.las'):
     os.remove('testsuite5.las')
 
-# same for testsuit19 and export to PulseWaves
+# same for testsuite19 and export to PulseWaves
 if os.path.exists('testsuite19.pls'):
     os.remove('testsuite19.pls')
+if os.path.exists('testsuite19.wvs'):
+    os.remove('testsuite19.wvs')
 
 # create version.txt info
 versionInfo = {'version' : TESTSUITE_VERSION}
@@ -195,6 +197,11 @@ nameList.append('testsuite20')
 from pylidar.testing import testsuite21
 testsuite21.run('.', '.')
 nameList.append('testsuite21')
+
+# testsuite22
+from pylidar.testing import testsuite22
+testsuite22.run('.', '.')
+nameList.append('testsuite22')
 
 # add our list of tests
 versionInfo['tests'] = nameList
