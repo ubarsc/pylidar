@@ -427,7 +427,7 @@ class ImageFile(object):
         if self.mode != CREATE:
             msg = 'Only valid for creation'
             raise generic.LiDARInvalidSetting(msg)
-        self.RasterDriver = driverName
+        self.rasterDriver = driverName
         
     def setRasterDriverOptions(self, options):
         """
