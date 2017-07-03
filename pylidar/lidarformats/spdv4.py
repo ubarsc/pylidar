@@ -2016,31 +2016,40 @@ spatial index will be recomputed on the fly"""
                     self.lastPoints.dtype.names is not None and 
                     colNames in self.lastPoints.dtype.names):
                 return self.lastPoints[colNames]
-            
-        nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
-        startIdxs = self.readPulsesForRange('PTS_START_IDX')
 
-        if 'RETURN_NUMBER' not in pointsHandle:
-            # not much else we can do...
-            # means to points were written to the file, 
-            # although there might be pulses
-            return None
+        if (self.lastPulseRange is None or 
+                    self.lastPulseRange != self.pulseRange or
+                    self.lastPointsSpace is None):
+            # otherwise we can re-use the self.lastPointsSpace
+            nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
+            startIdxs = self.readPulsesForRange('PTS_START_IDX')
+
+            if 'RETURN_NUMBER' not in pointsHandle:
+                # not much else we can do...
+                # means to points were written to the file, 
+                # although there might be pulses
+                # TODO: is this correct?
+                return None
         
-        nOut = pointsHandle['RETURN_NUMBER'].shape[0]
-        point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+            nOut = pointsHandle['RETURN_NUMBER'].shape[0]
+            point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
+
+            # keep these indices from pulses to points - handy for the indexing 
+            # functions.
+            self.lastPointsSpace = point_space
+            self.lastPoints_Idx = point_idx
+            self.lastPoints_IdxMask = point_idx_mask
+        #    print('new range')
+        #else:
+        #    print('reuse range')
         
-        points = self.readFieldsAndUnScale(pointsHandle, colNames, point_space)
+        points = self.readFieldsAndUnScale(pointsHandle, colNames, self.lastPointsSpace)
 
         # translate any classifications
         self.recodeClassification(points, generic.RECODE_TO_LAS, colNames)
         
-        # keep these indices from pulses to points - handy for the indexing 
-        # functions.
         self.lastPoints = points
-        self.lastPointsSpace = point_space
-        self.lastPoints_Idx = point_idx
-        self.lastPoints_IdxMask = point_idx_mask
         self.lastPointsColumns = colNames
         # self.lastPulseRange copied in readPulsesForRange()
         return points
@@ -2065,16 +2074,23 @@ spatial index will be recomputed on the fly"""
                     colNames in self.lastPulses.dtype.names):
                 return self.lastPulses[colNames]
         
-        nOut = pulsesHandle['PULSE_ID'].shape[0]
-        space = h5space.createSpaceFromRange(self.pulseRange.startPulse, 
+        if (self.lastPulseRange is None or 
+                self.lastPulseRange != self.pulseRange or
+                self.lastPulsesSpace is None):
+            nOut = pulsesHandle['PULSE_ID'].shape[0]
+            space = h5space.createSpaceFromRange(self.pulseRange.startPulse, 
                         self.pulseRange.endPulse, nOut)
-        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, space)
+
+            self.lastPulsesSpace = space
+            self.lastPulseRange = copy.copy(self.pulseRange)
+            self.lastPoints = None # now invalid
+            self.lastPointsSpace = None
+
+        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, 
+                self.lastPulsesSpace)
 
         self.lastPulses = pulses
-        self.lastPulsesSpace = space
-        self.lastPulseRange = copy.copy(self.pulseRange)
         self.lastPulsesColumns = colNames
-        self.lastPoints = None # now invalid
         return pulses
 
     def getTotalNumberPulses(self):
