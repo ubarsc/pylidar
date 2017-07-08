@@ -640,7 +640,7 @@ class LasFile(generic.LiDARFile):
             for waveform in range(waveformInfo.shape[0]):
                 gain = waveformInfo[waveform]['RECEIVE_WAVE_GAIN']
                 offset = waveformInfo[waveform]['RECEIVE_WAVE_OFFSET']
-                received[...,waveform,...] = (received[...,waveform,...] - gain) / offset
+                received[:,waveform] = (received[:,waveform] - gain) / offset
             received = received.astype(numpy.uint16)
 
         #print(pulses.shape, points.shape, received.shape, waveformInfo.shape)
@@ -690,7 +690,7 @@ class LasFile(generic.LiDARFile):
         Update our cached dictionary
         """
         if self.mode == generic.READ:
-            msg = 'Can only set header values on read or create'
+            msg = 'Can only set header values on create'
             raise generic.LiDARInvalidSetting(msg)
             
         if self.firstBlockWritten:
@@ -705,7 +705,7 @@ class LasFile(generic.LiDARFile):
         Just update one value in the header
         """
         if self.mode == generic.READ:
-            msg = 'Can only set header values on read or create'
+            msg = 'Can only set header values on create'
             raise generic.LiDARInvalidSetting(msg)
 
         if self.firstBlockWritten:

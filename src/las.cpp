@@ -29,6 +29,7 @@
 #include <Python.h>
 #include "numpy/arrayobject.h"
 #include "pylvector.h"
+#include "pylfieldinfomap.h"
 
 #include "lasreader.hpp"
 #include "laswriter.hpp"
@@ -49,8 +50,10 @@ struct LasState
 
 #if PY_MAJOR_VERSION >= 3
 #define GETSTATE(m) ((struct LasState*)PyModule_GetState(m))
+#define GETSTATE_FC GETSTATE(PyState_FindModule(&moduledef))
 #else
 #define GETSTATE(m) (&_state)
+#define GETSTATE_FC (&_state)
 static struct LasState _state;
 #endif
 
@@ -271,14 +274,7 @@ PyObject *pOptionDict;
 
     if( !PyDict_Check(pOptionDict) )
     {
-        // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
+        PyErr_SetString(GETSTATE_FC->error, "Last parameter to init function must be a dictionary");
         return -1;
     }
 
@@ -300,14 +296,7 @@ PyObject *pOptionDict;
         }
         else
         {
-            // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "BUILD_PULSES must be true or false");    
+            PyErr_SetString(GETSTATE_FC->error, "BUILD_PULSES must be true or false");    
             return -1;
         }
     }
@@ -339,13 +328,7 @@ PyObject *pOptionDict;
         else
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "PULSE_INDEX must be an int");    
+            PyErr_SetString(GETSTATE_FC->error, "PULSE_INDEX must be an int");    
             return -1;
         }
     }
@@ -357,13 +340,7 @@ PyObject *pOptionDict;
     if( self->pReader == NULL )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Unable to open las file");
+        PyErr_SetString(GETSTATE_FC->error, "Unable to open las file");
         return -1;
     }
 
@@ -588,13 +565,7 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
     else if( PyTuple_Size(args) != 0 )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "readData either takes 2 params for non-spatial reads, or 0 params for spatial reads");
+        PyErr_SetString(GETSTATE_FC->error, "readData either takes 2 params for non-spatial reads, or 0 params for spatial reads");
         return NULL;
 
     }
@@ -1031,13 +1002,7 @@ static PyObject *PyLasFileRead_getEPSG(PyLasFileRead *self, PyObject *args)
     if( !foundProjection )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Cannot find EPSG code for Coordinate System");
+        PyErr_SetString(GETSTATE_FC->error, "Cannot find EPSG code for Coordinate System");
         return NULL;
     }
     
@@ -1101,13 +1066,7 @@ static PyObject *PyLasFileRead_getScaling(PyLasFileRead *self, PyObject *args)
         if( !bFound )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_Format(GETSTATE(m)->error, "Unable to get scaling for field %s", pszField);
+            PyErr_Format(GETSTATE_FC->error, "Unable to get scaling for field %s", pszField);
             return NULL;
         }
     }
@@ -1152,13 +1111,7 @@ static PyObject *PyLasFileRead_getNativeDataType(PyLasFileRead *self, PyObject *
         if( pDescr == NULL )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_Format(GETSTATE(m)->error, "Unable to find data type for %s", pszField);
+            PyErr_Format(GETSTATE_FC->error, "Unable to find data type for %s", pszField);
             return NULL;
         }
     }    
@@ -1296,14 +1249,6 @@ static PyTypeObject PyLasFileReadType = {
     0,                 /* tp_new */
 };
 
-// to help us remember info for each field without having to look it up each time
-// used by CFieldInfoMap
-typedef struct {
-    char cKind;
-    int nOffset;
-    int nSize;
-} SFieldInfo;
-
 /* Python object wrapping a LASwriter */
 typedef struct {
     PyObject_HEAD
@@ -1336,7 +1281,7 @@ typedef struct {
     // set by setScaling for 'attribute' fields
     std::map<std::string, std::pair<double, double> > *pScalingMap;
     // set by setNativeDataType
-    std::map<std::string, SFieldInfo> *pAttributeTypeMap;
+    std::map<std::string, pylidar::SFieldInfo> *pAttributeTypeMap;
     // set by WAVEFORM_DESCR driver option
     PyArrayObject *pWaveformDescr;
 } PyLasFileWrite;
@@ -1404,13 +1349,7 @@ PyObject *pOptionDict;
         if( !PyDict_Check(pOptionDict) )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
+            PyErr_SetString(GETSTATE_FC->error, "Last parameter to init function must be a dictionary");
             return -1;
         }
 
@@ -1420,13 +1359,7 @@ PyObject *pOptionDict;
             if( !PyLong_Check(pVal) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "FORMAT parameter must be integer");
+                PyErr_SetString(GETSTATE_FC->error, "FORMAT parameter must be integer");
                 return -1;
             }
             self->point_data_format = PyLong_AsLong(pVal);
@@ -1438,13 +1371,7 @@ PyObject *pOptionDict;
             if( !PyLong_Check(pVal) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "RECORD_LENGTH parameter must be integer");
+                PyErr_SetString(GETSTATE_FC->error, "RECORD_LENGTH parameter must be integer");
                 return -1;
             }
             self->point_data_record_length = PyLong_AsLong(pVal);
@@ -1456,25 +1383,13 @@ PyObject *pOptionDict;
             if( !PyArray_Check(pVal) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "WAVEFORM_DESCR parameter must be an array");
+                PyErr_SetString(GETSTATE_FC->error, "WAVEFORM_DESCR parameter must be an array");
                 return -1;
             }
             if( PyArray_SIZE((PyArrayObject*)pVal) > 256 )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "WAVEFORM_DESCR parameter must be shorter than 256 - LAS restriction");
+                PyErr_SetString(GETSTATE_FC->error, "WAVEFORM_DESCR parameter must be shorter than 256 - LAS restriction");
                 return -1;
             }
             Py_INCREF(pVal);
@@ -1499,195 +1414,13 @@ PyObject *pOptionDict;
     self->bYScalingSet = false;
     self->bZScalingSet = false;
     self->pScalingMap = new std::map<std::string, std::pair<double, double> >;
-    self->pAttributeTypeMap = new std::map<std::string, SFieldInfo>;
+    self->pAttributeTypeMap = new std::map<std::string, pylidar::SFieldInfo>;
 
     // copy filename so we can open later
     self->pszFilename = strdup(pszFname);
 
     return 0;
 }
-
-#define DO_INT64_READ(tempVar) memcpy(&tempVar, (char*)pRow + info.nOffset, sizeof(tempVar)); \
-            nRetVal = (npy_int64)tempVar; 
-
-#define DO_FLOAT64_READ(tempVar) memcpy(&tempVar, (char*)pRow + info.nOffset, sizeof(tempVar)); \
-            dRetVal = (double)tempVar; 
-
-class CFieldInfoMap : public std::map<std::string, SFieldInfo>
-{
-public:
-    CFieldInfoMap(PyArrayObject *pArray) 
-    {
-        SFieldInfo info;
-        PyArray_Descr *pDescr = PyArray_DESCR(pArray);
-        PyObject *pKeys = PyDict_Keys(pDescr->fields);
-        for( Py_ssize_t i = 0; i < PyList_Size(pKeys); i++)
-        {
-            PyObject *pKey = PyList_GetItem(pKeys, i);
-#if PY_MAJOR_VERSION >= 3
-            PyObject *bytesKey = PyUnicode_AsEncodedString(pKey, NULL, NULL);
-            char *pszElementName = PyBytes_AsString(bytesKey);
-#else
-            char *pszElementName = PyString_AsString(pKey);
-#endif
-
-            pylidar_getFieldDescr(pArray, pszElementName, &info.nOffset, &info.cKind, &info.nSize, NULL);
-            insert( std::pair<std::string, SFieldInfo>(pszElementName, info) );
-
-#if PY_MAJOR_VERSION >= 3
-            Py_DECREF(bytesKey);
-#endif
-        }
-        Py_DECREF(pKeys);
-    }
-
-    npy_int64 getIntValue(std::string sName, void *pRow)
-    {
-        npy_char nCharVal;
-        npy_bool nBoolVal;
-        npy_byte nByteVal;
-        npy_ubyte nUByteVal;
-        npy_short nShortVal;
-        npy_ushort nUShortVal;
-        npy_int nIntVal;
-        npy_uint nUIntVal;
-        npy_long nLongVal;
-        npy_ulong nULongVal;
-        npy_float fFloatVal;
-        npy_double fDoubleVal;
-        npy_int64 nRetVal=0;
-
-        iterator it = find(sName);
-        if( it == end() )
-        {
-            return 0;
-        }
-        SFieldInfo info = it->second;
-        if( ( info.cKind == 'b' ) && ( info.nSize == 1 ) )
-        {
-            DO_INT64_READ(nBoolVal);
-        }
-        else if ( ( info.cKind == 'i' ) && ( info.nSize == 1 ) )
-        {
-            DO_INT64_READ(nByteVal);
-        }
-        else if ( ( info.cKind == 'S' ) && ( info.nSize == 1 ) )
-        {
-            DO_INT64_READ(nCharVal);
-        }
-        else if ( ( info.cKind == 'u' ) && ( info.nSize == 1 ) )
-        {
-            DO_INT64_READ(nUByteVal);
-        }
-        else if ( ( info.cKind == 'i' ) && ( info.nSize == 2 ) )
-        {
-            DO_INT64_READ(nShortVal);
-        }
-        else if ( ( info.cKind == 'u' ) && ( info.nSize == 2 ) )
-        {
-            DO_INT64_READ(nUShortVal);
-        }
-        else if ( ( info.cKind == 'i' ) && ( info.nSize == 4 ) )
-        {
-            DO_INT64_READ(nIntVal);
-        }
-        else if ( ( info.cKind == 'u' ) && ( info.nSize == 4 ) )
-        {
-            DO_INT64_READ(nUIntVal);
-        }
-        else if ( ( info.cKind == 'i' ) && ( info.nSize == 8 ) )
-        {
-            DO_INT64_READ(nLongVal);
-        }
-        else if ( ( info.cKind == 'u' ) && ( info.nSize == 8 ) )
-        {
-            DO_INT64_READ(nULongVal);
-        }
-        else if ( ( info.cKind == 'f' ) && ( info.nSize == 4 ) )
-        {
-            DO_INT64_READ(fFloatVal);
-        }
-        else if ( ( info.cKind == 'f' ) && ( info.nSize == 8 ) )
-        {
-            DO_INT64_READ(fDoubleVal);
-        }
-        return nRetVal;        
-    }
-    double getDoubleValue(std::string sName, void *pRow)
-    {
-        npy_char nCharVal;
-        npy_bool nBoolVal;
-        npy_byte nByteVal;
-        npy_ubyte nUByteVal;
-        npy_short nShortVal;
-        npy_ushort nUShortVal;
-        npy_int nIntVal;
-        npy_uint nUIntVal;
-        npy_long nLongVal;
-        npy_ulong nULongVal;
-        npy_float fFloatVal;
-        npy_double fDoubleVal;
-        double dRetVal=0;
-
-        iterator it = find(sName);
-        if( it == end() )
-        {
-            return 0;
-        }
-
-        SFieldInfo info = it->second;
-        if( ( info.cKind == 'b' ) && ( info.nSize == 1 ) )
-        {
-            DO_FLOAT64_READ(nBoolVal);
-        }
-        else if ( ( info.cKind == 'i' ) && ( info.nSize == 1 ) )
-        {
-            DO_FLOAT64_READ(nByteVal);
-        }
-        else if ( ( info.cKind == 'S' ) && ( info.nSize == 1 ) )
-        {
-            DO_FLOAT64_READ(nCharVal);
-        }
-        else if ( ( info.cKind == 'u' ) && ( info.nSize == 1 ) )
-        {
-            DO_FLOAT64_READ(nUByteVal);
-        }
-        else if ( ( info.cKind == 'i' ) && ( info.nSize == 2 ) )
-        {
-            DO_FLOAT64_READ(nShortVal);
-        }
-        else if ( ( info.cKind == 'u' ) && ( info.nSize == 2 ) )
-        {
-            DO_FLOAT64_READ(nUShortVal);
-        }
-        else if ( ( info.cKind == 'i' ) && ( info.nSize == 4 ) )
-        {
-            DO_FLOAT64_READ(nIntVal);
-        }
-        else if ( ( info.cKind == 'u' ) && ( info.nSize == 4 ) )
-        {
-            DO_FLOAT64_READ(nUIntVal);
-        }
-        else if ( ( info.cKind == 'i' ) && ( info.nSize == 8 ) )
-        {
-            DO_FLOAT64_READ(nLongVal);
-        }
-        else if ( ( info.cKind == 'u' ) && ( info.nSize == 8 ) )
-        {
-            DO_FLOAT64_READ(nULongVal);
-        }
-        else if ( ( info.cKind == 'f' ) && ( info.nSize == 4 ) )
-        {
-            DO_FLOAT64_READ(fFloatVal);
-        }
-        else if ( ( info.cKind == 'f' ) && ( info.nSize == 8 ) )
-        {
-            DO_FLOAT64_READ(fDoubleVal);
-        }
-        return dRetVal;        
-    }
-
-};
 
 // copies recognised fields from pHeaderDict into pHeader
 void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
@@ -1738,7 +1471,8 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
     {    
         PyObject *pArray = PyArray_FROM_OT(pVal, NPY_UINT8);
         // TODO: check 1d?
-        for( npy_intp i = 0; i < PyArray_DIM((PyArrayObject*)pArray, 0); i++ )
+        for( npy_intp i = 0; (i < PyArray_DIM((PyArrayObject*)pArray, 0)) &&
+                            (i < (npy_intp)GET_LENGTH(pHeader->project_ID_GUID_data_4)); i++ )
         {
             pHeader->project_ID_GUID_data_4[i] = *((U8*)PyArray_GETPTR1((PyArrayObject*)pArray, i));
         }
@@ -1816,7 +1550,8 @@ void setHeaderFromDictionary(PyObject *pHeaderDict, LASheader *pHeader)
     {    
         PyObject *pArray = PyArray_FROM_OT(pVal, NPY_UINT8);
         // TODO: check 1d?
-        for( npy_intp i = 0; i < PyArray_DIM((PyArrayObject*)pArray, 0); i++ )
+        for( npy_intp i = 0; (i < PyArray_DIM((PyArrayObject*)pArray, 0)) && 
+                            (i < (npy_intp)GET_LENGTH(pHeader->number_of_points_by_return)); i++ )
         {
             pHeader->number_of_points_by_return[i] = *((U8*)PyArray_GETPTR1((PyArrayObject*)pArray, i));
         }
@@ -1855,7 +1590,7 @@ void setWavePacketDescr(PyArrayObject *pArray, LASheader *pHeader, U8 nBitsPerSa
     npy_intp nSize = PyArray_SIZE(pArray);
     if( nSize > 0 )
     {
-        CFieldInfoMap infoMap(pArray);
+        pylidar::CFieldInfoMap infoMap(pArray);
         // ok apparently there are always 256. _init raises an error if more.
         pHeader->vlr_wave_packet_descr = new LASvlr_wave_packet_descr*[256];
         memset(pHeader->vlr_wave_packet_descr, 0, sizeof(LASvlr_wave_packet_descr*) * 256);
@@ -1928,13 +1663,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         if( !PyDict_Check(pHeader) )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "First parameter to writeData must be header dictionary");
+            PyErr_SetString(GETSTATE_FC->error, "First parameter to writeData must be header dictionary");
             return NULL;
         }
     }
@@ -1966,17 +1695,18 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
     if( bArraysOk && bHaveReceived && !PyArray_Check(pReceived) )
     {
         bArraysOk = false;
-        pszMessage = "Waveform info must be a numpy array";
+        pszMessage = "transmitted must be a numpy array";
     }
     if( bArraysOk && ((PyArray_NDIM((PyArrayObject*)pPulses) != 1) || (PyArray_NDIM((PyArrayObject*)pPoints) != 2) || 
             (bHaveWaveformInfos && (PyArray_NDIM((PyArrayObject*)pWaveformInfos) != 2)) || 
             (bHaveReceived && (PyArray_NDIM((PyArrayObject*)pReceived) != 3)) ) )
     {
         bArraysOk = false;
-        pszMessage = "pulses must be 1d, points and received 2d and waveforminfo 3d";
+        pszMessage = "pulses must be 1d, points and waveforminfo 2d, received 3d";
     }
     if( bArraysOk && bHaveReceived && (PyArray_TYPE((PyArrayObject*)pReceived) != NPY_UINT16))
     {
+        // uint16 set by las.py
         bArraysOk = false;
         pszMessage = "received must be 16bit";
     }
@@ -1984,13 +1714,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
     if( !bArraysOk )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, pszMessage);
+        PyErr_SetString(GETSTATE_FC->error, pszMessage);
         return NULL;
     }
 
@@ -1998,8 +1722,8 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
     // the type, offset etc
     // do it up here in case we need info for the attributes when setting
     // up the header and writer
-    CFieldInfoMap pulseMap((PyArrayObject*)pPulses);
-    CFieldInfoMap pointMap((PyArrayObject*)pPoints);
+    pylidar::CFieldInfoMap pulseMap((PyArrayObject*)pPulses);
+    pylidar::CFieldInfoMap pointMap((PyArrayObject*)pPoints);
 
     if( self->pWriter == NULL )
     {
@@ -2007,13 +1731,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         if( !self->bXScalingSet || !self->bYScalingSet || !self->bZScalingSet )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "Must set scaling for X, Y and Z columns before writing data");
+            PyErr_SetString(GETSTATE_FC->error, "Must set scaling for X, Y and Z columns before writing data");
             return NULL;
         }
 
@@ -2053,7 +1771,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         std::set<std::string> nonAttrPointSet = getEssentialPointFieldNames();
 
         // iterate over our field map and see what isn't in nonAttrPointSet
-        for( std::map<std::string, SFieldInfo>::iterator itr = pointMap.begin(); itr != pointMap.end(); itr++ )
+        for( std::map<std::string, pylidar::SFieldInfo>::iterator itr = pointMap.begin(); itr != pointMap.end(); itr++ )
         {
             if( nonAttrPointSet.find(itr->first) == nonAttrPointSet.end() )
             {
@@ -2062,7 +1780,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
                 int nSize = itr->second.nSize;
 
                 // have they requested a different type?
-                std::map<std::string, SFieldInfo>::iterator attrTypeItr = self->pAttributeTypeMap->find(itr->first);
+                std::map<std::string, pylidar::SFieldInfo>::iterator attrTypeItr = self->pAttributeTypeMap->find(itr->first);
                 if( attrTypeItr != self->pAttributeTypeMap->end() )
                 {
                     cKind = attrTypeItr->second.cKind;
@@ -2141,13 +1859,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
         if( self->pWriter == NULL )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "Unable to open las file");
+            PyErr_SetString(GETSTATE_FC->error, "Unable to open las file");
             return NULL;
         }
 
@@ -2159,13 +1871,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
             if( !self->pWaveformWriter->open(self->pszFilename, self->pHeader->vlr_wave_packet_descr) )
             {
                 // raise Python exception
-                PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                // best way I could find for obtaining module reference
-                // from inside a class method. Not needed for Python < 3.
-                m = PyState_FindModule(&moduledef);
-#endif
-                PyErr_SetString(GETSTATE(m)->error, "Unable to open las waveform file");
+                PyErr_SetString(GETSTATE_FC->error, "Unable to open las waveform file");
                 return NULL;
             }
         }
@@ -2306,7 +2012,7 @@ static PyObject *PyLasFileWrite_writeData(PyLasFileWrite *self, PyObject *args)
                 npy_int64 nInfos = pulseMap.getIntValue("NUMBER_OF_WAVEFORM_SAMPLES", pPulseRow);
                 if( nInfos > 0 ) // print error if more than 1? LAS can only handle 1
                 {
-                    CFieldInfoMap waveMap((PyArrayObject*)pWaveformInfos); // create once?
+                    pylidar::CFieldInfoMap waveMap((PyArrayObject*)pWaveformInfos); // create once?
                     void *pInfoRow = PyArray_GETPTR2((PyArrayObject*)pWaveformInfos, 0, nPulseIdx);
                     U32 nSamples = waveMap.getIntValue(N_WAVEFORM_BINS, pInfoRow);
                     F64 fGain = waveMap.getDoubleValue(RECEIVE_WAVE_GAIN, pInfoRow);
@@ -2383,13 +2089,7 @@ static PyObject *PyLasFileWrite_setScaling(PyLasFileWrite *self, PyObject *args)
         {
             // is an essential field that we can't store scaling for.
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_Format(GETSTATE(m)->error, "Unable to set scaling for field %s", pszField);
+            PyErr_Format(GETSTATE_FC->error, "Unable to set scaling for field %s", pszField);
             return NULL;
         }
         else
@@ -2424,7 +2124,7 @@ static PyObject *PyLasFileWrite_getNativeDataType(PyLasFileWrite *self, PyObject
         {
             // no luck, try the attributes that have been set by the user when calling setNativeDataType
             // no data has been written yet
-            std::map<std::string, SFieldInfo>::iterator itr = self->pAttributeTypeMap->find(pszField);
+            std::map<std::string, pylidar::SFieldInfo>::iterator itr = self->pAttributeTypeMap->find(pszField);
             if( itr != self->pAttributeTypeMap->end() )
             {
                 /* Now build dtype string - easier than having a switch on all the combinations */
@@ -2499,13 +2199,7 @@ static PyObject *PyLasFileWrite_getNativeDataType(PyLasFileWrite *self, PyObject
     if( pDescr == NULL )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_Format(GETSTATE(m)->error, "Unable to find data type for %s", pszField);
+        PyErr_Format(GETSTATE_FC->error, "Unable to find data type for %s", pszField);
         return NULL;
     }
 
@@ -2522,13 +2216,7 @@ static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject
     if( !PyType_Check(pPythonType) )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Last argument needs to be python type");
+        PyErr_SetString(GETSTATE_FC->error, "Last argument needs to be python type");
         return NULL;
     }
 
@@ -2537,13 +2225,7 @@ static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject
     if( !PyArray_DescrConverter(pPythonType, &pDtype) )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Could not convert python type to numpy dtype");
+        PyErr_SetString(GETSTATE_FC->error, "Could not convert python type to numpy dtype");
         return NULL;
     }
 
@@ -2551,21 +2233,15 @@ static PyObject *PyLasFileWrite_setNativeDataType(PyLasFileWrite *self, PyObject
     if( nonAttrPointSet.find(pszField) != nonAttrPointSet.end() )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_Format(GETSTATE(m)->error, "Can't set data type for %s", pszField);
+        PyErr_Format(GETSTATE_FC->error, "Can't set data type for %s", pszField);
         return NULL;
     }
 
-    SFieldInfo info;
+    pylidar::SFieldInfo info;
     info.cKind = pDtype->kind;
     info.nOffset = 0; // don't know yet
     info.nSize = pDtype->elsize;
-    self->pAttributeTypeMap->insert(std::pair<std::string, SFieldInfo>(pszField, info));
+    self->pAttributeTypeMap->insert(std::pair<std::string, pylidar::SFieldInfo>(pszField, info));
 
     // I *think* this is correct since I don't pass it to any of the (ref stealing)
     // array creation routines

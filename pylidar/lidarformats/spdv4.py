@@ -13,16 +13,6 @@ These are contained in the WRITESUPPORTEDOPTIONS module level variable.
 | SCALING_BUT_NO_DATA_WARNING | Warn when scaling set for a column that   |
 |                             | doesn't get created. Defaults to True     |
 +-----------------------------+-------------------------------------------+
-| PREFERRED_SPATIAL_INDEX     | The spatial index to use on creation of   |
-|                             | index, or for reading the preferred one   |
-|                             | to use. Defaults to                       |
-|                             | SPDV4_INDEXTYPE_SIMPLEGRID                |
-+-----------------------------+-------------------------------------------+
-| CREATE_INDEX_ON_UPDATE      | If PREFERRED_SPATIAL_INDEX is             |
-|                             | SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE set |
-|                             | this to True to create the index on       |
-|                             | update                                    |
-+-----------------------------+-------------------------------------------+
 | HDF5_CHUNK_SIZE             | Set the HDF5 chunk size when creating     |
 |                             | columns. Defaults to 250.                 |
 +-----------------------------+-------------------------------------------+
@@ -57,7 +47,6 @@ from . import h5space
 from . import spdv4_index
 
 WRITESUPPORTEDOPTIONS = ('SCALING_BUT_NO_DATA_WARNING', 
-            'PREFERRED_SPATIAL_INDEX', 'CREATE_INDEX_ON_UPDATE', 
             'HDF5_CHUNK_SIZE')
 "driver options"
 READSUPPORTEDOPTIONS = ()
@@ -198,8 +187,6 @@ SPDV4_PULSE_INDEX_ZPLANE = 7 # Reserved
 
 SPDV4_INDEXTYPE_SIMPLEGRID = spdv4_index.SPDV4_INDEXTYPE_SIMPLEGRID
 "types of spatial indices"
-SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE = spdv4_index.SPDV4_INDEXTYPE_LIBSPATIALINDEX_RTREE
-"types of spatial indices"
 
 SPDV4_SIMPLEGRID_COUNT_DTYPE = spdv4_index.SPDV4_SIMPLEGRID_COUNT_DTYPE
 "data types for the spatial index"
@@ -305,8 +292,6 @@ def flatten3dWaveformData(wavedata, inmask, nrecv, flattened):
             if c > 0:
                 nrecv[nrecv_idx] = c
                 nrecv_idx += 1
-    
-
 
 class SPDV4File(generic.LiDARFile):
     """
@@ -345,15 +330,9 @@ class SPDV4File(generic.LiDARFile):
 
         # type of spatial index to use
         self.preferredSpatialIndex = SPDV4_INDEXTYPE_SIMPLEGRID
-        if 'PREFERRED_SPATIAL_INDEX' in userClass.lidarDriverOptions:
-            self.preferredSpatialIndex = (
-                userClass.lidarDriverOptions['PREFERRED_SPATIAL_INDEX'])
 
         # create index on update - only valid for more advanced indices
         self.createIndexOnUpdate = False
-        if 'CREATE_INDEX_ON_UPDATE' in userClass.lidarDriverOptions:
-            self.createIndexOnUpdate = (
-                userClass.lidarDriverOptions['CREATE_INDEX_ON_UPDATE'])
 
         # hdf5 chunk size - as a tuple - columns are 1d
         self.hdf5ChunkSize = (DEFAULT_HDF5_CHUNK_SIZE,)
@@ -1438,10 +1417,10 @@ spatial index will be recomputed on the fly"""
 
             # create arrays for flatten3dWaveformData
             firstField = waveformInfo.dtype.names[0]
-            ntrans = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
+            ntrans = numpy.zeros(waveformInfo[firstField].count(), dtype=numpy.uint16)
             flattened =  numpy.empty(transmitted.count(), dtype=transmitted.dtype)
             
-            flatten3dWaveformData(received.data, received.mask, nrecv, flattened)
+            flatten3dWaveformData(transmitted.data, transmitted.mask, ntrans, flattened)
             currTransCount = 0
             if 'TRANSMITTED' in self.fileHandle['DATA']:
                 transHandle = self.fileHandle['DATA']['TRANSMITTED']
@@ -1496,7 +1475,7 @@ spatial index will be recomputed on the fly"""
     
             # create arrays for flatten3dWaveformData
             firstField = waveformInfo.dtype.names[0]
-            nrecv = numpy.empty(waveformInfo[firstField].count(), dtype=numpy.uint16)
+            nrecv = numpy.zeros(waveformInfo[firstField].count(), dtype=numpy.uint16)
             flattened =  numpy.empty(received.count(), dtype=received.dtype)
             
             flatten3dWaveformData(received.data, received.mask, nrecv, flattened)
@@ -2037,31 +2016,40 @@ spatial index will be recomputed on the fly"""
                     self.lastPoints.dtype.names is not None and 
                     colNames in self.lastPoints.dtype.names):
                 return self.lastPoints[colNames]
-            
-        nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
-        startIdxs = self.readPulsesForRange('PTS_START_IDX')
 
-        if 'RETURN_NUMBER' not in pointsHandle:
-            # not much else we can do...
-            # means to points were written to the file, 
-            # although there might be pulses
-            return None
+        if (self.lastPulseRange is None or 
+                    self.lastPulseRange != self.pulseRange or
+                    self.lastPointsSpace is None):
+            # otherwise we can re-use the self.lastPointsSpace
+            nReturns = self.readPulsesForRange('NUMBER_OF_RETURNS')
+            startIdxs = self.readPulsesForRange('PTS_START_IDX')
+
+            if 'RETURN_NUMBER' not in pointsHandle:
+                # not much else we can do...
+                # means to points were written to the file, 
+                # although there might be pulses
+                # TODO: is this correct?
+                return None
         
-        nOut = pointsHandle['RETURN_NUMBER'].shape[0]
-        point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
+            nOut = pointsHandle['RETURN_NUMBER'].shape[0]
+            point_space, point_idx, point_idx_mask = gridindexutils.convertSPDIdxToReadIdxAndMaskInfo(
                         startIdxs, nReturns, nOut)
+
+            # keep these indices from pulses to points - handy for the indexing 
+            # functions.
+            self.lastPointsSpace = point_space
+            self.lastPoints_Idx = point_idx
+            self.lastPoints_IdxMask = point_idx_mask
+        #    print('new range')
+        #else:
+        #    print('reuse range')
         
-        points = self.readFieldsAndUnScale(pointsHandle, colNames, point_space)
+        points = self.readFieldsAndUnScale(pointsHandle, colNames, self.lastPointsSpace)
 
         # translate any classifications
         self.recodeClassification(points, generic.RECODE_TO_LAS, colNames)
         
-        # keep these indices from pulses to points - handy for the indexing 
-        # functions.
         self.lastPoints = points
-        self.lastPointsSpace = point_space
-        self.lastPoints_Idx = point_idx
-        self.lastPoints_IdxMask = point_idx_mask
         self.lastPointsColumns = colNames
         # self.lastPulseRange copied in readPulsesForRange()
         return points
@@ -2086,16 +2074,23 @@ spatial index will be recomputed on the fly"""
                     colNames in self.lastPulses.dtype.names):
                 return self.lastPulses[colNames]
         
-        nOut = pulsesHandle['PULSE_ID'].shape[0]
-        space = h5space.createSpaceFromRange(self.pulseRange.startPulse, 
+        if (self.lastPulseRange is None or 
+                self.lastPulseRange != self.pulseRange or
+                self.lastPulsesSpace is None):
+            nOut = pulsesHandle['PULSE_ID'].shape[0]
+            space = h5space.createSpaceFromRange(self.pulseRange.startPulse, 
                         self.pulseRange.endPulse, nOut)
-        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, space)
+
+            self.lastPulsesSpace = space
+            self.lastPulseRange = copy.copy(self.pulseRange)
+            self.lastPoints = None # now invalid
+            self.lastPointsSpace = None
+
+        pulses = self.readFieldsAndUnScale(pulsesHandle, colNames, 
+                self.lastPulsesSpace)
 
         self.lastPulses = pulses
-        self.lastPulsesSpace = space
-        self.lastPulseRange = copy.copy(self.pulseRange)
         self.lastPulsesColumns = colNames
-        self.lastPoints = None # now invalid
         return pulses
 
     def getTotalNumberPulses(self):

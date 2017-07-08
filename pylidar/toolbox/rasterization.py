@@ -71,7 +71,7 @@ def writeImageFunc(data, otherArgs):
 
 def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION, 
         atype=DEFAULT_ATTRIBUTE, background=0, binSize=None, extraModule=None, 
-        quiet=False, footprint=None, windowSize=None):
+        quiet=False, footprint=None, windowSize=None, driverName=None, driverOptions=None):
     """
     Apply the given function to the list of input files and create
     an output raster file. attributes is a list of attributes to run
@@ -90,6 +90,13 @@ def rasterize(infiles, outfile, attributes, function=DEFAULT_FUNCTION,
     dataFiles.inList = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) 
                         for fname in infiles]
     dataFiles.imageOut = lidarprocessor.ImageFile(outfile, lidarprocessor.CREATE)
+    dataFiles.imageOut.setRasterIgnore(background)
+
+    if driverName is not None:
+        dataFiles.imageOut.setRasterDriver(driverName)
+        
+    if driverOptions is not None:
+        dataFiles.imageOut.setRasterDriverOptions(driverOptions)
 
     # import any other modules required
     globalsDict = globals()

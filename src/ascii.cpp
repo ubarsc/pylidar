@@ -53,8 +53,10 @@ struct ASCIIState
 
 #if PY_MAJOR_VERSION >= 3
 #define GETSTATE(m) ((struct ASCIIState*)PyModule_GetState(m))
+#define GETSTATE_FC GETSTATE(PyState_FindModule(&moduledef))
 #else
 #define GETSTATE(m) (&_state)
+#define GETSTATE_FC (&_state)
 static struct ASCIIState _state;
 #endif
 
@@ -372,13 +374,7 @@ PyASCIIReader_init(PyASCIIReader *self, PyObject *args, PyObject *kwds)
         return -1;
     }
 
-    PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-    // best way I could find for obtaining module reference
-    // from inside a class method. Not needed for Python < 3.
-    m = PyState_FindModule(&moduledef);
-#endif
-    PyObject *error = GETSTATE(m)->error;
+    PyObject *error = GETSTATE_FC->error;
 
     // nType should come from getFileType()
 #ifdef HAVE_ZLIB
@@ -650,8 +646,10 @@ public:
 #if defined (_MSC_VER) && _MSC_VER < 1900
                 // early versions of MSVC don't have strtoll
                 __int64 data = _strtoi64(pszString, NULL, 10);
+                #define PRINTF_IFMT "%I64d"
 #else
                 long long data = strtoll(pszString, NULL, 10);
+                #define PRINTF_IFMT "%lld"
 #endif            
                 switch(pElDefn->nSize)
                 {
@@ -660,7 +658,7 @@ public:
                         if( (data < NPY_MIN_INT8) || (data > NPY_MAX_INT8))
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type (%lld)\n", pElDefn->pszName, data);
+                            fprintf(stderr, "Column %s data outside range of type (" PRINTF_IFMT ")\n", pElDefn->pszName, data);
                         }
                         npy_int8 d = (npy_int8)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -671,7 +669,7 @@ public:
                         if( (data < NPY_MIN_INT16) || (data > NPY_MAX_INT16))
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type (%lld)\n", pElDefn->pszName, data);
+                            fprintf(stderr, "Column %s data outside range of type (" PRINTF_IFMT ")\n", pElDefn->pszName, data);
                         }
                         npy_int16 d = (npy_int16)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -682,7 +680,7 @@ public:
                         if( (data < NPY_MIN_INT32) || (data > NPY_MAX_INT32))
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type (%lld)\n", pElDefn->pszName, data);
+                            fprintf(stderr, "Column %s data outside range of type (" PRINTF_IFMT ")\n", pElDefn->pszName, data);
                         }
                         npy_int32 d = (npy_int32)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -693,7 +691,7 @@ public:
                         if( (data < NPY_MIN_INT64) || (data > NPY_MAX_INT64))
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type (%lld)\n", pElDefn->pszName, data);
+                            fprintf(stderr, "Column %s data outside range of type (" PRINTF_IFMT ")\n", pElDefn->pszName, data);
                         }
                         npy_int64 d = (npy_int64)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -709,8 +707,10 @@ public:
 #if defined( _MSC_VER) && _MSC_VER < 1900
                 // early versions of MSVC don't have strtoull
                 unsigned __int64 data = _strtoui64(pszString, NULL, 10);
+                #define PRINTF_UFMT "%I64u"
 #else
                 unsigned long long data = strtoull(pszString, NULL, 10);
+                #define PRINTF_UFMT "%llu"
 #endif
                 switch(pElDefn->nSize)
                 {
@@ -719,7 +719,7 @@ public:
                         if( data > NPY_MAX_UINT8 )
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type (%llu)\n", pElDefn->pszName, data);
+                            fprintf(stderr, "Column %s data outside range of type (" PRINTF_UFMT ")\n", pElDefn->pszName, data);
                         }
                         npy_uint8 d = (npy_uint8)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -730,7 +730,7 @@ public:
                         if( data > NPY_MAX_UINT16 )
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type (%llu)\n", pElDefn->pszName, data);
+                            fprintf(stderr, "Column %s data outside range of type (" PRINTF_UFMT ")\n", pElDefn->pszName, data);
                         }
                         npy_uint16 d = (npy_uint16)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -741,7 +741,7 @@ public:
                         if( data > NPY_MAX_UINT32 )
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type (%llu)\n", pElDefn->pszName, data);
+                            fprintf(stderr, "Column %s data outside range of type (" PRINTF_UFMT ")\n", pElDefn->pszName, data);
                         }
                         npy_uint32 d = (npy_uint32)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -752,7 +752,7 @@ public:
                         if( data > NPY_MAX_UINT64 )
                         {
                             // TODO: exception?
-                            fprintf(stderr, "Column %s data outside range of type (%llu)\n", pElDefn->pszName, data);
+                            fprintf(stderr, "Column %s data outside range of type (" PRINTF_UFMT ")\n", pElDefn->pszName, data);
                         }
                         npy_uint64 d = (npy_uint64)data;
                         memcpy(&pRecord[pElDefn->nOffset], &d, sizeof(d));
@@ -846,13 +846,7 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
             {
                 if( pszErrorString != NULL )
                 {
-                    PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                    // best way I could find for obtaining module reference
-                    // from inside a class method. Not needed for Python < 3.
-                    m = PyState_FindModule(&moduledef);
-#endif
-                    PyErr_SetString(GETSTATE(m)->error, pszErrorString);
+                    PyErr_SetString(GETSTATE_FC->error, pszErrorString);
                     return NULL;
                 }
                 self->bFinished = true;
@@ -903,13 +897,7 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
             {
                 if( pszErrorString != NULL )
                 {
-                    PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-                    // best way I could find for obtaining module reference
-                    // from inside a class method. Not needed for Python < 3.
-                    m = PyState_FindModule(&moduledef);
-#endif
-                    PyErr_SetString(GETSTATE(m)->error, pszErrorString);
+                    PyErr_SetString(GETSTATE_FC->error, pszErrorString);
                     delete[] pulseItem;
                     delete[] pointItem;
                     return NULL;
@@ -968,13 +956,7 @@ static PyObject *PyASCIIReader_readData(PyASCIIReader *self, PyObject *args)
     }
     catch(std::bad_alloc& ba)
     {
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Out of memory");
+        PyErr_SetString(GETSTATE_FC->error, "Out of memory");
         return NULL;
     }
 

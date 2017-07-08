@@ -217,28 +217,6 @@ def addLVISBinDriver(extModules, cxxFlags):
 
     extModules.append(lvisModule)
 
-def addAdvIndexing(extModules, cxxFlags):
-    """
-    Decides if the Advanced Indexing is to be built. If so
-    adds the Extension class to extModules.
-    """
-    if 'LIBSPATIALINDEX_ROOT' in os.environ:
-        print('Building Advanced Indexing Extension...')
-        libspatialindexRoot = os.environ['LIBSPATIALINDEX_ROOT']
-
-        advIdxModule = Extension(name='pylidar.lidarformats._advindex',
-            sources=['src/advindex.cpp', 'src/pylidar.c'],
-            include_dirs=[os.path.join(libspatialindexRoot, 'include')],
-            extra_compile_args=cxxFlags,
-            define_macros=[NUMPY_MACROS],
-            libraries=['spatialindex_c'],
-            library_dirs=[os.path.join(libspatialindexRoot, 'lib')])
-
-        extModules.append(advIdxModule)
-    else:
-        print('libspatialindex library not found.')
-        print('If installed set $LIBSPATIALINDEX_ROOT to the install location of libspatialindex https://libspatialindex.github.io/')
-
 def addInsidePoly(extModules):
     """
     Adds the insidepoly C toolbox module. Currently requires GDAL to be 
@@ -313,9 +291,6 @@ if withExtensions:
     addLasDriver(externalModules, cxxFlags)
     addASCIIDriver(externalModules, cxxFlags)
     addLVISBinDriver(externalModules, cxxFlags)
-    # Advanced indexing commented out for now
-    # wasn't useful, and causing problems for some installs
-    #addAdvIndexing(externalModules, cxxFlags)
     addInsidePoly(externalModules)
     addPulseWavesDriver(externalModules, cxxFlags)
 

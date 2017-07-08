@@ -43,8 +43,10 @@ struct RieglState
 
 #if PY_MAJOR_VERSION >= 3
 #define GETSTATE(m) ((struct RieglState*)PyModule_GetState(m))
+#define GETSTATE_FC GETSTATE(PyState_FindModule(&moduledef))
 #else
 #define GETSTATE(m) (&_state)
+#define GETSTATE_FC (&_state)
 static struct RieglState _state;
 #endif
 
@@ -954,13 +956,7 @@ void setWaveError(fwifc_int32_t result)
     fwifc_csz message;
     fwifc_get_last_error(&message);
     // raise Python exception
-    PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-    // best way I could find for obtaining module reference
-    // from inside a class method. Not needed for Python < 3.
-    m = PyState_FindModule(&moduledef);
-#endif
-    PyErr_Format(GETSTATE(m)->error, "Error from Riegl wave lib: %s", message);
+    PyErr_Format(GETSTATE_FC->error, "Error from Riegl wave lib: %s", message);
 }
 
 /* init method - open file */
@@ -981,13 +977,7 @@ PyObject *pOptionDict;
     if( !PyDict_Check(pOptionDict) )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Last parameter to init function must be a dictionary");
+        PyErr_SetString(GETSTATE_FC->error, "Last parameter to init function must be a dictionary");
         return -1;
     }
 
@@ -1000,13 +990,7 @@ PyObject *pOptionDict;
             (PyArray_DIM((PyArrayObject*)pRotationMatrix, 0) != 4 ) || (PyArray_DIM((PyArrayObject*)pRotationMatrix, 1) != 4 ) )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "ROTATION_MATRIX must be a 4x4 numpy array");    
+            PyErr_SetString(GETSTATE_FC->error, "ROTATION_MATRIX must be a 4x4 numpy array");    
             return -1;
         }
 
@@ -1021,13 +1005,7 @@ PyObject *pOptionDict;
         {
             Py_DECREF(pRotationMatrixF64);
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, e.what());
+            PyErr_SetString(GETSTATE_FC->error, e.what());
             return -1;
         }
 
@@ -1044,13 +1022,7 @@ PyObject *pOptionDict;
         if( !PyFloat_Check(pMagneticDeclination) )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_SetString(GETSTATE(m)->error, "MAGNETIC_DECLINATION must be a floating point number");
+            PyErr_SetString(GETSTATE_FC->error, "MAGNETIC_DECLINATION must be a floating point number");
             return -1;
         }
 
@@ -1102,13 +1074,7 @@ PyObject *pOptionDict;
     catch(scanlib::scanlib_exception e)
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_Format(GETSTATE(m)->error, "Error from Riegl lib: %s", e.what());
+        PyErr_Format(GETSTATE_FC->error, "Error from Riegl lib: %s", e.what());
         return -1;
     }   
 
@@ -1126,13 +1092,7 @@ PyObject *pOptionDict;
         if( api_major != RIEGL_WFM_MAJOR )
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_Format(GETSTATE(m)->error, "Mismatched libraries - Riegl waveform lib differs in major version number. "
+            PyErr_Format(GETSTATE_FC->error, "Mismatched libraries - Riegl waveform lib differs in major version number. "
                 "Was compiled against version %d.%d. Now running with %d.%d\n", 
                 RIEGL_WFM_MAJOR, RIEGL_WFM_MINOR, (int)api_major, (int)api_minor);
             return -1;
@@ -1259,13 +1219,7 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
         catch(scanlib::scanlib_exception e)
         {
             // raise Python exception
-            PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-            // best way I could find for obtaining module reference
-            // from inside a class method. Not needed for Python < 3.
-            m = PyState_FindModule(&moduledef);
-#endif
-            PyErr_Format(GETSTATE(m)->error, "Error from Riegl lib: %s", e.what());
+            PyErr_Format(GETSTATE_FC->error, "Error from Riegl lib: %s", e.what());
             return NULL;
         }
     }
@@ -1319,13 +1273,7 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
     if( self->waveHandle == NULL )
     {
         // raise Python exception
-        PyObject *m;
-#if PY_MAJOR_VERSION >= 3
-        // best way I could find for obtaining module reference
-        // from inside a class method. Not needed for Python < 3.
-        m = PyState_FindModule(&moduledef);
-#endif
-        PyErr_SetString(GETSTATE(m)->error, "Waveform file not present (or passed to constructor)");
+        PyErr_SetString(GETSTATE_FC->error, "Waveform file not present (or passed to constructor)");
         return NULL;
     }
 

@@ -56,6 +56,10 @@ def getCmdargs():
         help="Multiple input files will be combined in this way")
     p.add_argument("--windowsize", type=float, 
         help="Window size to use for each processing block")
+    p.add_argument("--drivername", 
+        help="GDAL driver to use for the output image file")
+    p.add_argument("--driveroptions", nargs="+",
+        help="Creation options to pass to the output format driver, e.g. COMPRESS=LZW")
     p.add_argument("-m", "--module", help="Extra modules that need to be " + 
         "imported for use by --function")
     p.add_argument("-q", "--quiet", default=False, action='store_true', 
@@ -89,4 +93,6 @@ def run():
         cmdargs.attributes, cmdargs.function,
         cmdargs.type, cmdargs.background, cmdargs.binsize, cmdargs.module,
         cmdargs.quiet, footprint=cmdargs.footprint, 
-        windowSize=cmdargs.windowsize)
+        windowSize=cmdargs.windowsize, driverName=cmdargs.drivername,
+        driverOptions=cmdargs.driveroptions)
+

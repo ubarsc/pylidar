@@ -151,6 +151,7 @@ class LVISBinFile(generic.LiDARFile):
 
         self.lvisFile = _lvisbin.File(lcename, lgename, lgwname, point_from)
         self.range = None
+        self.lastRange = None
         self.lastPoints = None
         self.lastPulses = None
         self.lastWaveformInfo = None
@@ -202,14 +203,15 @@ class LVISBinFile(generic.LiDARFile):
         """
         Internal method. Just reads into the self.last* fields
         """
-        pulses, points, info, recv, trans = self.lvisFile.readData(
+        if self.lastRange is None or self.range != self.lastRange:
+            pulses, points, info, recv, trans = self.lvisFile.readData(
                     self.range.startPulse, self.range.endPulse)
-        self.lastRange = copy.copy(self.range)
-        self.lastPoints = points
-        self.lastPulses = pulses
-        self.lastWaveformInfo = info
-        self.lastReceived = recv
-        self.lastTransmitted = trans
+            self.lastRange = copy.copy(self.range)
+            self.lastPoints = points
+            self.lastPulses = pulses
+            self.lastWaveformInfo = info
+            self.lastReceived = recv
+            self.lastTransmitted = trans
 
     def readPointsForRange(self, colNames=None):
         """
@@ -220,7 +222,7 @@ class LVISBinFile(generic.LiDARFile):
         colNames can be a list of column names to return. By default
         all columns are returned.
         """
-        self.readData()                            
+        self.readData()
         return self.subsetColumns(self.lastPoints, colNames)
         
     def readPulsesForRange(self, colNames=None):

@@ -37,6 +37,7 @@ from pylidar.toolbox.translate import ascii2spdv4
 from pylidar.toolbox.translate import lvisbin2spdv4
 from pylidar.toolbox.translate import lvishdf52spdv4
 from pylidar.toolbox.translate import pulsewaves2spdv4
+from pylidar.toolbox.translate import spdv42pulsewaves
 
 def getCmdargs():
     """
@@ -46,7 +47,7 @@ def getCmdargs():
     p.add_argument("-i", "--input", help="Input file name")
     p.add_argument("-o", "--output", help="Output file name")
     p.add_argument("-f", "--format", help="Output format", 
-        choices=['SPDV4', 'LAS'])
+        choices=['SPDV4', 'LAS', 'PULSEWAVES'])
     p.add_argument("--spatial", default=False, action="store_true", 
         help="Process the data spatially. Default is False and if True " + 
             "requires a spatial index in the input.")
@@ -221,6 +222,9 @@ def run():
         pulsewaves2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.scaling, 
                 cmdargs.null, cmdargs.constcol)
+
+    elif inFormat == 'SPDV4' and cmdargs.format == 'PULSEWAVES':
+        spdv42pulsewaves.translate(info, cmdargs.input, cmdargs.output)
 
     else:
         msg = 'Cannot convert between formats %s and %s' 
