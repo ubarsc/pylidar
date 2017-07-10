@@ -136,33 +136,13 @@ def addLasDriver(extModules, cxxFlags):
     if 'LASTOOLS_ROOT' in os.environ:
         print('Building Las Extension...')
         lastoolsRoot = os.environ['LASTOOLS_ROOT']
-        # do extra check of name of lib. By default it is 'liblas'
-        # but potentially renamed to 'laslib' so it doesn't conflict with 
-        # Howard Butler's lib of the same name. lastools on the Conda
-        # 'rios' channel does this. 
-        if sys.platform == 'win32':
-            prefix = ''
-        else:
-            prefix = 'lib'
-        laslibwildcard = os.path.join(lastoolsRoot, 'lib', prefix + 'laslib.*')
-        liblaswildcard = os.path.join(lastoolsRoot, 'lib', prefix + 'las.*')
-        if len(glob.glob(laslibwildcard)) > 0:
-            print('Found laslib')
-            lasLib = 'laslib'
-        elif len(glob.glob(liblaswildcard)) > 0:
-            print('Found liblas')
-            lasLib = 'las'
-        else:
-            print('Found neither laslib not liblas')
-            print('Assuming liblas')
-            lasLib = 'las'
 
         lasModule = Extension(name='pylidar.lidarformats._las',
                 sources=['src/las.cpp', 'src/pylidar.c'],
                 include_dirs=[os.path.join(lastoolsRoot, 'include')],
                 extra_compile_args=cxxFlags,
                 define_macros = [NUMPY_MACROS],
-                libraries=[lasLib],
+                libraries=['las'],
                 library_dirs=[os.path.join(lastoolsRoot, 'lib')])
                 
         extModules.append(lasModule)
