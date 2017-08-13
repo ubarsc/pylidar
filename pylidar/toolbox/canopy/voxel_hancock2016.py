@@ -67,12 +67,13 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         # TODO: check DEM is aligned to the voxel grid
         otherargs.scangrids["gvox"] = numpy.zeros(nVox, dtype=numpy.uint8)
         if otherargs.externaldem is not None:
+            nPix = otherargs.nX * otherargs.nY
             x, y = numpy.meshgrid(numpy.arange(otherargs.nX),numpy.arange(otherargs.nY))
             x = x.astype(numpy.float32) * otherargs.binSizeDem + otherargs.xMinDem
             y = otherargs.yMaxDem - y.astype(numpy.float32) * otherargs.binSizeDem 
-            xi = ((x.reshape(nVox) - otherargs.bounds[0]) / otherargs.voxelsize[0]).astype(numpy.uint)
-            yi = ((y.reshape(nVox) - otherargs.bounds[1]) / otherargs.voxelsize[1]).astype(numpy.uint)
-            zi = ((otherargs.dataDem.reshape(nVox) - otherargs.bounds[2]) / otherargs.voxelsize[2]).astype(numpy.uint)
+            xi = ((x.reshape(nPix) - otherargs.bounds[0]) / otherargs.voxelsize[0]).astype(numpy.uint)
+            yi = ((y.reshape(nPix) - otherargs.bounds[1]) / otherargs.voxelsize[1]).astype(numpy.uint)
+            zi = ((otherargs.dataDem.reshape(nPix) - otherargs.bounds[2]) / otherargs.voxelsize[2]).astype(numpy.uint)
             inside = (xi >= 0) & (xi < otherargs.nX) & (yi >= 0) & (yi < otherargs.nY) & (zi >= 0) & (zi < otherargs.nZ)    
             vidx = xi + otherargs.nX * yi + otherargs.nX * otherargs.nY * zi
             otherargs.scangrids["gvox"][vidx[inside]] = 1
@@ -95,7 +96,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
                  driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
             otherargs.scangrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
             for i in range(otherargs.nZ):
-                iw.setLayer(otherargs.scangrids[gridname][i,:,:], layerNum=i)
+                iw.setLayer(otherargs.scangrids[gridname][i,:,:], layerNum=i+1)
             iw.close()
    
     # calculate vertical cover profiles using conditional probability
@@ -111,7 +112,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
              driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
         otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
         for i in range(otherargs.nZ):
-            iw.setLayer(otherargs.outgrids[gridname][i,:,:], layerNum=i)
+            iw.setLayer(otherargs.outgrids[gridname][i,:,:], layerNum=i+1)
         iw.close()
    
 
