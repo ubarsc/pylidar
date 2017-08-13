@@ -92,7 +92,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         # write output scan voxel arrays to image files
         for gridname in scanOutputs:
             outfile = "%s.%s.%s" % (os.path.splitext(infile)[0], gridname, outputSuffix)
-            iw = canopycommon.ImageWriter(outfile, tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize, \
+            iw = canopycommon.ImageWriter(outfile, tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize[0], \
                  driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
             otherargs.scangrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
             for i in range(otherargs.nZ):
@@ -108,7 +108,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     # write output summary voxel arrays to image files
     summaryOutputs = ["scan"]
     for i,gridname in enumerate(summaryOutputs):   
-        iw = canopycommon.ImageWriter(outfiles[i], tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize, \
+        iw = canopycommon.ImageWriter(outfiles[i], tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize[0], \
              driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
         otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
         for i in range(otherargs.nZ):
