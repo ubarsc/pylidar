@@ -21,6 +21,7 @@ Functions for voxelization of TLS scans (Hancock et al., 2016)
 from __future__ import print_function, division
 
 import os
+import sys
 import numpy
 import collections
 from numba import jit
@@ -64,20 +65,18 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         otherargs.scangrids["wcov"] = numpy.zeros(nVox, dtype=numpy.float32)
         
         # set ground boundary for voxel traversal
-        # TODO: check DEM is aligned to the voxel grid
-        otherargs.scangrids["gvox"] = numpy.zeros(nVox, dtype=numpy.uint8)
-        if otherargs.externaldem is not None:
-            nPix = otherargs.nX * otherargs.nY
-            x, y = numpy.meshgrid(numpy.arange(otherargs.nX),numpy.arange(otherargs.nY))
-            x = x.astype(numpy.float32) * otherargs.binSizeDem + otherargs.xMinDem
-            y = otherargs.yMaxDem - y.astype(numpy.float32) * otherargs.binSizeDem 
-            xi = ((x.reshape(nPix) - otherargs.bounds[0]) / otherargs.voxelsize[0]).astype(numpy.uint)
-            yi = ((y.reshape(nPix) - otherargs.bounds[1]) / otherargs.voxelsize[1]).astype(numpy.uint)
-            zi = ((otherargs.dataDem.reshape(nPix) - otherargs.bounds[2]) / otherargs.voxelsize[2]).astype(numpy.uint)
-            inside = (xi >= 0) & (xi < otherargs.nX) & (yi >= 0) & (yi < otherargs.nY) & (zi >= 0) & (zi < otherargs.nZ)    
-            vidx = xi + otherargs.nX * yi + otherargs.nX * otherargs.nY * zi
-            otherargs.scangrids["gvox"][vidx[inside]] = 1
-
+        if otherargs.externaldem is not None:                    
+            if (otherargs.dataDem.shape[1] != otherargs.nX) or (otherargs.dataDem.shape[0] != otherargs.nY):
+                msg = 'External DEM size X and Y dimensions must be the same as the voxel grid'
+                raise SpatialException(msg)            
+            otherargs.scangrids["gvox"] = numpy.zeros((otherargs.nZ,otherargs.nY,otherargs.nX), dtype=numpy.uint8)
+            x,y = numpy.meshgrid(numpy.arange(otherargs.nX), numpy.arange(otherargs.nY))            
+            z = ((otherargs.dataDem - otherargs.bounds[2]) / otherargs.voxelsize[2]).astype(numpy.uint)            
+            otherargs.scangrids["gvox"][z,y,x] = 1
+            otherargs.scangrids["gvox"] = otherargs.scangrids["gvox"].reshape(nVox)           
+        else:
+            otherargs.scangrids["gvox"] = numpy.zeros(nVox, dtype=numpy.uint8)
+        
         # run the voxelization                
         print("Voxel traversing %s" % infile)
         dataFiles = canopycommon.prepareInputFiles(infiles, otherargs, index=i)       
@@ -91,7 +90,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         
         # write output scan voxel arrays to image files
         for gridname in scanOutputs:
-            outfile = "%s.%s.%s" % (os.path.splitext(infile)[0], gridname, outputSuffix)
+            outfile = "%s.%s%s" % (os.path.splitext(infile)[0], gridname, outputSuffix)
             iw = canopycommon.ImageWriter(outfile, tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize[0], \
                  driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
             otherargs.scangrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
@@ -102,12 +101,10 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     # calculate vertical cover profiles using conditional probability
     
     
-    # calculate pavd profiles
-    
     
     # write output summary voxel arrays to image files
     summaryOutputs = ["scan"]
-    for i,gridname in enumerate(summaryOutputs):   
+    for i,gridname in enumerate(summaryOutputs):
         iw = canopycommon.ImageWriter(outfiles[i], tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize[0], \
              driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
         otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
