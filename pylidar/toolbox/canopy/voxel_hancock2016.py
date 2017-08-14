@@ -21,11 +21,11 @@ Functions for voxelization of TLS scans (Hancock et al., 2016)
 from __future__ import print_function, division
 
 import os
-import sys
 import numpy
 import collections
 from numba import jit
 
+from pylidar.toolbox import spatial
 from pylidar.toolbox.canopy import canopycommon
 from pylidar import lidarprocessor
 
@@ -55,7 +55,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     
     # loop through each scan
     outputSuffix = os.path.splitext(outfiles[0])[1]
-    scanOutputs = ["btot","pgap","wcov"]
+    scanOutputs = ["hits","miss","btot","pgap","wcov"]
     for i,infile in enumerate(infiles):
         
         # initialize scan voxel arrays 
@@ -68,7 +68,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         if otherargs.externaldem is not None:                    
             if (otherargs.dataDem.shape[1] != otherargs.nX) or (otherargs.dataDem.shape[0] != otherargs.nY):
                 msg = 'External DEM size X and Y dimensions must be the same as the voxel grid'
-                raise SpatialException(msg)            
+                raise spatial.SpatialException(msg)            
             otherargs.scangrids["gvox"] = numpy.zeros((otherargs.nZ,otherargs.nY,otherargs.nX), dtype=numpy.uint8)
             x,y = numpy.meshgrid(numpy.arange(otherargs.nX), numpy.arange(otherargs.nY))            
             z = ((otherargs.dataDem - otherargs.bounds[2]) / otherargs.voxelsize[2]).astype(numpy.uint)            
@@ -91,8 +91,8 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         # write output scan voxel arrays to image files
         for gridname in scanOutputs:
             outfile = "%s.%s%s" % (os.path.splitext(infile)[0], gridname, outputSuffix)
-            iw = canopycommon.ImageWriter(outfile, tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize[0], \
-                 driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
+            iw = spatial.ImageWriter(outfile, tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize[0], \
+                 driverName=otherargs.rasterdriver, epsg=otherargs.proj[0], numBands=otherargs.nZ)
             otherargs.scangrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
             for i in range(otherargs.nZ):
                 iw.setLayer(otherargs.scangrids[gridname][i,:,:], layerNum=i+1)
@@ -105,11 +105,11 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     # write output summary voxel arrays to image files
     summaryOutputs = ["scan"]
     for i,gridname in enumerate(summaryOutputs):
-        iw = canopycommon.ImageWriter(outfiles[i], tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize[0], \
-             driverName=otherargs.rasterdriver, wkt=otherargs.proj[0], numBands=otherargs.nZ)
+        iw = spatial.ImageWriter(outfiles[i], tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize[0], \
+             driverName=otherargs.rasterdriver, epsg=otherargs.proj[0], numBands=otherargs.nZ)
         otherargs.outgrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
-        for i in range(otherargs.nZ):
-            iw.setLayer(otherargs.outgrids[gridname][i,:,:], layerNum=i+1)
+        for j in range(otherargs.nZ):
+            iw.setLayer(otherargs.outgrids[gridname][j,:,:], layerNum=i+1)
         iw.close()
    
 
@@ -236,11 +236,11 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
         else:
             tVoxelZ = (z + 1) / nZ
             stepZ = 0            
-                
+        
         voxelMaxX = bounds[0] + tVoxelX * voxDimX
         voxelMaxY = bounds[1] + tVoxelY * voxDimY
         voxelMaxZ = bounds[2] + tVoxelZ * voxDimZ
-
+        
         if dx == 0:
             tMaxX = tmax
             tDeltaX = tmax
@@ -260,9 +260,9 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
             tDeltaZ = tmax
         else:
             tMaxZ = tmin + (voxelMaxZ - startZ) / dz
-            tDeltaZ = voxelSize[2] / abs(dz) 
+            tDeltaZ = voxelSize[2] / abs(dz)
         
-        g = 0
+        gnd = 0
         whit = 1.0
         wmiss = 0.0
         if number_of_returns > 0:
@@ -274,15 +274,15 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
                         
             vidx = int(x + nX * y + nX * nY * z)
             
-            if (gvoxArr[vidx] > 0) or (g == 1):
-                missArr[vidx] += 1.0                
-                g = 1
+            if (gvoxArr[vidx] > 0) or (gnd == 1):
+                missArr[vidx] += 1.0
+                gnd = 1
             else:
                 hitsArr[vidx] += whit
                 missArr[vidx] += wmiss
                 
             for i in range(number_of_returns):
-                if (vidx == voxIdx[i]) and (g == 0):
+                if (vidx == voxIdx[i]) and (gnd == 0):
                     wcntArr[vidx] += w
                     whit -= w
                     wmiss += w

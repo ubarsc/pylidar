@@ -25,6 +25,7 @@ from pylidar.lidarformats import generic
 from pylidar import lidarprocessor
 from rios import cuiprogress
 
+from pylidar.toolbox import spatial
 from pylidar.toolbox.canopy import canopycommon
 from pylidar.toolbox.canopy import pavd_calders2014
 from pylidar.toolbox.canopy import voxel_hancock2016
@@ -46,7 +47,7 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
         dataFiles = canopycommon.prepareInputFiles(infiles, otherargs)
         if otherargs.externaldem is not None:
             otherargs.dataDem, otherargs.xMinDem, otherargs.yMaxDem, otherargs.binSizeDem = \
-                canopycommon.readImageLayer(otherargs.externaldem)
+                spatial.readImageLayer(otherargs.externaldem)
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
         pavd_calders2014.run_pavd_calders2014(dataFiles, controls, otherargs, outfiles[0])     
@@ -55,7 +56,7 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
         
         if otherargs.externaldem is not None:
             otherargs.dataDem, otherargs.xMinDem, otherargs.yMaxDem, otherargs.binSizeDem = \
-                canopycommon.readImageLayer(otherargs.externaldem)              
+                spatial.readImageLayer(otherargs.externaldem)              
         controls.setSpatialProcessing(False)
         controls.setWindowSize(512)
         voxel_hancock2016.run_voxel_hancock2016(infiles, controls, otherargs, outfiles)     
