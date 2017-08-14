@@ -55,7 +55,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     
     # loop through each scan
     outputSuffix = os.path.splitext(outfiles[0])[1]
-    scanOutputs = ["hits","miss","btot","pgap","wcov"]
+    scanOutputs = ["btot","pgap","wcov"]
     for i,infile in enumerate(infiles):
         
         # initialize scan voxel arrays 
@@ -86,7 +86,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         otherargs.outgrids["scan"] += numpy.uint8(otherargs.scangrids["hits"] > 0)
         otherargs.scangrids["btot"] = numpy.uint16(otherargs.scangrids["hits"] + otherargs.scangrids["miss"])
         otherargs.scangrids["pgap"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["hits"] / otherargs.scangrids["btot"], numpy.nan)
-        otherargs.scangrids["wcov"] = numpy.where(otherargs.scangrids["btot"] > 0, otherargs.scangrids["wcov"] / otherargs.scangrids["hits"], numpy.nan)
+        otherargs.scangrids["wcov"] = numpy.where(otherargs.scangrids["hits"] > 0, otherargs.scangrids["wcov"] / otherargs.scangrids["hits"], 0)
         
         # write output scan voxel arrays to image files
         for gridname in scanOutputs:
@@ -274,7 +274,7 @@ def traverseVoxels(x0, y0, z0, x1, y1, z1, dx, dy, dz, nX, nY, nZ, voxDimX, voxD
                         
             vidx = int(x + nX * y + nX * nY * z)
             
-            if (gvoxArr[vidx] > 0) or (gnd == 1):
+            if (gvoxArr[vidx] == 1) or (gnd == 1):
                 missArr[vidx] += 1.0
                 gnd = 1
             else:
