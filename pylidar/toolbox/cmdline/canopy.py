@@ -73,8 +73,8 @@ def getCmdargs():
         print("Must specify output CSV file name") 
         p.print_help()
         sys.exit()
-    elif (nOutFiles != 1) and (cmdargs.metric == "VOXEL_HANCOCK2016"):
-        print("Must specify one output GDAL image file names (NSCANS). More outputs will be added as implementation progresses.") 
+    elif (nOutFiles != 2) and (cmdargs.metric == "VOXEL_HANCOCK2016"):
+        print("Must specify two output GDAL image file names (NSCANS,COVER). More outputs will be added as implementation progresses.") 
         p.print_help()
         sys.exit()
     
