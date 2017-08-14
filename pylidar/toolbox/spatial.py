@@ -303,10 +303,10 @@ class ImageWriter(object):
             proj.ImportFromEPSG(self.epsg)
             self.ds.SetProjection(proj.ExportToWkt())
 
-            # Set the null value on every band
+        # Set the null value on every band
         if self.nullVal is not None:
             for i in range(self.numBands):
-                band = ds.GetRasterBand(i+1)
+                band = self.ds.GetRasterBand(i+1)
                 band.SetNoDataValue(self.nullVal)
 
     def setLayer(self, array, layerNum=1):
