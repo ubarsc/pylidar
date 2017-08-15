@@ -141,22 +141,21 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
                  driverName=otherargs.rasterdriver, epsg=otherargs.proj[0], numBands=otherargs.nZ, nullVal=VOXEL_NULL)
             otherargs.scangrids[gridname].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
             for i in range(otherargs.nZ):
-                iw.setLayer(otherargs.scangrids[gridname][i,:,:], layerNum=i+1)
+                iw.setLayer(otherargs.scangrids[gridname][i], layerNum=i+1)
             iw.close()
     
     # calculate vertical cover profiles using conditional probability
     otherargs.outgrids["cover"] = numpy.where(wtot > 0, otherargs.outgrids["cover"] / wtot, 0)
     otherargs.outgrids["cover"].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
     otherargs.outgrids["gvox"].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
+    otherargs.outgrids["gvox"] = numpy.cumsum(otherargs.outgrids["gvox"][::-1], axis=0)[::-1]
     n = otherargs.nZ - 1
     for i in range(n-1,-1,-1):
-        p_o = otherargs.outgrids["cover"][i+1,:,:]
-        p_i = otherargs.outgrids["cover"][i,:,:]
-        otherargs.outgrids["cover"][i,:,:] = p_o + (1 - p_o) * p_i
-        if otherargs.externaldem is not None:
-            otherargs.outgrids["gvox"][i,:,:] = otherargs.outgrids["gvox"][i+1,:,:]
-            otherargs.outgrids["cover"][i,:,:] = numpy.where(otherargs.outgrids["gvox"][i,:,:] == 0, \
-                otherargs.outgrids["cover"][i,:,:], VOXEL_NULL)
+        p_o = otherargs.outgrids["cover"][i+1]
+        p_i = otherargs.outgrids["cover"][i]
+        otherargs.outgrids["cover"][i] = p_o + (1 - p_o) * p_i
+        otherargs.outgrids["cover"][i] = numpy.where(otherargs.outgrids["gvox"][i] == 0, \
+            otherargs.outgrids["cover"][i], VOXEL_NULL)
     
     # write output summary voxel arrays to image files
     otherargs.outgrids["scans"].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
@@ -165,7 +164,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         iw = spatial.ImageWriter(outfiles[i], tlx=otherargs.bounds[0], tly=otherargs.bounds[4], binSize=otherargs.voxelsize[0], \
              driverName=otherargs.rasterdriver, epsg=otherargs.proj[0], numBands=otherargs.nZ, nullVal=VOXEL_NULL)
         for j in range(otherargs.nZ):
-            iw.setLayer(otherargs.outgrids[gridname][j,:,:], layerNum=j+1)
+            iw.setLayer(otherargs.outgrids[gridname][j], layerNum=j+1)
         iw.close()
    
 
