@@ -125,11 +125,11 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         # calculate scan grids
         nshots = otherargs.scangrids["miss"] + otherargs.scangrids["hits"]
         otherargs.scangrids["pgap"] = numpy.where(nshots > 0, otherargs.scangrids["miss"] / nshots, VOXEL_NULL)
-        w = numpy.where(nshots > 0, nshots / (nshots + otherargs.scangrids["occl"]) * otherargs.scangrids["plen"], 0)
+        w = numpy.where(nshots > 0, (nshots / (nshots + otherargs.scangrids["occl"])) * otherargs.scangrids["plen"], 0)
         
         # update summary grids
         otherargs.outgrids["scans"] += numpy.uint8(nshots > 0)
-        otherargs.outgrids["cover"] += numpy.where(nshots > 0, (1 - otherargs.scangrids["pgap"]) * w, VOXEL_NULL)
+        otherargs.outgrids["cover"] += numpy.where(nshots > 0, (1 - otherargs.scangrids["pgap"]) * w, 0)
         wtot += w
         otherargs.outgrids["class"] = classify_voxels(otherargs.scangrids["hits"], otherargs.scangrids["miss"], \
             otherargs.scangrids["occl"], otherargs.outgrids["class"], ground=otherargs.scangrids["gvox"])
@@ -145,7 +145,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
             iw.close()
     
     # calculate vertical cover profiles using conditional probability
-    otherargs.outgrids["cover"] = numpy.where(otherargs.outgrids["cover"] == VOXEL_NULL, numpy.nan, otherargs.outgrids["cover"] / wtot)
+    otherargs.outgrids["cover"] = numpy.where(wtot > 0, otherargs.outgrids["cover"] / wtot, numpy.nan)
     otherargs.outgrids["cover"].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
     n = otherargs.nZ - 1
     for i in range(n-1,-1,-1):
