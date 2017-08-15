@@ -91,6 +91,19 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     otherargs.outgrids["cover"] = numpy.zeros(nVox, dtype=numpy.float32)
     otherargs.outgrids["class"] = numpy.zeros(nVox, dtype=numpy.uint8)
     wtot = numpy.zeros(nVox, dtype=numpy.float32)
+        
+    # set ground boundary for voxel traversal
+    if otherargs.externaldem is not None:                    
+        if (otherargs.dataDem.shape[1] != otherargs.nX) or (otherargs.dataDem.shape[0] != otherargs.nY):
+            msg = 'External DEM size X and Y dimensions must be the same as the voxel grid'
+            raise spatial.SpatialException(msg)            
+        otherargs.outgrids["gvox"] = numpy.zeros((otherargs.nZ,otherargs.nY,otherargs.nX), dtype=numpy.uint8)
+        x,y = numpy.meshgrid(numpy.arange(otherargs.nX), numpy.arange(otherargs.nY))            
+        z = ((otherargs.dataDem - otherargs.bounds[2]) / otherargs.voxelsize[2]).astype(numpy.uint)            
+        otherargs.outgrids["gvox"][z,y,x] = 1
+        otherargs.outgrids["gvox"] = otherargs.outgrids["gvox"].reshape(nVox)
+    else:
+        otherargs.outgrids["gvox"] = numpy.zeros(nVox, dtype=numpy.uint8)    
     
     # loop through each scan
     outputSuffix = os.path.splitext(outfiles[0])[1]
@@ -103,19 +116,6 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         otherargs.scangrids["miss"] = numpy.zeros(nVox, dtype=numpy.float32)
         otherargs.scangrids["occl"] = numpy.zeros(nVox, dtype=numpy.float32)
         otherargs.scangrids["plen"] = numpy.ones(nVox, dtype=numpy.float32)
-        
-        # set ground boundary for voxel traversal
-        if otherargs.externaldem is not None:                    
-            if (otherargs.dataDem.shape[1] != otherargs.nX) or (otherargs.dataDem.shape[0] != otherargs.nY):
-                msg = 'External DEM size X and Y dimensions must be the same as the voxel grid'
-                raise spatial.SpatialException(msg)            
-            otherargs.scangrids["gvox"] = numpy.zeros((otherargs.nZ,otherargs.nY,otherargs.nX), dtype=numpy.uint8)
-            x,y = numpy.meshgrid(numpy.arange(otherargs.nX), numpy.arange(otherargs.nY))            
-            z = ((otherargs.dataDem - otherargs.bounds[2]) / otherargs.voxelsize[2]).astype(numpy.uint)            
-            otherargs.scangrids["gvox"][z,y,x] = 1
-            otherargs.scangrids["gvox"] = otherargs.scangrids["gvox"].reshape(nVox)
-        else:
-            otherargs.scangrids["gvox"] = numpy.zeros(nVox, dtype=numpy.uint8)
         
         # run the voxelization                
         print("Voxel traversing %s" % infile)
@@ -132,7 +132,7 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         otherargs.outgrids["cover"] += numpy.where(nshots > 0, (1 - otherargs.scangrids["pgap"]) * w, 0)
         wtot += w
         otherargs.outgrids["class"] = classify_voxels(otherargs.scangrids["hits"], otherargs.scangrids["miss"], \
-            otherargs.scangrids["occl"], otherargs.outgrids["class"], ground=otherargs.scangrids["gvox"])
+            otherargs.scangrids["occl"], otherargs.outgrids["class"], ground=otherargs.outgrids["gvox"])
         
         # write output scan voxel arrays to image files
         for gridname in scanOutputs:
@@ -147,14 +147,15 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
     # calculate vertical cover profiles using conditional probability
     otherargs.outgrids["cover"] = numpy.where(wtot > 0, otherargs.outgrids["cover"] / wtot, 0)
     otherargs.outgrids["cover"].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
+    otherargs.outgrids["gvox"].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
     n = otherargs.nZ - 1
     for i in range(n-1,-1,-1):
         p_o = otherargs.outgrids["cover"][i+1,:,:]
         p_i = otherargs.outgrids["cover"][i,:,:]
         otherargs.outgrids["cover"][i,:,:] = p_o + (1 - p_o) * p_i
         if otherargs.externaldem is not None:
-            otherargs.scangrids["gvox"][i,:,:] = otherargs.scangrids["gvox"][i+1,:,:]
-            otherargs.outgrids["cover"][i,:,:] = numpy.where(otherargs.scangrids["gvox"][i,:,:] == 0, \
+            otherargs.outgrids["gvox"][i,:,:] = otherargs.outgrids["gvox"][i+1,:,:]
+            otherargs.outgrids["cover"][i,:,:] = numpy.where(otherargs.outgrids["gvox"][i,:,:] == 0, \
                 otherargs.outgrids["cover"][i,:,:], VOXEL_NULL)
     
     # write output summary voxel arrays to image files
@@ -202,7 +203,7 @@ def runVoxelization(data, otherargs):
             pulses['NUMBER_OF_RETURNS'], otherargs.voxDimX, otherargs.voxDimY, otherargs.voxDimZ, \
             otherargs.nX, otherargs.nY, otherargs.nZ, otherargs.bounds, otherargs.voxelsize, \
             otherargs.scangrids["hits"], otherargs.scangrids["miss"], otherargs.scangrids["occl"], \
-            otherargs.scangrids["gvox"], otherargs.scangrids["plen"], voxIdx)
+            otherargs.outgrids["gvox"], otherargs.scangrids["plen"], voxIdx)
 
 
 @jit(nopython=True)
