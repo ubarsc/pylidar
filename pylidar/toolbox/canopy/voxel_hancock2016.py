@@ -145,14 +145,18 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
             iw.close()
     
     # calculate vertical cover profiles using conditional probability
-    otherargs.outgrids["cover"] = numpy.where(wtot > 0, otherargs.outgrids["cover"] / wtot, numpy.nan)
+    otherargs.outgrids["cover"] = numpy.where(wtot > 0, otherargs.outgrids["cover"] / wtot, 0)
     otherargs.outgrids["cover"].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
     n = otherargs.nZ - 1
     for i in range(n-1,-1,-1):
-        p_n = numpy.nansum(otherargs.outgrids["cover"][i+1:n,:,:], axis=0)
+        p_o = otherargs.outgrids["cover"][i+1,:,:]
         p_i = otherargs.outgrids["cover"][i,:,:]
-        otherargs.outgrids["cover"][i,:,:] = p_n + (1 - p_n) * numpy.where(numpy.isnan(p_i), 0.0, p_i)
-      
+        otherargs.outgrids["cover"][i,:,:] = p_o + (1 - p_o) * p_i
+        if otherargs.externaldem is not None:
+            otherargs.scangrids["gvox"][i,:,:] = otherargs.scangrids["gvox"][i+1,:,:]
+            otherargs.outgrids["cover"][i,:,:] = numpy.where(otherargs.scangrids["gvox"][i,:,:] == 0, \
+                otherargs.outgrids["cover"][i,:,:], VOXEL_NULL)
+    
     # write output summary voxel arrays to image files
     otherargs.outgrids["scans"].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
     otherargs.outgrids["class"].shape = (otherargs.nZ, otherargs.nY, otherargs.nX)
