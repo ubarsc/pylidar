@@ -53,7 +53,6 @@ def run(oldpath, newpath):
     otherargs.rptfile = None
     otherargs.gridsize = 20
     otherargs.gridbinsize = 5.0
-    otherargs.origin = [0.0,0.0]
     otherargs.excludedclasses = []
 
     inFile = os.path.join(oldpath, IMPORTED_SPD)
