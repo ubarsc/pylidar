@@ -62,7 +62,7 @@ def run(oldpath, newpath):
     inFile = os.path.join(oldpath, IMPORTED_SPD)
     outFile = os.path.join(newpath, CANOPY_CSV)
 
-    runCanopyMetric([inFile], outFile, "PAVD_CALDERS2014", otherargs)
+    runCanopyMetric([inFile], [outFile], "PAVD_CALDERS2014", otherargs)
 
     newData = numpy.genfromtxt(outFile, delimiter=',', names=True)
     oldData = numpy.genfromtxt(os.path.join(oldpath, CANOPY_CSV), 
