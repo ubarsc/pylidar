@@ -47,6 +47,8 @@ def run(oldpath, newpath):
     otherargs.minheight = 0.0
     otherargs.maxheight = 50.0
     otherargs.zenithbinsize = 5.0
+    otherargs.minazimuth = [0.0]
+    otherargs.maxazimuth = [360.0]
     otherargs.minzenith = [35.0]
     otherargs.maxzenith = [70.0]
     otherargs.planecorrection = False
@@ -54,6 +56,8 @@ def run(oldpath, newpath):
     otherargs.gridsize = 20
     otherargs.gridbinsize = 5.0
     otherargs.excludedclasses = []
+    otherargs.externaldem = None
+    otherargs.totalpaimethod = "HINGE"
 
     inFile = os.path.join(oldpath, IMPORTED_SPD)
     outFile = os.path.join(newpath, CANOPY_CSV)
