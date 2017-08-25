@@ -22,14 +22,10 @@ from __future__ import print_function
 
 import os
 import sys
-# If we fail to import the numpy version of setup, still try to proceed, as it is possibly
-# because we are being run by ReadTheDocs, and so we just need to be able to generate documentation. 
-try:
-    from numpy.distutils.core import setup, Extension
-    withExtensions = True
-except ImportError:
-    from distutils.core import setup
-    withExtensions = False
+from numpy.distutils.core import setup, Extension
+
+# don't build extensions if we are in readthedocs
+withExtensions = os.getenv('READTHEDOCS', default='False') != 'True'
 
 import pylidar
 
