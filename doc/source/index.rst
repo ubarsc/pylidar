@@ -168,6 +168,7 @@ Drivers
    lidarformats/ascii
    lidarformats/lvisbin
    lidarformats/lvishdf5
+   lidarformats/pulsewaves
    lidarformats/h5space
    lidarformats/gridindexutils
 
