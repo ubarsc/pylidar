@@ -128,11 +128,11 @@ def splitFileIntoTiles(infiles, binSize=1.0, blockSize=None,
     indexType is one of the INDEX_* constants.
     pulseIndexMethod is one of the PULSE_INDEX_* constants.
     footprint is one of lidarprocessor.UNION or lidarprocessor.INTERSECTION
-        and is how to combine extents if there is more than one file.
+    and is how to combine extents if there is more than one file.
     outputFormat is either 'SPDV4' or 'LAS'. 'LAS' outputs only supported
-        when input is 'LAS'.
+    when input is 'LAS'.
     buildPulses relevant for 'LAS' and determines whether to build the 
-        pulse structure or not. 
+    pulse structure or not. 
 
     returns the header of the first input file, the extent used and a list
     of (fname, extent) tuples that contain the information for 
