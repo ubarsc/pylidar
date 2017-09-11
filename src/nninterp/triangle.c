@@ -3135,7 +3135,7 @@ void info()
 /*                                                                           */
 /*****************************************************************************/
 
-void internalerror()
+void internalerror(void)
 {
   fflush(stdout);
   fprintf(stderr, "  Please report this bug to jrs@cs.berkeley.edu\n");
@@ -3775,7 +3775,7 @@ int alignment;
   } else {
     pool->alignbytes = wordsize;
   }
-  if (sizeof(VOID *) > pool->alignbytes) {
+  if (sizeof(VOID *) > (size_t)pool->alignbytes) {
     pool->alignbytes = sizeof(VOID *);
   }
   pool->itemwords = ((bytecount + pool->alignbytes - 1) / pool->alignbytes)
@@ -4167,7 +4167,7 @@ struct behavior *b;
   /*   integer index can occupy the same space as the subsegment pointers  */
   /*   or attributes or area constraint or extra nodes.                    */
   if ((b->voronoi || b->neighbors) &&
-      (trisize < 6 * sizeof(triangle) + sizeof(int))) {
+      ((size_t)trisize < 6 * sizeof(triangle) + sizeof(int))) {
     trisize = 6 * sizeof(triangle) + sizeof(int);
   }
   /* Having determined the memory size of a triangle, initialize the pool. */
@@ -4697,7 +4697,7 @@ struct osub *newsubseg;
 /*                                                                           */
 /*****************************************************************************/
 
-void exactinit()
+void exactinit(void)
 {
   REAL half;
   REAL check, lastcheck;
@@ -11122,7 +11122,7 @@ FILE *polyfile;
   int end[2];
   int killvertexindex;
   int incorners;
-  int segmentmarkers;
+  int segmentmarkers=0;
   int boundmarker;
   int aroundvertex;
   long hullsize;
@@ -13140,7 +13140,7 @@ struct behavior *b;
 
 #ifndef CDT_ONLY
 
-void precisionerror()
+void precisionerror(void)
 {
   fprintf(stderr, "Try increasing the area criterion and/or reducing the minimum\n");
   fprintf(stderr, "  allowable angle so that tiny triangles are not created.\n");

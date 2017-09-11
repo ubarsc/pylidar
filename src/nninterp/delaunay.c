@@ -107,7 +107,7 @@ static void tio_destroy(struct triangulateio* tio)
         free(tio->normlist);
 }
 
-static delaunay* delaunay_create()
+static delaunay* delaunay_create(void)
 {
     delaunay* d = malloc(sizeof(delaunay));
 
