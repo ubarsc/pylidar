@@ -257,6 +257,22 @@ def addPulseWavesDriver(extModules, cxxFlags):
         print('PulseWaves library not found.')
         print('If installed set $PULSEWAVES_ROOT to the install location of pulsewaves https://github.com/PulseWaves/PulseWaves')
 
+def addNNInterp(extModules):
+    """
+    Adds the nninterp toolbox module.
+    """
+    nninterp = Extension(name='pylidar.toolbox.nninterp',
+                sources = ['src/nninterp/performNNInterp.c', 
+                    'src/nninterp/delaunay.c', 'src/nninterp/hash.c', 
+                    'src/nninterp/istack.c', 'src/nninterp/lpi.c', 
+                    'src/nninterp/minell.c', 'src/nninterp/nnai.c', 
+                    'src/nninterp/nncommon-vulnerable.c', 
+                    'src/nninterp/nncommon.c', 'src/nninterp/nnpi.c', 
+                    'src/nninterp/preader.c', 'src/nninterp/triangle.c'],
+                define_macros = [NUMPY_MACROS, ('ANSI_DECLARATORS', None)])
+    print('Building nninterp Toolbox Extension...')
+    extModules.append(nninterp)
+
 # get any C++ flags
 cxxFlags = getExtraCXXFlags()
 # work out if we need to build any of the C/C++ extension
@@ -269,6 +285,7 @@ if withExtensions:
     addLVISBinDriver(externalModules, cxxFlags)
     addInsidePoly(externalModules)
     addPulseWavesDriver(externalModules, cxxFlags)
+    addNNInterp(externalModules)
 
 if NO_INSTALL_CMDLINE:
     scriptList = None
