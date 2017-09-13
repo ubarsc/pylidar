@@ -14,7 +14,10 @@ grid, stepping through the data in small blocks, etc.,
 allowing the programmer to concentrate on the processing involved. 
 It is licensed under GPL 3.
 
-See :doc:`spdv4format` for description of the SPD V4 file format. 
+See :doc:`spdv4format` for description of the SPD V4 file format. Supported 
+formats are: SPD V3, SPD V4, Riegl RXP, LAS, LVIS, ASCII and Pulsewaves 
+(additional libraries may be required).
+
 
 See the :doc:`arrayvisualisation` page to understand how numpy 
 arrays are used in PyLidar.
