@@ -1,5 +1,3 @@
-Note: Some source has different license - see src/nninterp directory.
-
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 

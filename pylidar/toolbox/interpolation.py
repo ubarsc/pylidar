@@ -39,10 +39,10 @@ try:
 except ImportError as cgalInterpErr:
     haveCGALInterpPy = False
     
-# Preferred interpolator - now part of toolbox
+# Preferred interpolator - see https://bitbucket.org/petebunting/pynninterp
 haveNNInterp = True
 try:
-    from . import nninterp
+    import pynninterp
 except ImportError:
     haveNNInterp = False
 
@@ -93,7 +93,7 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method='pynn'):
 
     elif method == 'pynn':
         if not haveNNInterp:
-            msg = "The nninterp python bindings required for natural neighbour interpolation and could not be imported"
+            msg = "The pynninterp python bindings required for natural neighbour interpolation and could not be imported"
             raise InterpolationError(msg)
         xVals = xVals.astype(numpy.float64)
         yVals = yVals.astype(numpy.float64)
@@ -105,14 +105,14 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method='pynn'):
                             gridCoords[1].astype(numpy.float64))
             
         try:
-            out = nninterp.NaturalNeighbour(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+            out = pynninterp.NaturalNeighbour(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
         except Exception as e:
-            # rethrow nninterp exception type so it can be more easily caught
+            # rethrow pynninterp exception type so it can be more easily caught
             raise InterpolationError(str(e))
 
     elif method == 'pylinear':
         if not haveNNInterp:
-            msg = "The nninterp python bindings required for linear (TIN?) interpolation and could not be imported"
+            msg = "The pynninterp python bindings required for linear (TIN?) interpolation and could not be imported"
             raise InterpolationError(msg)
         xVals = xVals.astype(numpy.float64)
         yVals = yVals.astype(numpy.float64)
@@ -124,7 +124,7 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method='pynn'):
                             gridCoords[1].astype(numpy.float64))
 
         try:
-            out = nninterp.Linear(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
+            out = pynninterp.Linear(xVals, yVals, zVals, gridCoords[0], gridCoords[1])
         except Exception as e:
             # rethrow pynninterp exception type so it can be more easily caught
             raise InterpolationError(str(e))
@@ -152,7 +152,7 @@ def interpPoints(xVals, yVals, zVals, ptCoords, method='pynn'):
             msg = "The nninterp python bindings required for natural neighbour interpolation and could not be imported"
             raise InterpolationError(msg)
 
-        out = nninterp.NaturalNeighbourPts(xVals, yVals, zVals, ptCoords)
+        out = pynninterp.NaturalNeighbourPts(xVals, yVals, zVals, ptCoords)
 
     else:
         raise InterpolationError("Interpolaton method '%s' was not recognised" % method)
