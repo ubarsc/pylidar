@@ -34,6 +34,8 @@ OUTPUT_DEM = 'testsuite16.img'
 
 BINSIZE = 1.0
 
+REQUIRED_FORMATS = ["PYNNINTERP"]
+
 def run(oldpath, newpath):
     """
     Runs the 16th basic test suite. Tests:
@@ -51,7 +53,8 @@ def run(oldpath, newpath):
 
     pxlCoords = spatial.getBlockCoordArrays(xMin, yMax, ncols, nrows, BINSIZE)
 
-    dem = interpolation.interpGrid(data['X'], data['Y'], data['Z'], pxlCoords, 'pynn') 
+    dem = interpolation.interpGrid(data['X'], data['Y'], data['Z'], pxlCoords, 
+                    method='pynn') 
 
     iw = spatial.ImageWriter(outputDEM, tlx=xMin, tly=yMax, binSize=BINSIZE)
     iw.setLayer(dem)

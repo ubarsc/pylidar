@@ -29,6 +29,7 @@ import importlib
 from . import utils
 # testsuite1 etc loaded dynamically below
 from pylidar import lidarprocessor
+from pylidar.toolbox import interpolation # so we can check we have pynninterp etc
 
 def getCmdargs():
     """
@@ -120,8 +121,18 @@ def run():
                         print('Skipping', name, 'due to missing format driver', fmt)
                         doTest = False
                         break
+                elif fmt == "PYNNINTERP":
+                    if not interpolation.havePyNNInterp:
+                        print('Skipping', name, 'due to missing feature', fmt)
+                        doTest = False
+                        break
+                elif fmt == "CGALINTERP":
+                    if not interpolation.haveCGALInterpPy:
+                        print('Skipping', name, 'due to missing feature', fmt)
+                        doTest = False
+                        break
                 else:
-                    msg = 'Unknown required format %s' % fmt
+                    msg = 'Unknown required format/feature %s' % fmt
                     raise ValueError(msg)
 
         if doTest:
@@ -143,7 +154,8 @@ def run():
     if testsIgnored != 0:
         print(testsIgnored, 'test(s) ignored as directed by user')
     if testsIgnoredNoDriver != 0:
-        print(testsIgnoredNoDriver, 'test(s) skipped because of missing format drivers')
+        print(testsIgnoredNoDriver, 
+            'test(s) skipped because of missing format drivers or features')
 
     if not cmdargs.noremove:
         shutil.rmtree(oldpath)

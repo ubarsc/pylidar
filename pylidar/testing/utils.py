@@ -28,11 +28,12 @@ import shutil
 import hashlib
 import tarfile
 import subprocess
+import numpy
 from pylidar import lidarprocessor
 from rios import cuiprogress
 from rios.parallel.jobmanager import find_executable
 
-TESTSUITE_VERSION = 8
+TESTSUITE_VERSION = 9
 """
 Version of the test suite. Increment each change.
 Used to ensure the tarfile matches what we expect.
@@ -402,6 +403,20 @@ def compareImageFiles(oldfile, newfile):
         msg = 'image checksums do not match'
         raise TestingDataMismatch(msg)
     print('Image files check ok')
+
+def compareNumpyFiles(oldfile, newfile):
+    """
+    Compares 2 data files saved in the numpy.save format
+    """
+    olddata = numpy.load(oldfile)
+    newdata = numpy.load(newfile)
+
+    # could potentially do these in chunks
+    # or set mmap_mode in numpy.load to reduce memory usage
+    if (olddata == newdata).all():
+        msg = 'numpy data does not match'
+        raise TestingDataMismatch(msg)
+    print('numpy data checks ok')
 
 def extractTarFile(tarFile, pathToUse='.', doVersionCheck=True):
     """

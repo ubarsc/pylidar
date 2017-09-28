@@ -27,7 +27,6 @@ import numpy
 from osgeo import gdal
 from . import utils
 from pylidar import lidarprocessor
-from pylidar.toolbox import interpolation
 from rios import cuiprogress
 from rios import pixelgrid
 

@@ -40,11 +40,11 @@ except ImportError as cgalInterpErr:
     haveCGALInterpPy = False
     
 # Preferred interpolator - see https://bitbucket.org/petebunting/pynninterp
-haveNNInterp = True
+havePyNNInterp = True
 try:
     import pynninterp
 except ImportError:
-    haveNNInterp = False
+    havePyNNInterp = False
 
 # Exception type for this module
 class InterpolationError(Exception):
@@ -92,7 +92,7 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method='pynn'):
             raise InterpolationError(str(e))
 
     elif method == 'pynn':
-        if not haveNNInterp:
+        if not havePyNNInterp:
             msg = "The pynninterp python bindings required for natural neighbour interpolation and could not be imported"
             raise InterpolationError(msg)
         xVals = xVals.astype(numpy.float64)
@@ -111,7 +111,7 @@ def interpGrid(xVals, yVals, zVals, gridCoords, method='pynn'):
             raise InterpolationError(str(e))
 
     elif method == 'pylinear':
-        if not haveNNInterp:
+        if not havePyNNInterp:
             msg = "The pynninterp python bindings required for linear (TIN?) interpolation and could not be imported"
             raise InterpolationError(msg)
         xVals = xVals.astype(numpy.float64)
@@ -148,7 +148,7 @@ def interpPoints(xVals, yVals, zVals, ptCoords, method='pynn'):
     returns 1d array with Z values.
     """
     if method == 'pynn':
-        if not haveNNInterp:
+        if not havePyNNInterp:
             msg = "The nninterp python bindings required for natural neighbour interpolation and could not be imported"
             raise InterpolationError(msg)
 

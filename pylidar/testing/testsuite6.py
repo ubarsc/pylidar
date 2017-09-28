@@ -35,6 +35,8 @@ IN_FILE = 'testsuite1_idx.spd'
 INTERP_FILE = 'testsuite6.img'
 PROJECTION_SOURCE = 'testsuite1.img'
 
+REQUIRED_FORMATS = ["PYNNINTERP"]
+
 def interpGroundReturns(data):
     # if given a list of fields, returns a structured array with all of them
     ptVals = data.input.getPoints(colNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
@@ -50,7 +52,8 @@ def interpGroundReturns(data):
         yVals = ptVals['Y'][mask]
         zVals = ptVals['Z'][mask]
         # 'pynn' needs the pynnterp module installed
-        out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, 'pynn')
+        out = interpolation.interpGrid(xVals, yVals, zVals, pxlCoords, 
+                method='pynn')
 
         # mask out where interpolation failed
         invalid = numpy.isnan(out)
