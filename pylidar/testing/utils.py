@@ -409,11 +409,26 @@ def compareNumpyFiles(oldfile, newfile):
     Compares 2 data files saved in the numpy.save format
     """
     olddata = numpy.load(oldfile)
+    olddata_nan = numpy.isnan(olddata)
+    # == operator does weird things with NaNs
+    olddata = olddata[~olddata_nan]
+
     newdata = numpy.load(newfile)
+    newdata_nan = numpy.isnan(newdata)
+    newdata = newdata[~newdata_nan]
+
+    if (olddata.shape != newdata.shape or 
+            olddata_nan.shape != newdata_nan.shape):
+        msg = 'numpy data is different size'
+        raise TestingDataMismatch(msg)
+
+    if not (olddata_nan == newdata_nan).all():
+        msg = 'numpy nan data does not match'
+        raise TestingDataMismatch(msg)
 
     # could potentially do these in chunks
     # or set mmap_mode in numpy.load to reduce memory usage
-    if (olddata == newdata).all():
+    if not (olddata == newdata).all():
         msg = 'numpy data does not match'
         raise TestingDataMismatch(msg)
     print('numpy data checks ok')
