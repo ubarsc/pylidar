@@ -123,6 +123,11 @@ from pylidar.testing import testsuite6
 testsuite6.run('.', '.')
 nameList.append('testsuite6')
 
+# testsuite6b
+from pylidar.testing import testsuite6b
+testsuite6b.run('.', '.')
+nameList.append('testsuite6b')
+
 # testsuite7
 from pylidar.testing import testsuite7 
 testsuite7.run('.', '.')
@@ -173,6 +178,11 @@ from pylidar.testing import testsuite16
 testsuite16.run('.', '.')
 nameList.append('testsuite16')
 
+# testsuite16b
+from pylidar.testing import testsuite16b
+testsuite16b.run('.', '.')
+nameList.append('testsuite16b')
+
 # testsuite17
 from pylidar.testing import testsuite17
 testsuite17.run('.', '.')
@@ -207,6 +217,11 @@ nameList.append('testsuite22')
 from pylidar.testing import testsuite23
 testsuite23.run('.', '.')
 nameList.append('testsuite23')
+
+# testsuite23b
+from pylidar.testing import testsuite23b
+testsuite23b.run('.', '.')
+nameList.append('testsuite23b')
 
 # add our list of tests
 versionInfo['tests'] = nameList

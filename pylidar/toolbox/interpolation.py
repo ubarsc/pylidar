@@ -154,6 +154,13 @@ def interpPoints(xVals, yVals, zVals, ptCoords, method='pynn'):
 
         out = pynninterp.NaturalNeighbourPts(xVals, yVals, zVals, ptCoords)
 
+    elif method == 'cgalnn':
+        if not haveCGALInterpPy:
+            msg = "The cgalinterp python bindings required for natural neighbour interpolation and could not be imported"
+            raise InterpolationError(msg)
+
+        out = cgalinterp.NaturalNeighbourPts(xVals, yVals, zVals, ptCoords)
+
     else:
         raise InterpolationError("Interpolaton method '%s' was not recognised" % method)
 
