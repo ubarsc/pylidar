@@ -220,6 +220,27 @@ array passed to :func:`pylidar.userclasses.LidarData.setPoints`, or a new colNam
 non-structured arrays.
 
 ---------------------
+Reading Waveform Data
+---------------------
+
+Reading waveform data is very similar to reading points and pulses. Here is a simple
+example::
+
+    def readFunc(data):
+        # returns 2d masked structured array with info about waveforms
+        # first axis is waveform number, second is pulse
+        waveinfo = data.input1.getWaveformInfo()
+
+        # returns masked 3d radiance array
+        # first axis is waveform bin, second is waveform number, third is pulse
+        recv = data.input1.getReceived()
+        trans = data.input1.getTransmitted()
+
+    dataFiles = lidarprocessor.DataFiles()
+    dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
+    lidarprocessor.doProcessing(readFunc, dataFiles)
+
+---------------------
 Notes for using Numba
 ---------------------
 
