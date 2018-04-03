@@ -23,7 +23,6 @@ from __future__ import print_function, division
 import numpy
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
-from pylidar.lidarformats import pulsewaves
 from rios import cuiprogress
 
 def transFunc(data):
