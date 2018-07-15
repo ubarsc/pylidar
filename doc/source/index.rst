@@ -32,13 +32,9 @@ There is a `Google Group <https://groups.google.com/forum/#!forum/pylidar>`_ whe
 Example
 -------
 
-See :doc:`processorexamples` for more information on programming using PyLidar. See the following pages for more information on running the command line utilities:
+See :doc:`processorexamples` for more information on programming using PyLidar. 
 
-- :doc:`commandline_translate`
-- :doc:`commandline_index`
-- :doc:`commandline_info`
-- :doc:`commandline_tiles`
-- :doc:`commandline_canopy`
+See :doc:`commandline_translate`, :doc:`commandline_index`, :doc:`commandline_info`, :doc:`commandline_tiles` or :doc:`commandline_canopy` for more information on running the command line utilities.
 
 
 Downloads
