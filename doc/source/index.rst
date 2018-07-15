@@ -22,9 +22,9 @@ formats are: SPD V3, SPD V4, Riegl RXP, LAS, LVIS, ASCII and Pulsewaves
 See the :doc:`arrayvisualisation` page to understand how numpy 
 arrays are used in PyLidar.
 
-Work funded by `DSITI <https://www.qld.gov.au/dsiti/>`_ and 
-`OEH <http://www.environment.nsw.gov.au/>`_ through the 
-`Joint Remote Sensing Research Program <https://www.gpem.uq.edu.au/jrsrp>`_.
+Work funded by:
+- `DSITI <https://www.qld.gov.au/dsiti/>`_ and `OEH <http://www.environment.nsw.gov.au/>`_ through the `Joint Remote Sensing Research Program <https://www.gpem.uq.edu.au/jrsrp>`_.
+- `University of Maryland <http://www.umd.edu/>`
 
 There is a `Google Group <https://groups.google.com/forum/#!forum/pylidar>`_ 
 where users can post questions.
@@ -86,7 +86,6 @@ Example
 See :doc:`processorexamples` for more information. :doc:`commandline` has more information on 
 running the command line utilities.
 
-.. image:: pylidar.jpg
 
 Downloads
 ---------
