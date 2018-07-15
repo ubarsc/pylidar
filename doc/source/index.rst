@@ -15,7 +15,7 @@ allowing the programmer to concentrate on the processing involved.
 It is licensed under GPL 3.
 
 See :doc:`spdv4format` for description of the SPD V4 file format. Supported 
-formats are: SPD V3, SPD V4, Riegl RXP, LAS, LVIS, ASCII and Pulsewaves 
+formats are: SPD V3, SPD V4, RIEGL RXP, LAS, LVIS, ASCII and Pulsewaves 
 (additional libraries may be required).
 
 
@@ -23,68 +23,22 @@ See the :doc:`arrayvisualisation` page to understand how numpy
 arrays are used in PyLidar.
 
 Work funded by:
-- `DSITI <https://www.qld.gov.au/dsiti/>`_ and `OEH <http://www.environment.nsw.gov.au/>`_ through the `Joint Remote Sensing Research Program <https://www.gpem.uq.edu.au/jrsrp>`_.
-- `University of Maryland <http://www.umd.edu/>`
 
-There is a `Google Group <https://groups.google.com/forum/#!forum/pylidar>`_ 
-where users can post questions.
+- `DSITI <https://www.qld.gov.au/dsiti/>`_ and `OEH <http://www.environment.nsw.gov.au/>`_ through the `Joint Remote Sensing Research Program <https://www.gpem.uq.edu.au/jrsrp>`_
+- `University of Maryland <http://www.umd.edu/>`_
+
+There is a `Google Group <https://groups.google.com/forum/#!forum/pylidar>`_ where users can post questions.
 
 Example
 -------
 
-::
+See :doc:`processorexamples` for more information on programming using PyLidar. See the following pages for more information on running the command line utilities:
 
-    """
-    Creates a Raster output file from the minimum 'Z' values of 
-    the points in each bin
-    """
-    import numpy
-    from numba import jit
-    from pylidar import lidarprocessor
-    from pylidar.toolbox import spatial
-    from pylidar.lidarformats import generic
-
-    BINSIZE = 1.0
-
-    @jit
-    def findMinZs(data, outImage, xMin, yMax):
-        for i in range(data.shape[0]):
-            if data[i]['CLASSIFICATION'] == lidarprocessor.CLASSIFICATION_GROUND:
-                row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
-                        xMin, yMax, BINSIZE)
-                if outImage[row, col] != 0:
-                    if data[i]['Z'] < outImage[row, col]:
-                        outImage[row, col] = data[i]['Z']
-                else:
-                    outImage[row, col] = data[i]['Z']
-
-    def processChunk(data, otherArgs):
-        data = data.input1.getPoints(colNames=['X', 'Y', 'Z', 'CLASSIFICATION'])
-        findMinZs(data, otherArgs.outImage, otherArgs.xMin, otherArgs.yMax)
-
-    info = generic.getLidarFileInfo(inFile)
-    header = info.header
-
-    dataFiles = lidarprocessor.DataFiles()
-    dataFiles.input1 = lidarprocessor.LidarFile(inFile, lidarprocessor.READ)
-
-    xMin, yMax, ncols, nrows = spatial.getGridInfoFromHeader(header, BINSIZE)
-
-    outImage = numpy.zeros((nrows, ncols))
-
-    otherArgs = lidarprocessor.OtherArgs()
-    otherArgs.outImage = outImage
-    otherArgs.xMin = xMin
-    otherArgs.yMax = yMax
-
-    lidarprocessor.doProcessing(processChunk, dataFiles, otherArgs=otherArgs)
-
-    iw = spatial.ImageWriter(outFile, tlx=xMin, tly=yMax, binSize=BINSIZE)
-    iw.setLayer(outImage)
-    iw.close()
-
-See :doc:`processorexamples` for more information. :doc:`commandline` has more information on 
-running the command line utilities.
+- :doc:`commandline_translate`
+- :doc:`commandline_index`
+- :doc:`commandline_info`
+- :doc:`commandline_tiles`
+- :doc:`commandline_canopy`
 
 
 Downloads
