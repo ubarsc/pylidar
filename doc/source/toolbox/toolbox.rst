@@ -13,6 +13,7 @@ Toolbox
     interpolation
     visualisation
     spatial
+    canopy
 
 * :ref:`genindex`
 * :ref:`modindex`
