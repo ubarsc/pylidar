@@ -29,12 +29,16 @@ Work funded by:
 
 There is a `Google Group <https://groups.google.com/forum/#!forum/pylidar>`_ where users can post questions.
 
-Example
--------
+Examples
+--------
 
-See :doc:`processorexamples` for more information on programming using PyLidar. 
+See :doc:`processorexamples` for more information on programming using PyLidar. See the following links for more information on running the command line utilities:
 
-See :doc:`commandline_translate`, :doc:`commandline_index`, :doc:`commandline_info`, :doc:`commandline_tiles` or :doc:`commandline_canopy` for more information on running the command line utilities.
+- :doc:`commandline_translate`
+- :doc:`commandline_index`
+- :doc:`commandline_info`
+- :doc:`commandline_tiles`
+- :doc:`commandline_canopy`
 
 
 Downloads
