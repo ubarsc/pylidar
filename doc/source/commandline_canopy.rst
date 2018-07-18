@@ -99,14 +99,14 @@ Three merged scan output files are generated and output as specified by the --ou
 
 Below is an example of a horizontal slice of a 0.5 m voxelization output from pylidar_canopy using a single scan as input. The command line syntax for this example was::
 
-pylidar_canopy -m VOXEL_HANCOCK2016 -i 151125_121744.rxp 
-    -o nscans.tif cover_profile.tif voxel_class.tif 
-    --voxelsize 0.5 --bounds -50 -50 -10 50 50 60 
-    --rasterdriver GTiff
+    pylidar_canopy -m VOXEL_HANCOCK2016 -i 151125_121744.rxp
+        -o nscans.tif cover_profile.tif voxel_class.tif
+        --voxelsize 0.5 --bounds -50 -50 -10 50 50 60
+        --rasterdriver GTiff
 
-For ease of interpretation we only show a the output using a single scan. The horizontal slice is taken at 2m because this is the height of the scanner so beams will traverse the voxel space horizontally, further simplifying visual interpretation.
+For ease of interpretation we only show a the output using a single scan. The horizontal slice is taken at 2 m because this is the height of the scanner so beams will traverse the voxel space horizontally, further simplifying visual interpretation.
 
 .. image:: voxel_example.png
     :scale: 50 %
-
+    :align: center
 
