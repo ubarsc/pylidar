@@ -47,15 +47,19 @@ recommended values for the RIEGL VZ400 (Calders *et al.*, 2014).
 Voxel traversal and deriving vertical cover profiles
 ----------------------------------------------------
 
-The Voxel Traversal is Python implementation (using numba for speed) of the following algorithm:
+The voxel traversal is a Python implementation (using numba for speed) of the following algorithm:
 
 *Amanatides, J. and Woo, A. 1987. A Fast Voxel Traversal Algorithm for Ray Tracing. Proceedings of EuroGraphics. 87.* 
+
+The end of each beam is the edge of the voxel space. We account for partial interception of each beam by stepwise reduction of beam weighting with each interception. Each beam starts with a weighting of 1, but this is reduced by 1 / *N* with each interception where *N* is the total number of returns for that beam.
 
 The derivation of vertical cover profiles is a simplified implementation of the following method:
 
 *Hancock, S., Anderson, K., Disney, M. and Gaston, K.J. 2017. Measurement of fine-spatial-resolution 3D vegetation structure with airborne waveform lidar: Calibration and validation with voxelised terrestrial lidar. Remote Sensing of Environment, 188: 37--50.*
 
-Deriving voxelized vertical Pgap profiles by combining all registered scans::
+The simplification is in how we account for partial interceptions in the calculation of voxel Pgap (see above) and in the derivation of vertical Pgap (1 - cover(z)) by using conditional probability (so assuming a random distribution of elements within a voxel).
+
+An example of deriving voxelized vertical Pgap profiles by combining all registered scans::
 
     pylidar_canopy -m VOXEL_HANCOCK2016 -i scan1.rxp scan2.rxp scan3.rxp 
         -o nscans.tif cover_profile.tif voxel_class.tif 
@@ -68,14 +72,12 @@ Individual scan products are automatically generated and output:
 1. Weighted number of beams that reach the voxel unoccluded and have an interception in that voxel (hits)
 2. Weighted number of beams that pass through the voxel unoccluded (miss)
 3. Weighted number of beams that are occluded from the voxel (occl)
-4. The ratio of the weighted number of beams that reach the voxel to the number that could have passed through (pgap)
-
-The end of each beam is the edge of the voxel space. We account for partial interception of each beam by stepwise reduction of beam weighting with each interception. Each beam starts with a a weighting of 1, but this is reduced by 1 / n with each interception where n is the total number of returns for that beam.
+4. Directional gap probability (pgap)
 
 Three merged scan output files are generated and output as specified by the --output command line argument:
 
-1. Number of scans that a vixel is visible to (nscans.tif)
-2. Vertical cover profile (cover_profile.tif). Vertical Pgap (1 - cover) is calculated using conditional probabilities.
+1. Number of scans that a voxel is visible to (nscans.tif)
+2. Vertical cover profile (cover_profile.tif)
 3. Voxel classification. The following table shows the classification codes:
    
    +-------------+-------+------+--------+----------+ 
@@ -93,7 +95,14 @@ Three merged scan output files are generated and output as specified by the --ou
    +-------------+-------+------+--------+----------+ 
 
 
-Below is an example of a horizontal slice of a 0.5 m voxelization output from pylidar_canopy using a single scan as input. For ease of interpretation we only show a slice at 2m because this is the height of the scanner so beams will traverse the voxel space horizontally.
+Below is an example of a horizontal slice of a 0.5 m voxelization output from pylidar_canopy using a single scan as input. The command line syntax for this example was::
+
+pylidar_canopy -m VOXEL_HANCOCK2016 -i 151125_121744.rxp 
+    -o nscans.tif cover_profile.tif voxel_class.tif 
+    --voxelsize 0.5 --bounds -50 -50 -10 50 50 60 
+    --rasterdriver GTiff
+
+For ease of interpretation we only show a the output using a single scan. The horizontal slice is taken at 2m because this is the height of the scanner so beams will traverse the voxel space horizontally, further simplifying visual interpretation.
 
 .. image:: voxel_example.png
     :scale: 50 %
