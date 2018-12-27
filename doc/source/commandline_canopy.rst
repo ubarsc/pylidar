@@ -2,9 +2,7 @@
 Command Line Examples: pylidar_canopy
 =====================================
 
-Once you have converted your data to SPDV4 format, you can use this
-utility to derive various published lidar canopy metrics. Some metrics will also 
-accept other suitable file formats.
+You can use this utility to derive various published lidar canopy metrics.
 
 --------------------------------
 Deriving vertical plant profiles
@@ -59,7 +57,7 @@ The derivation of vertical cover profiles is a simplified implementation of the 
 
 The simplification is in how we account for partial interceptions in the calculation of voxel Pgap (see above) and derive the vertical cover profiles (1 - Pgap(z)).
 
-An example of deriving voxelized vertical Pgap profiles by combining all registered scans::
+RXP and SPD files are accepted as input. An example of deriving voxelized vertical Pgap profiles by combining all registered scans::
 
     pylidar_canopy -m VOXEL_HANCOCK2016 -i scan1.rxp scan2.rxp scan3.rxp 
         -o nscans.tif cover_profile.tif voxel_class.tif 
@@ -69,9 +67,9 @@ An example of deriving voxelized vertical Pgap profiles by combining all registe
 
 Individual scan products are automatically generated and output:
 
-1. Weighted number of beams that reach the voxel unoccluded and have an interception in that voxel (hits)
-2. Weighted number of beams that pass through the voxel unoccluded (miss)
-3. Weighted number of beams that are occluded from the voxel (occl)
+1. Weighted count of beams that reach the voxel unoccluded and have an interception in that voxel (hits)
+2. Weighted count of beams that pass through the voxel unoccluded (miss)
+3. Weighted count of beams that are occluded from the voxel (occl)
 4. Directional gap probability (pgap) calculated as miss / (miss+hits)
 
 To get the vertical cover for a voxel 1-pgap is averaged across all scans (assuming all intercepted elements have the same projected area at different view angles), with each scan weighted by (miss + hits) / (miss + hits + occl) to account for then visibility of that voxel. The vertical profile of cover is calculated by conditional probability, so assuming a random distribution of elements in each voxel.
@@ -81,7 +79,7 @@ Three merged scan output files are generated and output as specified by the --ou
 1. Number of scans that a voxel is visible to (nscans.tif)
 2. Vertical cover profile (cover_profile.tif)
 3. Voxel classification. The following table shows the classification codes:
-   
+
    +-------------+-------+------+--------+----------+ 
    | Class       | Value | Hits | Misses | Occluded |
    +=============+=======+======+========+==========+ 
@@ -104,9 +102,15 @@ Below is an example of a horizontal slice of a 0.5 m voxelization output from py
         --voxelsize 0.5 --bounds -50 -50 -10 50 50 60
         --rasterdriver GTiff
 
-For ease of interpretation we only show a the output using a single scan. The horizontal slice is taken at 2 m because this is the height of the scanner so beams will traverse the voxel space horizontally, further simplifying visual interpretation.
+For ease of interpretation we only show the output using a single scan. The horizontal slice is taken at 2 m because this is the height of the scanner so beams will traverse the voxel space horizontally, further simplifying visual interpretation.
 
 .. image:: voxel_example.png
     :scale: 50 %
     :align: center
 
+    
+----------------------------
+Multilayer crown delineation 
+----------------------------
+
+*Duncanson, L.I., Cook, B.D., Hurtt, G.C. and Dubayah, R.O. 2014. An efficient, multi-layered crown delineation algorithm for mapping individual tree structure across multiple ecosystems, 154: 378--386.*

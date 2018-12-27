@@ -35,7 +35,7 @@ def getCmdargs():
     p = argparse.ArgumentParser()
     p.add_argument("-i", "--infiles", nargs="+", help="Input lidar files (required)")
     p.add_argument("-o", "--output", nargs="+", help="Output file/s (required)")
-    p.add_argument("-m", "--metric", default="PAVD_CALDERS2014", choices=["PAVD_CALDERS2014","VOXEL_HANCOCK2016","PGAP_ARMSTON2013"], 
+    p.add_argument("-m", "--metric", default="PAVD_CALDERS2014", choices=["PAVD_CALDERS2014","VOXEL_HANCOCK2016","PGAP_ARMSTON2013","CROWN_DUNCANSON2014"], 
         help="Canopy metric to calculate. default=%(default)s")
     p.add_argument("-w","--weighted", default=False, action="store_true", help="Calculate Pgap(z) using weighted interception (Armston et al., 2013)")         
     p.add_argument("-p","--planecorrection", default=False, action="store_true", help="Apply plane correction to point heights (PAVD_CALDERS2014 metric only)")
@@ -146,7 +146,11 @@ def run():
     elif cmdargs.metric == "PGAP_ARMSTON2013":    
         
         pass
-    
+
+    elif cmdargs.metric == "CROWN_DUNCANSON2014":    
+        
+        pass
+        
     else:
         msg = 'Unsupported metric %s' % cmdargs.metric
         raise CanopyMetricError(msg)

@@ -66,11 +66,15 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
         controls.setSpatialProcessing(True)
         controls.setWindowSize(64)
         pgap_armston2013.run_pgap_armston2013(dataFiles, controls, otherargs, outfiles)     
-                                                  
+
+    elif metric == "CROWN_DUNCANSON2014":
+    
+        controls.setSpatialProcessing(False)
+        controls.setWindowSize(64)
+        crown_duncanson2014.run_crown_duncanson2014(dataFiles, controls, otherargs, outfiles)     
+                                                          
     else:
         
         msg = 'Unsupported metric %s' % metric
         raise canopycommon.CanopyMetricError(msg)
         
-
-            
