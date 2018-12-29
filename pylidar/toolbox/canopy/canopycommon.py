@@ -127,8 +127,8 @@ def selectColumns(data, otherargs):
     points = data.infile.getPoints(colNames=otherargs.colNames)
 
     if otherargs.boundingBox is not None:
-        mask = (points['X'] >= otherargs.boundingBox[0]) & (points['X'] <= otherargs.boundingBox[1]) & 
-               (points['Y'] >= otherargs.boundingBox[2]) & (points['Y'] <= otherargs.boundingBox[3])
+        mask = ((points['X'] >= otherargs.boundingBox[0]) & (points['X'] <= otherargs.boundingBox[1]) & 
+                (points['Y'] >= otherargs.boundingBox[2]) & (points['Y'] <= otherargs.boundingBox[3]))
         points = points[mask]
 
     if points.shape[0] > 0:

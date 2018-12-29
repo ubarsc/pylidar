@@ -56,7 +56,7 @@ def run_crown_duncanson2014(points, otherargs, outfiles):
     for layer in range(otherargs.maxlayers):
     
         # Initialize the output grid
-        outImage = numpy.zeros(nY,nX))
+        outImage = numpy.zeros((nY,nX))
     
         if points.shape[0] > 0:
         

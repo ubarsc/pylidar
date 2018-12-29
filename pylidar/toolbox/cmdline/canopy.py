@@ -42,7 +42,7 @@ def getCmdargs():
     p.add_argument("-r","--reportfile", help="Output file report file for point height plane correction (PAVD_CALDERS2014 metric only)")
     p.add_argument("-v","--voxelsize", default=1.0, type=float, help="Voxel spatial resolution (VOXEL_HANCOCK2016 metric only)")
     p.add_argument("-b","--bounds", nargs=6, type=float, default=[-50.0,-50.0,0.0,50.0,50.0,50.0], 
-        help="Voxel bounds [minX,minY,minZ,maxX,maxY,maxZ] (VOXEL_HANCOCK2016 metric only)")
+        help="Voxel bounds [minX,minY,minZ,maxX,maxY,maxZ] (VOXEL_HANCOCK2016 and CROWN_DUNCANSON metrics only)")
     p.add_argument("--heightcol", default='Z', help="Point column name to use for vertical profile heights (default: %(default)s).")
     p.add_argument("--heightbinsize", default=0.5, type=float, help="Vertical bin size (default: %(default)f m)")
     p.add_argument("--minheight", default=0.0, type=float, help="Minimum point height to include in vertical profile or crown delineation (default: %(default)f m)")
@@ -61,6 +61,8 @@ def getCmdargs():
     p.add_argument("--rasterdriver", default="HFA", help="GDAL format for output raster (default is %(default)s)")
     p.add_argument("--externaltransformfn", nargs="+", default=[], help="External transform filenames (for RIEGL RXP input files)")
     p.add_argument("--externaldem", help="External single layer DEM image to use for calculation of point heights (PAVD_CALDERS2014) or lower boundary of voxel traversal (VOXEL_HANCOCK2016)")
+    p.add_argument("--maxlayers", default=6, type=int, help="Maximum number of vertical canopy layers permitted (default: %(default)i; CROWN_DUNCANSON2014 metric only)")
+    p.add_argument("--windowsize", default=3, type=int, help="Window size used for canopy height model smoothing (default: %(default)i; CROWN_DUNCANSON2014 metric only)")
        
     cmdargs = p.parse_args()
     if (cmdargs.infiles is None) or (cmdargs.metric is None):
@@ -77,7 +79,11 @@ def getCmdargs():
         print("Must specify three output GDAL image file names (NSCANS,COVER,CLASS). More outputs will be added as implementation progresses.") 
         p.print_help()
         sys.exit()
-    
+    if (nOutFiles != 2) and (cmdargs.metric == "CROWN_DUNCANSON2014"):
+        print("Must specify output image and CSV file names") 
+        p.print_help()
+        sys.exit()
+        
     nInfiles = len(cmdargs.infiles)
     if ( (len(cmdargs.minzenith) != nInfiles) or (len(cmdargs.maxzenith) != nInfiles) ) and (cmdargs.metric == "PAVD_CALDERS2014"):
         print("--minzenith and --maxzenith must have the same length as --infiles")
