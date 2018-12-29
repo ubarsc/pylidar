@@ -42,7 +42,7 @@ def getCmdargs():
     p.add_argument("-r","--reportfile", help="Output file report file for point height plane correction (PAVD_CALDERS2014 metric only)")
     p.add_argument("-v","--voxelsize", default=1.0, type=float, help="Voxel spatial resolution (VOXEL_HANCOCK2016 metric only)")
     p.add_argument("-b","--bounds", nargs=6, type=float, default=[-50.0,-50.0,0.0,50.0,50.0,50.0], 
-        help="Voxel bounds [minX,minY,minZ,maxX,maxY,maxZ] (VOXEL_HANCOCK2016 and CROWN_DUNCANSON metrics only)")
+        help="Voxel bounds [minX,minY,minZ,maxX,maxY,maxZ] (VOXEL_HANCOCK2016 metric only)")
     p.add_argument("--heightcol", default='Z', help="Point column name to use for vertical profile heights (default: %(default)s).")
     p.add_argument("--heightbinsize", default=0.5, type=float, help="Vertical bin size (default: %(default)f m)")
     p.add_argument("--minheight", default=0.0, type=float, help="Minimum point height to include in vertical profile or crown delineation (default: %(default)f m)")
@@ -56,13 +56,15 @@ def getCmdargs():
         help="Total PAI method for solid angle weighted plant profiles (default: %(default)s; PAVD_CALDERS2014 metric only)")
     p.add_argument("--totalpai", default=1.0, type=float, help="Total PAI to use if --totalpaimethod=EXTERNAL is selected (default: %(default)f m2/m2; PAVD_CALDERS2014 metric only)")
     p.add_argument("--gridsize", default=20, type=int, help="Grid dimension for the point height plane correction (default: %(default)i; PAVD_CALDERS2014 metric only)")
-    p.add_argument("--gridbinsize", default=5.0, type=float, help="Grid resolution for the point height plane correction (default: %(default)f m; PAVD_CALDERS2014 metric only)")
+    p.add_argument("--gridbinsize", default=5.0, type=float, help="Grid resolution for the PAVD_CALDERS2014 point height plane correction or CROWN_DUNCANSON2014 processing (default: %(default)f m)")
     p.add_argument("--excludedclasses", nargs="+", default=[], type=int, help="Point CLASSIFICATION values to exclude from the metric calculation (default is all points)")
     p.add_argument("--rasterdriver", default="HFA", help="GDAL format for output raster (default is %(default)s)")
     p.add_argument("--externaltransformfn", nargs="+", default=[], help="External transform filenames (for RIEGL RXP input files)")
     p.add_argument("--externaldem", help="External single layer DEM image to use for calculation of point heights (PAVD_CALDERS2014) or lower boundary of voxel traversal (VOXEL_HANCOCK2016)")
     p.add_argument("--maxlayers", default=6, type=int, help="Maximum number of vertical canopy layers permitted (default: %(default)i; CROWN_DUNCANSON2014 metric only)")
     p.add_argument("--windowsize", default=3, type=int, help="Window size used for canopy height model smoothing (default: %(default)i; CROWN_DUNCANSON2014 metric only)")
+    p.add_argument("--gridbounds", nargs=4, type=float, default=None, 
+        help="Voxel bounds [minX,maxX,minY,maxY] (CROWN_DUNCANSON2014 metric only)")
        
     cmdargs = p.parse_args()
     if (cmdargs.infiles is None) or (cmdargs.metric is None):
@@ -156,10 +158,10 @@ def run():
     elif cmdargs.metric == "CROWN_DUNCANSON2014":    
         
         otherargs.windowsize = cmdargs.windowsize
-        otherargs.resolution = cmdargs.resolution
+        otherargs.resolution = cmdargs.gridbinsize
         otherargs.maxlayers = cmdargs.maxlayers
         otherargs.minheight = cmdargs.minheight
-        otherargs.bounds = numpy.array(cmdargs.bounds, dtype=numpy.float32)
+        otherargs.bounds = numpy.array(cmdargs.gridbounds, dtype=numpy.float32)
         otherargs.heightbinsize = cmdargs.heightbinsize
         
     else:
