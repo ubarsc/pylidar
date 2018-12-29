@@ -69,10 +69,19 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
 
     elif metric == "CROWN_DUNCANSON2014":
     
-        controls.setSpatialProcessing(False)
-        controls.setWindowSize(64)
-        crown_duncanson2014.run_crown_duncanson2014(dataFiles, controls, otherargs, outfiles)     
-                                                          
+        if otherargs.bounds is None:
+            xmin = min([generic.getLidarFileInfo(fn).header['X_MIN'] for fn in infiles])
+            xmax = max([generic.getLidarFileInfo(fn).header['X_MAX'] for fn in infiles])
+            ymin = min([generic.getLidarFileInfo(fn).header['Y_MIN'] for fn in infiles])
+            ymax = max([generic.getLidarFileInfo(fn).header['Y_MAx'] for fn in infiles])
+            otherargs.bounds = numpy.array([numpy.floor(xmin), numpy.ceil(xmax), 
+                    numpy.floor(ymin), numpy.ceil(ymax)])
+        
+        points = canopycommon.readAllPoints(infiles, boundingbox=otherargs.bounds, 
+                colnames=['X','Y','Z','CLASSIFICATION'])
+        
+        crown_duncanson2014.run_crown_duncanson2014(points, otherargs, outfiles)     
+        
     else:
         
         msg = 'Unsupported metric %s' % metric

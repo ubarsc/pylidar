@@ -75,3 +75,61 @@ def prepareInputFiles(infiles, otherargs, index=None):
             otherargs.proj.append(None)
     
     return dataFiles
+
+    
+def readAllPoints(fns, boundingbox=None, colnames=['X','Y','Z','CLASSIFICATION']):
+    """
+    Read the requested columns for the points in the given files, in a memory-efficient manner.
+    Uses pylidar to read only a block of points at a time, and select out just the
+    desired columns. This saves quite a lot of memory, in comparison to reading in all points 
+    at once, since all columns for all points have to be read in at the same time.
+    
+    If boundingbox is given, it is a tuple of
+        (xmin, xmax, ymin, ymax)
+    and only points within this box are included.
+
+    Return a single recarray with only the selected columns, and only the selected points.
+    """
+    dataFiles = lidarprocessor.DataFiles()
+    dataFiles.inFiles = [lidarprocessor.LidarFile(fn, lidarprocessor.READ) for fn in fns]
+    
+    otherargs = lidarprocessor.OtherArgs()
+    otherargs.colNames = colnames
+    otherargs.boundingBox = boundingbox
+    otherargs.dataList = []
+    
+    controls = lidarprocessor.Controls()
+    controls.setSpatialProcessing(False)
+    controls.setWindowSize(512)
+
+    lidarprocessor.doProcessing(selectColumns, datafiles, otherArgs=otherargs, controls=controls)
+
+    # Put all the separate rec-arrays together
+    nPoints = sum([a.shape[0] for a in otherargs.dataList])
+    if nPoints > 0:
+        dataArray = numpy.empty(nPoints, dtype=otherargs.dataArrList[0].dtype)
+        i = 0
+        for tmpDataArray in otherargs.dataList:
+            fullArr[i:i+tmpDataArray.shape[0]] = tmpDataArray
+            i += tmpDataArray.shape[0]
+    else:
+        msg = 'Input files have no valid data'
+        raise generic.LiDARInvalidData(msg)
+
+    return dataArray
+
+
+def selectColumns(data, otherargs):
+    """
+    Read the next block of lidar points, select out the requested columns. If requested,
+    filter to ground only. If requested, restrict to the given bounding box.
+    """
+    points = data.infile.getPoints(colNames=otherargs.colNames)
+
+    if otherargs.boundingBox is not None:
+        mask = (points['X'] >= otherargs.boundingBox[0]) & (points['X'] <= otherargs.boundingBox[1]) & 
+               (points['Y'] >= otherargs.boundingBox[2]) & (points['Y'] <= otherargs.boundingBox[3])
+        points = points[mask]
+
+    if points.shape[0] > 0:
+        otherargs.dataList.append(points)

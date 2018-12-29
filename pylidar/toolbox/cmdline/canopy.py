@@ -45,7 +45,7 @@ def getCmdargs():
         help="Voxel bounds [minX,minY,minZ,maxX,maxY,maxZ] (VOXEL_HANCOCK2016 metric only)")
     p.add_argument("--heightcol", default='Z', help="Point column name to use for vertical profile heights (default: %(default)s).")
     p.add_argument("--heightbinsize", default=0.5, type=float, help="Vertical bin size (default: %(default)f m)")
-    p.add_argument("--minheight", default=0.0, type=float, help="Minimum point height to include in vertical profile (default: %(default)f m)")
+    p.add_argument("--minheight", default=0.0, type=float, help="Minimum point height to include in vertical profile or crown delineation (default: %(default)f m)")
     p.add_argument("--maxheight", default=50.0, type=float, help="Maximum point height to include in vertical profile (default: %(default)f m)")
     p.add_argument("--zenithbinsize", default=5.0, type=float, help="View zenith bin size (default: %(default)f deg)")
     p.add_argument("--minzenith", nargs="+", default=[35.0], type=float, help="Minimum view zenith angle to use for each input file")
@@ -149,7 +149,12 @@ def run():
 
     elif cmdargs.metric == "CROWN_DUNCANSON2014":    
         
-        pass
+        otherargs.windowsize = cmdargs.windowsize
+        otherargs.resolution = cmdargs.resolution
+        otherargs.maxlayers = cmdargs.maxlayers
+        otherargs.minheight = cmdargs.minheight
+        otherargs.bounds = numpy.array(cmdargs.bounds, dtype=numpy.float32)
+        otherargs.heightbinsize = cmdargs.heightbinsize
         
     else:
         msg = 'Unsupported metric %s' % cmdargs.metric
