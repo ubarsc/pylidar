@@ -34,6 +34,17 @@ from pylidar.toolbox import spatial
 from pylidar.lidarformats import generic
 
 
+def writeTestImage(fn,image,otherargs):
+    """
+    Temporary outputs for debugging
+    """
+    outImageFile = spatial.ImageWriter(fn, tlx=otherargs.bounds[0], tly=otherargs.bounds[3], 
+            binSize=otherargs.resolution, driverName=otherargs.rasterdriver, epsg=otherargs.proj[0], 
+            numBands=1) 
+    outImageFile.setLayer(image, layerNum=1)    
+    outImageFile.close()
+    
+
 def run_crown_duncanson2014(points, otherargs, outfiles):
     """
     Main function for CROWN_DUNCANSON2014
@@ -41,13 +52,12 @@ def run_crown_duncanson2014(points, otherargs, outfiles):
     
     # Initialize the output files
     outImageFile = spatial.ImageWriter(outfiles[0], tlx=otherargs.bounds[0], tly=otherargs.bounds[3], 
-            binSize=otherargs.resolution, driverName=otherargs.rasterdriver, epsg=None, 
-            numBands=otherargs.maxlayers, nullVal=0)
-    outMetricsFile = open(outfiles[1],'w')
+            binSize=otherargs.resolution, driverName=otherargs.rasterdriver, epsg=otherargs.proj[0], 
+            numBands=otherargs.maxlayers, nullVal=0)  
     
     # Output grid size
-    nX = (otherargs.bounds[1] - otherargs.bounds[0]) / otherargs.resolution
-    nY = (otherargs.bounds[3] - otherargs.bounds[2]) / otherargs.resolution
+    nX = int((otherargs.bounds[1] - otherargs.bounds[0]) / otherargs.resolution)
+    nY = int((otherargs.bounds[3] - otherargs.bounds[2]) / otherargs.resolution)
     
     # Calculate height above ground of all points
     heights = calcHeights(points)
@@ -88,7 +98,7 @@ def run_crown_duncanson2014(points, otherargs, outfiles):
             header=','.join(metrics.dtype.names))
         
 
-def processLayer(points, heights, points_mask, outImage, x_min, y_max, otherargs):
+def processLayer(points, heights, points_mask, outImage, otherargs):
     """
     Segment the uppermost canopy layer
     """        
@@ -99,16 +109,21 @@ def processLayer(points, heights, points_mask, outImage, x_min, y_max, otherargs
     else:
         findMaxHeights(points[points_mask,:], heights[points_mask], outImage, 
                 otherargs.bounds[0], otherargs.bounds[3], otherargs.resolution)
+    writeTestImage("test_chm.tif",outImage,otherargs)
     
     # Fill pits in the CHM
     filled_chm = fillCHM(outImage, windowsize=otherargs.windowsize, minheight=otherargs.minheight)
+    writeTestImage("test_filledchm.tif",regions,otherargs)
     
     # Smooth the filled CHM
-    smoothed_chm = smoothCHM(filled_chm, windowsize=otherargs.windowsize)
+    smoothed_chm = smoothCHM(filled_chm, windowsize=otherargs.windowsize, 
+            minheight=otherargs.minheight)
+    writeTestImage("test_smoothchm.tif",regions,otherargs)
     
     # Run the watershed
     regions = runWatershed(smoothed_chm, windowsize=otherargs.windowsize, 
             minheight=otherargs.minheight)    
+    writeTestImage("test_regions.tif",regions,otherargs)
     
     return regions
 
@@ -235,13 +250,16 @@ def calcHeights(data):
     underneath nonground returns
     """
     # Interpolate the ground elevation of nonground points
-    gndmask = data['CLASSIFICATION'] == generic.CLASSIFICATION_GROUND  
+    gndmask = data['CLASSIFICATION'] == generic.CLASSIFICATION_GROUND
+    nongndxy = numpy.empty((numpy.count_nonzero(~gndmask),2))
+    nongndxy[:,0] = data['X'][~gndmask]
+    nongndxy[:,1] = data['Y'][~gndmask]
     gndz = pynninterp.NaturalNeighbourPts(data['X'][gndmask], data['Y'][gndmask], 
-            data['Z'][gndmask], data[~gndmask,['X','Y']])
+            data['Z'][gndmask], nongndxy)
     
     # Calculate the heights    
-    heights = numpy.zeros(data.shape[0], dtype=data['Z'].dtype)
-    heights[gndmask] = data['Z'][~gndmask] - gndz
+    heights = numpy.zeros(data.shape[0], dtype=numpy.float32)
+    heights[~gndmask] = data['Z'][~gndmask] - gndz
     
     return heights
     
@@ -291,7 +309,7 @@ def fillCHM(inImage, windowsize=3, minheight=2.0):
     return filled_chm
 
     
-def smoothCHM(inImage, windowsize=3):
+def smoothCHM(inImage, windowsize=3, minheight=2.0):
     """
     Smooth the canopy height model. The neighborhood
     is defined by windowsize * 2 + 1
@@ -303,7 +321,7 @@ def smoothCHM(inImage, windowsize=3):
     # Smooth the CHM   
     offset = int(r)    
     smoothed_chm = numpy.where(inImage >= minheight, inImage, 0.0)
-    ndimage.convolve(sum_heights, weights=d/numpy.sum(d), output=smoothed_chm, 
+    ndimage.convolve(smoothed_chm, weights=d/numpy.sum(d), output=smoothed_chm, 
             mode='mirror', origin=[offset,offset])
     
     return smoothed_chm
@@ -316,8 +334,7 @@ def runWatershed(inImage, windowsize=3, minheight=2.0):
     """
     # Generate the input markers
     d = numpy.ones((windowsize,windowsize))
-    canopy_mask = inImage >= minheight
-    local_maxi = peak_local_max(inImage, mask=canopy_mask,  
+    local_maxi = peak_local_max(inImage, threshold_abs=minheight,  
             footprint=d, indices=False)
     markers = ndimage.label(local_maxi)[0]
     
@@ -325,6 +342,7 @@ def runWatershed(inImage, windowsize=3, minheight=2.0):
     min_val = numpy.min(inImage)
     max_val = numpy.max(inImage)   
     tmpImage = max_val - ((255 + 0.9999) * (inImage - min_val)/(max_val - min_val))
+    canopy_mask = inImage >= minheight
     labels = watershed(tmpImage, markers, mask=canopy_mask)
     
     return labels

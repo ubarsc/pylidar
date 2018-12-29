@@ -35,7 +35,7 @@ class CanopyMetricError(Exception):
     "Exception type for canopymetric errors"
 
 
-def prepareInputFiles(infiles, otherargs, index=None):
+def prepareInputFiles(infiles, index=None):
     """
     Prepare input files for calculation of canopy metrics
     """    
@@ -44,9 +44,6 @@ def prepareInputFiles(infiles, otherargs, index=None):
         dataFiles.inFiles = [lidarprocessor.LidarFile(infiles[index], lidarprocessor.READ)]
     else:
         dataFiles.inFiles = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) for fname in infiles]
-    
-    otherargs.lidardriver = []
-    otherargs.proj = []
     
     nFiles = len(dataFiles.inFiles)
     for i in range(nFiles):        
@@ -63,6 +60,27 @@ def prepareInputFiles(infiles, otherargs, index=None):
             else:
                 msg = 'Input file %s has no valid pitch/roll/yaw data' % dataFiles.inFiles[i].fname
                 raise generic.LiDARInvalidData(msg)
+    
+    return dataFiles
+
+    
+def prepareOtherArgs(infiles, otherargs, index=None):
+    """
+    Extract file information commonly required for output products and make
+    available in otherargs
+    """    
+    dataFiles = lidarprocessor.DataFiles()
+    if index is not None:
+        dataFiles.inFiles = [lidarprocessor.LidarFile(infiles[index], lidarprocessor.READ)]
+    else:
+        dataFiles.inFiles = [lidarprocessor.LidarFile(fname, lidarprocessor.READ) for fname in infiles]
+    
+    otherargs.lidardriver = []
+    otherargs.proj = []
+    
+    nFiles = len(dataFiles.inFiles)
+    for i in range(nFiles):        
+        info = generic.getLidarFileInfo(dataFiles.inFiles[i].fname)
 
         otherargs.lidardriver.append( info.getDriverName() )
         
@@ -74,8 +92,6 @@ def prepareInputFiles(infiles, otherargs, index=None):
         else:
             otherargs.proj.append(None)
     
-    return dataFiles
-
     
 def readAllPoints(fns, boundingbox=None, colnames=['X','Y','Z','CLASSIFICATION']):
     """
@@ -100,22 +116,23 @@ def readAllPoints(fns, boundingbox=None, colnames=['X','Y','Z','CLASSIFICATION']
     
     controls = lidarprocessor.Controls()
     controls.setSpatialProcessing(False)
-    controls.setWindowSize(512)
-
-    lidarprocessor.doProcessing(selectColumns, datafiles, otherArgs=otherargs, controls=controls)
+    controls.setWindowSize(2048)
+    
+    # Read the input files
+    lidarprocessor.doProcessing(selectColumns, dataFiles, otherArgs=otherargs, controls=controls)
 
     # Put all the separate rec-arrays together
     nPoints = sum([a.shape[0] for a in otherargs.dataList])
     if nPoints > 0:
-        dataArray = numpy.empty(nPoints, dtype=otherargs.dataArrList[0].dtype)
+        dataArray = numpy.empty(nPoints, dtype=otherargs.dataList[0].dtype)
         i = 0
-        for tmpDataArray in otherargs.dataList:
-            fullArr[i:i+tmpDataArray.shape[0]] = tmpDataArray
-            i += tmpDataArray.shape[0]
+        for tmp in otherargs.dataList:
+            dataArray[i:i+tmp.shape[0]] = tmp
+            i += tmp.shape[0]
     else:
         msg = 'Input files have no valid data'
         raise generic.LiDARInvalidData(msg)
-
+        
     return dataArray
 
 
@@ -124,8 +141,15 @@ def selectColumns(data, otherargs):
     Read the next block of lidar points, select out the requested columns. If requested,
     filter to ground only. If requested, restrict to the given bounding box.
     """
-    points = data.infile.getPoints(colNames=otherargs.colNames)
-
+    pointsList = [inFile.getPoints(colNames=otherargs.colNames) for inFile in data.inFiles]
+    nPoints = sum([p.shape[0] for p in pointsList])
+    if nPoints > 0:
+        points = numpy.empty(nPoints, dtype=pointsList[0].dtype)
+        i = 0
+        for tmp in pointsList:
+            points[i:i+tmp.shape[0]] = tmp
+            i += tmp.shape[0]    
+    
     if otherargs.boundingBox is not None:
         mask = ((points['X'] >= otherargs.boundingBox[0]) & (points['X'] <= otherargs.boundingBox[1]) & 
                 (points['Y'] >= otherargs.boundingBox[2]) & (points['Y'] <= otherargs.boundingBox[3]))

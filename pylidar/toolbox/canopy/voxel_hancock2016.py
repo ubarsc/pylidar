@@ -119,7 +119,8 @@ def run_voxel_hancock2016(infiles, controls, otherargs, outfiles):
         
         # run the voxelization                
         print("Voxel traversing %s" % infile)
-        dataFiles = canopycommon.prepareInputFiles(infiles, otherargs, index=i)       
+        dataFiles = canopycommon.prepareInputFiles(infiles, index=i)
+        canopycommon.prepareOtherArgs(infiles, otherargs, index=i)        
         lidarprocessor.doProcessing(runVoxelization, dataFiles, controls=controls, otherArgs=otherargs)
         
         # calculate scan grids

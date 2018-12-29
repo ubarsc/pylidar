@@ -30,6 +30,7 @@ from pylidar.toolbox.canopy import canopycommon
 from pylidar.toolbox.canopy import pavd_calders2014
 from pylidar.toolbox.canopy import voxel_hancock2016
 from pylidar.toolbox.canopy import pgap_armston2013
+from pylidar.toolbox.canopy import crown_duncanson2014
 
 
 def runCanopyMetric(infiles, outfiles, metric, otherargs):
@@ -44,7 +45,8 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
     
     if metric == "PAVD_CALDERS2014":
         
-        dataFiles = canopycommon.prepareInputFiles(infiles, otherargs)
+        dataFiles = canopycommon.prepareInputFiles(infiles)
+        prepareOtherArgs(infiles, otherargs)
         if otherargs.externaldem is not None:
             otherargs.dataDem, otherargs.xMinDem, otherargs.yMaxDem, otherargs.binSizeDem = \
                 spatial.readImageLayer(otherargs.externaldem)
@@ -69,16 +71,18 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
 
     elif metric == "CROWN_DUNCANSON2014":
     
-        if otherargs.bounds is None:
+        if numpy.isnan(otherargs.bounds):
             xmin = min([generic.getLidarFileInfo(fn).header['X_MIN'] for fn in infiles])
             xmax = max([generic.getLidarFileInfo(fn).header['X_MAX'] for fn in infiles])
             ymin = min([generic.getLidarFileInfo(fn).header['Y_MIN'] for fn in infiles])
-            ymax = max([generic.getLidarFileInfo(fn).header['Y_MAx'] for fn in infiles])
+            ymax = max([generic.getLidarFileInfo(fn).header['Y_MAX'] for fn in infiles])
             otherargs.bounds = numpy.array([numpy.floor(xmin), numpy.ceil(xmax), 
                     numpy.floor(ymin), numpy.ceil(ymax)])
         
         points = canopycommon.readAllPoints(infiles, boundingbox=otherargs.bounds, 
                 colnames=['X','Y','Z','CLASSIFICATION'])
+        
+        canopycommon.prepareOtherArgs(infiles, otherargs)
         
         crown_duncanson2014.run_crown_duncanson2014(points, otherargs, outfiles)     
         

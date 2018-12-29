@@ -45,7 +45,7 @@ def getCmdargs():
         help="Voxel bounds [minX,minY,minZ,maxX,maxY,maxZ] (VOXEL_HANCOCK2016 metric only)")
     p.add_argument("--heightcol", default='Z', help="Point column name to use for vertical profile heights (default: %(default)s).")
     p.add_argument("--heightbinsize", default=0.5, type=float, help="Vertical bin size (default: %(default)f m)")
-    p.add_argument("--minheight", default=0.0, type=float, help="Minimum point height to include in vertical profile or crown delineation (default: %(default)f m)")
+    p.add_argument("--minheight", default=0.0, type=float, help="Minimum point height to include in PAVD_CALDERS2014 or CROWN_DUNCANSON2014 (default: %(default)f m)")
     p.add_argument("--maxheight", default=50.0, type=float, help="Maximum point height to include in vertical profile (default: %(default)f m)")
     p.add_argument("--zenithbinsize", default=5.0, type=float, help="View zenith bin size (default: %(default)f deg)")
     p.add_argument("--minzenith", nargs="+", default=[35.0], type=float, help="Minimum view zenith angle to use for each input file")
@@ -61,10 +61,10 @@ def getCmdargs():
     p.add_argument("--rasterdriver", default="HFA", help="GDAL format for output raster (default is %(default)s)")
     p.add_argument("--externaltransformfn", nargs="+", default=[], help="External transform filenames (for RIEGL RXP input files)")
     p.add_argument("--externaldem", help="External single layer DEM image to use for calculation of point heights (PAVD_CALDERS2014) or lower boundary of voxel traversal (VOXEL_HANCOCK2016)")
-    p.add_argument("--maxlayers", default=6, type=int, help="Maximum number of vertical canopy layers permitted (default: %(default)i; CROWN_DUNCANSON2014 metric only)")
+    p.add_argument("--maxlayers", default=3, type=int, help="Maximum number of vertical canopy layers permitted (default: %(default)i; CROWN_DUNCANSON2014 metric only)")
     p.add_argument("--windowsize", default=3, type=int, help="Window size used for canopy height model smoothing (default: %(default)i; CROWN_DUNCANSON2014 metric only)")
-    p.add_argument("--gridbounds", nargs=4, type=float, default=None, 
-        help="Voxel bounds [minX,maxX,minY,maxY] (CROWN_DUNCANSON2014 metric only)")
+    p.add_argument("--gridbounds", nargs=4, type=float,  
+        help="Output product bounds [minX,maxX,minY,maxY] (default: None; CROWN_DUNCANSON2014 metric only)")
        
     cmdargs = p.parse_args()
     if (cmdargs.infiles is None) or (cmdargs.metric is None):
@@ -163,6 +163,7 @@ def run():
         otherargs.minheight = cmdargs.minheight
         otherargs.bounds = numpy.array(cmdargs.gridbounds, dtype=numpy.float32)
         otherargs.heightbinsize = cmdargs.heightbinsize
+        otherargs.rasterdriver = cmdargs.rasterdriver
         
     else:
         msg = 'Unsupported metric %s' % cmdargs.metric
