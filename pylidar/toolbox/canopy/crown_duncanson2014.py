@@ -84,10 +84,7 @@ def run_crown_duncanson2014(points, otherargs, outfiles):
             
             # Get the crown metrics for the uppermost layer
             metrics_tmp = extractMetrics(regions, region_ids, region_heights, otherargs)
-            if layer > 0:
-                metrics = numpy.concatenate((metrics, metrics_tmp))
-            else:
-                metrics = metrics_tmp
+            metrics = numpy.concatenate((metrics, metrics_tmp)) if layer > 0 else metrics_tmp
             
             # Remove the upppermost layer from the point cloud
             points = points[~points_mask]
@@ -113,17 +110,17 @@ def processLayer(points, heights, points_mask, outImage, otherargs):
     
     # Fill pits in the CHM
     filled_chm = fillCHM(outImage, windowsize=otherargs.windowsize, minheight=otherargs.minheight)
-    writeTestImage("test_filledchm.tif",regions,otherargs)
+    writeTestImage("test_filledchm.tif", filled_chm, otherargs)
     
     # Smooth the filled CHM
     smoothed_chm = smoothCHM(filled_chm, windowsize=otherargs.windowsize, 
             minheight=otherargs.minheight)
-    writeTestImage("test_smoothchm.tif",regions,otherargs)
+    writeTestImage("test_smoothchm.tif", smoothed_chm, otherargs)
     
     # Run the watershed
     regions = runWatershed(smoothed_chm, windowsize=otherargs.windowsize, 
             minheight=otherargs.minheight)    
-    writeTestImage("test_regions.tif",regions,otherargs)
+    writeTestImage("test_regions.tif", regions, otherargs)
     
     return regions
 
@@ -146,7 +143,7 @@ def processProfiles(regions, points, heights, otherargs):
     
     # Segment the profiles
     height_thresholds = numpy.zeros(region_ids.size)
-    segmentProfiles(region_ids, profile_data, height_thresholds)
+    segmentProfiles(profile_data, profile_heights, height_thresholds, otherargs.heightbinsize)
     
     # Update the point index
     points_mask = numpy.full(heights.size, False)
@@ -166,9 +163,9 @@ def binHeightsByRegion(data, heights, region_image, region_ids, profile_data, pr
         row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
                 xMin, yMax, binSize)
         if (row >= 0) & (col >= 0) & (row < region_image.shape[0]) & (col < region_image.shape[1]):
-            if regionImage[row, col] != 0:
+            if region_image[row, col] != 0:
                 for j in range(region_ids.shape[0]):
-                    if region_ids[j] == regionImage[row, col]:
+                    if region_ids[j] == region_image[row, col]:
                         if heights[i] > profile_heights[j]:
                             profile_heights[j] = heights[i]
                         hbin = int(heights[i] / heightBinSize)
@@ -177,13 +174,15 @@ def binHeightsByRegion(data, heights, region_image, region_ids, profile_data, pr
 
 
 @jit(nopython=True)
-def segmentProfiles(profile_data, profile_heights, heightbinsize, vertical_buffer=0.1, relative_thres=0.15):
+def segmentProfiles(profile_data, profile_heights, height_thresholds, heightbinsize, 
+    vertical_buffer=0.1, relative_thres=0.15):
     """
     Smooth and split the vertical profile
     Smoothing width is dependent on height of the tree, 0.15*segment height in bins
     Buffer is 10% of the max height (so passing a truncated profile)
     """
     peak_idx = 0
+    height_bins = numpy.arange(profile_data.shape[0]) * heightbinsize
     for i in range(profile_heights.shape[0]):
         smoothing_width = int(relative_thres * profile_heights[i])   
         start_bin = int(profile_heights[i] * vertical_buffer / heightbinsize)        
@@ -261,6 +260,10 @@ def calcHeights(data):
     heights = numpy.zeros(data.shape[0], dtype=numpy.float32)
     heights[~gndmask] = data['Z'][~gndmask] - gndz
     
+    # Exclude canopy points outside bounds of ground points
+    # Need to verify why the NaN are occuring
+    heights[numpy.isnan(heights)] = 0.0
+    
     return heights
     
 
@@ -289,17 +292,17 @@ def fillCHM(inImage, windowsize=3, minheight=2.0):
     is defined by windowsize * 2 + 1
     """
     # Calculate the median heights
-    offset = int((windowsize - 1) / 2)
+    offset = 0
     median_heights = ndimage.median_filter(inImage, size=windowsize, mode='mirror', 
             origin=[offset,offset])
     
     # Generate inputs to calculate the mean heights of canopy pixels
     weights = numpy.ones([windowsize,windowsize])
-    cnt_heights = (inImage >= minheight).astype(inImage.dtype)
-    ndimage.convolve(cnt_heights, weights=weights, mode='mirror', output=cnt_heights, 
-            origin=[offset,offset])   
-    sum_heights = numpy.where(inImage >= minheight, inImage, 0.0)
-    ndimage.convolve(sum_heights, weights=weights, output=sum_heights, mode='mirror', 
+    tmp_heights = (inImage >= minheight).astype(inImage.dtype)
+    cnt_heights = ndimage.convolve(tmp_heights, weights=weights, mode='mirror', 
+            origin=[offset,offset])
+    tmp_heights = numpy.where(inImage >= minheight, inImage, 0.0)
+    sum_heights = ndimage.convolve(tmp_heights, weights=weights, mode='mirror', 
             origin=[offset,offset])
     
     # Infill the CHM
@@ -318,11 +321,10 @@ def smoothCHM(inImage, windowsize=3, minheight=2.0):
     r = (windowsize - 1) / 2
     d = disk(r)
     
-    # Smooth the CHM   
-    offset = int(r)    
-    smoothed_chm = numpy.where(inImage >= minheight, inImage, 0.0)
-    ndimage.convolve(smoothed_chm, weights=d/numpy.sum(d), output=smoothed_chm, 
-            mode='mirror', origin=[offset,offset])
+    # Smooth the CHM    
+    tmp = numpy.where(inImage >= minheight, inImage, 0.0)
+    smoothed_chm = ndimage.convolve(tmp, weights=d/numpy.sum(d), 
+            mode='mirror', origin=[0,0])
     
     return smoothed_chm
 
@@ -356,9 +358,9 @@ def findProfilePeak(for_dip, bins_dip, peak_arr_x2, n_down=4, w_siz=2, second_pe
     bins_dip = the height bins
     peak_arr_x2 = the output array
     """
-    normal_input = 1 - (for_dip / max(for_dip))    
+    normal_input = 1 - (for_dip / numpy.max(for_dip))    
     k = numpy.ones(smoothing_width) / smoothing_width
-    temp_var = numpy.convol(normal_input, k)    
+    temp_var = numpy.convolve(normal_input, k)    
     max_peak = numpy.max(temp_var)
     max_peak_x, = numpy.where(temp_var == max_peak)
     peak_th = second_peak_th_factor * max_peak
@@ -395,11 +397,3 @@ def findProfilePeak(for_dip, bins_dip, peak_arr_x2, n_down=4, w_siz=2, second_pe
         peak_arr_x2 = peak_arr_x[selected_i]
     else:
         peak_arr_x2 = numpy.zeros(1)
-
-
-def writeMetrics(metrics):
-    """
-    Write the crown metrics to a comma delimited ASCII file
-    """
-    pass
-
