@@ -173,7 +173,7 @@ def binHeightsByRegion(data, heights, region_image, region_ids, profile_data, pr
                             profile_data[j,hbin] += 1
 
 
-@jit(nopython=True)
+#@jit(nopython=True)
 def segmentProfiles(profile_data, profile_heights, height_thresholds, heightbinsize, 
     vertical_buffer=0.1, relative_thres=0.15):
     """
@@ -205,9 +205,9 @@ def maskPoints(data, heights, region_image, region_ids, height_thresholds, data_
         row, col = spatial.xyToRowColNumba(data[i]['X'], data[i]['Y'],
                 xMin, yMax, binSize)
         if (row >= 0) & (col >= 0) & (row < region_image.shape[0]) & (col < region_image.shape[1]):
-            if regionImage[row, col] != 0:
+            if region_image[row, col] != 0:
                 for j in range(region_ids.shape[0]):
-                    if region_ids[j] == regionImage[row, col]:
+                    if region_ids[j] == region_image[row, col]:
                         if height[i] > height_thresholds[j]:
                             data_mask[i] = True                
 
@@ -320,10 +320,11 @@ def smoothCHM(inImage, windowsize=3, minheight=2.0):
     # Set the disk structuring element
     r = (windowsize - 1) / 2
     d = disk(r)
+    w = d/numpy.sum(d)
     
     # Smooth the CHM    
     tmp = numpy.where(inImage >= minheight, inImage, 0.0)
-    smoothed_chm = ndimage.convolve(tmp, weights=d/numpy.sum(d), 
+    smoothed_chm = ndimage.convolve(tmp, weights=w, 
             mode='mirror', origin=[0,0])
     
     return smoothed_chm
@@ -350,7 +351,7 @@ def runWatershed(inImage, windowsize=3, minheight=2.0):
     return labels
 
     
-@jit(nopython=True)
+#@jit(nopython=True)
 def findProfilePeak(for_dip, bins_dip, peak_arr_x2, n_down=4, w_siz=2, second_peak_th_factor=0.06, smoothing_width=4):
     """
     Matthew Brolly's peak finding code
