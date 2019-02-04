@@ -83,7 +83,7 @@ def run_crown_duncanson2014(points, otherargs, outfiles):
             outImageFile.setLayer(regions, layerNum=layer+1)
             
             # Get the crown metrics for the uppermost layer
-            metrics_tmp = extractMetrics(regions, region_ids, region_heights, otherargs)
+            metrics_tmp = extractMetrics(regions, region_ids, region_heights, layer+1, otherargs)
             metrics = numpy.concatenate((metrics, metrics_tmp)) if layer > 0 else metrics_tmp
             
             # Remove the upppermost layer from the point cloud
@@ -91,7 +91,7 @@ def run_crown_duncanson2014(points, otherargs, outfiles):
             heights = heights[~points_mask]
             
     outImageFile.close()
-    numpy.savetxt(outfiles[1], metrics, fmt="%.4f", delimiter=',', 
+    numpy.savetxt(outfiles[1], metrics, fmt="%s", delimiter=',', 
             header=','.join(metrics.dtype.names))
         
 
@@ -104,23 +104,19 @@ def processLayer(points, heights, points_mask, outImage, otherargs):
         findMaxHeights(points, heights, outImage, otherargs.bounds[0], otherargs.bounds[3], 
                 otherargs.resolution)
     else:
-        findMaxHeights(points[points_mask,:], heights[points_mask], outImage, 
+        findMaxHeights(points[points_mask], heights[points_mask], outImage, 
                 otherargs.bounds[0], otherargs.bounds[3], otherargs.resolution)
-    writeTestImage("test_chm.tif",outImage,otherargs)
     
     # Fill pits in the CHM
     filled_chm = fillCHM(outImage, windowsize=otherargs.windowsize, minheight=otherargs.minheight)
-    writeTestImage("test_filledchm.tif", filled_chm, otherargs)
     
     # Smooth the filled CHM
     smoothed_chm = smoothCHM(filled_chm, windowsize=otherargs.windowsize, 
             minheight=otherargs.minheight)
-    writeTestImage("test_smoothchm.tif", smoothed_chm, otherargs)
     
     # Run the watershed
     regions = runWatershed(smoothed_chm, windowsize=otherargs.windowsize, 
             minheight=otherargs.minheight)    
-    writeTestImage("test_regions.tif", regions, otherargs)
     
     return regions
 
@@ -139,7 +135,7 @@ def processProfiles(regions, points, heights, otherargs):
     
     # Derive the vertical profile for each segment  
     binHeightsByRegion(points, heights, regions, region_ids, profile_data, profile_heights,  
-            otherargs.bounds[0], otherargs.bounds[3], otherargs.resolution, otherargs.heightbinsize)  
+            otherargs.bounds[0], otherargs.bounds[3], otherargs.resolution, otherargs.heightbinsize)
     
     # Segment the profiles
     height_thresholds = numpy.zeros(region_ids.size)
@@ -147,8 +143,8 @@ def processProfiles(regions, points, heights, otherargs):
     
     # Update the point index
     points_mask = numpy.full(heights.size, False)
-    maskPoints(data, heights, region_image, region_ids, height_thresholds, points_mask, 
-            otherargs.bounds[0], otherargs.bounds[3])
+    maskPoints(points, heights, regions, region_ids, height_thresholds, points_mask, 
+            otherargs.bounds[0], otherargs.bounds[3], otherargs.resolution)
     
     return points_mask,region_ids,profile_heights
 
@@ -184,20 +180,21 @@ def segmentProfiles(profile_data, profile_heights, height_thresholds, heightbins
     peak_idx = 0
     height_bins = numpy.arange(profile_data.shape[0]) * heightbinsize
     for i in range(profile_heights.shape[0]):
-        smoothing_width = int(relative_thres * profile_heights[i])   
-        start_bin = int(profile_heights[i] * vertical_buffer / heightbinsize)        
-        end_bin = int(profile_heights[i] / heightbinsize) - start_bin    
-        for_dip = profile_data[start_bin:end_bin,i]
-        bins_dip = height_bins[start_bin:end_bin]       
-        findProfilePeak(for_dip, bins_dip, peak_idx, smoothing_width=smoothing_width)
-        if peak_idx[0] > 0:
-            height_thresholds[i] = bins_dip[peak_idx[0]]
-        else:
-            height_thresholds[i] = 0
+        if profile_heights[i] > 0:
+            smoothing_width = int(relative_thres * profile_heights[i])   
+            if smoothing_width > 0:
+                start_bin = int(profile_heights[i] * vertical_buffer / heightbinsize)        
+                end_bin = int(profile_heights[i] / heightbinsize) - start_bin    
+                for_dip = profile_data[i,start_bin:end_bin]
+                if numpy.max(for_dip) > 0:
+                    bins_dip = height_bins[start_bin:end_bin]
+                    findProfilePeak(for_dip, bins_dip, peak_idx, smoothing_width=smoothing_width)
+                    if peak_idx > 0:
+                        height_thresholds[i] = bins_dip[peak_idx]
     
 
 @jit(nopython=True)
-def maskPoints(data, heights, region_image, region_ids, height_thresholds, data_mask, xMin, yMax):
+def maskPoints(data, heights, region_image, region_ids, height_thresholds, data_mask, xMin, yMax, binSize):
     """
     Mask points that are not in the uppermost canopy
     """
@@ -208,11 +205,11 @@ def maskPoints(data, heights, region_image, region_ids, height_thresholds, data_
             if region_image[row, col] != 0:
                 for j in range(region_ids.shape[0]):
                     if region_ids[j] == region_image[row, col]:
-                        if height[i] > height_thresholds[j]:
+                        if heights[i] > height_thresholds[j]:
                             data_mask[i] = True                
 
                 
-def extractMetrics(regions, region_ids, region_heights, otherargs):
+def extractMetrics(regions, region_ids, region_heights, layer, otherargs):
     """
     Extract metrics for each segment
     Implemented as done in Duncanson et al. (2014) but can be improved
@@ -222,24 +219,27 @@ def extractMetrics(regions, region_ids, region_heights, otherargs):
     xgrid = xgrid * otherargs.resolution + otherargs.bounds[0]
     ygrid = otherargs.bounds[3] - ygrid * otherargs.resolution
     
-    # Initialize the output metrics structured array    
-    arrayDtype = [("CrownID", 'i4')]
+    # Initialize the output metrics structured array   
+    arrayDtype = [("CrownID", 'i4'),("Layer", 'i4')]
     for name in ["Easting", "Northing", "Height", "Area", "DiameterX", "DiameterY"]:
         arrayDtype.append((name, 'f8'))
-    metrics = numpy.empty((region_ids.shape[0], ), dtype=arrayDtype)
+    metrics = numpy.zeros((region_ids.shape[0], ), dtype=arrayDtype)
     
     # Calculate the metrics
     metrics["CrownID"] = region_ids
-    metrics["Height"] = region_heights
+    metrics["Layer"] = layer
+    metrics["Height"] = region_heights    
     for i,region_id in enumerate(region_ids):
-        idx = regions == region_id
-        metrics["Easting"][i] = numpy.mean(xgrid[idx])
-        metrics["Northing"][i] = numpy.mean(ygrid[idx])       
-        metrics["Area"][i] = numpy.sum(idx) * otherargs.resolution**2
-        metrics["DiameterX"][i] = numpy.max(xgrid[idx]) - numpy.min(xgrid[idx])
-        metrics["DiameterY"][i] = numpy.max(ygrid[idx]) - numpy.min(ygrid[idx])
+        if region_heights[i] > 0:
+            idx = regions == region_id
+            if idx.sum() > 0:
+                metrics["Easting"][i] = numpy.mean(xgrid[idx])
+                metrics["Northing"][i] = numpy.mean(ygrid[idx])       
+                metrics["Area"][i] = numpy.sum(idx) * otherargs.resolution**2
+                metrics["DiameterX"][i] = numpy.max(xgrid[idx]) - numpy.min(xgrid[idx])
+                metrics["DiameterY"][i] = numpy.max(ygrid[idx]) - numpy.min(ygrid[idx])
     
-    return metrics
+    return metrics[metrics["Height"] > 0]
     
     
 def calcHeights(data):
@@ -307,7 +307,8 @@ def fillCHM(inImage, windowsize=3, minheight=2.0):
     
     # Infill the CHM
     mask = (inImage < minheight) & (median_heights >= minheight)
-    filled_chm = numpy.where(mask, sum_heights / cnt_heights, inImage)
+    avg_heights = numpy.divide(sum_heights, cnt_heights, where=mask)
+    filled_chm = numpy.where(mask, avg_heights, inImage)
     
     return filled_chm
 
@@ -320,7 +321,7 @@ def smoothCHM(inImage, windowsize=3, minheight=2.0):
     # Set the disk structuring element
     r = (windowsize - 1) / 2
     d = disk(r)
-    w = d/numpy.sum(d)
+    w = d / numpy.sum(d)
     
     # Smooth the CHM    
     tmp = numpy.where(inImage >= minheight, inImage, 0.0)
@@ -344,7 +345,10 @@ def runWatershed(inImage, windowsize=3, minheight=2.0):
     # Run the watershed
     min_val = numpy.min(inImage)
     max_val = numpy.max(inImage)   
-    tmpImage = max_val - ((255 + 0.9999) * (inImage - min_val)/(max_val - min_val))
+    val_range = max_val - min_val
+    tmpImage = numpy.where(val_range > 0, (inImage - min_val) / val_range, 0)
+    tmpImage = max_val - (255 + 0.9999) * tmpImage
+    
     canopy_mask = inImage >= minheight
     labels = watershed(tmpImage, markers, mask=canopy_mask)
     
@@ -359,18 +363,18 @@ def findProfilePeak(for_dip, bins_dip, peak_arr_x2, n_down=4, w_siz=2, second_pe
     bins_dip = the height bins
     peak_arr_x2 = the output array
     """
-    normal_input = 1 - (for_dip / numpy.max(for_dip))    
+    normal_input = 1 - (for_dip / numpy.max(for_dip))
     k = numpy.ones(smoothing_width) / smoothing_width
     temp_var = numpy.convolve(normal_input, k)    
     max_peak = numpy.max(temp_var)
     max_peak_x, = numpy.where(temp_var == max_peak)
     peak_th = second_peak_th_factor * max_peak
-    peak_arr = numpy.zeros(1)
-    peak_arr_x = numpy.zeros(1,dtype=numpy.uint8)
+    peak_arr = numpy.zeros(temp_var.size)
+    peak_arr_x = numpy.zeros(temp_var.size,dtype=numpy.uint16)
     previous_w_peak = 0
     peak_assignment_flag = 0
-    
-    for x in range(0, temp_var.size-w_siz, w_siz):
+    i = 0
+    for x in range(0, temp_var.size-w_siz):
         
         current_w_peak = numpy.max(temp_var[x:x+w_siz])
         
@@ -378,7 +382,7 @@ def findProfilePeak(for_dip, bins_dip, peak_arr_x2, n_down=4, w_siz=2, second_pe
             previous_w_peak = current_w_peak
             previous_peak = current_w_peak
             previous_peak_x_tmp, = numpy.where(temp_var[x:x+w_siz] == current_w_peak)
-            previous_peak_x = x + previous_peak_x_tmp
+            previous_peak_x = x + previous_peak_x_tmp[0]
             peak_assignment_flag = 0
            
         if current_w_peak < previous_w_peak:
@@ -386,15 +390,15 @@ def findProfilePeak(for_dip, bins_dip, peak_arr_x2, n_down=4, w_siz=2, second_pe
             peak_assignment_flag += 1
 
         if peak_assignment_flag == n_down:
-            peak_arr = numpy.concatenate((peak_arr,previous_peak))
-            peak_arr_x = numpy.concatenate((peak_arr_x,previous_peak_x))
+            peak_arr[i] = previous_peak
+            peak_arr_x[i] = previous_peak_x
+            i += 1
 
         previous_w_peak = current_w_peak
 
     selected_i, = numpy.where(peak_arr > 0)
     
     if selected_i.size > 0:
-        peak_arr2 = peak_arr[selected_i]
-        peak_arr_x2 = peak_arr_x[selected_i]
+        peak_arr_x2 = peak_arr_x[selected_i][0]
     else:
-        peak_arr_x2 = numpy.zeros(1)
+        peak_arr_x2 = -1
