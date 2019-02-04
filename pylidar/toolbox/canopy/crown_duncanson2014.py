@@ -137,10 +137,12 @@ def processProfiles(regions, points, heights, otherargs):
     binHeightsByRegion(points, heights, regions, region_ids, profile_data, profile_heights,  
             otherargs.bounds[0], otherargs.bounds[3], otherargs.resolution, otherargs.heightbinsize)
     
+    numpy.savetxt("test_profile_data.csv", profile_data, fmt="%.4f", delimiter=',')
+    
     # Segment the profiles
     height_thresholds = numpy.zeros(region_ids.size)
     segmentProfiles(profile_data, profile_heights, height_thresholds, otherargs.heightbinsize)
-    
+        
     # Update the point index
     points_mask = numpy.full(heights.size, False)
     maskPoints(points, heights, regions, region_ids, height_thresholds, points_mask, 
