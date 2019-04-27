@@ -38,13 +38,12 @@ def run_pavd_calders2014(dataFiles, controls, otherargs, outfile):
         otherargs.xgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
         otherargs.ygrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
         otherargs.zgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
-        otherargs.rgrid = numpy.zeros(otherargs.gridsize**2, dtype=numpy.float64)
         otherargs.gridmask = numpy.ones(otherargs.gridsize**2, dtype=numpy.bool)
                   
         lidarprocessor.doProcessing(runXYMinGridding, dataFiles, controls=controls, otherArgs=otherargs)
         
         otherargs.planefit = planeFitHubers(otherargs.xgrid[~otherargs.gridmask], otherargs.ygrid[~otherargs.gridmask], 
-            otherargs.zgrid[~otherargs.gridmask], otherargs.rgrid[~otherargs.gridmask], reportfile=otherargs.rptfile)
+            otherargs.zgrid[~otherargs.gridmask], reportfile=otherargs.rptfile)
     
     minZenithAll = min(otherargs.minzenith)
     maxZenithAll = max(otherargs.maxzenith)
@@ -126,7 +125,7 @@ def countPointsPulsesByZenithHeight(midZenithBins,minimumAzimuth,maximumAzimuth,
                             pointCounts[i,k] += weights[j]
 
 @jit
-def minPointsByXYGrid(pointX, pointY, pointZ, pointR, gridX, gridY, gridZ, gridR, gridMask,
+def minPointsByXYGrid(pointX, pointY, pointZ, gridX, gridY, gridZ, gridMask,
                            minX, maxX, minY, maxY, resolution, nbinsX):
     """
     Called by runXYMinGridding()
@@ -137,7 +136,6 @@ def minPointsByXYGrid(pointX, pointY, pointZ, pointR, gridX, gridY, gridZ, gridR
         pointX          1D array of point X coordinates for this block
         pointY          1D array of point Y coordinates for this block
         pointZ          1D array of point Z coordinates for this block
-        pointR          1D array of point range coordinates for this block
         minX            Minimum X coordinate to consider
         maxX            Maximum X coordinate to consider
         minY            Minimum Y coordinate to consider
@@ -149,7 +147,6 @@ def minPointsByXYGrid(pointX, pointY, pointZ, pointR, gridX, gridY, gridZ, gridR
         gridX           A 1D array representation of a 2D grid of minumum Z point X coordinates
         gridY           A 1D array representation of a 2D grid of minumum Z point Y coordinates
         gridZ           A 1D array representation of a 2D grid of minumum Z point Z coordinates
-        gridR           A 1D array representation of a 2D grid of minumum Z point range coordinates
         gridMask        A 1D array representation of a 2D bool grid of missing values
     
     """
@@ -162,12 +159,10 @@ def minPointsByXYGrid(pointX, pointY, pointZ, pointR, gridX, gridY, gridZ, gridR
                         gridX[j] = pointX[i]
                         gridY[j] = pointY[i]
                         gridZ[j] = pointZ[i]
-                        gridR[j] = pointR[i]
                 else:
                     gridX[j] = pointX[i]
                     gridY[j] = pointY[i]
                     gridZ[j] = pointZ[i]
-                    gridR[j] = pointR[i]
                     gridMask[j] = False
     
 def runXYMinGridding(data, otherargs):
@@ -175,7 +170,7 @@ def runXYMinGridding(data, otherargs):
     Derive a minimum Z surface following plane correction procedures outlined in Calders et al. (2014)
     """
     pulsecolnames = ['X_ORIGIN','Y_ORIGIN','Z_ORIGIN','NUMBER_OF_RETURNS']    
-    pointcolnames = ['X','Y','Z','RANGE']
+    pointcolnames = ['X','Y','Z']
 
     halfextent = (otherargs.gridsize * otherargs.gridbinsize) / 2.0
 
@@ -194,7 +189,7 @@ def runXYMinGridding(data, otherargs):
         y = points['Y'] - pulsesByPoint['Y_ORIGIN']
         z = points['Z'] - pulsesByPoint['Z_ORIGIN']
         
-        minPointsByXYGrid(x, y, z, points['RANGE'], otherargs.xgrid, otherargs.ygrid, otherargs.zgrid, otherargs.rgrid, 
+        minPointsByXYGrid(x, y, z, otherargs.xgrid, otherargs.ygrid, otherargs.zgrid,  
             otherargs.gridmask, minX, maxX, minY, maxY, otherargs.gridbinsize, otherargs.gridsize)
 
 def runZenithHeightStratification(data, otherargs):
@@ -290,7 +285,7 @@ def calcLinearPlantProfiles(height, heightbinsize, zenith, pgapz):
         y = kthetal[:,i]
         mask = ~numpy.isnan(y)
         if numpy.count_nonzero(mask) > 2:
-            lv, lh = numpy.linalg.lstsq(a[mask,:], y[mask])[0]        
+            lv, lh = numpy.linalg.lstsq(a[mask,:], y[mask], rcond=None)[0]        
             paiv[i] = lv
             paih[i] = lh    
             if lv < 0:
@@ -378,14 +373,14 @@ def writeProfiles(outfile, zenith, height, pgapz, lpp_pai, lpp_pavd, lpp_mla,
     numpy.savetxt(outfile, profileArray, fmt="%.4f", delimiter=',', 
             header=','.join(profileArray.dtype.names))
 
-def planeFitHubers(x, y, z, r, reportfile=None):
+def planeFitHubers(x, y, z, reportfile=None):
     """
     Plane fitting (Huber's T norm with median absolute deviation scaling)
     Prior weights are set to 1 / point range.
     """
-    xy = numpy.vstack((x/r,y/r)).T
+    xy = numpy.vstack((x,y)).T
     xy = sm.add_constant(xy)
-    huber_t = sm.RLM(z/r, xy, M=sm.robust.norms.HuberT())
+    huber_t = sm.RLM(z, xy, M=sm.robust.norms.HuberT())
     huber_results = huber_t.fit()
             
     outdictn = collections.OrderedDict()
