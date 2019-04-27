@@ -35,7 +35,7 @@ class CanopyMetricError(Exception):
     "Exception type for canopymetric errors"
 
 
-def prepareInputFiles(infiles, index=None):
+def prepareInputFiles(infiles, otherargs, index=None):
     """
     Prepare input files for calculation of canopy metrics
     """    

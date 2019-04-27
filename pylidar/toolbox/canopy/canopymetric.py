@@ -45,8 +45,8 @@ def runCanopyMetric(infiles, outfiles, metric, otherargs):
     
     if metric == "PAVD_CALDERS2014":
         
-        dataFiles = canopycommon.prepareInputFiles(infiles)
-        prepareOtherArgs(infiles, otherargs)
+        dataFiles = canopycommon.prepareInputFiles(infiles, otherargs)
+        canopycommon.prepareOtherArgs(infiles, otherargs)
         if otherargs.externaldem is not None:
             otherargs.dataDem, otherargs.xMinDem, otherargs.yMaxDem, otherargs.binSizeDem = \
                 spatial.readImageLayer(otherargs.externaldem)
