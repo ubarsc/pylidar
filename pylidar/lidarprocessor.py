@@ -36,6 +36,7 @@ from .lidarformats import spdv4
 from .lidarformats import ascii
 from .lidarformats import lvisbin
 from .lidarformats import lvishdf5
+from .lidarformats import gedil1a01
 
 HAVE_FMT_ASCII_ZLIB = ascii.HAVE_ZLIB
 HAVE_FMT_RIEGL = True
