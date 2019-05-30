@@ -172,6 +172,9 @@ class GEDIL1A01File(generic.LiDARFile):
                     elif name in self.fileHandle[self.beam]['geolocation']:
                         s = self.fileHandle[self.beam]['geolocation'][name].dtype.str
                         dtypeList.append((str(name), s))
+                    elif name in SURFACE_TYPE_NAMES:
+                        s = self.fileHandle[self.beam]['geolocation']['surface_type'].dtype.str
+                        dtypeList.append((str(name), s))
                     else:
                         msg = 'column %s not found in file' % name
                         raise generic.LiDARArrayColumnError(msg)
