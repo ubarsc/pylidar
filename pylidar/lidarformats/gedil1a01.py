@@ -1,5 +1,5 @@
 """
-Driver for LVIS L1A01 HDF5 files. Read only.
+Driver for GEDI L1A01 HDF5 files. Read only.
 
 Read Driver Options
 -------------------
@@ -150,34 +150,43 @@ class GEDIL1A01File(generic.LiDARFile):
         Assumes colName is not None
         """
         if isinstance(colNames, str):
-            if colNames == CLASSIFICATION_NAME and colNames not in self.fileHandle[self.beam]['geolocation']:
+            if colNames == CLASSIFICATION_NAME and colNames not in self.fileHandle[self.beam]['geolocation'] and colNames not in self.fileHandle[self.beam]:
                 # hack so we can fake a CLASSIFICATION column
                 numRecords = self.range.endPulse - self.range.startPulse
                 return numpy.zeros(numRecords, dtype=numpy.uint8)
 
-            return self.fileHandle[colNames][self.range.startPulse:self.range.endPulse]
+            if colNames in self.fileHandle[self.beam]:
+                return self.fileHandle[self.beam][colNames][self.range.startPulse:self.range.endPulse]
+            else:
+                return self.fileHandle[self.beam]['geolocation'][colNames][self.range.startPulse:self.range.endPulse]
         else:
             # a list etc. Have to build structured array first
             dtypeList = []
             for name in colNames:
-                if name == CLASSIFICATION_NAME and name not in self.fileHandle:
+                if name == CLASSIFICATION_NAME and name not in self.fileHandle[self.beam]['geolocation'] and name not in self.fileHandle[self.beam]:
                     dtypeList.append((CLASSIFICATION_NAME, numpy.uint8))
-                elif name not in self.fileHandle[self.beam]['geolocation']:
-                    msg = 'column %s not found in file' % name
-                    raise generic.LiDARArrayColumnError(msg)
                 else:
-                    s = self.fileHandle[self.beam]['geolocation'][name].dtype.str
-                    dtypeList.append((str(name), s))
+                    if name in self.fileHandle[self.beam]:
+                        s = self.fileHandle[self.beam][name].dtype.str
+                        dtypeList.append((str(name), s))
+                    elif name in self.fileHandle[self.beam]['geolocation']:
+                        s = self.fileHandle[self.beam]['geolocation'][name].dtype.str
+                        dtypeList.append((str(name), s))
+                    else:
+                        msg = 'column %s not found in file' % name
+                        raise generic.LiDARArrayColumnError(msg)
 
             numRecords = self.range.endPulse - self.range.startPulse
             data = numpy.empty(numRecords, dtypeList)
             for name in colNames:
-                if name == CLASSIFICATION_NAME and name not in self.fileHandle[self.beam]['geolocation']:
+                if name == CLASSIFICATION_NAME and name not in self.fileHandle[self.beam]['geolocation'] and name not in self.fileHandle[self.beam]:
                     data[CLASSIFICATION_NAME].fill(0)
                 else:
                     if name in SURFACE_TYPE_NAMES:
                         idx = SURFACE_TYPE_NAMES.index(name)
                         data[str(name)] = self.fileHandle[self.beam]['geolocation']['surface_type'][idx,self.range.startPulse:self.range.endPulse]
+                    elif name in self.fileHandle[self.beam]:
+                        data[str(name)] = self.fileHandle[self.beam][name][self.range.startPulse:self.range.endPulse]
                     else:
                         data[str(name)] = self.fileHandle[self.beam]['geolocation'][name][self.range.startPulse:self.range.endPulse]
 
@@ -241,7 +250,17 @@ class GEDIL1A01File(generic.LiDARFile):
                     if name == 'surface_type':
                         for surface_type_name in SURFACE_TYPE_NAMES:
                             colNames.append(str(surface_type_name))
+            for name in self.fileHandle[self.beam].keys():
+                # add all the ones that are 1d array
+                try:
+                    # some may be sub-datasets etc
+                    shape = self.fileHandle[self.beam][name].shape
+                except AttributeError as e:
+                    continue
 
+                if len(shape) == 1:
+                    colNames.append(str(name))
+                    
         return self.readRange(colNames)
         
     def readWaveformInfo(self):
