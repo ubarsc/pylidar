@@ -231,7 +231,7 @@ class GEDIL1A01File(generic.LiDARFile):
                 
         # check that it is indeed the right version
         # and get attributes
-        fileAttrs = self.fileHandle.attrs
+        self.fileAttrs = self.fileHandle.attrs
         if mode == generic.READ or mode == generic.UPDATE:
             # not sure if this is ok - just check there are some header fields
             for expected in EXPECTED_HEADER_FIELDS:
@@ -240,14 +240,23 @@ class GEDIL1A01File(generic.LiDARFile):
                     msg = '%s not found in header' % expected
                     raise generic.LiDARFormatNotUnderstood(msg)                
         else:
-            # write the GENERATING_SOFTWARE tag
-            fileAttrs['generating_software'] = generic.SOFTWARE_NAME
-                    
-            # create the groups
-            data = self.fileHandle.create_group(self.beam)
-            for group_name in self.group_names:
-                data.create_group(group_name)
+            # add header values for current L1A01 format
+            self.fileAttrs['l0_to_l1a_githash'] = b'19d6178607a7be37e67811a2d4f3fc4e145a335c'
+            self.fileAttrs['l0_to_l1a_version'] = b'20190417.0.0'        
+        
+        # create new groups if necessary
+        if mode == generic.CREATE or mode == generic.UPDATE:    
             
+            if self.beam not in self.fileHandle:
+                data = self.fileHandle.create_group(self.beam)
+                
+            for group_name in self.group_names:
+                if group_name not in self.fileHandle[self.beam]:
+                    data.create_group(group_name)
+
+            # add the GENERATING_SOFTWARE tag
+            self.fileAttrs['generating_software'] = generic.SOFTWARE_NAME
+                
         self.range = None
         self.lastPulsesSpace = None
         self.lastTransSpace = None
@@ -262,6 +271,10 @@ class GEDIL1A01File(generic.LiDARFile):
         return 'GEDIL1A01'
 
     def close(self):
+        
+        if self.mode != generic.READ:
+            self.setHeader(self.fileAttrs)
+        
         self.fileHandle = None
         self.range = None
         self.lastPulsesSpace = None
@@ -515,7 +528,7 @@ class GEDIL1A01File(generic.LiDARFile):
         """
         try:
             nPulses = self.fileHandle[self.beam]['shot_number'].shape[0]
-        except AttributeError as e:
+        except (AttributeError, KeyError) as e:
             nPulses = 0
 
         return nPulses
@@ -962,6 +975,25 @@ class GEDIL1A01File(generic.LiDARFile):
         Just extract the one value and return it
         """
         return self.getHeader()[name]
+
+    def setHeader(self, newHeaderDict):
+        """
+        Update our cached dictionary
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on update or create'
+            raise generic.LiDARInvalidSetting(msg)
+        for key in newHeaderDict.keys():
+            self.fileHandle.attrs[key] = newHeaderDict[key]
+        
+    def setHeaderValue(self, name, value):
+        """
+        Just update one value in the header
+        """
+        if self.mode == generic.READ:
+            msg = 'Can only set header values on update or create'
+            raise generic.LiDARInvalidSetting(msg)
+        self.fileHandle.attrs[name] = value
         
     
 class GEDIL1A01FileInfo(generic.LiDARFileInfo):
