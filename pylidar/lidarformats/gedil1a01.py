@@ -1,5 +1,5 @@
 """
-Driver for GEDI L1A01 HDF5 files. Read only.
+Driver for GEDI L1A01 HDF5 files.
 
 Read Driver Options
 -------------------
