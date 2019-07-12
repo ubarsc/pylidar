@@ -443,11 +443,8 @@ class GEDIL1A01File(generic.LiDARFile):
                 group = GROUP_NAMES[group_id]
                 hdfName = name[4::]
                 s = self.fileHandle[self.beam][group][hdfName].dtype.str 
-                if self.fileHandle[self.beam][group][hdfName].ndim > 1:
-                    t = self.fileHandle[self.beam][group][hdfName].shape
-                    dtypeList.append((str(name), s, t))
-                else:
-                    dtypeList.append((str(name), s)) 
+                t = self.fileHandle[self.beam][group][hdfName].shape
+                dtypeList.append((str(name), s, t))
         data = numpy.empty(1, dtype=dtypeList)
         
         # populate the array
@@ -1022,4 +1019,4 @@ class GEDIL1A01FileInfo(generic.LiDARFileInfo):
             
     @staticmethod        
     def getDriverName():
-        return 'GEDI L1A01'
+        return 'GEDIL1A01'
