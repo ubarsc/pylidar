@@ -76,7 +76,7 @@ DEFAULT_HDF5_CHUNK_SIZE = 250
 READSUPPORTEDOPTIONS = ('POINT_FROM', 'BEAM', 'PULSE_GROUP_NAMES')
 "Supported read options"
 
-WRITESUPPORTEDOPTIONS = ('BEAM', 'GROUP_NAMES')
+WRITESUPPORTEDOPTIONS = ('BEAM', 'PULSE_GROUP_NAMES')
 "Supported write options"
 
 DEFAULT_POINT_FROM = ('GEO_longitude_lastbin', 'GEO_latitude_lastbin', 'GEO_elevation_lastbin')
@@ -175,7 +175,19 @@ def flatten2dWaveformData(wavedata, inmask, nrecv, flattened):
                 flattened[flat_idx] = wavedata[s, p]
                 flat_idx += 1
                 nrecv[p] += 1
-                
+
+    def flatten2dMaskedArray(flatArray, in2d, mask2d, idx2d):
+    """
+    Used by writeData to flatten out masked 2d data into a 1d
+    using the indexes and masked saved from when the array was created.
+    """
+    (maxPts, nRows) = in2d.shape
+    for n in range(maxPts):
+        for row in range(nRows):
+            if not mask2d[n, row]:
+                idx = idx2d[n, row]
+                val = in2d[n, row]
+                flatArray[idx] = val
 
 class GEDIL1A01File(generic.LiDARFile):
     """
@@ -210,7 +222,7 @@ class GEDIL1A01File(generic.LiDARFile):
             self.pointFrom = userClass.lidarDriverOptions['POINT_FROM']
         self.beam = DEFAULT_BEAM
         if 'BEAM' in userClass.lidarDriverOptions:
-            self.beam = userClass.lidarDriverOptions['BEAM']                
+            self.beam = userClass.lidarDriverOptions['BEAM']
         self.pulse_group_names = DEFAULT_PULSE_GROUP_NAMES
         if 'PULSE_GROUP_NAMES' in userClass.lidarDriverOptions:
             self.pulse_group_names = userClass.lidarDriverOptions['PULSE_GROUP_NAMES'] 
@@ -245,13 +257,10 @@ class GEDIL1A01File(generic.LiDARFile):
         
         # get the ancillary data
         # TODO: Will the ancillary group ever need to change?
+        self.ancillary = numpy.array([1.19880002e+09], dtype=[('master_time_epoch', '<f8')])
         if mode == generic.READ or mode == generic.UPDATE:
             if self.beam in self.fileHandle:
                 self.ancillary = self.readAncillaryData(self.fileHandle, self.beam)
-            else:
-                self.ancillary = numpy.array([1.19880002e+09], dtype=[('master_time_epoch', '<f8')])
-        else:
-            self.ancillary = numpy.array([1.19880002e+09], dtype=[('master_time_epoch', '<f8')])
         
         # create new groups if necessary
         if mode == generic.CREATE or mode == generic.UPDATE:
@@ -274,7 +283,7 @@ class GEDIL1A01File(generic.LiDARFile):
         self.lastTrans_IdxMask = None
         self.lastRecvSpace = None
         self.lastRecv_Idx = None
-        self.lastRecv_IdxMask = None    
+        self.lastRecv_IdxMask = None
     
     @staticmethod        
     def getDriverName():
@@ -476,8 +485,8 @@ class GEDIL1A01File(generic.LiDARFile):
                                         waveformInfo['tx_sample_start_index'], waveformInfo['tx_sample_count'], 
                                         nOut)
         
-        start = int(waveformInfo['tx_sample_start_index'][0] - 1)
-        finish = int(waveformInfo['tx_sample_start_index'][-1] + waveformInfo['tx_sample_count'][-1] - 1)
+        start = int(waveformInfo['tx_sample_start_index'][0])
+        finish = int(waveformInfo['tx_sample_start_index'][-1] + waveformInfo['tx_sample_count'][-1])
         trans = self.fileHandle[self.beam]['txwaveform'][start:finish]
         
         trans = trans[trans_idx]
@@ -491,10 +500,9 @@ class GEDIL1A01File(generic.LiDARFile):
         
     def readReceived(self):
         """
-        Return the 3d masked integer array of received for each of the
+        Return the 2d masked integer array of received for each of the
         current pulses.
-        First axis is the waveform bin.
-        Second axis is waveform number and last is pulse.
+        First axis is waveform number and last is pulse.
         """
         waveformInfo = self.readWaveformInfo()
         if waveformInfo is None:
@@ -509,10 +517,10 @@ class GEDIL1A01File(generic.LiDARFile):
                                       waveformInfo['rx_sample_start_index'], waveformInfo['rx_sample_count'], 
                                       nOut)
         
-        start = int(waveformInfo['rx_sample_start_index'][0] - 1)
-        finish = int(waveformInfo['rx_sample_start_index'][-1] + waveformInfo['rx_sample_count'][-1] - 1)
+        start = int(waveformInfo['rx_sample_start_index'][0])
+        finish = int(waveformInfo['rx_sample_start_index'][-1] + waveformInfo['rx_sample_count'][-1])
         recv = self.fileHandle[self.beam]['rxwaveform'][start:finish]
-                
+        
         recv = recv[recv_idx]
         
         self.lastRecvSpace = recv_space
@@ -546,7 +554,7 @@ class GEDIL1A01File(generic.LiDARFile):
             if sys.version_info[0] == 3 and isinstance(value, bytes):
                 value = value.decode()
             header[str(name)] = value
-
+            
         return header
 
     @staticmethod
@@ -617,7 +625,9 @@ class GEDIL1A01File(generic.LiDARFile):
             flatSize = self.lastTrans_Idx.max() + 1
             flatTrans = numpy.empty((flatSize,), dtype=transmitted.data.dtype)
             ntrans = numpy.empty((flatSize,), dtype=numpy.uint16)
-            flatten2dWaveformData(transmitted, self.lastTrans_IdxMask, ntrans, flatTrans)
+            
+            gridindexutils.flatten2dMaskedArray(flatTrans, transmitted, self.lastTrans_IdxMask, ntrans)   
+            #flatten2dWaveformData(transmitted, self.lastTrans_IdxMask, ntrans, flatTrans)
             
             transmitted = flatTrans
                 
@@ -627,7 +637,9 @@ class GEDIL1A01File(generic.LiDARFile):
             ntrans = numpy.zeros(transmitted.shape[1], dtype=numpy.uint16)
             flattened = numpy.empty(transmitted.count(), dtype=transmitted.dtype)
 
-            flatten2dWaveformData(transmitted.data, transmitted.mask, ntrans, flattened)
+            #flatten2dWaveformData(transmitted.data, transmitted.mask, ntrans, flattened)
+            gridindexutils.flatten2dMaskedArray(flattened, transmitted.data, transmitted.mask, ntrans)
+            
             currTransCount = 0
             if 'txwaveform' in self.fileHandle[self.beam]:
                 transHandle = self.fileHandle[self.beam]['txwaveform']
@@ -668,7 +680,10 @@ class GEDIL1A01File(generic.LiDARFile):
             flatSize = self.lastRecv_Idx.max() + 1
             flatRecv = numpy.empty((flatSize,), dtype=received.data.dtype)
             nrecv = numpy.empty((flatSize,), dtype=numpy.uint16)
-            flatten2dWaveformData(received, self.lastRecv_IdxMask, nrecv, flatRecv)
+            
+            gridindexutils.flatten2dMaskedArray(flatRecv, received, self.lastRecv_IdxMask, nrecv)            
+            #flatten2dWaveformData(received, self.lastRecv_IdxMask, nrecv, flatRecv)
+            
             received = flatRecv
                 
         else:
@@ -677,7 +692,9 @@ class GEDIL1A01File(generic.LiDARFile):
             nrecv = numpy.zeros(received.shape[1], dtype=numpy.uint16)
             flattened =  numpy.empty(received.count(), dtype=received.dtype)
             
-            flatten2dWaveformData(received.data, received.mask, nrecv, flattened)
+            gridindexutils.flatten2dMaskedArray(flattened, received.data, received.mask, nrecv)
+            #flatten2dWaveformData(received.data, received.mask, nrecv, flattened)
+            
             currRecvCount = 0
             if 'rxwaveform' in self.fileHandle[self.beam]:
                 recvHandle = self.fileHandle[self.beam]['rxwaveform']
@@ -768,21 +785,22 @@ class GEDIL1A01File(generic.LiDARFile):
         Only use for file creation.
         """       
         for name in structArray.dtype.names:       
-            data, group, hdfname = self.prepareDataForWriting(
-                        structArray[name], name)
-            
-            if group is None:
-                groupHandle = self.fileHandle[self.beam]
-            else:
-                groupHandle = self.fileHandle[self.beam][group]
-            
-            if hdfname in groupHandle:
-                newSize = groupHandle[hdfname].shape[0] + len(structArray)
-                a = groupHandle[hdfname].ndim - 1
-                groupHandle[hdfname].resize(newSize, axis=a)
-                groupHandle[hdfname][...,oldSize:newSize+1] = data
-            else:
-                self.createDataColumn(groupHandle, hdfname, data)
+            if name not in WAVEFORMINFO_FIELDS:
+                data, group, hdfname = self.prepareDataForWriting(
+                            structArray[name], name)
+                
+                if group is None:
+                    groupHandle = self.fileHandle[self.beam]
+                else:
+                    groupHandle = self.fileHandle[self.beam][group]
+                
+                if hdfname in groupHandle:
+                    newSize = groupHandle[hdfname].shape[0] + len(structArray)
+                    a = groupHandle[hdfname].ndim - 1
+                    groupHandle[hdfname].resize(newSize, axis=a)
+                    groupHandle[hdfname][...,oldSize:newSize+1] = data
+                else:
+                    self.createDataColumn(groupHandle, hdfname, data)
 
     def writeData(self, pulses=None, points=None, transmitted=None, received=None, waveformInfo=None):
         """
@@ -873,7 +891,7 @@ class GEDIL1A01File(generic.LiDARFile):
                     rHandle[oldSize:newSize+1] = recv_start                    
                 else:
                     self.createDataColumn(self.fileHandle[self.beam], 
-                                'rx_sample_start_index', trans_start)
+                                'rx_sample_start_index', recv_start)
 
                 if 'rx_sample_count' in self.fileHandle[self.beam]:
                     rHandle = self.fileHandle[self.beam]['rx_sample_count']
@@ -889,17 +907,18 @@ class GEDIL1A01File(generic.LiDARFile):
             
             if pulses is not None:
                 for name in pulses.dtype.names:
-                    data, group, hdfname = self.prepareDataForWriting(pulses[name], name)
-                    if data.size > 0:
-                        if group is None:
-                            groupHandle = self.fileHandle[self.beam]
-                        else:
-                            groupHandle = self.fileHandle[self.beam][group]
-                        if hdfname in groupHandle:
-                            # get: Array must be C-contiguous without the copy
-                            self.lastPulsesSpace.write(groupHandle[hdfname], data.copy())
-                        else:
-                            self.createDataColumn(groupHandle, name, data)
+                    if name not in WAVEFORMINFO_FIELDS:
+                        data, group, hdfname = self.prepareDataForWriting(pulses[name], name)                   
+                        if data.size > 0:
+                            if group is None:
+                                groupHandle = self.fileHandle[self.beam]
+                            else:
+                                groupHandle = self.fileHandle[self.beam][group]
+                            if hdfname in groupHandle:
+                                # get: Array must be C-contiguous without the copy
+                                self.lastPulsesSpace.write(groupHandle[hdfname], data.copy())
+                            else:
+                                self.createDataColumn(groupHandle, name, data)
                             
             if transmitted is not None:
                 transmitted, trans_start, ntrans = self.prepareTransmittedForWriting(transmitted)
