@@ -176,18 +176,6 @@ def flatten2dWaveformData(wavedata, inmask, nrecv, flattened):
                 flat_idx += 1
                 nrecv[p] += 1
 
-    def flatten2dMaskedArray(flatArray, in2d, mask2d, idx2d):
-    """
-    Used by writeData to flatten out masked 2d data into a 1d
-    using the indexes and masked saved from when the array was created.
-    """
-    (maxPts, nRows) = in2d.shape
-    for n in range(maxPts):
-        for row in range(nRows):
-            if not mask2d[n, row]:
-                idx = idx2d[n, row]
-                val = in2d[n, row]
-                flatArray[idx] = val
 
 class GEDIL1A01File(generic.LiDARFile):
     """
@@ -485,10 +473,7 @@ class GEDIL1A01File(generic.LiDARFile):
                                         waveformInfo['tx_sample_start_index'], waveformInfo['tx_sample_count'], 
                                         nOut)
         
-        start = int(waveformInfo['tx_sample_start_index'][0])
-        finish = int(waveformInfo['tx_sample_start_index'][-1] + waveformInfo['tx_sample_count'][-1])
-        trans = self.fileHandle[self.beam]['txwaveform'][start:finish]
-        
+        trans = trans_space.read(self.fileHandle[self.beam]['txwaveform']) 
         trans = trans[trans_idx]
         
         self.lastTransSpace = trans_space
@@ -517,11 +502,8 @@ class GEDIL1A01File(generic.LiDARFile):
                                       waveformInfo['rx_sample_start_index'], waveformInfo['rx_sample_count'], 
                                       nOut)
         
-        start = int(waveformInfo['rx_sample_start_index'][0])
-        finish = int(waveformInfo['rx_sample_start_index'][-1] + waveformInfo['rx_sample_count'][-1])
-        recv = self.fileHandle[self.beam]['rxwaveform'][start:finish]
-        
-        recv = recv[recv_idx]
+        recv = recv_space.read(self.fileHandle[self.beam]['rxwaveform'])        
+        recv = recv[recv_idx]      
         
         self.lastRecvSpace = recv_space
         if self.mode == generic.UPDATE:
@@ -625,9 +607,8 @@ class GEDIL1A01File(generic.LiDARFile):
             flatSize = self.lastTrans_Idx.max() + 1
             flatTrans = numpy.empty((flatSize,), dtype=transmitted.data.dtype)
             ntrans = numpy.empty((flatSize,), dtype=numpy.uint16)
-            
-            gridindexutils.flatten2dMaskedArray(flatTrans, transmitted, self.lastTrans_IdxMask, ntrans)   
-            #flatten2dWaveformData(transmitted, self.lastTrans_IdxMask, ntrans, flatTrans)
+              
+            flatten2dWaveformData(transmitted, self.lastTrans_IdxMask, ntrans, flatTrans)
             
             transmitted = flatTrans
                 
@@ -637,8 +618,7 @@ class GEDIL1A01File(generic.LiDARFile):
             ntrans = numpy.zeros(transmitted.shape[1], dtype=numpy.uint16)
             flattened = numpy.empty(transmitted.count(), dtype=transmitted.dtype)
 
-            #flatten2dWaveformData(transmitted.data, transmitted.mask, ntrans, flattened)
-            gridindexutils.flatten2dMaskedArray(flattened, transmitted.data, transmitted.mask, ntrans)
+            flatten2dWaveformData(transmitted.data, transmitted.mask, ntrans, flattened)
             
             currTransCount = 0
             if 'txwaveform' in self.fileHandle[self.beam]:
@@ -680,9 +660,8 @@ class GEDIL1A01File(generic.LiDARFile):
             flatSize = self.lastRecv_Idx.max() + 1
             flatRecv = numpy.empty((flatSize,), dtype=received.data.dtype)
             nrecv = numpy.empty((flatSize,), dtype=numpy.uint16)
-            
-            gridindexutils.flatten2dMaskedArray(flatRecv, received, self.lastRecv_IdxMask, nrecv)            
-            #flatten2dWaveformData(received, self.lastRecv_IdxMask, nrecv, flatRecv)
+                      
+            flatten2dWaveformData(received, self.lastRecv_IdxMask, nrecv, flatRecv)
             
             received = flatRecv
                 
@@ -692,8 +671,7 @@ class GEDIL1A01File(generic.LiDARFile):
             nrecv = numpy.zeros(received.shape[1], dtype=numpy.uint16)
             flattened =  numpy.empty(received.count(), dtype=received.dtype)
             
-            gridindexutils.flatten2dMaskedArray(flattened, received.data, received.mask, nrecv)
-            #flatten2dWaveformData(received.data, received.mask, nrecv, flattened)
+            flatten2dWaveformData(received.data, received.mask, nrecv, flattened)
             
             currRecvCount = 0
             if 'rxwaveform' in self.fileHandle[self.beam]:
