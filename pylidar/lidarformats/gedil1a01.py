@@ -15,7 +15,7 @@ These are contained in the READSUPPORTEDOPTIONS module level variable.
 |                       |     'GEO_latitude_lastbin',                |
 |                       |     'GEO_elevation_lastbin')               |
 +-----------------------+--------------------------------------------+
-| BEAM                  | A string defining the beam id to use. One  |
+| BEAM                  | A string defining the beam id to read. One |
 |                       | of ['BEAM0000', 'BEAM0001', 'BEAM0010',    |
 |                       | 'BEAM0011', 'BEAM0101', 'BEAM0110',        |
 |                       | 'BEAM1000', 'BEAM1011']                    |
@@ -38,7 +38,11 @@ These are contained in the WRITESUPPORTEDOPTIONS module level variable.
 | HDF5_CHUNK_SIZE       | Set the HDF5 chunk size when creating      |
 |                       | columns. Defaults to 250.                  |
 +-----------------------+--------------------------------------------+
-
+| BEAM                  | A string defining the beam id to write.    |
+|                       | One of ['BEAM0000', 'BEAM0001', 'BEAM0010' |
+|                       | , 'BEAM0011', 'BEAM0101', 'BEAM0110',      |
+|                       | 'BEAM1000', 'BEAM1011']                    |
++-----------------------+--------------------------------------------+
 """
 
 # This file is part of PyLidar
@@ -67,21 +71,24 @@ from . import h5space
 from . import generic
 from . import gridindexutils
 
-WRITESUPPORTEDOPTIONS = ('HDF5_CHUNK_SIZE')
-"driver options"
-
-"Default hdf5 chunk size set on column creation"
-DEFAULT_HDF5_CHUNK_SIZE = 250
 
 READSUPPORTEDOPTIONS = ('POINT_FROM', 'BEAM', 'PULSE_GROUP_NAMES')
 "Supported read options"
 
-WRITESUPPORTEDOPTIONS = ('BEAM', 'PULSE_GROUP_NAMES')
+WRITESUPPORTEDOPTIONS = ('HDF5_CHUNK_SIZE', 'APPEND', 'BEAM')
 "Supported write options"
 
 DEFAULT_POINT_FROM = ('GEO_longitude_lastbin', 'GEO_latitude_lastbin', 'GEO_elevation_lastbin')
+
+"Default beam group name set on read and write"
 DEFAULT_BEAM = 'BEAM0101'
+
+"Default pulse group names read"
 DEFAULT_PULSE_GROUP_NAMES = ['CLK', 'INST_HK', 'TX_PROCESSING', 'geolocation', 'geophys_corr']
+
+"Default hdf5 chunk size set on column creation"
+DEFAULT_HDF5_CHUNK_SIZE = 250
+
 EXPECTED_HEADER_FIELDS = ['l0_to_l1a_githash', 'l0_to_l1a_version']
 CLASSIFICATION_NAME = 'CLASSIFICATION'
 "GEDI L1A01 files don't have a CLASSIFICATION column so we have to create a blank one"
@@ -152,6 +159,7 @@ GEOPHYS_CORR_FIELDS = {'delta_time': numpy.float64, 'dynamic_atmosphere_correcti
 
 WAVEFORMINFO_FIELDS = {'tx_sample_count': numpy.uint16, 'tx_sample_start_index': numpy.uint64, 'rx_sample_count': numpy.uint16, 
 'rx_sample_start_index': numpy.uint64}
+"These fields have defined type"
 
 GROUP_IDS = {'CLK': 'CLK', 'INST_HK': 'IHK', 'TX_PROCESSING': 'TXP', 'ancillary': 'ANC', 'geolocation': 'GEO', 'geophys_corr': 'GCO'}
 GROUP_NAMES = {'CLK': 'CLK', 'IHK': 'INST_HK', 'TXP': 'TX_PROCESSING', 'ANC': 'ancillary', 'GEO': 'geolocation', 'GCO': 'geophys_corr'}
@@ -184,16 +192,6 @@ class GEDIL1A01File(generic.LiDARFile):
     def __init__(self, fname, mode, controls, userClass):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)    
 
-        # convert mode into h5py mode string
-        if mode == generic.READ:
-            h5py_mode = 'r'
-        elif mode == generic.UPDATE:
-            h5py_mode = 'r+'
-        elif mode == generic.CREATE:
-            h5py_mode = 'w'
-        else:
-            raise ValueError('Unknown value for mode parameter')
-
         # check driver options    
         if mode == generic.READ:
             options = READSUPPORTEDOPTIONS
@@ -213,13 +211,23 @@ class GEDIL1A01File(generic.LiDARFile):
             self.beam = userClass.lidarDriverOptions['BEAM']
         self.pulse_group_names = DEFAULT_PULSE_GROUP_NAMES
         if 'PULSE_GROUP_NAMES' in userClass.lidarDriverOptions:
-            self.pulse_group_names = userClass.lidarDriverOptions['PULSE_GROUP_NAMES'] 
+            self.pulse_group_names = userClass.lidarDriverOptions['PULSE_GROUP_NAMES']
             
         # hdf5 chunk size - as a tuple - columns are 1d
         self.hdf5ChunkSize = (DEFAULT_HDF5_CHUNK_SIZE,)
         if 'HDF5_CHUNK_SIZE' in userClass.lidarDriverOptions:
-            self.hdf5ChunkSize = (userClass.lidarDriverOptions['HDF5_CHUNK_SIZE'],)                
+            self.hdf5ChunkSize = (userClass.lidarDriverOptions['HDF5_CHUNK_SIZE'],)        
                 
+        # convert mode into h5py mode string
+        if mode == generic.READ:
+            h5py_mode = 'r'
+        elif mode == generic.UPDATE:
+            h5py_mode = 'r+'
+        elif mode == generic.CREATE:
+            h5py_mode = 'w'
+        else:
+            raise ValueError('Unknown value for mode parameter')
+
         # attempt to open the file
         try:
             self.fileHandle = h5py.File(fname, h5py_mode)
@@ -265,13 +273,6 @@ class GEDIL1A01File(generic.LiDARFile):
             self.fileAttrs['generating_software'] = generic.SOFTWARE_NAME
                 
         self.range = None
-        self.lastPulsesSpace = None
-        self.lastTransSpace = None
-        self.lastTrans_Idx = None
-        self.lastTrans_IdxMask = None
-        self.lastRecvSpace = None
-        self.lastRecv_Idx = None
-        self.lastRecv_IdxMask = None
     
     @staticmethod        
     def getDriverName():
@@ -285,13 +286,6 @@ class GEDIL1A01File(generic.LiDARFile):
         
         self.fileHandle = None
         self.range = None
-        self.lastPulsesSpace = None
-        self.lastTransSpace = None
-        self.lastTrans_Idx = None
-        self.lastTrans_IdxMask = None
-        self.lastRecvSpace = None
-        self.lastRecv_Idx = None
-        self.lastRecv_IdxMask = None 
 
     def hasSpatialIndex(self):
         "GEDI L1A01 does not have a spatial index"
@@ -476,11 +470,6 @@ class GEDIL1A01File(generic.LiDARFile):
         trans = trans_space.read(self.fileHandle[self.beam]['txwaveform']) 
         trans = trans[trans_idx]
         
-        self.lastTransSpace = trans_space
-        if self.mode == generic.UPDATE:
-            self.lastTrans_Idx = trans_idx
-            self.lastTrans_IdxMask = trans_idx_mask
-        
         return numpy.ma.array(trans, mask=trans_idx_mask)
         
     def readReceived(self):
@@ -503,12 +492,7 @@ class GEDIL1A01File(generic.LiDARFile):
                                       nOut)
         
         recv = recv_space.read(self.fileHandle[self.beam]['rxwaveform'])        
-        recv = recv[recv_idx]      
-        
-        self.lastRecvSpace = recv_space
-        if self.mode == generic.UPDATE:
-            self.lastRecv_Idx = recv_idx
-            self.lastRecv_IdxMask = recv_idx_mask
+        recv = recv[recv_idx]
         
         return numpy.ma.array(recv, mask=recv_idx_mask)
         
@@ -597,41 +581,26 @@ class GEDIL1A01File(generic.LiDARFile):
         trans_start = None
         ntrans = None
 
-        transmitted = numpy.ma.MaskedArray(transmitted, mask=transmitted.mask)
+        transmitted = numpy.ma.MaskedArray(transmitted, mask=transmitted.mask)       
         
-        if self.mode == generic.UPDATE:
+        # create arrays for flatten2dWaveformData
+        ntrans = numpy.zeros(transmitted.shape[1], dtype=numpy.uint16)
+        flattened = numpy.empty(transmitted.count(), dtype=transmitted.dtype)
 
-            origShape = transmitted.shape
-
-            # flatten it back to 1d so it can be written
-            flatSize = self.lastTrans_Idx.max() + 1
-            flatTrans = numpy.empty((flatSize,), dtype=transmitted.data.dtype)
-            ntrans = numpy.empty((flatSize,), dtype=numpy.uint16)
-              
-            flatten2dWaveformData(transmitted, self.lastTrans_IdxMask, ntrans, flatTrans)
-            
-            transmitted = flatTrans
-                
-        else:       
+        flatten2dWaveformData(transmitted.data, transmitted.mask, ntrans, flattened)
         
-            # create arrays for flatten2dWaveformData
-            ntrans = numpy.zeros(transmitted.shape[1], dtype=numpy.uint16)
-            flattened = numpy.empty(transmitted.count(), dtype=transmitted.dtype)
+        currTransCount = 0
+        if 'txwaveform' in self.fileHandle[self.beam]:
+            transHandle = self.fileHandle[self.beam]['txwaveform']
+            currTransCount = transHandle.shape[0]
 
-            flatten2dWaveformData(transmitted.data, transmitted.mask, ntrans, flattened)
-            
-            currTransCount = 0
-            if 'txwaveform' in self.fileHandle[self.beam]:
-                transHandle = self.fileHandle[self.beam]['txwaveform']
-                currTransCount = transHandle.shape[0]
-
-            trans_start = numpy.cumsum(ntrans)
-            trans_start = numpy.roll(trans_start, 1)
-            if trans_start.size > 0:
-                trans_start[0] = 0
-            trans_start += currTransCount            
-            
-            transmitted = flattened
+        trans_start = numpy.cumsum(ntrans)
+        trans_start = numpy.roll(trans_start, 1)
+        if trans_start.size > 0:
+            trans_start[0] = 0
+        trans_start += currTransCount            
+        
+        transmitted = flattened
             
         return transmitted, trans_start, ntrans
     
@@ -651,40 +620,25 @@ class GEDIL1A01File(generic.LiDARFile):
         nrecv = None
             
         received = numpy.ma.MaskedArray(received, mask=received.mask)
-
-        if self.mode == generic.UPDATE:
-
-            origShape = received.shape
-            
-            # flatten it back to 1d so it can be written
-            flatSize = self.lastRecv_Idx.max() + 1
-            flatRecv = numpy.empty((flatSize,), dtype=received.data.dtype)
-            nrecv = numpy.empty((flatSize,), dtype=numpy.uint16)
-                      
-            flatten2dWaveformData(received, self.lastRecv_IdxMask, nrecv, flatRecv)
-            
-            received = flatRecv
-                
-        else:
     
-            # create arrays for flatten2dWaveformData
-            nrecv = numpy.zeros(received.shape[1], dtype=numpy.uint16)
-            flattened =  numpy.empty(received.count(), dtype=received.dtype)
+        # create arrays for flatten2dWaveformData
+        nrecv = numpy.zeros(received.shape[1], dtype=numpy.uint16)
+        flattened =  numpy.empty(received.count(), dtype=received.dtype)
+        
+        flatten2dWaveformData(received.data, received.mask, nrecv, flattened)
+        
+        currRecvCount = 0
+        if 'rxwaveform' in self.fileHandle[self.beam]:
+            recvHandle = self.fileHandle[self.beam]['rxwaveform']
+            currRecvCount = recvHandle.shape[0]
+        
+        recv_start = numpy.cumsum(nrecv)
+        recv_start = numpy.roll(recv_start, 1)
+        if recv_start.size > 0:
+            recv_start[0] = 0
+        recv_start += currRecvCount            
             
-            flatten2dWaveformData(received.data, received.mask, nrecv, flattened)
-            
-            currRecvCount = 0
-            if 'rxwaveform' in self.fileHandle[self.beam]:
-                recvHandle = self.fileHandle[self.beam]['rxwaveform']
-                currRecvCount = recvHandle.shape[0]
-            
-            recv_start = numpy.cumsum(nrecv)
-            recv_start = numpy.roll(recv_start, 1)
-            if recv_start.size > 0:
-                recv_start[0] = 0
-            recv_start += currRecvCount            
-                
-            received = flattened
+        received = flattened
 
         return received, recv_start, nrecv        
         
@@ -789,7 +743,9 @@ class GEDIL1A01File(generic.LiDARFile):
             # the processor always calls this so if a reading driver just ignore
             return
 
-        elif self.mode == generic.CREATE:
+        else:
+            
+            # check the inputs
             
             if pulses is None:
                 msg = 'Must provide pulses when writing new data'
@@ -811,7 +767,7 @@ class GEDIL1A01File(generic.LiDARFile):
                 msg = 'received must be 2d as returned by readReceived'
                 raise generic.LiDARInvalidData(msg)
         
-        if self.mode == generic.CREATE:
+            # write the data
 
             if pulses is not None and len(pulses) > 0:
                 self.writeStructuredArray(self.fileHandle[self.beam], pulses)
@@ -881,59 +837,6 @@ class GEDIL1A01File(generic.LiDARFile):
                     self.createDataColumn(self.fileHandle[self.beam], 
                                 'rx_sample_count', nrecv)
                                 
-        else:
-            
-            if pulses is not None:
-                for name in pulses.dtype.names:
-                    if name not in WAVEFORMINFO_FIELDS:
-                        data, group, hdfname = self.prepareDataForWriting(pulses[name], name)                   
-                        if data.size > 0:
-                            if group is None:
-                                groupHandle = self.fileHandle[self.beam]
-                            else:
-                                groupHandle = self.fileHandle[self.beam][group]
-                            if hdfname in groupHandle:
-                                # get: Array must be C-contiguous without the copy
-                                self.lastPulsesSpace.write(groupHandle[hdfname], data.copy())
-                            else:
-                                self.createDataColumn(groupHandle, name, data)
-                            
-            if transmitted is not None:
-                transmitted, trans_start, ntrans = self.prepareTransmittedForWriting(transmitted)
-                self.lastTransSpace.write(self.fileHandle[self.beam]['txwaveform'], transmitted)
-                data, group, hdfname = self.prepareDataForWriting(trans_start, 'tx_sample_start_index')
-                if data.size > 0:
-                    if hdfname in self.fileHandle[self.beam]:
-                        # get: Array must be C-contiguous without the copy
-                        self.lastPulsesSpace.write(self.fileHandle[self.beam][hdfname], data.copy())
-                    else:
-                        self.createDataColumn(self.fileHandle[self.beam], hdfname, data)
-                data, group, hdfname = self.prepareDataForWriting(ntrans, 'tx_sample_count')
-                if data.size > 0:
-                    if hdfname in self.fileHandle[self.beam]:
-                        # get: Array must be C-contiguous without the copy
-                        self.lastPulsesSpace.write(self.fileHandle[self.beam][hdfname], data.copy())
-                    else:
-                        self.createDataColumn(self.fileHandle[self.beam], hdfname, data)
-                        
-            if received is not None:
-                received, recv_start, nrecv = self.prepareReceivedForWriting(received)
-                self.lastRecvSpace.write(self.fileHandle[self.beam]['rxwaveform'], received)
-                data, group, hdfname = self.prepareDataForWriting(recv_start, 'rx_sample_start_index')
-                if data.size > 0:
-                    if hdfname in self.fileHandle[self.beam]:
-                        # get: Array must be C-contiguous without the copy
-                        self.lastPulsesSpace.write(self.fileHandle[self.beam][hdfname], data.copy())
-                    else:
-                        self.createDataColumn(self.fileHandle[self.beam], hdfname, data)
-                data, group, hdfname = self.prepareDataForWriting(nrecv, 'rx_sample_count')
-                if data.size > 0:
-                    if hdfname in self.fileHandle[self.beam]:
-                        # get: Array must be C-contiguous without the copy
-                        self.lastPulsesSpace.write(self.fileHandle[self.beam][hdfname], data.copy())
-                    else:
-                        self.createDataColumn(self.fileHandle[self.beam], hdfname, data)
-              
     def getHeader(self):
         """
         Get the header as a dictionary
