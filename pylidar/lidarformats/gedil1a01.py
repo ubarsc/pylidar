@@ -684,7 +684,10 @@ class GEDIL1A01File(generic.LiDARFile):
         else:
             group = None
             hdfName = name
-            dataType = MAIN_FIELDS[hdfName]
+            if hdfName in MAIN_FIELDS:
+                dataType = MAIN_FIELDS[hdfName]
+            else:
+                dataType = data.dtype
         
         # cast to datatype
         if numpy.issubdtype(dataType, numpy.integer):
