@@ -730,7 +730,8 @@ class GEDIL1A01File(generic.LiDARFile):
                     groupHandle = self.fileHandle[self.beam][group]
                 
                 if hdfname in groupHandle:
-                    newSize = groupHandle[hdfname].shape[0] + len(structArray)
+                    oldSize = groupHandle[hdfname].shape[0]
+                    newSize = oldSize + len(structArray)
                     a = groupHandle[hdfname].ndim - 1
                     groupHandle[hdfname].resize(newSize, axis=a)
                     groupHandle[hdfname][...,oldSize:newSize+1] = data
