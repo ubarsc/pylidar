@@ -24,7 +24,7 @@ These are contained in the READSUPPORTEDOPTIONS module level variable.
 |                       | per pulse data to use.                     |
 |                       | Can be any of ['CLK', 'INST_HK',           |
 |                       | 'TX_PROCESSING', 'geolocation',            |
-|                       | 'geophys_corr']                          |
+|                       | 'geophys_corr']                            |
 +-----------------------+--------------------------------------------+
 
 Write Driver Options
@@ -42,6 +42,12 @@ These are contained in the WRITESUPPORTEDOPTIONS module level variable.
 |                       | One of ['BEAM0000', 'BEAM0001', 'BEAM0010' |
 |                       | , 'BEAM0011', 'BEAM0101', 'BEAM0110',      |
 |                       | 'BEAM1000', 'BEAM1011']                    |
++-----------------------+--------------------------------------------+
+| PULSE_GROUP_NAMES     | A list or tuple defining the groups with   |
+|                       | per pulse data to use.                     |
+|                       | Can be any of ['CLK', 'INST_HK',           |
+|                       | 'TX_PROCESSING', 'geolocation',            |
+|                       | 'geophys_corr']                            |
 +-----------------------+--------------------------------------------+
 """
 
@@ -75,7 +81,7 @@ from . import gridindexutils
 READSUPPORTEDOPTIONS = ('POINT_FROM', 'BEAM', 'PULSE_GROUP_NAMES')
 "Supported read options"
 
-WRITESUPPORTEDOPTIONS = ('HDF5_CHUNK_SIZE', 'APPEND', 'BEAM')
+WRITESUPPORTEDOPTIONS = ('HDF5_CHUNK_SIZE', 'APPEND', 'BEAM', 'PULSE_GROUP_NAMES')
 "Supported write options"
 
 DEFAULT_POINT_FROM = ('GEO_longitude_lastbin', 'GEO_latitude_lastbin', 'GEO_elevation_lastbin')
