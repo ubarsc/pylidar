@@ -50,7 +50,6 @@ import pylidar
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.pngmath',
     'sphinx.ext.viewcode',
 ]
 
