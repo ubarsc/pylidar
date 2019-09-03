@@ -50,13 +50,13 @@ def getExtraCXXFlags():
     else:
         return None
 
-def addRieglDriver(extModules, cxxFlags):
+def addRieglRXPDriver(extModules, cxxFlags):
     """
-    Decides if the Riegl driver is to be built. If so 
+    Decides if the Riegl RXP driver is to be built. If so 
     adds the Extension class to extModules.
     """
     if 'RIVLIB_ROOT' in os.environ and 'RIWAVELIB_ROOT' in os.environ:
-        print('Building Riegl Extension...')
+        print('Building Riegl RXP Extension...')
         rivlibRoot = os.environ['RIVLIB_ROOT']
         riwavelibRoot = os.environ['RIWAVELIB_ROOT']
         rivlibs = ['scanlib-mt', 'riboost_chrono-mt', 
@@ -88,7 +88,7 @@ def addRieglDriver(extModules, cxxFlags):
                  
         extModules.append(rieglModule)
     else:
-        print('Riegl Libraries not found.')
+        print('Riegl RXP Libraries not found.')
         print('If installed set $RIVLIB_ROOT to the install location of RiVLib')
         print('and $RIWAVELIB_ROOT to the install location of the waveform extraction library (riwavelib)')
         
@@ -121,7 +121,68 @@ def getRieglWaveLibVersion(riwavelibRoot, libname):
                 
     return [("RIEGL_WFM_MAJOR", str(major.value)), 
             ("RIEGL_WFM_MINOR", str(minor.value))]
-                
+            
+def addRieglRDBDriver(extModules, cxxFlags):
+    """
+    Decides if the Riegl RDB driver is to be built. If so 
+    adds the Extension class to extModules.
+    """
+    if 'RDBLIB_ROOT' in os.environ:
+        print('Building Riegl RDB Extension...')
+        
+        rdblibRoot = os.environ['RDBLIB_ROOT']
+        rdbLibName = 'rdb'
+
+        defines = getRieglRDBLibVersion(rdblibRoot, rdbLibName)
+        defines.extend([NUMPY_MACROS])
+        
+        rieglRDBModule = Extension(name='pylidar.lidarformats._rieglrdb', 
+                define_macros=defines,
+                sources=['src/riegl_rdb.cpp', 'src/pylidar.c'],
+                include_dirs=[os.path.join(rdblibRoot, "interface", "c")],
+                extra_compile_args=cxxFlags,
+                libraries=[rdbLibName],
+                library_dirs=[os.path.join(rdblibRoot, 'library')])
+                 
+        extModules.append(rieglRDBModule)
+    else:
+        print('Riegl RDB Libraries not found.')
+        print('If installed set $RDBLIB_ROOT to the install location of RDBLib')
+        
+def getRieglRDBLibVersion(rdbRoot, libname):
+    """
+    Because we cannot distribute the rdblib library, we need
+    to check that the major version at compile time matches the 
+    version the user has at runtime. We do this by getting the
+    version now and setting it as a #define. The library can then
+    use the #define to check at runtime.
+    
+    Unfortunately the headers don't give us this information.
+    
+    """
+    import ctypes
+    if sys.platform == 'win32':
+        libname = os.path.join(rdbRoot, 'library', libname + '.dll')
+    elif sys.platform == 'darwin':
+        libname = os.path.join(rdbRoot, 'library', 'lib' + libname + '.dylib')
+    else:
+        libname = os.path.join(rdbRoot, 'library', 'lib' + libname + '.so')
+    rdb = ctypes.cdll.LoadLibrary(libname)
+    
+    context = ctypes.c_void_p()
+    logLevel = ctypes.c_char_p(b"NONE")
+    logPath = ctypes.c_char_p(b"")
+    rdb.rdb_context_new(ctypes.byref(context), logLevel, logPath)
+    
+    version = ctypes.c_char_p()
+    rdb.rdb_library_version(context, ctypes.byref(version))
+    versionString = version.value
+    if sys.version_info[0] >= 3:
+        versionString = versionString.decode()
+    
+    rdb.rdb_context_delete(ctypes.byref(context))
+    
+    return [("RIEGL_RDB_VERSION", '\"' + versionString + '\"')]
         
 def addLasDriver(extModules, cxxFlags):
     """
@@ -263,7 +324,8 @@ cxxFlags = getExtraCXXFlags()
 # modules
 externalModules = []
 if withExtensions:
-    addRieglDriver(externalModules, cxxFlags)
+    addRieglRXPDriver(externalModules, cxxFlags)
+    addRieglRDBDriver(externalModules, cxxFlags)
     addLasDriver(externalModules, cxxFlags)
     addASCIIDriver(externalModules, cxxFlags)
     addLVISBinDriver(externalModules, cxxFlags)
