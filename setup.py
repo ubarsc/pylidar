@@ -22,6 +22,7 @@ from __future__ import print_function
 
 import os
 import sys
+import ctypes
 from numpy.distutils.core import setup, Extension
 
 # don't build extensions if we are in readthedocs
@@ -103,7 +104,6 @@ def getRieglWaveLibVersion(riwavelibRoot, libname):
     Unfortunately the headers don't give us this information.
     
     """
-    import ctypes
     if sys.platform == 'win32':
         libname = os.path.join(riwavelibRoot, 'lib', libname + '.dll')
     elif sys.platform == 'darwin':
@@ -160,7 +160,6 @@ def getRieglRDBLibVersion(rdbRoot, libname):
     Unfortunately the headers don't give us this information.
     
     """
-    import ctypes
     if sys.platform == 'win32':
         libname = os.path.join(rdbRoot, 'library', libname + '.dll')
     elif sys.platform == 'darwin':
@@ -182,7 +181,16 @@ def getRieglRDBLibVersion(rdbRoot, libname):
     
     rdb.rdb_context_delete(ctypes.byref(context))
     
-    return [("RIEGL_RDB_VERSION", '\"' + versionString + '\"')]
+    # versionString is quite specific  -something like:
+    # 2.2.1-2094 (x86_64-linux, Jul 11 2019, 13:10:32)
+    # we probably don't have to have the exact same string
+    # so just extract major and minor version numbers
+    arr = versionString.split('.')
+    major = arr[0]
+    minor = arr[1]
+    
+    return [("RIEGL_RDB_MAJOR", major),
+            ("RIEGL_RDB_MINOR", minor)]
         
 def addLasDriver(extModules, cxxFlags):
     """

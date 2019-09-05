@@ -43,12 +43,39 @@ struct RieglRDBState
 static struct RieglRDBState _state;
 #endif
 
+// buffer that we read the data in before copying to point/pulse structures
+typedef struct
+{
+   // pulse
+    npy_uint64 shot_ID; // rieg.shot_id
+    double shot_origin_x; // riegl.shot_origin[0]
+    double shot_origin_y; // riegl.shot_origin[1]
+    double shot_origin_z; // riegl.shot_origin[2]
+    double shot_direction_x; // riegl.shot_direction[0]
+    double shot_direction_y; // riegl.shot_direction[1]
+    double shot_direction_z; // riegl.shot_direction[2]
+    npy_uint64 timestamp; // riegl.timestamp
+   
+    // points
+    npy_uint64 id; // riegl.id
+    npy_uint16 classification; // rieg.class
+    double range; // riegl.range
+    double reflectance; // riegl.reflectance
+    double amplitude; // riegl.amplitude
+    double x; // riegl.xyz_socs[0];
+    double y; // riegl.xyz_socs[1];
+    double z; // riegl.xyz_socs[2];
+
+} RieglRDBBuffer;
+
 typedef struct
 {
     PyObject_HEAD
     char *pszFilename; // so we can re-create the file obj if needed
     RDBContext *pContext;
     RDBPointcloud *pPointCloud;
+    RDBPointcloudQuerySelect *pQuerySelect; // != NULL if we currently have one going
+    Py_ssize_t nCurrentPulse;  // if pQuerySelect != NULL this is the pulse number we are up to
 
 } PyRieglRDBFile;
 
@@ -87,6 +114,10 @@ static void
 PyRieglRDBFile_dealloc(PyRieglRDBFile *self)
 {
     free(self->pszFilename);
+    if( self->pQuerySelect != NULL )
+    {
+        rdb_pointcloud_query_select_delete(self->pContext, &self->pQuerySelect);
+    }
     if( self->pPointCloud != NULL )
     {
         rdb_pointcloud_delete(self->pContext, &self->pPointCloud);
@@ -97,6 +128,50 @@ PyRieglRDBFile_dealloc(PyRieglRDBFile *self)
     }
 
     Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+// Returns false and sets Python exception if error code set
+static bool CheckRDBResult(RDBResult code, PyRieglRDBFile *self)
+{
+    if( code != RDB_SUCCESS )
+    {
+        int32_t   errorCode(0);
+        RDBString text("Unable to create context");
+        RDBString details("");
+    
+        if( self->pContext != NULL )
+        {
+            rdb_context_get_last_error(self->pContext, &errorCode, &text, &details);
+        }
+        
+        PyErr_Format(GETSTATE_FC->error, "Error from RDBLib: %s. Details: %s\n",
+               text, details); 
+        return false;
+    }
+    
+    return true;
+}
+
+// Processes psz until a '.' is found
+// and returns string as an int. 
+// Updates psz to point to first char after the '.'
+static int GetAVersionPart(RDBString *psz)
+{
+RDBString pCurr = *psz;
+
+    while( *pCurr != '.' )
+    {
+        pCurr++;
+    }
+    
+    char *pTemp = strndup(*psz, pCurr - (*psz));
+    int nResult = atoi(pTemp);
+    free(pTemp);
+    
+    pCurr++; // go past dot
+    *psz = pCurr; // store back to caller
+    
+    return nResult;
 }
 
 static int 
@@ -110,19 +185,48 @@ char *pszFname = NULL;
     }
     
     // get context
-    // TODO: log level and log path
-    rdb_context_new(&self->pContext, "", "");
+    // TODO: log level and log path as an option?
+    if( !CheckRDBResult(rdb_context_new(&self->pContext, "", ""), self) )
+    {
+        return -1;
+    }
     
     // check we are running against the same version of the library we were compiled
     // against
     RDBString pszVersionString;
-    rdb_library_license(self->pContext, &pszVersionString);
-    if( strcmp(pszVersionString, "RIEGL_RDB_VERSION") != 0 )
+    if( !CheckRDBResult(rdb_library_version(self->pContext, &pszVersionString), self) )
+    {
+        return -1;
+    }
+    
+    RDBString *psz = &pszVersionString;
+    int nMajor = GetAVersionPart(psz);
+    int nMinor = GetAVersionPart(psz);
+    if( (nMajor != RIEGL_RDB_MAJOR) || (nMinor != RIEGL_RDB_MINOR) )
     {
         // raise Python exception
-        PyErr_Format(GETSTATE_FC->error, "Mismatched libraries - RDB lib differs in version string. "
-            "Was compiled against version %s. Now running with %s\n", 
-            "RIEGL_RDB_VERSION", pszVersionString);
+        PyErr_Format(GETSTATE_FC->error, "Mismatched libraries - RDB lib differs in version "
+            "Was compiled against version %d.%d. Now running with %d.%d (version string: '%s')\n", 
+            RIEGL_RDB_MAJOR, RIEGL_RDB_MINOR, nMajor, nMinor, pszVersionString);
+        return -1;
+    }
+    
+    // open file
+    // need a RDBPointcloudOpenSettings TODO: set from options
+    RDBPointcloudOpenSettings *pSettings;
+    if( !CheckRDBResult(rdb_pointcloud_open_settings_new(self->pContext, &pSettings), self) )
+    {
+        return -1;
+    }
+    
+    if( !CheckRDBResult(rdb_pointcloud_new(self->pContext, &self->pPointCloud), self) )
+    {
+        return -1;
+    }
+    
+    if( !CheckRDBResult(rdb_pointcloud_open(self->pContext, self->pPointCloud,
+                    pszFname, pSettings), self) )
+    {
         return -1;
     }
     
@@ -130,6 +234,9 @@ char *pszFname = NULL;
     // take a copy of the filename so we can re
     // create the file pointer.
     self->pszFilename = strdup(pszFname);
+    
+    self->pQuerySelect = NULL;
+    self->nCurrentPulse = 0;
 
     return 0;
 }
@@ -141,6 +248,39 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
         return NULL;
 
     nPulses = nPulseEnd - nPulseStart;
+    
+    Py_ssize_t nPulsesToIgnore = 0;
+    if( self->pQuerySelect == NULL )
+    {
+        // have no current selection - create one
+        if( !CheckRDBResult(rdb_pointcloud_query_select_new(self->pContext, 
+                    self->pPointCloud,
+                    0, // all nodes apparently according to querySelect.cpp
+                    "",
+                    &self->pQuerySelect), self) )
+        {
+            return NULL;
+        }
+        
+        nPulsesToIgnore = nPulseStart;
+    }
+    else
+    {
+        // already have one
+        if( nPulseStart > self->nCurrentPulse )
+        {
+            // past where we are up to
+            nPulsesToIgnore = nPulseStart - self->nCurrentPulse;
+        }
+        else if( nPulseStart < self->nCurrentPulse )
+        {
+            // go back to beginning. Delete query select and start again
+            if( !CheckRDBResult(rdb_pointcloud_query_select_delete(self->pContext, &self->pQuerySelect), self) )
+            {
+                return NULL;
+            }
+        }
+    }
 
     Py_RETURN_NONE;
 }
