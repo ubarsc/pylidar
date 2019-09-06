@@ -25,7 +25,8 @@
 #include "numpy/npy_math.h"
 #include "pylvector.h"
 
-#include <riegl/rdb.h>
+#include "riegl/rdb.h"
+#include "riegl/rdb/default/attributes.h"
 
 /* An exception object for this module */
 /* created in the init function */
@@ -43,30 +44,107 @@ struct RieglRDBState
 static struct RieglRDBState _state;
 #endif
 
+static const int nGrowBy = 10000;
+static const int nInitSize = 256*256;
+// number of records to read in from librdb at one time
+static const int nTempSize = 100;
+
 // buffer that we read the data in before copying to point/pulse structures
+// NOTE: any changes must be reflected in RiegRDBReader::resetBuffers()
 typedef struct
 {
    // pulse
     npy_uint64 shot_ID; // rieg.shot_id
-    double shot_origin_x; // riegl.shot_origin[0]
-    double shot_origin_y; // riegl.shot_origin[1]
-    double shot_origin_z; // riegl.shot_origin[2]
-    double shot_direction_x; // riegl.shot_direction[0]
-    double shot_direction_y; // riegl.shot_direction[1]
-    double shot_direction_z; // riegl.shot_direction[2]
+    double shot_origin[3]; // riegl.shot_origin
+    double shot_direction[3]; // riegl.shot_direction
     npy_uint64 timestamp; // riegl.timestamp
    
     // points
     npy_uint64 id; // riegl.id
-    npy_uint16 classification; // rieg.class
+    npy_uint16 classification; // riegl.class
     double range; // riegl.range
     double reflectance; // riegl.reflectance
     double amplitude; // riegl.amplitude
-    double x; // riegl.xyz_socs[0];
-    double y; // riegl.xyz_socs[1];
-    double z; // riegl.xyz_socs[2];
+    double xyz[3]; // riegl.xyz_socs
 
 } RieglRDBBuffer;
+
+// Returns false and sets Python exception if error code set
+static bool CheckRDBResult(RDBResult code, RDBContext *pContext);
+
+// For use in PyRieglRDBFile_* functions, return ret on error
+#define CHECKRESULT_FILE(code, ret) if( !CheckRDBResult(code, self->pContext) ) return ret;
+
+// For use in RiegRDBReader, return ret on error
+#define CHECKRESULT_READER(code, ret) if( !CheckRDBResult(code, m_pContext) ) return ret;
+// for automating the binding process
+#define CHECKBIND_READER(attribute, dataType, buffer) if( !CheckRDBResult( \
+                    rdb_pointcloud_query_select_bind( \
+                        m_pContext, m_pQuerySelect, attribute, dataType, buffer, \
+                        sizeof(RieglRDBBuffer)), m_pContext) ) return false;
+
+class RiegRDBReader
+{
+public:
+    RiegRDBReader(RDBContext *pContext, RDBPointcloudQuerySelect *pQuerySelect)
+    {
+        m_pContext = pContext;
+        m_pQuerySelect = pQuerySelect;
+        m_nPulsesToIgnore = 0;
+    }
+    
+    void setPulsesToIgnore(Py_ssize_t nPulsesToIgnore)
+    {
+        m_nPulsesToIgnore = nPulsesToIgnore;
+    }
+    
+    // reset librdb to read into the start of our m_TempBuffer
+    bool resetBuffers()
+    {
+        // NOTE: this must match definition of RieglRDBBuffer
+        // pulse
+        //CHECKBIND_READER("riegl.shot_id", RDBDataTypeUINT64, &m_TempBuffer[0].shot_ID)
+        //CHECKBIND_READER("riegl.shot_origin", RDBDataTypeDOUBLE, &m_TempBuffer[0].shot_origin)
+        //CHECKBIND_READER("riegl.shot_direction", RDBDataTypeDOUBLE, &m_TempBuffer[0].shot_direction)
+        CHECKBIND_READER("riegl.timestamp", RDBDataTypeUINT64, &m_TempBuffer[0].timestamp)
+
+        // point
+        CHECKBIND_READER("riegl.id", RDBDataTypeUINT64, &m_TempBuffer[0].id)
+        CHECKBIND_READER("riegl.class", RDBDataTypeUINT16, &m_TempBuffer[0].classification)
+        //CHECKBIND_READER(RDB_RIEGL_RANGE.name, RDBDataTypeDOUBLE, &m_TempBuffer[0].range)
+        CHECKBIND_READER("riegl.reflectance", RDBDataTypeDOUBLE, &m_TempBuffer[0].reflectance)
+        CHECKBIND_READER("riegl.amplitude", RDBDataTypeDOUBLE, &m_TempBuffer[0].amplitude)
+        CHECKBIND_READER("riegl.xyz", RDBDataTypeDOUBLE, &m_TempBuffer[0].xyz)
+        
+        return true;
+    }
+    
+    bool readData(Py_ssize_t nPulses)
+    {
+        // reset to beginning of our temp space
+        if( !resetBuffers() )
+        {
+            return false;
+        }
+        
+        uint32_t processed = 0;
+        CHECKRESULT_READER(rdb_pointcloud_query_select_next(
+                    m_pContext, m_pQuerySelect, nTempSize, &processed), false);
+                    
+        for( uint32_t i = 0; i < processed; i++ )
+        {
+            fprintf(stderr, "id %" PRIu64 " %f\n", m_TempBuffer[i].id, m_TempBuffer[i].reflectance);
+        }
+                    
+        return true;
+    }
+
+private:
+    RDBContext *m_pContext;
+    RDBPointcloudQuerySelect *m_pQuerySelect;
+    Py_ssize_t m_nPulsesToIgnore;
+    RieglRDBBuffer m_TempBuffer[nTempSize];
+};
 
 typedef struct
 {
@@ -130,28 +208,6 @@ PyRieglRDBFile_dealloc(PyRieglRDBFile *self)
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-// Returns false and sets Python exception if error code set
-static bool CheckRDBResult(RDBResult code, PyRieglRDBFile *self)
-{
-    if( code != RDB_SUCCESS )
-    {
-        int32_t   errorCode(0);
-        RDBString text("Unable to create context");
-        RDBString details("");
-    
-        if( self->pContext != NULL )
-        {
-            rdb_context_get_last_error(self->pContext, &errorCode, &text, &details);
-        }
-        
-        PyErr_Format(GETSTATE_FC->error, "Error from RDBLib: %s. Details: %s\n",
-               text, details); 
-        return false;
-    }
-    
-    return true;
-}
-
 // Processes psz until a '.' is found
 // and returns string as an int. 
 // Updates psz to point to first char after the '.'
@@ -186,22 +242,16 @@ char *pszFname = NULL;
     
     // get context
     // TODO: log level and log path as an option?
-    if( !CheckRDBResult(rdb_context_new(&self->pContext, "", ""), self) )
-    {
-        return -1;
-    }
+    CHECKRESULT_FILE(rdb_context_new(&self->pContext, "", ""), -1)
     
     // check we are running against the same version of the library we were compiled
     // against
     RDBString pszVersionString;
-    if( !CheckRDBResult(rdb_library_version(self->pContext, &pszVersionString), self) )
-    {
-        return -1;
-    }
+    CHECKRESULT_FILE(rdb_library_version(self->pContext, &pszVersionString), -1)
     
-    RDBString *psz = &pszVersionString;
-    int nMajor = GetAVersionPart(psz);
-    int nMinor = GetAVersionPart(psz);
+    RDBString psz = pszVersionString;
+    int nMajor = GetAVersionPart(&psz);
+    int nMinor = GetAVersionPart(&psz);
     if( (nMajor != RIEGL_RDB_MAJOR) || (nMinor != RIEGL_RDB_MINOR) )
     {
         // raise Python exception
@@ -214,20 +264,21 @@ char *pszFname = NULL;
     // open file
     // need a RDBPointcloudOpenSettings TODO: set from options
     RDBPointcloudOpenSettings *pSettings;
-    if( !CheckRDBResult(rdb_pointcloud_open_settings_new(self->pContext, &pSettings), self) )
-    {
-        return -1;
-    }
+    CHECKRESULT_FILE(rdb_pointcloud_open_settings_new(self->pContext, &pSettings), -1)
     
-    if( !CheckRDBResult(rdb_pointcloud_new(self->pContext, &self->pPointCloud), self) )
-    {
-        return -1;
-    }
+    CHECKRESULT_FILE(rdb_pointcloud_new(self->pContext, &self->pPointCloud), -1)
     
-    if( !CheckRDBResult(rdb_pointcloud_open(self->pContext, self->pPointCloud,
-                    pszFname, pSettings), self) )
+    CHECKRESULT_FILE(rdb_pointcloud_open(self->pContext, self->pPointCloud,
+                    pszFname, pSettings), -1)
+                    
+    uint32_t count;
+    RDBString list;
+    CHECKRESULT_FILE(rdb_pointcloud_point_attributes_list(self->pContext, self->pPointCloud,
+                        &count, &list), -1)
+    for( uint32_t i = 0; i < count; i++ )
     {
-        return -1;
+        fprintf(stderr, "%d %s\n", i, list);
+        list = list + strlen(list) + 1;
     }
     
 
@@ -252,15 +303,13 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
     Py_ssize_t nPulsesToIgnore = 0;
     if( self->pQuerySelect == NULL )
     {
+        fprintf(stderr, "New start\n");
         // have no current selection - create one
-        if( !CheckRDBResult(rdb_pointcloud_query_select_new(self->pContext, 
+        CHECKRESULT_FILE(rdb_pointcloud_query_select_new(self->pContext, 
                     self->pPointCloud,
                     0, // all nodes apparently according to querySelect.cpp
                     "",
-                    &self->pQuerySelect), self) )
-        {
-            return NULL;
-        }
+                    &self->pQuerySelect), NULL)
         
         nPulsesToIgnore = nPulseStart;
     }
@@ -269,17 +318,30 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
         // already have one
         if( nPulseStart > self->nCurrentPulse )
         {
+            fprintf(stderr, "fast forward\n" );
             // past where we are up to
             nPulsesToIgnore = nPulseStart - self->nCurrentPulse;
         }
         else if( nPulseStart < self->nCurrentPulse )
         {
+            fprintf(stderr, "rewind\n");
             // go back to beginning. Delete query select and start again
-            if( !CheckRDBResult(rdb_pointcloud_query_select_delete(self->pContext, &self->pQuerySelect), self) )
-            {
-                return NULL;
-            }
+            CHECKRESULT_FILE(rdb_pointcloud_query_select_delete(self->pContext, &self->pQuerySelect), NULL)
+
+            CHECKRESULT_FILE(rdb_pointcloud_query_select_new(self->pContext, 
+                    self->pPointCloud,
+                    0, // all nodes apparently according to querySelect.cpp
+                    "",
+                    &self->pQuerySelect), NULL)
+            nPulsesToIgnore = nPulseStart;
         }
+    }
+    
+    RiegRDBReader reader(self->pContext, self->pQuerySelect);
+    reader.setPulsesToIgnore(nPulsesToIgnore);
+    if( !reader.readData(nPulses) )
+    {
+        return NULL;
     }
 
     Py_RETURN_NONE;
@@ -292,6 +354,28 @@ static PyObject *PyRieglRDBFile_readWaveforms(PyRieglRDBFile *self, PyObject *ar
         return NULL;
 
     Py_RETURN_NONE;
+}
+
+// Returns false and sets Python exception if error code set
+static bool CheckRDBResult(RDBResult code, RDBContext *pContext)
+{
+    if( code != RDB_SUCCESS )
+    {
+        int32_t   errorCode(0);
+        RDBString text("Unable to create context");
+        RDBString details("");
+    
+        if( pContext != NULL )
+        {
+            rdb_context_get_last_error(pContext, &errorCode, &text, &details);
+        }
+        
+        PyErr_Format(GETSTATE_FC->error, "Error from RDBLib: %s. Details: %s\n",
+               text, details); 
+        return false;
+    }
+    
+    return true;
 }
 
 /* Table of methods */
