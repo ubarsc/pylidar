@@ -21,6 +21,7 @@
  */
 
 #include <Python.h>
+#include <cmath>
 #include "numpy/arrayobject.h"
 #include "numpy/npy_math.h"
 #include "pylvector.h"
@@ -49,23 +50,84 @@ static const int nInitSize = 256*256;
 // number of records to read in from librdb at one time
 static const int nTempSize = 100;
 
+/* Structure for pulses */
+typedef struct {
+    npy_uint64 pulse_ID;
+    npy_uint64 timestamp;
+    float azimuth;
+    float zenith;
+    npy_uint32 scanline;
+    npy_uint16 scanline_Idx;
+    double x_Idx;
+    double y_Idx;
+    npy_uint32 pts_start_idx;
+    npy_uint8 number_of_returns;
+} SRieglRDBPulse;
+
+/* field info for CVector::getNumpyArray */
+static SpylidarFieldDefn RieglPulseFields[] = {
+    CREATE_FIELD_DEFN(SRieglRDBPulse, pulse_ID, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, timestamp, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, azimuth, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, zenith, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline_Idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, y_Idx, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, x_Idx, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, pts_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, number_of_returns, 'u'),
+    {NULL} // Sentinel
+};
+
+/* Structure for points */
+typedef struct {
+    npy_uint64 return_Number;
+    npy_uint64 timestamp;
+    float deviation_Return;
+    npy_uint8 classification;
+    double range;
+    double rho_app;
+    double amplitude_Return;
+    double x;
+    double y;
+    double z;
+} SRieglRDBPoint;
+
+/* field info for CVector::getNumpyArray */
+static SpylidarFieldDefn RieglPointFields[] = {
+    CREATE_FIELD_DEFN(SRieglRDBPoint, return_Number, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, timestamp, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, deviation_Return, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, classification, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, range, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, rho_app, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, amplitude_Return, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, x, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, y, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, z, 'f'),
+    {NULL} // Sentinel
+};
+
 // buffer that we read the data in before copying to point/pulse structures
 // NOTE: any changes must be reflected in RiegRDBReader::resetBuffers()
 typedef struct
 {
-   // pulse
-    npy_uint64 shot_ID; // rieg.shot_id
-    double shot_origin[3]; // riegl.shot_origin
-    double shot_direction[3]; // riegl.shot_direction
-    npy_uint64 timestamp; // riegl.timestamp
-   
     // points
     npy_uint64 id; // riegl.id
+    npy_uint64 timestamp; // riegl.timestamp
+    npy_int32 deviation; // riegl.deviation
     npy_uint16 classification; // riegl.class
-    double range; // riegl.range
     double reflectance; // riegl.reflectance
     double amplitude; // riegl.amplitude
-    double xyz[3]; // riegl.xyz_socs
+    double xyz[3]; // riegl.xyz
+    
+    // pulses
+    npy_uint32 row;  // riegl.row
+    npy_uint16 column; // riegl.column
+    
+    // info for attributing points to pulses
+    npy_uint8 target_index; // riegl.target_index
+    npy_uint8 target_count; // riegl.target_count
 
 } RieglRDBBuffer;
 
@@ -83,69 +145,6 @@ static bool CheckRDBResult(RDBResult code, RDBContext *pContext);
                         m_pContext, m_pQuerySelect, attribute, dataType, buffer, \
                         sizeof(RieglRDBBuffer)), m_pContext) ) return false;
 
-class RiegRDBReader
-{
-public:
-    RiegRDBReader(RDBContext *pContext, RDBPointcloudQuerySelect *pQuerySelect)
-    {
-        m_pContext = pContext;
-        m_pQuerySelect = pQuerySelect;
-        m_nPulsesToIgnore = 0;
-    }
-    
-    void setPulsesToIgnore(Py_ssize_t nPulsesToIgnore)
-    {
-        m_nPulsesToIgnore = nPulsesToIgnore;
-    }
-    
-    // reset librdb to read into the start of our m_TempBuffer
-    bool resetBuffers()
-    {
-        // NOTE: this must match definition of RieglRDBBuffer
-        // pulse
-        //CHECKBIND_READER("riegl.shot_id", RDBDataTypeUINT64, &m_TempBuffer[0].shot_ID)
-        //CHECKBIND_READER("riegl.shot_origin", RDBDataTypeDOUBLE, &m_TempBuffer[0].shot_origin)
-        //CHECKBIND_READER("riegl.shot_direction", RDBDataTypeDOUBLE, &m_TempBuffer[0].shot_direction)
-        CHECKBIND_READER("riegl.timestamp", RDBDataTypeUINT64, &m_TempBuffer[0].timestamp)
-
-        // point
-        CHECKBIND_READER("riegl.id", RDBDataTypeUINT64, &m_TempBuffer[0].id)
-        CHECKBIND_READER("riegl.class", RDBDataTypeUINT16, &m_TempBuffer[0].classification)
-        //CHECKBIND_READER(RDB_RIEGL_RANGE.name, RDBDataTypeDOUBLE, &m_TempBuffer[0].range)
-        CHECKBIND_READER("riegl.reflectance", RDBDataTypeDOUBLE, &m_TempBuffer[0].reflectance)
-        CHECKBIND_READER("riegl.amplitude", RDBDataTypeDOUBLE, &m_TempBuffer[0].amplitude)
-        CHECKBIND_READER("riegl.xyz", RDBDataTypeDOUBLE, &m_TempBuffer[0].xyz)
-        
-        return true;
-    }
-    
-    bool readData(Py_ssize_t nPulses)
-    {
-        // reset to beginning of our temp space
-        if( !resetBuffers() )
-        {
-            return false;
-        }
-        
-        uint32_t processed = 0;
-        CHECKRESULT_READER(rdb_pointcloud_query_select_next(
-                    m_pContext, m_pQuerySelect, nTempSize, &processed), false);
-                    
-        for( uint32_t i = 0; i < processed; i++ )
-        {
-            fprintf(stderr, "id %" PRIu64 " %f\n", m_TempBuffer[i].id, m_TempBuffer[i].reflectance);
-        }
-                    
-        return true;
-    }
-
-private:
-    RDBContext *m_pContext;
-    RDBPointcloudQuerySelect *m_pQuerySelect;
-    Py_ssize_t m_nPulsesToIgnore;
-    RieglRDBBuffer m_TempBuffer[nTempSize];
-};
-
 typedef struct
 {
     PyObject_HEAD
@@ -154,6 +153,8 @@ typedef struct
     RDBPointcloud *pPointCloud;
     RDBPointcloudQuerySelect *pQuerySelect; // != NULL if we currently have one going
     Py_ssize_t nCurrentPulse;  // if pQuerySelect != NULL this is the pulse number we are up to
+    bool bFinishedReading;
+    PyObject *pHeader;  // dictionary with header info
 
 } PyRieglRDBFile;
 
@@ -188,6 +189,189 @@ static struct PyModuleDef moduledef = {
 };
 #endif
 
+class RiegRDBReader
+{
+public:
+    RiegRDBReader(RDBContext *pContext, RDBPointcloudQuerySelect *pQuerySelect)
+    {
+        m_pContext = pContext;
+        m_pQuerySelect = pQuerySelect;
+        m_nPulsesToIgnore = 0;
+    }
+    
+    void setPulsesToIgnore(Py_ssize_t nPulsesToIgnore)
+    {
+        m_nPulsesToIgnore = nPulsesToIgnore;
+    }
+    
+    // reset librdb to read into the start of our m_TempBuffer
+    bool resetBuffers()
+    {
+        // NOTE: this must match definition of RieglRDBBuffer
+        // I'm using the info from attribues.h rather than strings
+        //  - not sure what is best practice
+        // point
+        CHECKBIND_READER(RDB_RIEGL_ID.name, RDBDataTypeUINT64, &m_TempBuffer.id)
+        CHECKBIND_READER(RDB_RIEGL_TIMESTAMP.name, RDBDataTypeUINT64, &m_TempBuffer.timestamp)
+        CHECKBIND_READER(RDB_RIEGL_DEVIATION.name, RDBDataTypeINT32, &m_TempBuffer.deviation)
+        CHECKBIND_READER(RDB_RIEGL_CLASS.name, RDBDataTypeUINT16, &m_TempBuffer.classification)
+        CHECKBIND_READER(RDB_RIEGL_REFLECTANCE.name, RDBDataTypeDOUBLE, &m_TempBuffer.reflectance)
+        CHECKBIND_READER(RDB_RIEGL_AMPLITUDE.name, RDBDataTypeDOUBLE, &m_TempBuffer.amplitude)
+        CHECKBIND_READER(RDB_RIEGL_XYZ.name, RDBDataTypeDOUBLE, &m_TempBuffer.xyz)
+        
+        // these 2 don't appear to be documented, but are in there
+        CHECKBIND_READER("riegl.row", RDBDataTypeUINT32, &m_TempBuffer.row);
+        CHECKBIND_READER("riegl.column", RDBDataTypeUINT16, &m_TempBuffer.column);
+        
+        CHECKBIND_READER(RDB_RIEGL_TARGET_INDEX.name, RDBDataTypeUINT8, &m_TempBuffer.target_index)
+        CHECKBIND_READER(RDB_RIEGL_TARGET_COUNT.name, RDBDataTypeUINT8, &m_TempBuffer.target_count)
+        
+        return true;
+    }
+    
+    PyObject* readData(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, bool &bFinished)
+    {
+        pylidar::CVector<SRieglRDBPulse> pulses(nInitSize, nGrowBy);
+        SRieglRDBPulse pulse;
+        pylidar::CVector<SRieglRDBPoint> points(nInitSize, nGrowBy);
+        SRieglRDBPoint point;
+        
+        while( m_nPulsesToIgnore > 0 )
+        {
+            if( !resetBuffers() )
+            {
+                return NULL;
+            }
+
+            uint32_t processed = 0;
+            if( rdb_pointcloud_query_select_next(
+                    m_pContext, m_pQuerySelect, 1,
+                    &processed) == 0 )
+            {
+                // 0 means 'end of file' apparently
+                PyErr_SetString(GETSTATE_FC->error, "Unable to ignore correct number of pulses");
+                return NULL;
+            }
+            m_nPulsesToIgnore--;
+        }
+
+        while( true )
+        {
+            // because we are reading in a number of pulses
+            // and we can't rewind, we have to read in one point
+            // at a time and slowly build up to the right number 
+            // of pulses
+        
+            // reset to beginning of our temp space
+            // have to do this every time since we are just reading one
+            // - could be slow.
+            if( !resetBuffers() )
+            {
+                return NULL;
+            }
+
+            uint32_t processed = 0;
+            if( rdb_pointcloud_query_select_next(
+                    m_pContext, m_pQuerySelect, 1,
+                    &processed) == 0 )
+            {
+                // 0 means 'end of file' apparently
+                bFinished = true;
+                break;
+            }
+                    
+            if( processed == 0 ) 
+            {
+                bFinished = true;
+                break;
+            }
+            
+            point.return_Number = m_TempBuffer.id;
+            point.timestamp = m_TempBuffer.timestamp;
+            point.deviation_Return = m_TempBuffer.deviation;
+            point.classification = m_TempBuffer.classification;
+            point.range = std::sqrt(std::pow(m_TempBuffer.xyz[0], 2) + 
+                                    std::pow(m_TempBuffer.xyz[1], 2) + 
+                                    std::pow(m_TempBuffer.xyz[2], 2));
+            // Rescale reflectance from dB to papp
+            point.rho_app = std::pow(10.0, m_TempBuffer.reflectance / 10.0);
+            point.amplitude_Return = m_TempBuffer.amplitude;
+            point.x = m_TempBuffer.xyz[0];
+            point.y = m_TempBuffer.xyz[1];
+            point.z = m_TempBuffer.xyz[2];
+            
+            if( m_TempBuffer.target_index == 1 ) 
+            {
+                // start of new pulse 
+                  
+                // check that we have the required number of pulses
+                // (would have just finished reading all the attached points
+                // of the previous pulse)
+                if( pulses.getNumElems() >= nPulses )
+                {
+                    break;
+                }
+                    
+                pulse.pulse_ID = nCurrentPulse;
+                pulse.timestamp = m_TempBuffer.timestamp;
+                pulse.azimuth = std::atan(point.x / point.y);
+                if( (point.x <= 0) && (point.y >= 0) )
+                {
+                    pulse.azimuth += 180;
+                }
+                if( (point.x <= 0) && (point.y <= 0) )
+                {
+                    pulse.azimuth -= 180;
+                }
+                if( pulse.azimuth < 0 )
+                {
+                    pulse.azimuth += 360;
+                }
+                pulse.zenith = std::atan(std::sqrt(std::pow(point.x, 2) + 
+                                std::pow(point.y, 2)) / point.z);
+                if( pulse.zenith < 0 )
+                {
+                    pulse.zenith += 180;
+                }
+                    
+                pulse.scanline = m_TempBuffer.row;
+                pulse.scanline_Idx = m_TempBuffer.column;
+                pulse.x_Idx = point.x;
+                pulse.y_Idx = point.y;
+                pulse.pts_start_idx = points.getNumElems();
+                pulse.number_of_returns = 0; // can't trust m_TempBuffer.target_count;
+                                            // increment below
+                pulses.push(&pulse);
+                nCurrentPulse++;
+            }
+            
+            points.push(&point);
+            
+            SRieglRDBPulse *pLastPulse = pulses.getLastElement();
+            if( pLastPulse != NULL )
+            {
+                pLastPulse->number_of_returns++;
+            }
+            
+        }
+
+        // build tuple
+        PyArrayObject *pPulses = pulses.getNumpyArray(RieglPulseFields);
+        PyArrayObject *pPoints = points.getNumpyArray(RieglPointFields);
+        PyObject *pTuple = PyTuple_Pack(2, pPulses, pPoints);
+        Py_DECREF(pPulses);
+        Py_DECREF(pPoints);
+
+        return pTuple;
+    }
+
+private:
+    RDBContext *m_pContext;
+    RDBPointcloudQuerySelect *m_pQuerySelect;
+    Py_ssize_t m_nPulsesToIgnore;
+    RieglRDBBuffer m_TempBuffer;
+};
+
 static void 
 PyRieglRDBFile_dealloc(PyRieglRDBFile *self)
 {
@@ -204,6 +388,8 @@ PyRieglRDBFile_dealloc(PyRieglRDBFile *self)
     {
         rdb_context_delete(&self->pContext);
     }
+    
+    Py_XDECREF(self->pHeader);
 
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -271,7 +457,7 @@ char *pszFname = NULL;
     CHECKRESULT_FILE(rdb_pointcloud_open(self->pContext, self->pPointCloud,
                     pszFname, pSettings), -1)
                     
-    uint32_t count;
+    /*uint32_t count;
     RDBString list;
     CHECKRESULT_FILE(rdb_pointcloud_point_attributes_list(self->pContext, self->pPointCloud,
                         &count, &list), -1)
@@ -279,8 +465,29 @@ char *pszFname = NULL;
     {
         fprintf(stderr, "%d %s\n", i, list);
         list = list + strlen(list) + 1;
+    }*/
+    // read in header ("metadata" in rdblib speak)
+    self->pHeader = PyDict_New();
+    uint32_t count;
+    RDBString list;
+    CHECKRESULT_FILE(rdb_pointcloud_meta_data_list(self->pContext, self->pPointCloud,
+                        &count, &list), -1)
+    RDBString value;
+    for( uint32_t i = 0; i < count; i++ )
+    {
+        CHECKRESULT_FILE(rdb_pointcloud_meta_data_get(self->pContext, self->pPointCloud,
+                        list, &value), -1)
+        // TODO: decode json?
+#if PY_MAJOR_VERSION >= 3
+        PyObject *pString = PyUnicode_FromString(value);
+#else
+        PyObject *pString = PyString_FromString(value);
+#endif
+        PyDict_SetItemString(self->pHeader, list, pString);
+        Py_DECREF(pString);
+        /*fprintf(stderr, "%d %s %s\n", i, list, value);*/
+        list = list + strlen(list) + 1;
     }
-    
 
     // take a copy of the filename so we can re
     // create the file pointer.
@@ -288,6 +495,7 @@ char *pszFname = NULL;
     
     self->pQuerySelect = NULL;
     self->nCurrentPulse = 0;
+    self->bFinishedReading = false;
 
     return 0;
 }
@@ -339,12 +547,12 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
     
     RiegRDBReader reader(self->pContext, self->pQuerySelect);
     reader.setPulsesToIgnore(nPulsesToIgnore);
-    if( !reader.readData(nPulses) )
-    {
-        return NULL;
-    }
-
-    Py_RETURN_NONE;
+    
+    // will be NULL on error
+    PyObject *pResult = reader.readData(nPulses, 
+                self->nCurrentPulse, self->bFinishedReading);
+    
+    return pResult;
 }
 
 static PyObject *PyRieglRDBFile_readWaveforms(PyRieglRDBFile *self, PyObject *args)
@@ -385,8 +593,30 @@ static PyMethodDef PyRieglRDBFile_methods[] = {
     {NULL}  /* Sentinel */
 };
 
+static PyObject *PyRieglRDBFile_getFinished(PyRieglRDBFile *self, void *closure)
+{
+    if( self->bFinishedReading )
+        Py_RETURN_TRUE;
+    else
+        Py_RETURN_FALSE;
+}
+
+static PyObject *PyRieglRDBFile_getPulsesRead(PyRieglRDBFile *self, void *closure)
+{
+    return PyLong_FromSsize_t(self->nCurrentPulse);
+}
+
+static PyObject *PyRieglRDBFile_getHeader(PyRieglRDBFile *self, void *closure)
+{
+    Py_INCREF(self->pHeader);
+    return self->pHeader;
+}
+
 /* get/set */
 static PyGetSetDef PyRieglRDBFile_getseters[] = {
+    {(char*)"finished", (getter)PyRieglRDBFile_getFinished, NULL, (char*)"Get Finished reading state", NULL}, 
+    {(char*)"pulsesRead", (getter)PyRieglRDBFile_getPulsesRead, NULL, (char*)"Get number of pulses read", NULL},
+    {(char*)"header", (getter)PyRieglRDBFile_getHeader, NULL, (char*)"Get header as a dictionary", NULL},
     {NULL}  /* Sentinel */
 };
 
