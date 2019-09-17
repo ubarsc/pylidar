@@ -42,7 +42,7 @@ def isRieglRDBFile(fname):
     of the file.
     """
     fh = open(fname, 'rb')
-    data = fh.read(32)
+    data = fh.read(len(RDB_MAGIC))
     fh.close()
         
     return data == RDB_MAGIC
@@ -59,7 +59,7 @@ class RieglRDBFile(generic.LiDARFile):
             msg = 'Riegl RDB driver is read only'
             raise generic.LiDARInvalidSetting(msg)
 
-        if not isRieglFile(fname):
+        if not isRieglRDBFile(fname):
             msg = 'not a riegl RDB file'
             raise generic.LiDARFileException(msg)
         

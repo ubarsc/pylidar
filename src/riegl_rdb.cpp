@@ -235,14 +235,18 @@ public:
         SRieglRDBPulse pulse;
         pylidar::CVector<SRieglRDBPoint> points(nInitSize, nGrowBy);
         SRieglRDBPoint point;
+
+        // reset to beginning of our temp space
+        // - seems we only need to do this once
+        // and rdb_pointcloud_query_select_next resets
+        // back to the beginning of the space each time
+        if( !resetBuffers() )
+        {
+            return NULL;
+        }
         
         while( m_nPulsesToIgnore > 0 )
         {
-            if( !resetBuffers() )
-            {
-                return NULL;
-            }
-
             uint32_t processed = 0;
             if( rdb_pointcloud_query_select_next(
                     m_pContext, m_pQuerySelect, 1,
@@ -261,15 +265,6 @@ public:
             // and we can't rewind, we have to read in one point
             // at a time and slowly build up to the right number 
             // of pulses
-        
-            // reset to beginning of our temp space
-            // have to do this every time since we are just reading one
-            // - could be slow.
-            if( !resetBuffers() )
-            {
-                return NULL;
-            }
-
             uint32_t processed = 0;
             if( rdb_pointcloud_query_select_next(
                     m_pContext, m_pQuerySelect, 1,
@@ -511,7 +506,7 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
     Py_ssize_t nPulsesToIgnore = 0;
     if( self->pQuerySelect == NULL )
     {
-        fprintf(stderr, "New start\n");
+        //fprintf(stderr, "New start\n");
         // have no current selection - create one
         CHECKRESULT_FILE(rdb_pointcloud_query_select_new(self->pContext, 
                     self->pPointCloud,
@@ -526,13 +521,13 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
         // already have one
         if( nPulseStart > self->nCurrentPulse )
         {
-            fprintf(stderr, "fast forward\n" );
+            //fprintf(stderr, "fast forward\n" );
             // past where we are up to
             nPulsesToIgnore = nPulseStart - self->nCurrentPulse;
         }
         else if( nPulseStart < self->nCurrentPulse )
         {
-            fprintf(stderr, "rewind\n");
+            //fprintf(stderr, "rewind\n");
             // go back to beginning. Delete query select and start again
             CHECKRESULT_FILE(rdb_pointcloud_query_select_delete(self->pContext, &self->pQuerySelect), NULL)
 

@@ -46,6 +46,13 @@ except ImportError:
     # libraries not available
     HAVE_FMT_RIEGL = False
 
+HAVE_FMT_RIEGL_RDB = True
+try:
+    from .lidarformats import riegl_rdb
+except ImportError:
+    # libraries not available
+    HAVE_FMT_RIEGL_RDB = False
+
 HAVE_FMT_LAS = True
 try:
     from .lidarformats import las
