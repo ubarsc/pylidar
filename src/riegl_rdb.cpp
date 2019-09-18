@@ -463,25 +463,25 @@ char *pszFname = NULL;
     }*/
     // read in header ("metadata" in rdblib speak)
     self->pHeader = PyDict_New();
-    uint32_t count;
-    RDBString list;
+    uint32_t acount;
+    RDBString alist;
     CHECKRESULT_FILE(rdb_pointcloud_meta_data_list(self->pContext, self->pPointCloud,
-                        &count, &list), -1)
+                        &acount, &alist), -1)
     RDBString value;
-    for( uint32_t i = 0; i < count; i++ )
+    for( uint32_t i = 0; i < acount; i++ )
     {
         CHECKRESULT_FILE(rdb_pointcloud_meta_data_get(self->pContext, self->pPointCloud,
-                        list, &value), -1)
+                        alist, &value), -1)
         // TODO: decode json?
 #if PY_MAJOR_VERSION >= 3
         PyObject *pString = PyUnicode_FromString(value);
 #else
         PyObject *pString = PyString_FromString(value);
 #endif
-        PyDict_SetItemString(self->pHeader, list, pString);
+        PyDict_SetItemString(self->pHeader, alist, pString);
         Py_DECREF(pString);
         /*fprintf(stderr, "%d %s %s\n", i, list, value);*/
-        list = list + strlen(list) + 1;
+        alist = alist + strlen(alist) + 1;
     }
 
     // take a copy of the filename so we can re
