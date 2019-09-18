@@ -131,7 +131,10 @@ def addRieglRDBDriver(extModules, cxxFlags):
         print('Building Riegl RDB Extension...')
         
         rdblibRoot = os.environ['RDBLIB_ROOT']
-        rdbLibName = 'rdb'
+        if sys.platform == 'win32':
+            rdbLibName = 'rdblib'
+        else:
+            rdbLibName = 'rdb'
 
         defines = getRieglRDBLibVersion(rdblibRoot, rdbLibName)
         defines.extend([NUMPY_MACROS])

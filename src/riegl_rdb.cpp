@@ -50,6 +50,30 @@ static const int nInitSize = 256*256;
 // number of records to read in from librdb at one time
 static const int nTempSize = 100;
 
+#ifdef _MSC_VER
+// not available with MSVC
+// see https://bugs.libssh.org/T112
+char *strndup(const char *s, size_t n)
+{
+    char *x = NULL;
+
+    if (n + 1 < n) {
+        return NULL;
+    }
+
+    x = (char*)malloc(n + 1);
+    if (x == NULL) {
+        return NULL;
+    }
+
+    memcpy(x, s, n);
+    x[n] = '\0';
+
+    return x;
+}
+
+#endif
+
 /* Structure for pulses */
 typedef struct {
     npy_uint64 pulse_ID;
@@ -283,8 +307,8 @@ public:
             
             point.return_Number = m_TempBuffer.id;
             point.timestamp = m_TempBuffer.timestamp;
-            point.deviation_Return = m_TempBuffer.deviation;
-            point.classification = m_TempBuffer.classification;
+            point.deviation_Return = (float)m_TempBuffer.deviation;
+            point.classification = (npy_uint8)m_TempBuffer.classification;
             point.range = std::sqrt(std::pow(m_TempBuffer.xyz[0], 2) + 
                                     std::pow(m_TempBuffer.xyz[1], 2) + 
                                     std::pow(m_TempBuffer.xyz[2], 2));
@@ -309,7 +333,7 @@ public:
                     
                 pulse.pulse_ID = nCurrentPulse;
                 pulse.timestamp = m_TempBuffer.timestamp;
-                pulse.azimuth = std::atan(point.x / point.y);
+                pulse.azimuth = (float)std::atan(point.x / point.y);
                 if( (point.x <= 0) && (point.y >= 0) )
                 {
                     pulse.azimuth += 180;
@@ -322,7 +346,7 @@ public:
                 {
                     pulse.azimuth += 360;
                 }
-                pulse.zenith = std::atan(std::sqrt(std::pow(point.x, 2) + 
+                pulse.zenith = (float)std::atan(std::sqrt(std::pow(point.x, 2) + 
                                 std::pow(point.y, 2)) / point.z);
                 if( pulse.zenith < 0 )
                 {
@@ -333,7 +357,7 @@ public:
                 pulse.scanline_Idx = m_TempBuffer.column;
                 pulse.x_Idx = point.x;
                 pulse.y_Idx = point.y;
-                pulse.pts_start_idx = points.getNumElems();
+                pulse.pts_start_idx = (npy_uint32)points.getNumElems();
                 pulse.number_of_returns = 0; // can't trust m_TempBuffer.target_count;
                                             // increment below
                 pulses.push(&pulse);
