@@ -87,7 +87,7 @@ command line to install pylidar (dependencies are obtained automatically): ::
     conda config --add channels conda-forge 
     conda config --add channels rios 
     conda create -n myenv pylidar
-    source activate myenv # omit 'source' on Windows
+    conda activate myenv
 
 The related `pynninterp <https://bitbucket.org/petebunting/pynninterp>`_ module is used
 for some interpolation operations and can be installed via Conda also from the 'rios' channel::
