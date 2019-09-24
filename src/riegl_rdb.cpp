@@ -391,7 +391,7 @@ public:
                 break;
             }
        
-            point.return_Number = currEl.id;
+            point.return_Number = currEl.target_index - 1; // target_index is 1 - based
             point.timestamp = currEl.timestamp;
             point.deviation_Return = (float)currEl.deviation;
             point.classification = (npy_uint8)currEl.classification;

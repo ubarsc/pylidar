@@ -23,6 +23,7 @@ from __future__ import print_function, division
 
 import os
 import copy
+import json
 import numpy
 
 from . import generic
@@ -67,6 +68,8 @@ class RieglRDBFile(generic.LiDARFile):
         self.lastRange = None
         self.lastPoints = None
         self.lastPulses = None
+        # cache header so we can do a json.loads on everything
+        self.header = None
         self.rdbFile = _rieglrdb.RDBFile(fname)
         
     @staticmethod        
@@ -93,6 +96,7 @@ class RieglRDBFile(generic.LiDARFile):
         self.lastRange = None
         self.lastPoints = None
         self.lastPulses = None
+        self.header = None
         self.rdbFile = None
         
     def getTotalNumberPulses(self):
@@ -212,8 +216,21 @@ class RieglRDBFile(generic.LiDARFile):
         
     def getHeader(self):
         """
+        Get header from C++ if we haven't already. Most of it appears
+        to be JSON strings so we attempt to decode them back into Python
+        objects. We don't seem to be able to do this from C++ directly.
         """
-        return self.rdbFile.header
+        if self.header is None:
+            header = self.rdbFile.header
+            self.header = {}
+            for key in header:
+                try:
+                    self.header[key] = json.loads(header[key])
+                except json.decoder.JSONDecodeError, TypeError:
+                    # just copy value across - not JSON
+                    self.header[key] = header[key]
+            
+        return self.header
         
     def getHeaderValue(self, name):
         """
