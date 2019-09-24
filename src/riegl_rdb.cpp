@@ -169,6 +169,119 @@ static bool CheckRDBResult(RDBResult code, RDBContext *pContext);
                         m_pContext, m_pQuerySelect, attribute, dataType, buffer, \
                         sizeof(RieglRDBBuffer)), m_pContext) ) return false;
 
+// class that wraps an array of RieglRDBBuffer s
+// so we can read in a whole lot at once. 
+class PyRieglRDBDataBuffer
+{
+public:
+    PyRieglRDBDataBuffer(RDBContext *pContext, RDBPointcloudQuerySelect *pQuerySelect)
+    {
+        m_pContext = pContext;
+        m_pQuerySelect = pQuerySelect;
+        reset();
+    }
+    
+    void reset()
+    {
+        m_nElementsInBuffer = 0;
+        m_nCurrentIdx = 0;
+        m_bEOF = false;
+    }
+
+    // reset librdb to read into the start of our m_TempBuffer
+    bool resetBuffers()
+    {
+        // NOTE: this must match definition of RieglRDBBuffer
+        // I'm using the info from attribues.h rather than strings
+        //  - not sure what is best practice
+        // point
+        CHECKBIND_READER(RDB_RIEGL_ID.name, RDBDataTypeUINT64, &m_buffer[0].id)
+        CHECKBIND_READER(RDB_RIEGL_TIMESTAMP.name, RDBDataTypeUINT64, &m_buffer[0].timestamp)
+        CHECKBIND_READER(RDB_RIEGL_DEVIATION.name, RDBDataTypeINT32, &m_buffer[0].deviation)
+        CHECKBIND_READER(RDB_RIEGL_CLASS.name, RDBDataTypeUINT16, &m_buffer[0].classification)
+        CHECKBIND_READER(RDB_RIEGL_REFLECTANCE.name, RDBDataTypeDOUBLE, &m_buffer[0].reflectance)
+        CHECKBIND_READER(RDB_RIEGL_AMPLITUDE.name, RDBDataTypeDOUBLE, &m_buffer[0].amplitude)
+        CHECKBIND_READER(RDB_RIEGL_XYZ.name, RDBDataTypeDOUBLE, &m_buffer[0].xyz)
+        
+        // these 2 don't appear to be documented, but are in there
+        CHECKBIND_READER("riegl.row", RDBDataTypeUINT32, &m_buffer[0].row);
+        CHECKBIND_READER("riegl.column", RDBDataTypeUINT16, &m_buffer[0].column);
+        
+        CHECKBIND_READER(RDB_RIEGL_TARGET_INDEX.name, RDBDataTypeUINT8, &m_buffer[0].target_index)
+        CHECKBIND_READER(RDB_RIEGL_TARGET_COUNT.name, RDBDataTypeUINT8, &m_buffer[0].target_count)
+        
+        return true;
+    }
+    
+    bool read(uint32_t nElements=nInitSize)
+    {
+        reset();
+        if( !resetBuffers() )
+        {
+            return false;
+        }
+        uint32_t processed = 0;
+        if( rdb_pointcloud_query_select_next(
+                m_pContext, m_pQuerySelect, nElements,
+                &processed) == 0 )
+        {
+            // 0 means 'end of file' apparently
+            m_bEOF = true;
+        }
+        if( processed == 0 )
+        {
+            m_bEOF = true;
+        }
+        
+        m_nElementsInBuffer = processed;
+        return true;
+    }
+    
+    // allows us to get 'current' and 'next' elements
+    // this is important for ignoring pulses as we are really
+    // interested if the 'next' element is the start of a new
+    // pulse
+    RieglRDBBuffer *getNextElement(RieglRDBBuffer *pCurrent, bool *pbSetCurrent)
+    {
+        if( m_nCurrentIdx >= m_nElementsInBuffer )
+        {
+            //fprintf(stderr, "refilling 1 %d %d\n", m_nCurrentIdx, m_nElementsInBuffer);
+            if( !read() || eof() )
+            {
+                *pbSetCurrent = false;
+                return NULL;
+            }
+        }
+        
+        memcpy(pCurrent, &m_buffer[m_nCurrentIdx], sizeof(RieglRDBBuffer));
+        m_nCurrentIdx++;
+        *pbSetCurrent = true;
+        if( m_nCurrentIdx >= m_nElementsInBuffer )
+        {
+            //fprintf(stderr, "refilling 2 %d %d\n", m_nCurrentIdx, m_nElementsInBuffer);
+            if( !read() || eof() )
+            {
+                return NULL;
+            }
+        }
+        
+        return &m_buffer[m_nCurrentIdx];
+    }
+    
+    bool eof()
+    {
+        return m_bEOF;
+    }
+
+private:
+    RDBContext *m_pContext;
+    RDBPointcloudQuerySelect *m_pQuerySelect;
+    RieglRDBBuffer m_buffer[nInitSize];
+    uint32_t m_nElementsInBuffer;
+    uint32_t m_nCurrentIdx;
+    bool m_bEOF;
+};
+
 typedef struct
 {
     PyObject_HEAD
@@ -176,6 +289,7 @@ typedef struct
     RDBContext *pContext;
     RDBPointcloud *pPointCloud;
     RDBPointcloudQuerySelect *pQuerySelect; // != NULL if we currently have one going
+    PyRieglRDBDataBuffer *pBuffer; // object for buffering reads on pQuerySelect
     Py_ssize_t nCurrentPulse;  // if pQuerySelect != NULL this is the pulse number we are up to
     bool bFinishedReading;
     PyObject *pHeader;  // dictionary with header info
@@ -213,13 +327,15 @@ static struct PyModuleDef moduledef = {
 };
 #endif
 
-class RiegRDBReader
+class RieglRDBReader
 {
 public:
-    RiegRDBReader(RDBContext *pContext, RDBPointcloudQuerySelect *pQuerySelect)
+    RieglRDBReader(RDBContext *pContext, RDBPointcloudQuerySelect *pQuerySelect,
+                    PyRieglRDBDataBuffer *pBuffer)
     {
         m_pContext = pContext;
         m_pQuerySelect = pQuerySelect;
+        m_pBuffer = pBuffer;
         m_nPulsesToIgnore = 0;
     }
     
@@ -228,30 +344,6 @@ public:
         m_nPulsesToIgnore = nPulsesToIgnore;
     }
     
-    // reset librdb to read into the start of our m_TempBuffer
-    bool resetBuffers()
-    {
-        // NOTE: this must match definition of RieglRDBBuffer
-        // I'm using the info from attribues.h rather than strings
-        //  - not sure what is best practice
-        // point
-        CHECKBIND_READER(RDB_RIEGL_ID.name, RDBDataTypeUINT64, &m_TempBuffer.id)
-        CHECKBIND_READER(RDB_RIEGL_TIMESTAMP.name, RDBDataTypeUINT64, &m_TempBuffer.timestamp)
-        CHECKBIND_READER(RDB_RIEGL_DEVIATION.name, RDBDataTypeINT32, &m_TempBuffer.deviation)
-        CHECKBIND_READER(RDB_RIEGL_CLASS.name, RDBDataTypeUINT16, &m_TempBuffer.classification)
-        CHECKBIND_READER(RDB_RIEGL_REFLECTANCE.name, RDBDataTypeDOUBLE, &m_TempBuffer.reflectance)
-        CHECKBIND_READER(RDB_RIEGL_AMPLITUDE.name, RDBDataTypeDOUBLE, &m_TempBuffer.amplitude)
-        CHECKBIND_READER(RDB_RIEGL_XYZ.name, RDBDataTypeDOUBLE, &m_TempBuffer.xyz)
-        
-        // these 2 don't appear to be documented, but are in there
-        CHECKBIND_READER("riegl.row", RDBDataTypeUINT32, &m_TempBuffer.row);
-        CHECKBIND_READER("riegl.column", RDBDataTypeUINT16, &m_TempBuffer.column);
-        
-        CHECKBIND_READER(RDB_RIEGL_TARGET_INDEX.name, RDBDataTypeUINT8, &m_TempBuffer.target_index)
-        CHECKBIND_READER(RDB_RIEGL_TARGET_COUNT.name, RDBDataTypeUINT8, &m_TempBuffer.target_count)
-        
-        return true;
-    }
     
     PyObject* readData(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, bool &bFinished)
     {
@@ -260,66 +352,60 @@ public:
         pylidar::CVector<SRieglRDBPoint> points(nInitSize, nGrowBy);
         SRieglRDBPoint point;
 
-        // reset to beginning of our temp space
-        // - seems we only need to do this once
-        // and rdb_pointcloud_query_select_next resets
-        // back to the beginning of the space each time
-        if( !resetBuffers() )
-        {
-            return NULL;
-        }
-        
+        RieglRDBBuffer currEl;
+        bool bSetCurrent;
         while( m_nPulsesToIgnore > 0 )
         {
-            uint32_t processed = 0;
-            if( rdb_pointcloud_query_select_next(
-                    m_pContext, m_pQuerySelect, 1,
-                    &processed) == 0 )
+            RieglRDBBuffer *pNextEl = m_pBuffer->getNextElement(&currEl, &bSetCurrent);
+            if( pNextEl == NULL )
             {
-                // 0 means 'end of file' apparently
-                PyErr_SetString(GETSTATE_FC->error, "Unable to ignore correct number of pulses");
+                if( PyErr_Occurred() == NULL )
+                {
+                    PyErr_SetString(GETSTATE_FC->error, "Got to EOF while ignoring pulses");
+                }
+                bFinished = true;
                 return NULL;
             }
-            m_nPulsesToIgnore--;
+            if( pNextEl->target_index == 1 )
+            {
+                // if the next element is a new pulse then
+                // we have read one new pulse
+                m_nPulsesToIgnore--;
+            }
         }
 
-        while( true )
+        while( !m_pBuffer->eof() )
         {
-            // because we are reading in a number of pulses
-            // and we can't rewind, we have to read in one point
-            // at a time and slowly build up to the right number 
-            // of pulses
-            uint32_t processed = 0;
-            if( rdb_pointcloud_query_select_next(
-                    m_pContext, m_pQuerySelect, 1,
-                    &processed) == 0 )
-            {
-                // 0 means 'end of file' apparently
-                bFinished = true;
-                break;
-            }
-                    
-            if( processed == 0 ) 
+        
+            m_pBuffer->getNextElement(&currEl, &bSetCurrent);
+            // only interested in currEl
+            if( !bSetCurrent )
             {
                 bFinished = true;
+                if( PyErr_Occurred() != NULL )
+                {
+                    // error happened somewhere
+                    return NULL;
+                }
+                // finished reading
                 break;
             }
-            
-            point.return_Number = m_TempBuffer.id;
-            point.timestamp = m_TempBuffer.timestamp;
-            point.deviation_Return = (float)m_TempBuffer.deviation;
-            point.classification = (npy_uint8)m_TempBuffer.classification;
-            point.range = std::sqrt(std::pow(m_TempBuffer.xyz[0], 2) + 
-                                    std::pow(m_TempBuffer.xyz[1], 2) + 
-                                    std::pow(m_TempBuffer.xyz[2], 2));
+       
+            point.return_Number = currEl.id;
+            point.timestamp = currEl.timestamp;
+            point.deviation_Return = (float)currEl.deviation;
+            point.classification = (npy_uint8)currEl.classification;
+            point.range = std::sqrt(std::pow(currEl.xyz[0], 2) + 
+                                    std::pow(currEl.xyz[1], 2) + 
+                                    std::pow(currEl.xyz[2], 2));
             // Rescale reflectance from dB to papp
-            point.rho_app = std::pow(10.0, m_TempBuffer.reflectance / 10.0);
-            point.amplitude_Return = m_TempBuffer.amplitude;
-            point.x = m_TempBuffer.xyz[0];
-            point.y = m_TempBuffer.xyz[1];
-            point.z = m_TempBuffer.xyz[2];
+            point.rho_app = std::pow(10.0, currEl.reflectance / 10.0);
+            point.amplitude_Return = currEl.amplitude;
+            point.x = currEl.xyz[0];
+            point.y = currEl.xyz[1];
+            point.z = currEl.xyz[2];
             
-            if( m_TempBuffer.target_index == 1 ) 
+            if( currEl.target_index == 1 ) 
             {
                 // start of new pulse 
                   
@@ -332,7 +418,7 @@ public:
                 }
                     
                 pulse.pulse_ID = nCurrentPulse;
-                pulse.timestamp = m_TempBuffer.timestamp;
+                pulse.timestamp = currEl.timestamp;
                 pulse.azimuth = (float)std::atan(point.x / point.y);
                 if( (point.x <= 0) && (point.y >= 0) )
                 {
@@ -353,8 +439,8 @@ public:
                     pulse.zenith += 180;
                 }
                     
-                pulse.scanline = m_TempBuffer.row;
-                pulse.scanline_Idx = m_TempBuffer.column;
+                pulse.scanline = currEl.row;
+                pulse.scanline_Idx = currEl.column;
                 pulse.x_Idx = point.x;
                 pulse.y_Idx = point.y;
                 pulse.pts_start_idx = (npy_uint32)points.getNumElems();
@@ -373,6 +459,8 @@ public:
             }
             
         }
+        
+        bFinished = m_pBuffer->eof();
 
         // build tuple
         PyArrayObject *pPulses = pulses.getNumpyArray(RieglPulseFields);
@@ -387,13 +475,14 @@ public:
 private:
     RDBContext *m_pContext;
     RDBPointcloudQuerySelect *m_pQuerySelect;
+    PyRieglRDBDataBuffer *m_pBuffer;
     Py_ssize_t m_nPulsesToIgnore;
-    RieglRDBBuffer m_TempBuffer;
 };
 
 static void 
 PyRieglRDBFile_dealloc(PyRieglRDBFile *self)
 {
+    delete self->pBuffer;
     free(self->pszFilename);
     if( self->pQuerySelect != NULL )
     {
@@ -513,6 +602,7 @@ char *pszFname = NULL;
     self->pszFilename = strdup(pszFname);
     
     self->pQuerySelect = NULL;
+    self->pBuffer = NULL;
     self->nCurrentPulse = 0;
     self->bFinishedReading = false;
 
@@ -526,6 +616,7 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
         return NULL;
 
     nPulses = nPulseEnd - nPulseStart;
+    //fprintf( stderr, "Pulse start %ld\n", nPulseStart);
     
     Py_ssize_t nPulsesToIgnore = 0;
     if( self->pQuerySelect == NULL )
@@ -537,6 +628,9 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
                     0, // all nodes apparently according to querySelect.cpp
                     "",
                     &self->pQuerySelect), NULL)
+                    
+        self->pBuffer = new PyRieglRDBDataBuffer(self->pContext,
+                                        self->pQuerySelect);
         
         nPulsesToIgnore = nPulseStart;
     }
@@ -553,6 +647,7 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
         {
             //fprintf(stderr, "rewind\n");
             // go back to beginning. Delete query select and start again
+            delete self->pBuffer;
             CHECKRESULT_FILE(rdb_pointcloud_query_select_delete(self->pContext, &self->pQuerySelect), NULL)
 
             CHECKRESULT_FILE(rdb_pointcloud_query_select_new(self->pContext, 
@@ -560,11 +655,15 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
                     0, // all nodes apparently according to querySelect.cpp
                     "",
                     &self->pQuerySelect), NULL)
+
+            self->pBuffer = new PyRieglRDBDataBuffer(self->pContext,
+                                        self->pQuerySelect);
+                                        
             nPulsesToIgnore = nPulseStart;
         }
     }
     
-    RiegRDBReader reader(self->pContext, self->pQuerySelect);
+    RieglRDBReader reader(self->pContext, self->pQuerySelect, self->pBuffer);
     reader.setPulsesToIgnore(nPulsesToIgnore);
     
     // will be NULL on error
