@@ -226,7 +226,7 @@ class RieglRDBFile(generic.LiDARFile):
             for key in header:
                 try:
                     self.header[key] = json.loads(header[key])
-                except json.decoder.JSONDecodeError, TypeError:
+                except (json.decoder.JSONDecodeError, TypeError):
                     # just copy value across - not JSON
                     self.header[key] = header[key]
             
