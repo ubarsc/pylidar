@@ -151,7 +151,7 @@ typedef struct
     
     // info for attributing points to pulses
     npy_uint8 target_index; // riegl.target_index
-    npy_uint8 target_count; // riegl.target_count
+    //npy_uint8 target_count; // riegl.target_count
 
 } RieglRDBBuffer;
 
@@ -208,7 +208,7 @@ public:
         CHECKBIND_READER("riegl.column", RDBDataTypeUINT16, &m_buffer[0].column);
         
         CHECKBIND_READER(RDB_RIEGL_TARGET_INDEX.name, RDBDataTypeUINT8, &m_buffer[0].target_index)
-        CHECKBIND_READER(RDB_RIEGL_TARGET_COUNT.name, RDBDataTypeUINT8, &m_buffer[0].target_count)
+        //CHECKBIND_READER(RDB_RIEGL_TARGET_COUNT.name, RDBDataTypeUINT8, &m_buffer[0].target_count)
         
         return true;
     }
@@ -390,16 +390,19 @@ public:
                 // finished reading
                 break;
             }
-       
-            point.return_Number = currEl.target_index - 1; // target_index is 1 - based
+            
+            // NB: currEl.target_index can only be trusted to tell us if we are starting 
+            // a new pulse or not (==1). It has only values of 1 and 2 (even for pulses with
+            // more than 2 points).
+            // currEl.target_count appears to be rubbish. Ignoring.
+            // point.return_Number dealt with below depending on whether
             point.timestamp = currEl.timestamp;
             point.deviation_Return = (float)currEl.deviation;
             point.classification = (npy_uint8)currEl.classification;
             point.range = std::sqrt(std::pow(currEl.xyz[0], 2) + 
                                     std::pow(currEl.xyz[1], 2) + 
                                     std::pow(currEl.xyz[2], 2));
-            // Rescale reflectance from dB to papp
-            point.rho_app = std::pow(10.0, currEl.reflectance / 10.0);
+            point.rho_app = currEl.reflectance;
             point.amplitude_Return = currEl.amplitude;
             point.x = currEl.xyz[0];
             point.y = currEl.xyz[1];
@@ -408,6 +411,7 @@ public:
             if( currEl.target_index == 1 ) 
             {
                 // start of new pulse 
+                point.return_Number = 0;
                   
                 // check that we have the required number of pulses
                 // (would have just finished reading all the attached points
@@ -448,6 +452,20 @@ public:
                                             // increment below
                 pulses.push(&pulse);
                 nCurrentPulse++;
+            }
+            else
+            {
+                // continuation of previous pulse. Increment the
+                // return_Number based on the previous point
+                SRieglRDBPoint *pLastPoint = points.getLastElement();
+                if( pLastPoint != NULL )
+                {
+                    point.return_Number = pLastPoint->return_Number + 1;
+                }
+                else
+                {
+                    point.return_Number = 0;
+                }
             }
             
             points.push(&point);
