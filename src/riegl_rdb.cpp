@@ -264,7 +264,7 @@ public:
         if( m_nCurrentIdx >= m_nElementsInBuffer )
         {
             //fprintf(stderr, "refilling 1 %d %d\n", m_nCurrentIdx, m_nElementsInBuffer);
-            if( !read() || eof() )
+            if( !read() )
             {
                 return false;
             }
@@ -386,7 +386,7 @@ public:
         pylidar::CVector<SRieglRDBPoint> points(nInitSize, nGrowBy);
         SRieglRDBPoint point;
 
-        fprintf(stderr, "Ignoring %ld\n", m_nPulsesToIgnore);
+        //fprintf(stderr, "Ignoring %ld\n", m_nPulsesToIgnore);
         while( m_nPulsesToIgnore > 0 )
         {
             if( m_pBuffer->eof() )
@@ -696,13 +696,13 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
         // already have one
         if( nPulseStart > self->nCurrentPulse )
         {
-            fprintf(stderr, "fast forward\n" );
+            //fprintf(stderr, "fast forward\n" );
             // past where we are up to
             nPulsesToIgnore = nPulseStart - self->nCurrentPulse;
         }
         else if( nPulseStart < self->nCurrentPulse )
         {
-            fprintf(stderr, "rewind\n");
+            //fprintf(stderr, "rewind\n");
             // go back to beginning. Delete query select and start again
             CHECKRESULT_FILE(rdb_pointcloud_query_select_delete(self->pContext, &self->pQuerySelect), NULL)
 
