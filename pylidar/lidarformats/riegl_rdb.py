@@ -238,3 +238,36 @@ class RieglRDBFile(generic.LiDARFile):
         """
         return self.getHeader()[name]
      
+# There is a lot of stuff in the header. Just pull out some fields
+# that look like they might be interesting
+INFO_KEYS = ('riegl.geo_tag', 'riegl.time_base', 'riegl.device')
+     
+class RieglRDBFileInfo(generic.LiDARFileInfo):
+    """
+    Class that gets information about a Riegl file
+    and makes it available as fields.
+    The underlying C++ _riegl module does the hard work here
+    """
+    def __init__(self, fname):
+        generic.LiDARFileInfo.__init__(self, fname)
+                
+        if not isRieglRDBFile(fname):
+            msg = 'not a riegl RDB file'
+            raise generic.LiDARFormatNotUnderstood(msg)
+
+        rdbFile = _rieglrdb.RDBFile(fname)
+        self.header = {}
+        for name in INFO_KEYS:
+            if name in rdbFile.header:
+                self.header[name] = rdbFile.header[name]
+
+    @staticmethod        
+    def getDriverName():
+        return 'riegl RDB'
+
+    @staticmethod
+    def getHeaderTranslationDict():
+        """
+        Nothing yet - empty dict
+        """
+        return {}
