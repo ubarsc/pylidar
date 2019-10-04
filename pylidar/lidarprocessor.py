@@ -39,12 +39,12 @@ from .lidarformats import lvishdf5
 from .lidarformats import gedil1a01
 
 HAVE_FMT_ASCII_ZLIB = ascii.HAVE_ZLIB
-HAVE_FMT_RIEGL = True
+HAVE_FMT_RIEGL_RXP = True
 try:
-    from .lidarformats import riegl
+    from .lidarformats import rieglrxp
 except ImportError:
     # libraries not available
-    HAVE_FMT_RIEGL = False
+    HAVE_FMT_RIEGL_RXP = False
 
 HAVE_FMT_RIEGL_RDB = True
 try:

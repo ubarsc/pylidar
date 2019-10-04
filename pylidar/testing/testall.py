@@ -106,8 +106,9 @@ def run():
                         print('Skipping', name, 'due to missing format driver', fmt)
                         doTest = False
                         break
+                # TODO: rename to "REIGLRXP"
                 elif fmt == "RIEGL":
-                    if not lidarprocessor.HAVE_FMT_RIEGL:
+                    if not lidarprocessor.HAVE_FMT_RIEGL_RXP:
                         print('Skipping', name, 'due to missing format driver', fmt)
                         doTest = False
                         break

@@ -77,9 +77,9 @@ def addRieglRXPDriver(extModules, cxxFlags):
         defines = getRieglWaveLibVersion(riwavelibRoot, riwavelibs[0])
         defines.extend([NUMPY_MACROS])
         
-        rieglModule = Extension(name='pylidar.lidarformats._riegl', 
+        rieglModule = Extension(name='pylidar.lidarformats._rieglrxp', 
                 define_macros=defines,
-                sources=['src/riegl.cpp', 'src/pylidar.c'],
+                sources=['src/riegl_rxp.cpp', 'src/pylidar.c'],
                 include_dirs=[os.path.join(rivlibRoot, 'include'),
                                 os.path.join(riwavelibRoot, 'include')],
                 extra_compile_args=cxxFlags,

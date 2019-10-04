@@ -1,5 +1,5 @@
 /*
- * riegl.cpp
+ * riegl_rxp.cpp
  *
  *
  * This file is part of PyLidar
@@ -36,18 +36,18 @@ static const int nInitSize = 256*256;
 
 /* An exception object for this module */
 /* created in the init function */
-struct RieglState
+struct RieglRXPState
 {
     PyObject *error;
 };
 
 #if PY_MAJOR_VERSION >= 3
-#define GETSTATE(m) ((struct RieglState*)PyModule_GetState(m))
+#define GETSTATE(m) ((struct RieglRXPState*)PyModule_GetState(m))
 #define GETSTATE_FC GETSTATE(PyState_FindModule(&moduledef))
 #else
 #define GETSTATE(m) (&_state)
 #define GETSTATE_FC (&_state)
-static struct RieglState _state;
+static struct RieglRXPState _state;
 #endif
 
 /* Structure for pulses */
@@ -68,26 +68,26 @@ typedef struct {
     npy_uint8 number_of_returns;
     npy_uint32 wfm_start_idx;
     npy_uint8 number_of_waveform_samples;
-} SRieglPulse;
+} SRieglRXPPulse;
 
 /* field info for CVector::getNumpyArray */
-static SpylidarFieldDefn RieglPulseFields[] = {
-    CREATE_FIELD_DEFN(SRieglPulse, pulse_ID, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, timestamp, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, prism_facet, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, azimuth, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, zenith, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, scanline, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, scanline_Idx, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, y_Idx, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, x_Idx, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, x_Origin, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, y_Origin, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, z_Origin, 'f'),
-    CREATE_FIELD_DEFN(SRieglPulse, pts_start_idx, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, number_of_returns, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, wfm_start_idx, 'u'),
-    CREATE_FIELD_DEFN(SRieglPulse, number_of_waveform_samples, 'u'),
+static SpylidarFieldDefn RieglRXPPulseFields[] = {
+    CREATE_FIELD_DEFN(SRieglRXPPulse, pulse_ID, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, timestamp, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, prism_facet, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, azimuth, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, zenith, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, scanline, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, scanline_Idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, y_Idx, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, x_Idx, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, x_Origin, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, y_Origin, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, z_Origin, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, pts_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, number_of_returns, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, wfm_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPulse, number_of_waveform_samples, 'u'),
     {NULL} // Sentinel
 };
 
@@ -103,20 +103,20 @@ typedef struct {
     double x;
     double y;
     double z;
-} SRieglPoint;
+} SRieglRXPPoint;
 
 /* field info for CVector::getNumpyArray */
-static SpylidarFieldDefn RieglPointFields[] = {
-    CREATE_FIELD_DEFN(SRieglPoint, return_Number, 'u'),
-    CREATE_FIELD_DEFN(SRieglPoint, timestamp, 'u'),
-    CREATE_FIELD_DEFN(SRieglPoint, deviation_Return, 'f'),
-    CREATE_FIELD_DEFN(SRieglPoint, classification, 'u'),
-    CREATE_FIELD_DEFN(SRieglPoint, range, 'f'),
-    CREATE_FIELD_DEFN(SRieglPoint, rho_app, 'f'),
-    CREATE_FIELD_DEFN(SRieglPoint, amplitude_Return, 'f'),
-    CREATE_FIELD_DEFN(SRieglPoint, x, 'f'),
-    CREATE_FIELD_DEFN(SRieglPoint, y, 'f'),
-    CREATE_FIELD_DEFN(SRieglPoint, z, 'f'),
+static SpylidarFieldDefn RieglRXPPointFields[] = {
+    CREATE_FIELD_DEFN(SRieglRXPPoint, return_Number, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPoint, timestamp, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPoint, deviation_Return, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPoint, classification, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPPoint, range, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPoint, rho_app, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPoint, amplitude_Return, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPoint, x, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPoint, y, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPPoint, z, 'f'),
     {NULL} // Sentinel
 };
 
@@ -128,25 +128,25 @@ typedef struct {
     npy_uint8  channel;
     float      receive_wave_gain;
     float      receive_wave_offset;
-} SRieglWaveformInfo;
+} SRieglRXPWaveformInfo;
 
 /* field info for CVector::getNumpyArray */
-static SpylidarFieldDefn RieglWaveformInfoFields[] = {
-    CREATE_FIELD_DEFN(SRieglWaveformInfo, number_of_waveform_received_bins, 'u'),
-    CREATE_FIELD_DEFN(SRieglWaveformInfo, range_to_waveform_start, 'u'),
-    CREATE_FIELD_DEFN(SRieglWaveformInfo, received_start_idx, 'u'),
-    CREATE_FIELD_DEFN(SRieglWaveformInfo, channel, 'u'),
-    CREATE_FIELD_DEFN(SRieglWaveformInfo, receive_wave_gain, 'f'),
-    CREATE_FIELD_DEFN(SRieglWaveformInfo, receive_wave_offset, 'f'),
+static SpylidarFieldDefn RieglRXPWaveformInfoFields[] = {
+    CREATE_FIELD_DEFN(SRieglRXPWaveformInfo, number_of_waveform_received_bins, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPWaveformInfo, range_to_waveform_start, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPWaveformInfo, received_start_idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPWaveformInfo, channel, 'u'),
+    CREATE_FIELD_DEFN(SRieglRXPWaveformInfo, receive_wave_gain, 'f'),
+    CREATE_FIELD_DEFN(SRieglRXPWaveformInfo, receive_wave_offset, 'f'),
     {NULL} // Sentinel
 };
 
 // This class is the main reader. It reads the points
 // and pulses in chunks from the datastream.
-class RieglReader : public scanlib::pointcloud
+class RieglRXPReader : public scanlib::pointcloud
 {
 public:
-    RieglReader(pylidar::CMatrix<double> *pRotationMatrix, pylidar::CMatrix<double> *pMagneticMatrix) : 
+    RieglRXPReader(pylidar::CMatrix<double> *pRotationMatrix, pylidar::CMatrix<double> *pMagneticMatrix) : 
         scanlib::pointcloud(false), 
         m_nTotalPulsesReadFile(0),
         m_nPulsesToIgnore(0),
@@ -186,7 +186,7 @@ public:
             Py_ssize_t nPoints = 0;
             while(n > 0)
             {
-                SRieglPulse *pPulse = m_Pulses.getElem(n - 1);
+                SRieglRXPPulse *pPulse = m_Pulses.getElem(n - 1);
                 if( (pPulse != NULL ) && ( pPulse->pts_start_idx > 0 ) )
                 {
                     nPoints = pPulse->pts_start_idx;
@@ -209,7 +209,7 @@ public:
         npy_intp n = 0;
         while( n < m_Pulses.getNumElems() )
         {
-            SRieglPulse *p = m_Pulses.getElem(n);
+            SRieglRXPPulse *p = m_Pulses.getElem(n);
             if( p->pts_start_idx > 0 )
             {
                 idx = p->pts_start_idx;
@@ -229,7 +229,7 @@ public:
         // the array of points
         for( npy_intp n = 0; n < m_Pulses.getNumElems(); n++ )
         {
-            SRieglPulse *pPulse = m_Pulses.getElem(n);
+            SRieglRXPPulse *pPulse = m_Pulses.getElem(n);
             if( pPulse->number_of_returns > 0 )
                 pPulse->pts_start_idx -= nPointIdx;
         }
@@ -237,14 +237,14 @@ public:
 
     PyArrayObject *getPulses(Py_ssize_t n, Py_ssize_t *pPointIdx)
     {
-        pylidar::CVector<SRieglPulse> *lower = m_Pulses.splitLower(n);
+        pylidar::CVector<SRieglRXPPulse> *lower = m_Pulses.splitLower(n);
         // record the index of the next point
         *pPointIdx = 0;
         while( n > 0 )
         {
             if( n <= lower->getNumElems() )
             {
-                SRieglPulse *pPulse = lower->getElem(n - 1);
+                SRieglRXPPulse *pPulse = lower->getElem(n - 1);
                 if( pPulse->pts_start_idx > 0 )
                 {
                     *pPointIdx = (pPulse->pts_start_idx + pPulse->number_of_returns);
@@ -254,7 +254,7 @@ public:
             n--;
         }
 
-        PyArrayObject *p = lower->getNumpyArray(RieglPulseFields);
+        PyArrayObject *p = lower->getNumpyArray(RieglRXPPulseFields);
         delete lower; // linked mem now owned by numpy
         renumberPointIdxs();
         return p;
@@ -262,9 +262,9 @@ public:
 
     PyArrayObject *getPoints(Py_ssize_t n)
     {
-        pylidar::CVector<SRieglPoint> *lower = m_Points.splitLower(n);
+        pylidar::CVector<SRieglRXPPoint> *lower = m_Points.splitLower(n);
         //fprintf(stderr, "points %ld %ld %ld\n", m_Points.getNumElems(), lower->getNumElems(), n);
-        PyArrayObject *p = lower->getNumpyArray(RieglPointFields);
+        PyArrayObject *p = lower->getNumpyArray(RieglRXPPointFields);
         delete lower; // linked mem now owned by numpy
         return p;
     }
@@ -273,7 +273,7 @@ public:
     // called from readWaveforms() when called in turn from riegl_readData
     void setWaveformInfo(Py_ssize_t n, npy_uint32 wfm_start_idx, npy_uint8 number_of_waveform_samples)
     {
-        SRieglPulse *pPulse = m_Pulses.getElem(n);
+        SRieglRXPPulse *pPulse = m_Pulses.getElem(n);
         pPulse->wfm_start_idx = wfm_start_idx;
         pPulse->number_of_waveform_samples = number_of_waveform_samples;
     }
@@ -291,7 +291,7 @@ protected:
             return;
         }
 
-        SRieglPulse pulse;
+        SRieglRXPPulse pulse;
         pulse.pulse_ID = m_nTotalPulsesReadFile;
         // convert from seconds to ns
         pulse.timestamp = time_sorg * 1e9 + 0.5;
@@ -350,7 +350,7 @@ protected:
         }
         // we assume that this point will be
         // connected to the last pulse...
-        SRieglPulse *pPulse = m_Pulses.getLastElement();
+        SRieglRXPPulse *pPulse = m_Pulses.getLastElement();
         if(pPulse == NULL)
         {
             // removed throw since this seems to happen when
@@ -365,7 +365,7 @@ protected:
         }
         pPulse->number_of_returns++;
 
-        SRieglPoint point;
+        SRieglRXPPoint point;
 
         // the current echo is always indexed by target_count-1.
         scanlib::target& current_target(targets[target_count-1]);
@@ -449,8 +449,8 @@ protected:
 private:
     Py_ssize_t m_nTotalPulsesReadFile;
     Py_ssize_t m_nPulsesToIgnore;
-    pylidar::CVector<SRieglPulse> m_Pulses;
-    pylidar::CVector<SRieglPoint> m_Points;
+    pylidar::CVector<SRieglRXPPulse> m_Pulses;
+    pylidar::CVector<SRieglRXPPoint> m_Points;
     npy_uint32 m_scanline;
     npy_uint16 m_scanlineIdx;
     pylidar::CMatrix<double> *m_pRotationMatrix;
@@ -462,10 +462,10 @@ private:
 // This reads through the whole file and interepts relevant
 // packets. If more than one packet has the info, then the values
 // from the last one will be recorded at the end of the read.
-class RieglParamReader : public scanlib::pointcloud
+class RieglRXPParamReader : public scanlib::pointcloud
 {
 public:
-    RieglParamReader() : scanlib::pointcloud(false),
+    RieglRXPParamReader() : scanlib::pointcloud(false),
         m_fLat(0), 
         m_fLong(0),
         m_fHeight(0),
@@ -834,7 +834,7 @@ typedef struct
     std::shared_ptr<scanlib::basic_rconnection> rc;
     scanlib::decoder_rxpmarker *pDecoder;
     scanlib::buffer *pBuffer;
-    RieglReader *pReader;
+    RieglRXPReader *pReader;
     bool bFinishedReading;
     pylidar::CMatrix<double> *pMagneticDeclination;
     pylidar::CMatrix<double> *pRotationMatrix;
@@ -849,18 +849,18 @@ typedef struct
     Py_ssize_t nCacheWavePulseStart;
     Py_ssize_t nCacheWavePulseEnd;
 
-} PyRieglScanFile;
+} PyRieglRXPScanFile;
 
 // return a dictionary with info about the file.
 // means reading through the whole file
-static PyObject *riegl_getFileInfo(PyObject *self, PyObject *args)
+static PyObject *rieglrxp_getFileInfo(PyObject *self, PyObject *args)
 {
 const char *pszFilename;
 
     if( !PyArg_ParseTuple(args, "s", &pszFilename) )
         return NULL;
 
-    RieglParamReader reader;
+    RieglRXPParamReader reader;
     try
     {
         std::shared_ptr<scanlib::basic_rconnection> rc = scanlib::basic_rconnection::create(pszFilename);
@@ -886,28 +886,28 @@ const char *pszFilename;
 }
 
 static const char *SupportedDriverOptions[] = {"ROTATION_MATRIX", "MAGNETIC_DECLINATION", NULL};
-static PyObject *riegl_getSupportedOptions(PyObject *self, PyObject *args)
+static PyObject *rieglrxp_getSupportedOptions(PyObject *self, PyObject *args)
 {
     return pylidar_stringArrayToTuple(SupportedDriverOptions);
 }
 
 // module methods
 static PyMethodDef module_methods[] = {
-    {"getFileInfo", (PyCFunction)riegl_getFileInfo, METH_VARARGS,
+    {"getFileInfo", (PyCFunction)rieglrxp_getFileInfo, METH_VARARGS,
         "Get a dictionary with information about the file. Pass the filename"},
-    {"getSupportedOptions", (PyCFunction)riegl_getSupportedOptions, METH_NOARGS,
+    {"getSupportedOptions", (PyCFunction)rieglrxp_getSupportedOptions, METH_NOARGS,
         "Get a tuple of supported driver options"},
     {NULL}  /* Sentinel */
 };
 
 #if PY_MAJOR_VERSION >= 3
-static int riegl_traverse(PyObject *m, visitproc visit, void *arg) 
+static int rieglrxp_traverse(PyObject *m, visitproc visit, void *arg) 
 {
     Py_VISIT(GETSTATE(m)->error);
     return 0;
 }
 
-static int riegl_clear(PyObject *m) 
+static int rieglrxp_clear(PyObject *m) 
 {
     Py_CLEAR(GETSTATE(m)->error);
     return 0;
@@ -915,20 +915,20 @@ static int riegl_clear(PyObject *m)
 
 static struct PyModuleDef moduledef = {
         PyModuleDef_HEAD_INIT,
-        "_riegl",
+        "_rieglrxp",
         NULL,
-        sizeof(struct RieglState),
+        sizeof(struct RieglRXPState),
         module_methods,
         NULL,
-        riegl_traverse,
-        riegl_clear,
+        rieglrxp_traverse,
+        rieglrxp_clear,
         NULL
 };
 #endif
 
 /* destructor - close and delete tc */
 static void 
-PyRieglScanFile_dealloc(PyRieglScanFile *self)
+PyRieglRXPScanFile_dealloc(PyRieglRXPScanFile *self)
 {
     free(self->pszFilename);
     self->rc->close();
@@ -964,7 +964,7 @@ void setWaveError(fwifc_int32_t result)
 /* currently only the SupportedDriverOptions keys are used */
 
 static int 
-PyRieglScanFile_init(PyRieglScanFile *self, PyObject *args, PyObject *kwds)
+PyRieglRXPScanFile_init(PyRieglRXPScanFile *self, PyObject *args, PyObject *kwds)
 {
 char *pszFname = NULL, *pszWaveFname;
 PyObject *pOptionDict;
@@ -1069,7 +1069,7 @@ PyObject *pOptionDict;
         self->pBuffer = new scanlib::buffer();
 
         // our reader class
-        self->pReader = new RieglReader(self->pRotationMatrix, self->pMagneticDeclination);
+        self->pReader = new RieglRXPReader(self->pRotationMatrix, self->pMagneticDeclination);
     }
     catch(scanlib::scanlib_exception e)
     {
@@ -1157,7 +1157,7 @@ PyObject *pOptionDict;
     return 0;
 }
 
-static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
+static PyObject *PyRieglRXPScanFile_readData(PyRieglRXPScanFile *self, PyObject *args)
 {
     Py_ssize_t nPulseStart, nPulseEnd, nPulses;
     if( !PyArg_ParseTuple(args, "nn:readData", &nPulseStart, &nPulseEnd ) )
@@ -1183,7 +1183,7 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
         delete self->pReader;
         self->pDecoder = new scanlib::decoder_rxpmarker(self->rc);
         self->pBuffer = new scanlib::buffer();
-        self->pReader = new RieglReader(self->pRotationMatrix, self->pMagneticDeclination);
+        self->pReader = new RieglRXPReader(self->pRotationMatrix, self->pMagneticDeclination);
         self->pReader->setPulsesToIgnore(nPulseStart);
     }
     else if( nPulseStart > nTotalRead )
@@ -1264,7 +1264,7 @@ static PyObject *PyRieglScanFile_readData(PyRieglScanFile *self, PyObject *args)
 }
 
 // returns a tuple with waveform info, received, wfmStart (for pulses) and wfmCount (for pulses)
-static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *args)
+static PyObject *PyRieglRXPScanFile_readWaveforms(PyRieglRXPScanFile *self, PyObject *args)
 {
     Py_ssize_t nPulseStart, nPulseEnd;
     if( !PyArg_ParseTuple(args, "nn:readWaveforms", &nPulseStart, &nPulseEnd ) )
@@ -1277,7 +1277,7 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
         return NULL;
     }
 
-    // PyRieglScanFile_readData also reads the waveforms to find the wfm_start_idx and number_of_waveform_samples
+    // PyRieglRXPScanFile_readData also reads the waveforms to find the wfm_start_idx and number_of_waveform_samples
     // and caches all the data so we can return it if the range is the same.
     if( ( self->nCacheWavePulseStart != nPulseStart ) || ( self->nCacheWavePulseEnd != nPulseEnd) )
     {
@@ -1298,7 +1298,7 @@ static PyObject *PyRieglScanFile_readWaveforms(PyRieglScanFile *self, PyObject *
 PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group, 
         Py_ssize_t nPulseStart, Py_ssize_t nPulseEnd)
 {
-    pylidar::CVector<SRieglWaveformInfo> waveInfo(nInitSize, nGrowBy);
+    pylidar::CVector<SRieglRXPWaveformInfo> waveInfo(nInitSize, nGrowBy);
     pylidar::CVector<npy_uint16> received(nInitSize, nGrowBy);
     pylidar::CVector<npy_uint32> wfmStart(nInitSize, nGrowBy);
     pylidar::CVector<npy_uint8> wfmNumber(nInitSize, nGrowBy);
@@ -1317,7 +1317,7 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
     fwifc_uint16_t flags;           /* GPS synchronized, ... */
 
     npy_uint64 nRecStartIdx = 0;
-    SRieglWaveformInfo info;
+    SRieglRXPWaveformInfo info;
     npy_uint16 waveSample;
     npy_uint32 waveformStartIdx = 0;
     npy_uint8 waveformCount;
@@ -1404,7 +1404,7 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
     }
 
     // extract values as numpy arrays
-    PyArrayObject *pNumpyInfo = waveInfo.getNumpyArray(RieglWaveformInfoFields);
+    PyArrayObject *pNumpyInfo = waveInfo.getNumpyArray(RieglRXPWaveformInfoFields);
     PyArrayObject *pNumpyRec = received.getNumpyArray(NPY_UINT16);
     PyArrayObject *pNumpyWfmStart = wfmStart.getNumpyArray(NPY_UINT32);
     PyArrayObject *pNumpyWfmNumber = wfmNumber.getNumpyArray(NPY_UINT8);
@@ -1420,13 +1420,13 @@ PyObject *readWaveforms(fwifc_file waveHandle, fwifc_float64_t wave_v_group,
 }
 
 /* Table of methods */
-static PyMethodDef PyRieglScanFile_methods[] = {
-    {"readData", (PyCFunction)PyRieglScanFile_readData, METH_VARARGS, NULL},
-    {"readWaveforms", (PyCFunction)PyRieglScanFile_readWaveforms, METH_VARARGS, NULL},
+static PyMethodDef PyRieglRXPScanFile_methods[] = {
+    {"readData", (PyCFunction)PyRieglRXPScanFile_readData, METH_VARARGS, NULL},
+    {"readWaveforms", (PyCFunction)PyRieglRXPScanFile_readWaveforms, METH_VARARGS, NULL},
     {NULL}  /* Sentinel */
 };
 
-static PyObject *PyRieglScanFile_getFinished(PyRieglScanFile *self, void *closure)
+static PyObject *PyRieglRXPScanFile_getFinished(PyRieglRXPScanFile *self, void *closure)
 {
     if( self->bFinishedReading )
         Py_RETURN_TRUE;
@@ -1434,12 +1434,12 @@ static PyObject *PyRieglScanFile_getFinished(PyRieglScanFile *self, void *closur
         Py_RETURN_FALSE;
 }
 
-static PyObject *PyRieglScanFile_getPulsesRead(PyRieglScanFile *self, void *closure)
+static PyObject *PyRieglRXPScanFile_getPulsesRead(PyRieglRXPScanFile *self, void *closure)
 {
     return PyLong_FromSsize_t(self->pReader->getNumPulsesReadFile());
 }
 
-static PyObject *PyRieglScanFile_getNumWaveRecords(PyRieglScanFile *self, void *closure)
+static PyObject *PyRieglRXPScanFile_getNumWaveRecords(PyRieglRXPScanFile *self, void *closure)
 {
     if( self->waveHandle != NULL )
         return PyLong_FromLong(self->wave_number_of_records);
@@ -1448,24 +1448,24 @@ static PyObject *PyRieglScanFile_getNumWaveRecords(PyRieglScanFile *self, void *
 }
 
 /* get/set */
-static PyGetSetDef PyRieglScanFile_getseters[] = {
-    {(char*)"finished", (getter)PyRieglScanFile_getFinished, NULL, (char*)"Get Finished reading state", NULL}, 
-    {(char*)"pulsesRead", (getter)PyRieglScanFile_getPulsesRead, NULL, (char*)"Get number of pulses read", NULL},
-    {(char*)"numWaveRecords", (getter)PyRieglScanFile_getNumWaveRecords, NULL, (char*)"Get number of waveform records in file", NULL},
+static PyGetSetDef PyRieglRXPScanFile_getseters[] = {
+    {(char*)"finished", (getter)PyRieglRXPScanFile_getFinished, NULL, (char*)"Get Finished reading state", NULL}, 
+    {(char*)"pulsesRead", (getter)PyRieglRXPScanFile_getPulsesRead, NULL, (char*)"Get number of pulses read", NULL},
+    {(char*)"numWaveRecords", (getter)PyRieglRXPScanFile_getNumWaveRecords, NULL, (char*)"Get number of waveform records in file", NULL},
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject PyRieglScanFileType = {
+static PyTypeObject PyRieglRXPScanFileType = {
 #if PY_MAJOR_VERSION >= 3
     PyVarObject_HEAD_INIT(NULL, 0)
 #else
     PyObject_HEAD_INIT(NULL)
     0,                         /*ob_size*/
 #endif
-    "_riegl.ScanFile",         /*tp_name*/
-    sizeof(PyRieglScanFile),   /*tp_basicsize*/
+    "_rieglrxp.ScanFile",         /*tp_name*/
+    sizeof(PyRieglRXPScanFile),   /*tp_basicsize*/
     0,                         /*tp_itemsize*/
-    (destructor)PyRieglScanFile_dealloc, /*tp_dealloc*/
+    (destructor)PyRieglRXPScanFile_dealloc, /*tp_dealloc*/
     0,                         /*tp_print*/
     0,                         /*tp_getattr*/
     0,                         /*tp_setattr*/
@@ -1481,22 +1481,22 @@ static PyTypeObject PyRieglScanFileType = {
     0,                         /*tp_setattro*/
     0,                         /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
-    "Riegl Scan File object",           /* tp_doc */
+    "Riegl RXP Scan File object",           /* tp_doc */
     0,                     /* tp_traverse */
     0,                     /* tp_clear */
     0,                     /* tp_richcompare */
     0,                     /* tp_weaklistoffset */
     0,                     /* tp_iter */
     0,                     /* tp_iternext */
-    PyRieglScanFile_methods,             /* tp_methods */
+    PyRieglRXPScanFile_methods,             /* tp_methods */
     0,             /* tp_members */
-    PyRieglScanFile_getseters,           /* tp_getset */
+    PyRieglRXPScanFile_getseters,           /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    (initproc)PyRieglScanFile_init,      /* tp_init */
+    (initproc)PyRieglRXPScanFile_init,      /* tp_init */
     0,                         /* tp_alloc */
     0,                 /* tp_new */
 };
@@ -1505,17 +1505,17 @@ static PyTypeObject PyRieglScanFileType = {
 #define INITERROR return NULL
 
 PyMODINIT_FUNC 
-PyInit__riegl(void)
+PyInit__rieglrxp(void)
 
 #else
 #define INITERROR return
 
 PyMODINIT_FUNC
-init_riegl(void)
+init_rieglrxp(void)
 #endif
 {
     PyObject *pModule;
-    struct RieglState *state;
+    struct RieglRXPState *state;
 
     /* initialize the numpy stuff */
     import_array();
@@ -1525,7 +1525,7 @@ init_riegl(void)
 #if PY_MAJOR_VERSION >= 3
     pModule = PyModule_Create(&moduledef);
 #else
-    pModule = Py_InitModule("_riegl", module_methods);
+    pModule = Py_InitModule("_rieglrxp", module_methods);
 #endif
     if( pModule == NULL )
         INITERROR;
@@ -1533,7 +1533,7 @@ init_riegl(void)
     state = GETSTATE(pModule);
 
     /* Create and add our exception type */
-    state->error = PyErr_NewException("_riegl.error", NULL, NULL);
+    state->error = PyErr_NewException("_rieglrxp.error", NULL, NULL);
     if( state->error == NULL )
     {
         Py_DECREF(pModule);
@@ -1542,16 +1542,16 @@ init_riegl(void)
     PyModule_AddObject(pModule, "error", state->error);
 
     /* Scan file type */
-    PyRieglScanFileType.tp_new = PyType_GenericNew;
-    if( PyType_Ready(&PyRieglScanFileType) < 0 )
+    PyRieglRXPScanFileType.tp_new = PyType_GenericNew;
+    if( PyType_Ready(&PyRieglRXPScanFileType) < 0 )
 #if PY_MAJOR_VERSION >= 3
         return NULL;
 #else
         return;
 #endif
 
-    Py_INCREF(&PyRieglScanFileType);
-    PyModule_AddObject(pModule, "ScanFile", (PyObject *)&PyRieglScanFileType);
+    Py_INCREF(&PyRieglRXPScanFileType);
+    PyModule_AddObject(pModule, "ScanFile", (PyObject *)&PyRieglRXPScanFileType);
 
 #if PY_MAJOR_VERSION >= 3
     return pModule;

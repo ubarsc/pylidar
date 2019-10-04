@@ -61,17 +61,17 @@ import numpy
 from . import generic
 # Fail slightly less drastically when running from ReadTheDocs
 if os.getenv('READTHEDOCS', default='False') != 'True':
-    from . import _riegl
-    SUPPORTEDOPTIONS = _riegl.getSupportedOptions()
+    from . import _rieglrxp
+    SUPPORTEDOPTIONS = _rieglrxp.getSupportedOptions()
 else:
     SUPPORTEDOPTIONS = {}
 
 from . import gridindexutils
 
-def isRieglFile(fname):
+def isRieglRXPFile(fname):
     """
     Helper function that looks at the start of the file
-    to determine if it is a riegl file or not
+    to determine if it is a riegl RXP file or not
     """
     # The riegl supplied functions only return an error when 
     # we actually start reading but PyLidar needs to know straight
@@ -87,7 +87,7 @@ def isRieglFile(fname):
     else:
         return True
 
-class RieglFile(generic.LiDARFile):
+class RieglRXPFile(generic.LiDARFile):
     """
     Driver for reading Riegl rxp files. Uses rivlib
     via the _riegl module.
@@ -96,11 +96,11 @@ class RieglFile(generic.LiDARFile):
         generic.LiDARFile.__init__(self, fname, mode, controls, userClass)
         
         if mode != generic.READ:
-            msg = 'Riegl driver is read only'
+            msg = 'Riegl RXP driver is read only'
             raise generic.LiDARInvalidSetting(msg)
 
-        if not isRieglFile(fname):
-            msg = 'not a riegl file'
+        if not isRieglRXPFile(fname):
+            msg = 'not a riegl RXP file'
             raise generic.LiDARFileException(msg)
         
         # test if there is a .wfm file with the same base name
@@ -128,12 +128,12 @@ class RieglFile(generic.LiDARFile):
         self.lastWaveInfo = None
         self.lastReceived = None
         self.header = None # only populate when asked for - slow operation
-        self.scanFile = _riegl.ScanFile(fname, waveName, 
+        self.scanFile = _rieglrxp.ScanFile(fname, waveName, 
                         userClass.lidarDriverOptions)
                           
     @staticmethod        
     def getDriverName():
-        return 'riegl'
+        return 'riegl RXP'
 
     @staticmethod
     def getTranslationDict(arrayType):
@@ -331,7 +331,7 @@ class RieglFile(generic.LiDARFile):
             # the processor always calls this so if a reading driver just ignore
             return
         
-        msg = 'riegl driver does not support update/creating'
+        msg = 'riegl RXP driver does not support update/creating'
         raise generic.LiDARWritingNotSupported(msg)
         
     def getHeader(self):
@@ -340,7 +340,7 @@ class RieglFile(generic.LiDARFile):
         fake it by providing the info from _riegl.getFileInfo
         """
         if self.header is None:
-            self.header = _riegl.getFileInfo(self.fname)
+            self.header = _rieglrxp.getFileInfo(self.fname)
         return self.header
         
     def getHeaderValue(self, name):
@@ -350,24 +350,24 @@ class RieglFile(generic.LiDARFile):
         return self.getHeader()[name]
     
 
-class RieglFileInfo(generic.LiDARFileInfo):
+class RieglRXPFileInfo(generic.LiDARFileInfo):
     """
-    Class that gets information about a Riegl file
+    Class that gets information about a Riegl RXP file
     and makes it available as fields.
     The underlying C++ _riegl module does the hard work here
     """
     def __init__(self, fname):
         generic.LiDARFileInfo.__init__(self, fname)
                 
-        if not isRieglFile(fname):
-            msg = 'not a riegl file'
+        if not isRieglRXPFile(fname):
+            msg = 'not a riegl RXP file'
             raise generic.LiDARFormatNotUnderstood(msg)
 
-        self.header = _riegl.getFileInfo(fname)
+        self.header = _rieglrxp.getFileInfo(fname)
 
     @staticmethod        
     def getDriverName():
-        return 'riegl'
+        return 'riegl RXP'
 
     @staticmethod
     def getHeaderTranslationDict():
