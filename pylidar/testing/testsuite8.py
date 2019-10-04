@@ -1,6 +1,6 @@
 
 """
-Simple testsuite that checks we can import a Riegl file
+Simple testsuite that checks we can import a Riegl RXP file
 and create a spatial index and image from it. 
 Also tests updating resulting file.
 """
@@ -35,7 +35,7 @@ from pylidar.toolbox.rasterization import rasterize
 from pylidar.toolbox.arrayutils import convertArgResultToIndexTuple
 from rios import cuiprogress
 
-REQUIRED_FORMATS = ["RIEGL"]
+REQUIRED_FORMATS = ["RIEGLRXP"]
 
 INPUT_RIEGL = '161122_092408.rxp'
 IMPORTED_SPD = 'testsuite8.spd'

@@ -41,7 +41,7 @@ from .lidarformats import gedil1a01
 HAVE_FMT_ASCII_ZLIB = ascii.HAVE_ZLIB
 HAVE_FMT_RIEGL_RXP = True
 try:
-    from .lidarformats import rieglrxp
+    from .lidarformats import riegl_rxp
 except ImportError:
     # libraries not available
     HAVE_FMT_RIEGL_RXP = False
