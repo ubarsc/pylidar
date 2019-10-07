@@ -186,7 +186,6 @@ public:
         m_nElementsInBuffer = 0;
         m_nCurrentIdx = 0;
         m_bEOF = false;
-        m_bCurrentFill = false;
     }
     
     // so we can update it if we have to rewind etc
@@ -243,70 +242,55 @@ public:
         
         m_nElementsInBuffer = processed;
         
-        if( !m_bCurrentFill && (processed > 0))
-        {
-            memcpy(&m_currentData[0], &m_buffer[0], sizeof(RieglRDBBuffer));
-            if( processed > 1 )
-            {
-                memcpy(&m_currentData[1], &m_buffer[1], sizeof(RieglRDBBuffer));
-            }
-            m_bCurrentFill = true;
-        }
         return true;
     }
     
     
     bool move()
     {
-        // shuffle down
-        memcpy(&m_currentData[0], &m_currentData[1], sizeof(RieglRDBBuffer));
-        
         if( m_nCurrentIdx >= m_nElementsInBuffer )
         {
+            bool bFirstRead = (m_nElementsInBuffer == 0);
             //fprintf(stderr, "refilling 1 %d %d\n", m_nCurrentIdx, m_nElementsInBuffer);
             if( !read() )
             {
                 return false;
             }
-            m_nCurrentIdx = 0;
+            if( bFirstRead )
+            {
+                // we haven't done a read() before now, go to element 1
+                m_nCurrentIdx = 1;
+            }
+            else
+            {
+                // have done a read() before, go back to start
+                m_nCurrentIdx = 0;
+            }
         }
         else
         {
             m_nCurrentIdx++;
         }
-        memcpy(&m_currentData[1], &m_buffer[m_nCurrentIdx], sizeof(RieglRDBBuffer));
         return true;
     }
     
     RieglRDBBuffer *getCurrent()
     {
-        if( !m_bCurrentFill )
+        if( m_nElementsInBuffer == 0 )
         {
             if( !read() )
             {
                 return NULL;
             }
         }
-        return &m_currentData[0];
+        return &m_buffer[m_nCurrentIdx];
     }
 
-    RieglRDBBuffer *getNext()
-    {
-        if( !m_bCurrentFill )
-        {
-            if( !read() )
-            {
-                return NULL;
-            }
-        }
-        return &m_currentData[1];
-    }
-    
     bool eof()
     {
         return m_bEOF;
     }
-
+    
 private:
     RDBContext *m_pContext;
     RDBPointcloudQuerySelect *m_pQuerySelect;
@@ -314,9 +298,6 @@ private:
     uint32_t m_nElementsInBuffer;
     uint32_t m_nCurrentIdx;
     bool m_bEOF;
-    
-    bool m_bCurrentFill;
-    RieglRDBBuffer m_currentData[2];
 };
 
 typedef struct
@@ -389,30 +370,32 @@ public:
         //fprintf(stderr, "Ignoring %ld\n", m_nPulsesToIgnore);
         while( m_nPulsesToIgnore > 0 )
         {
+            // move first so we don't include the pulse we are currently on
+            if( !m_pBuffer->move() )
+            {
+                bFinished = true;
+                return NULL;
+            }
+
             if( m_pBuffer->eof() )
             {
                 PyErr_SetString(GETSTATE_FC->error, "Got to EOF while ignoring pulses");
-                return NULL;        
+                return NULL;
             }
-        
-            RieglRDBBuffer *pNextEl = m_pBuffer->getNext();
-            if( pNextEl == NULL )
+
+            RieglRDBBuffer *pCurrEl = m_pBuffer->getCurrent();
+            if( pCurrEl == NULL )
             {
                 // error whould be set
                 bFinished = true;
                 return NULL;
             }
-            if( pNextEl->target_index == 1 )
+            if( pCurrEl->target_index == 1 )
             {
                 // if the next element is a new pulse then
                 // we have read one new pulse
                 m_nPulsesToIgnore--;
                 nCurrentPulse++;
-                if( !m_pBuffer->move() )
-                {
-                    bFinished = true;
-                    return NULL;
-                }
             }
         }
 
