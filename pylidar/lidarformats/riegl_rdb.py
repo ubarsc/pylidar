@@ -1,6 +1,32 @@
 
 """
-Driver for Riegl .rdbx files
+Driver for Riegl .rdbx files. Note that the requires access to Riegl's 
+'rdblib' closed source library that can be obtained from Riegl.
+
+To build Riegl RDB support the $RDBLIB_ROOT environment variable
+must be set before running setup.py.
+
+These variables must point into the directories that rdblib
+created when it was unzipped.
+
+At runtime, $RDBLIB_ROOT/library must be added to your LD_LIBRARY_PATH (Unix)
+or PATH (Windows) environment variable so the linked library can be found.
+
+Driver Options
+--------------
+
+These are contained in the SUPPORTEDOPTIONS module level variable.
+
++-----------------------+---------------------------------------+
+| Name                  | Use                                   |
++=======================+=======================================+
+| SORT_POINTS           | Pass a boolean to determine whether   |
+|                       | all points for a pulse are sorted.    |
+|                       | Defaults to True, but the user may    |
+|                       | want points to be unsorted to match   |
+|                       | Riegl libraries for debugging         |
+|                       | purposes.                             |
++-----------------------+---------------------------------------+
 
 """
 
@@ -30,6 +56,9 @@ from . import generic
 # Fail slightly less drastically when running from ReadTheDocs
 if os.getenv('READTHEDOCS', default='False') != 'True':
     from . import _rieglrdb
+    SUPPORTEDOPTIONS = _rieglrdb.getSupportedOptions()
+else:
+    SUPPORTEDOPTIONS = {}
 
 from . import gridindexutils
 
@@ -63,6 +92,13 @@ class RieglRDBFile(generic.LiDARFile):
         if not isRieglRDBFile(fname):
             msg = 'not a riegl RDB file'
             raise generic.LiDARFileException(msg)
+
+        # check if the options are all valid. Good to check in case of typo.
+        # hard to do this in C
+        for key in userClass.lidarDriverOptions:
+            if key not in SUPPORTEDOPTIONS:
+                msg = '%s not a supported Riegl RDB option' % repr(key)
+                raise generic.LiDARInvalidSetting(msg)
         
         self.range = None
         self.lastRange = None
@@ -70,7 +106,7 @@ class RieglRDBFile(generic.LiDARFile):
         self.lastPulses = None
         # cache header so we can do a json.loads on everything
         self.header = None
-        self.rdbFile = _rieglrdb.RDBFile(fname)
+        self.rdbFile = _rieglrdb.RDBFile(fname, userClass.lidarDriverOptions)
         
     @staticmethod        
     def getDriverName():

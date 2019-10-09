@@ -3,7 +3,7 @@
 Driver for riegl rxp files. Note that the requires access to Riegl's 
 'rivlib' and 'riwavelib' closed source libraries that can be obtained from Riegl.
 
-To build Riegl support the $RIVLIB_ROOT and $RIWAVELIB_ROOT environment variables
+To build Riegl RXP support the $RIVLIB_ROOT and $RIWAVELIB_ROOT environment variables
 must be set before running setup.py.
 
 These variables must point into the directories that rivlib and riwavelib
@@ -117,7 +117,7 @@ class RieglRXPFile(generic.LiDARFile):
         # hard to do this in C
         for key in userClass.lidarDriverOptions:
             if key not in SUPPORTEDOPTIONS:
-                msg = '%s not a supported Riegl option' % repr(key)
+                msg = '%s not a supported Riegl RXP option' % repr(key)
                 raise generic.LiDARInvalidSetting(msg)
         
         self.range = None

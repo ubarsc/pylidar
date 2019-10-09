@@ -132,13 +132,24 @@ static SpylidarFieldDefn RieglPointFields[] = {
     {NULL} // Sentinel
 };
 
+// for qsort
+// so we can sort by range
+int comparePointsByRange(const void *a, const void *b)
+{
+    const SRieglRDBPoint *pa = static_cast<const SRieglRDBPoint*>(a);
+    const SRieglRDBPoint *pb = static_cast<const SRieglRDBPoint*>(b);
+    if ( pa->range < pb->range ) return -1;
+    if ( pa->range == pb->range ) return 0;
+    if ( pa->range > pb->range ) return 1;
+}
+
 // buffer that we read the data in before copying to point/pulse structures
 // NOTE: any changes must be reflected in RiegRDBReader::resetBuffers()
 typedef struct
 {
     // points
     npy_uint64 id; // riegl.id
-    npy_uint64 timestamp; // riegl.timestamp
+    double timestamp; // riegl.timestamp (convert s->ns and to uint64 later)
     npy_int32 deviation; // riegl.deviation
     npy_uint16 classification; // riegl.class
     double reflectance; // riegl.reflectance
@@ -203,7 +214,7 @@ public:
         //  - not sure what is best practice
         // point
         CHECKBIND_READER(RDB_RIEGL_ID.name, RDBDataTypeUINT64, &m_buffer[0].id)
-        CHECKBIND_READER(RDB_RIEGL_TIMESTAMP.name, RDBDataTypeUINT64, &m_buffer[0].timestamp)
+        CHECKBIND_READER(RDB_RIEGL_TIMESTAMP.name, RDBDataTypeDOUBLE, &m_buffer[0].timestamp)
         CHECKBIND_READER(RDB_RIEGL_DEVIATION.name, RDBDataTypeINT32, &m_buffer[0].deviation)
         CHECKBIND_READER(RDB_RIEGL_CLASS.name, RDBDataTypeUINT16, &m_buffer[0].classification)
         CHECKBIND_READER(RDB_RIEGL_REFLECTANCE.name, RDBDataTypeDOUBLE, &m_buffer[0].reflectance)
@@ -248,6 +259,7 @@ public:
     
     bool move()
     {
+        m_nCurrentIdx++;
         if( m_nCurrentIdx >= m_nElementsInBuffer )
         {
             bool bFirstRead = (m_nElementsInBuffer == 0);
@@ -266,10 +278,6 @@ public:
                 // have done a read() before, go back to start
                 m_nCurrentIdx = 0;
             }
-        }
-        else
-        {
-            m_nCurrentIdx++;
         }
         return true;
     }
@@ -310,12 +318,21 @@ typedef struct
     PyRieglRDBDataBuffer *pBuffer; // object for buffering reads on pQuerySelect
     Py_ssize_t nCurrentPulse;  // if pQuerySelect != NULL this is the pulse number we are up to
     bool bFinishedReading;
+    bool bSortPoints;
     PyObject *pHeader;  // dictionary with header info
 
 } PyRieglRDBFile;
 
+static const char *SupportedDriverOptions[] = {"SORT_POINTS", NULL};
+static PyObject *rieglrdb_getSupportedOptions(PyObject *self, PyObject *args)
+{
+    return pylidar_stringArrayToTuple(SupportedDriverOptions);
+}
+
 // module methods
 static PyMethodDef module_methods[] = {
+    {"getSupportedOptions", (PyCFunction)rieglrdb_getSupportedOptions, METH_NOARGS,
+        "Get a tuple of supported driver options"},
     {NULL}  /* Sentinel */
 };
 
@@ -360,13 +377,13 @@ public:
     }
     
     
-    PyObject* readData(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, bool &bFinished)
+    PyObject* readData(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, bool &bFinished, bool bSortPoints)
     {
         pylidar::CVector<SRieglRDBPulse> pulses(nInitSize, nGrowBy);
         SRieglRDBPulse pulse;
         pylidar::CVector<SRieglRDBPoint> points(nInitSize, nGrowBy);
         SRieglRDBPoint point;
-
+        
         //fprintf(stderr, "Ignoring %ld\n", m_nPulsesToIgnore);
         while( m_nPulsesToIgnore > 0 )
         {
@@ -413,8 +430,10 @@ public:
             // a new pulse or not (==1). It has only values of 1 and 2 (even for pulses with
             // more than 2 points).
             // currEl->target_count appears to be rubbish. Ignoring.
-            // point.return_Number dealt with below depending on whether
-            point.timestamp = currEl->timestamp;
+            // point.return_Number dealt with below depending on whether 1 or not
+            
+            // convert to ns
+            point.timestamp = (npy_uint64)round(currEl->timestamp * 1e10);
             point.deviation_Return = (float)currEl->deviation;
             point.classification = (npy_uint8)currEl->classification;
             point.range = std::sqrt(std::pow(currEl->xyz[0], 2) + 
@@ -429,6 +448,25 @@ public:
             if( currEl->target_index == 1 ) 
             {
                 // start of new pulse 
+                
+                if( bSortPoints )
+                {
+                    // we need to now sort the points for the previous pulse
+                    // by range. Bizarrely this doesn't happen by default
+                    SRieglRDBPulse *pLastPulse = pulses.getLastElement();
+                    if( (pLastPulse != NULL ) && (pLastPulse->number_of_returns > 1) )
+                    {
+                        points.sort(pLastPulse->pts_start_idx,
+                                pLastPulse->number_of_returns, 
+                                comparePointsByRange);
+                        // now renumber the points so they make sense in the new order
+                        for( npy_uint64 i = 0; i < pLastPulse->number_of_returns; i++ )
+                        {
+                            points.getElem(pLastPulse->pts_start_idx + i)->return_Number = i;
+                        }
+                    }
+                }
+                
                 point.return_Number = 0;
                   
                 // check that we have the required number of pulses
@@ -567,12 +605,36 @@ static int
 PyRieglRDBFile_init(PyRieglRDBFile *self, PyObject *args, PyObject *kwds)
 {
 char *pszFname = NULL;
+PyObject *pOptionDict;
 
-    if( !PyArg_ParseTuple(args, "s", &pszFname ) )
+    if( !PyArg_ParseTuple(args, "sO", &pszFname, &pOptionDict ) )
     {
         return -1;
     }
     
+    if( !PyDict_Check(pOptionDict) )
+    {
+        // raise Python exception
+        PyErr_SetString(GETSTATE_FC->error, "Last parameter to init function must be a dictionary");
+        return -1;
+    }
+    
+    // parse options
+    self->bSortPoints = true;
+    PyObject *pSortPointsFlag = PyDict_GetItemString(pOptionDict, "SORT_POINTS");
+    if( pSortPointsFlag != NULL )
+    {
+        if( !PyBool_Check(pSortPointsFlag) )
+        {
+            PyErr_SetString(GETSTATE_FC->error, "SORT_POINTS must be True or False");
+            return -1;
+        }
+        if( pSortPointsFlag == Py_False )
+        {
+            self->bSortPoints = false;
+        }
+    }
+
     // get context
     // TODO: log level and log path as an option?
     CHECKRESULT_FILE(rdb_context_new(&self->pContext, "", ""), -1)
@@ -707,7 +769,7 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
     
     // will be NULL on error
     PyObject *pResult = reader.readData(nPulses, 
-                self->nCurrentPulse, self->bFinishedReading);
+                self->nCurrentPulse, self->bFinishedReading, self->bSortPoints);
     
     return pResult;
 }
