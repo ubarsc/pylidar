@@ -268,7 +268,7 @@ public:
     
     void sort(npy_intp start, npy_intp num, int (*compar)(const void*,const void*))
     {
-        qsort(&m_pData[start], num, m_nElemSize, compar);
+        qsort(getElem(start), num, m_nElemSize, compar);
     }
 
 private:
