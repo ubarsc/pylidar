@@ -20,12 +20,6 @@ These are contained in the SUPPORTEDOPTIONS module level variable.
 +-----------------------+---------------------------------------+
 | Name                  | Use                                   |
 +=======================+=======================================+
-| SORT_POINTS           | Pass a boolean to determine whether   |
-|                       | all points for a pulse are sorted.    |
-|                       | Defaults to True, but the user may    |
-|                       | want points to be unsorted to match   |
-|                       | Riegl libraries for debugging         |
-|                       | purposes.                             |
 +-----------------------+---------------------------------------+
 
 """
@@ -56,9 +50,9 @@ from . import generic
 # Fail slightly less drastically when running from ReadTheDocs
 if os.getenv('READTHEDOCS', default='False') != 'True':
     from . import _rieglrdb
-    SUPPORTEDOPTIONS = _rieglrdb.getSupportedOptions()
+    SUPPORTEDOPTIONS = []
 else:
-    SUPPORTEDOPTIONS = {}
+    SUPPORTEDOPTIONS = []
 
 from . import gridindexutils
 

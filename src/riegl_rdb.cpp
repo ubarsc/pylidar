@@ -22,6 +22,8 @@
 
 #include <Python.h>
 #include <cmath>
+#include <memory>
+#include <unordered_map>
 #include "numpy/arrayobject.h"
 #include "numpy/npy_math.h"
 #include "pylvector.h"
@@ -132,17 +134,6 @@ static SpylidarFieldDefn RieglPointFields[] = {
     {NULL} // Sentinel
 };
 
-// for qsort
-// so we can sort by range
-int comparePointsByRange(const void *a, const void *b)
-{
-    const SRieglRDBPoint *pa = static_cast<const SRieglRDBPoint*>(a);
-    const SRieglRDBPoint *pb = static_cast<const SRieglRDBPoint*>(b);
-    if ( pa->range < pb->range ) return -1;
-    if ( pa->range == pb->range ) return 0;
-    if ( pa->range > pb->range ) return 1;
-}
-
 // buffer that we read the data in before copying to point/pulse structures
 // NOTE: any changes must be reflected in RiegRDBReader::resetBuffers()
 typedef struct
@@ -162,7 +153,7 @@ typedef struct
     
     // info for attributing points to pulses
     npy_uint8 target_index; // riegl.target_index
-    //npy_uint8 target_count; // riegl.target_count
+    npy_uint8 target_count; // riegl.target_count
 
 } RieglRDBBuffer;
 
@@ -179,6 +170,83 @@ static bool CheckRDBResult(RDBResult code, RDBContext *pContext);
                     rdb_pointcloud_query_select_bind( \
                         m_pContext, m_pQuerySelect, attribute, dataType, buffer, \
                         sizeof(RieglRDBBuffer)), m_pContext) ) return false;
+
+// class that tracks an incomplete pulse.
+// The records in a .rbdx file are in a 'random' order
+// they have been optimised for display in some sort of order that
+// has a low res visualisation first, then as you read through 
+// the file you get more density.
+
+// This is a bit of a pain for us since you get the individual records
+// for a pulse all over the place. We track everything by the riegl.id 
+// of the first record for a pulse (riedl.id - reigl.target_index - 1) for
+// a given record. This class allows you to add more records for a pulse
+// and work out when you have them all and get an array of these records.
+
+// PyRieglRDBDataBuffer uses an unordered_map of these based on the riegl.id
+// of the first record of a pulse.
+class PyRieglRDBPulseTracker
+{
+public:
+    PyRieglRDBPulseTracker(npy_uint8 nrecords)
+    {
+        m_nRecords = nrecords;
+        m_pRecords = new RieglRDBBuffer[nrecords];
+        m_pSet = new bool[nrecords];
+        for( npy_uint8 i = 0; i < nrecords; i++ )
+        {
+            m_pSet[i] = false;
+        }
+    }
+    ~PyRieglRDBPulseTracker()
+    {
+        delete[] m_pRecords;
+        delete[] m_pSet;
+    }
+    
+    void setRecord(npy_uint8 idx, RieglRDBBuffer *pRecord)
+    {
+        memcpy(&m_pRecords[idx], pRecord, sizeof(RieglRDBBuffer));
+        m_pSet[idx] = true;
+    }
+    
+    // returns m_pRecords if we have them all, otherwise NULL
+    RieglRDBBuffer* allSet()
+    {
+        for( npy_uint8 i = 0; i < m_nRecords; i++ )
+        {
+            if( !m_pSet[i] )
+            {
+                return NULL;
+            }
+        }
+        //fprintf(stderr, "Got complete records %d\n", (int)m_nRecords);
+        return m_pRecords;
+    }
+    
+    npy_uint8 getNRecords()
+    {
+        return m_nRecords;
+    }
+    
+    npy_uint8 getNFound()
+    {
+        npy_uint8 found = 0;
+        for( npy_uint8 i = 0; i < m_nRecords; i++ )
+        {
+            if( m_pSet[i] )
+            {
+                found++;
+            }
+        }
+        return found;
+    }
+
+private:
+    RieglRDBBuffer *m_pRecords;
+    npy_uint8 m_nRecords;
+    bool *m_pSet;
+};
 
 // class that wraps an array of RieglRDBBuffer s
 // so we can read in a whole lot at once. 
@@ -203,6 +271,7 @@ public:
     void setQuerySelect(RDBPointcloudQuerySelect *pQuerySelect)
     {
         m_pQuerySelect = pQuerySelect;
+        m_pulseTracker.clear(); // clear the tracker as nothing will make sense now
         reset();
     }
 
@@ -226,7 +295,7 @@ public:
         CHECKBIND_READER("riegl.column", RDBDataTypeUINT16, &m_buffer[0].column);
         
         CHECKBIND_READER(RDB_RIEGL_TARGET_INDEX.name, RDBDataTypeUINT8, &m_buffer[0].target_index)
-        //CHECKBIND_READER(RDB_RIEGL_TARGET_COUNT.name, RDBDataTypeUINT8, &m_buffer[0].target_count)
+        CHECKBIND_READER(RDB_RIEGL_TARGET_COUNT.name, RDBDataTypeUINT8, &m_buffer[0].target_count)
         
         return true;
     }
@@ -299,6 +368,73 @@ public:
         return m_bEOF;
     }
     
+    // support for tracking incomplete pulses (see PyRieglRDBPulseTracker, above)
+    
+    // return pointer to buffer if have all the records for a pulse
+    RieglRDBBuffer* addCurrentToTracker()
+    {
+        RieglRDBBuffer *pCurrEl = getCurrent();
+        if( pCurrEl == NULL )
+        {
+            return NULL;
+        }
+        // target_index is 1-based.
+        // find the id of the first record of this pulse
+        // (should be in order)
+        npy_uint64 startIdx = pCurrEl->id - (pCurrEl->target_index - 1);
+        auto got = m_pulseTracker.find(startIdx);
+        
+        if( got == m_pulseTracker.end() )
+        {
+            if( pCurrEl->target_count == 1 )
+            {
+                // can short circuit the rest and return pCurrEl
+                //fprintf(stderr, "Just one el %ld\n", startIdx);
+                return pCurrEl;
+            }
+            else
+            {
+                //fprintf(stderr, "Starting new one for %ld %d %ld %d\n", startIdx, (int)pCurrEl->target_count, pCurrEl->id, (int)pCurrEl->target_index);
+                PyRieglRDBPulseTracker *pTracker = new PyRieglRDBPulseTracker(pCurrEl->target_count);
+                pTracker->setRecord(pCurrEl->target_index - 1, pCurrEl);
+                std::unique_ptr<PyRieglRDBPulseTracker> ap(pTracker);
+                
+                m_pulseTracker.insert(std::pair<npy_uint64, std::unique_ptr<PyRieglRDBPulseTracker> >(startIdx, std::move(ap)));
+                return NULL;
+            }
+        }
+        else
+        {
+            //fprintf(stderr, "Adding record for %ld\n", startIdx);
+            got->second.get()->setRecord(pCurrEl->target_index - 1, pCurrEl);
+            return got->second.get()->allSet();
+        }
+    }
+    
+    // when finished processing a complete pulse, 
+    // call to release memory
+    void removeCurrentFromTracker()
+    {
+        RieglRDBBuffer *pCurrEl = getCurrent();
+        npy_uint64 startIdx = pCurrEl->id - (pCurrEl->target_index - 1);
+        // TODO: exception raised???
+        m_pulseTracker.erase(startIdx);
+        //fprintf(stderr, "removing %ld\n", startIdx);
+    }
+    
+    // for debugging
+    void dumpRemainderinTracker()
+    {
+        npy_uint64 tot = 0;
+        for(auto itr = m_pulseTracker.begin(); itr != m_pulseTracker.end(); itr++ )
+        {
+            npy_uint8 missing = itr->second.get()->getNRecords() - itr->second.get()->getNFound();
+            tot += missing;
+            fprintf(stderr, "Remainder id = %ld count = %d\n", itr->first, missing );
+        }
+        fprintf(stderr, "Total %ld\n", tot);
+    }
+    
 private:
     RDBContext *m_pContext;
     RDBPointcloudQuerySelect *m_pQuerySelect;
@@ -306,6 +442,9 @@ private:
     uint32_t m_nElementsInBuffer;
     uint32_t m_nCurrentIdx;
     bool m_bEOF;
+    
+    // link the start riegl.id for a pulse with the points for that pulse
+    std::unordered_map<npy_uint64, std::unique_ptr<PyRieglRDBPulseTracker> > m_pulseTracker;
 };
 
 typedef struct
@@ -318,21 +457,20 @@ typedef struct
     PyRieglRDBDataBuffer *pBuffer; // object for buffering reads on pQuerySelect
     Py_ssize_t nCurrentPulse;  // if pQuerySelect != NULL this is the pulse number we are up to
     bool bFinishedReading;
-    bool bSortPoints;
     PyObject *pHeader;  // dictionary with header info
 
 } PyRieglRDBFile;
 
-static const char *SupportedDriverOptions[] = {"SORT_POINTS", NULL};
+/*static const char *SupportedDriverOptions[] = {"SORT_POINTS", NULL};
 static PyObject *rieglrdb_getSupportedOptions(PyObject *self, PyObject *args)
 {
     return pylidar_stringArrayToTuple(SupportedDriverOptions);
-}
+}*/
 
 // module methods
 static PyMethodDef module_methods[] = {
-    {"getSupportedOptions", (PyCFunction)rieglrdb_getSupportedOptions, METH_NOARGS,
-        "Get a tuple of supported driver options"},
+    /*{"getSupportedOptions", (PyCFunction)rieglrdb_getSupportedOptions, METH_NOARGS,
+        "Get a tuple of supported driver options"},*/
     {NULL}  /* Sentinel */
 };
 
@@ -377,7 +515,7 @@ public:
     }
     
     
-    PyObject* readData(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, bool &bFinished, bool bSortPoints)
+    PyObject* readData(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, bool &bFinished)
     {
         pylidar::CVector<SRieglRDBPulse> pulses(nInitSize, nGrowBy);
         SRieglRDBPulse pulse;
@@ -400,91 +538,51 @@ public:
                 return NULL;
             }
 
-            RieglRDBBuffer *pCurrEl = m_pBuffer->getCurrent();
-            if( pCurrEl == NULL )
+            if( m_pBuffer->getCurrent() == NULL )
             {
                 // error whould be set
                 bFinished = true;
                 return NULL;
             }
-            if( pCurrEl->target_index == 1 )
+            if( m_pBuffer->addCurrentToTracker() != NULL)
             {
-                // if the next element is a new pulse then
-                // we have read one new pulse
+                m_pBuffer->removeCurrentFromTracker();
+                // we have a complete pulse 
                 m_nPulsesToIgnore--;
                 nCurrentPulse++;
             }
         }
 
-        while( !m_pBuffer->eof() )
+        // now do the actual reading
+        while( !m_pBuffer->eof() && (pulses.getNumElems() < nPulses))
         {
-            RieglRDBBuffer *currEl = m_pBuffer->getCurrent();
-            if( currEl == NULL )
+            if( m_pBuffer->getCurrent() == NULL )
             {
                 bFinished = true;
                 // error happened somewhere
                 return NULL;
             }
-            
-            // NB: currEl->target_index can only be trusted to tell us if we are starting 
-            // a new pulse or not (==1). It has only values of 1 and 2 (even for pulses with
-            // more than 2 points).
-            // currEl->target_count appears to be rubbish. Ignoring.
-            // point.return_Number dealt with below depending on whether 1 or not
-            
-            // convert to ns
-            point.timestamp = (npy_uint64)round(currEl->timestamp * 1e10);
-            point.deviation_Return = (float)currEl->deviation;
-            point.classification = (npy_uint8)currEl->classification;
-            point.range = std::sqrt(std::pow(currEl->xyz[0], 2) + 
-                                    std::pow(currEl->xyz[1], 2) + 
-                                    std::pow(currEl->xyz[2], 2));
-            point.rho_app = currEl->reflectance;
-            point.amplitude_Return = currEl->amplitude;
-            point.x = currEl->xyz[0];
-            point.y = currEl->xyz[1];
-            point.z = currEl->xyz[2];
-            
-            if( currEl->target_index == 1 ) 
+
+            RieglRDBBuffer *pRecordsStart = m_pBuffer->addCurrentToTracker();
+            if( pRecordsStart != NULL )
             {
-                // start of new pulse 
-                
-                if( bSortPoints )
-                {
-                    // we need to now sort the points for the previous pulse
-                    // by range. Bizarrely this doesn't happen by default
-                    SRieglRDBPulse *pLastPulse = pulses.getLastElement();
-                    if( (pLastPulse != NULL ) && (pLastPulse->number_of_returns > 1) )
-                    {
-                        points.sort(pLastPulse->pts_start_idx,
-                                pLastPulse->number_of_returns, 
-                                comparePointsByRange);
-                        // now renumber the points so they make sense in the new order
-                        for( npy_uint64 i = 0; i < pLastPulse->number_of_returns; i++ )
-                        {
-                            points.getElem(pLastPulse->pts_start_idx + i)->return_Number = i;
-                        }
-                    }
-                }
-                
-                point.return_Number = 0;
-                  
-                // check that we have the required number of pulses
-                // (would have just finished reading all the attached points
-                // of the previous pulse)
-                if( pulses.getNumElems() >= nPulses )
-                {
-                    break;
-                }
-                    
+                RieglRDBBuffer *pCurrEl = pRecordsStart;
+            
+                //fprintf(stderr, "Have full %d %ld\n", (int)pCurrEl->target_count, pCurrEl->id - (pCurrEl->target_index - 1));
+                // we have a complete pulse with pCurrEl->target_count records
+                // create pulse
                 pulse.pulse_ID = nCurrentPulse;
-                pulse.timestamp = currEl->timestamp;
-                pulse.azimuth = (float)std::atan(point.x / point.y);
-                if( (point.x <= 0) && (point.y >= 0) )
+                pulse.timestamp = (npy_uint64)round(pCurrEl->timestamp * 1e10); // time of first record in ns
+                // use first record for calculating azimuth etc (should be last record?)
+                double x = pCurrEl->xyz[0];
+                double y = pCurrEl->xyz[1];
+                double z = pCurrEl->xyz[2];
+                pulse.azimuth = (float)std::atan(x / y);
+                if( (x <= 0) && (y >= 0) )
                 {
                     pulse.azimuth += 180;
                 }
-                if( (point.x <= 0) && (point.y <= 0) )
+                if( (x <= 0) && (y <= 0) )
                 {
                     pulse.azimuth -= 180;
                 }
@@ -492,45 +590,46 @@ public:
                 {
                     pulse.azimuth += 360;
                 }
-                pulse.zenith = (float)std::atan(std::sqrt(std::pow(point.x, 2) + 
-                                std::pow(point.y, 2)) / point.z);
+                pulse.zenith = (float)std::atan(std::sqrt(std::pow(x, 2) + 
+                                std::pow(y, 2)) / z);
                 if( pulse.zenith < 0 )
                 {
                     pulse.zenith += 180;
                 }
                     
-                pulse.scanline = currEl->row;
-                pulse.scanline_Idx = currEl->column;
-                pulse.x_Idx = point.x;
-                pulse.y_Idx = point.y;
+                pulse.scanline = pCurrEl->row;
+                pulse.scanline_Idx = pCurrEl->column;
+                pulse.x_Idx = x;
+                pulse.y_Idx = y;
                 pulse.pts_start_idx = (npy_uint32)points.getNumElems();
-                pulse.number_of_returns = 0; // can't trust m_TempBuffer.target_count;
-                                            // increment below
+                pulse.number_of_returns = pCurrEl->target_count;
                 pulses.push(&pulse);
+                
+                // now points
+                npy_uint8 target_count = pCurrEl->target_count; // do this here, as pCurrEl gets updated below
+                for( npy_uint8 i = 0; i < target_count; i++ )
+                {
+                    // convert to ns
+                    point.timestamp = (npy_uint64)round(pCurrEl->timestamp * 1e10);
+                    point.deviation_Return = (float)pCurrEl->deviation;
+                    point.classification = (npy_uint8)pCurrEl->classification;
+                    point.range = std::sqrt(std::pow(pCurrEl->xyz[0], 2) + 
+                                    std::pow(pCurrEl->xyz[1], 2) + 
+                                    std::pow(pCurrEl->xyz[2], 2));
+                    point.rho_app = pCurrEl->reflectance;
+                    point.amplitude_Return = pCurrEl->amplitude;
+                    point.x = pCurrEl->xyz[0];
+                    point.y = pCurrEl->xyz[1];
+                    point.z = pCurrEl->xyz[2];
+
+                    points.push(&point);
+                    // next record
+                    pCurrEl++;
+                }
+
                 nCurrentPulse++;
-            }
-            else
-            {
-                // continuation of previous pulse. Increment the
-                // return_Number based on the previous point
-                SRieglRDBPoint *pLastPoint = points.getLastElement();
-                if( pLastPoint != NULL )
-                {
-                    point.return_Number = pLastPoint->return_Number + 1;
-                }
-                else
-                {
-                    point.return_Number = 0;
-                }
-            }
-            
-            points.push(&point);
-            
-            SRieglRDBPulse *pLastPulse = pulses.getLastElement();
-            if( pLastPulse != NULL )
-            {
-                pLastPulse->number_of_returns++;
-            }
+                m_pBuffer->removeCurrentFromTracker();
+            }            
             
             if( !m_pBuffer->move() )
             {
@@ -619,21 +718,7 @@ PyObject *pOptionDict;
         return -1;
     }
     
-    // parse options
-    self->bSortPoints = true;
-    PyObject *pSortPointsFlag = PyDict_GetItemString(pOptionDict, "SORT_POINTS");
-    if( pSortPointsFlag != NULL )
-    {
-        if( !PyBool_Check(pSortPointsFlag) )
-        {
-            PyErr_SetString(GETSTATE_FC->error, "SORT_POINTS must be True or False");
-            return -1;
-        }
-        if( pSortPointsFlag == Py_False )
-        {
-            self->bSortPoints = false;
-        }
-    }
+    // TODO: parse options
 
     // get context
     // TODO: log level and log path as an option?
@@ -769,7 +854,7 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
     
     // will be NULL on error
     PyObject *pResult = reader.readData(nPulses, 
-                self->nCurrentPulse, self->bFinishedReading, self->bSortPoints);
+                self->nCurrentPulse, self->bFinishedReading);
     
     return pResult;
 }
