@@ -242,7 +242,31 @@ public:
         return found;
     }
 
+    // if there are incomplete pulses, shuffle everything down 
+    // and update m_nRecords
+    // returns pointer to buffer
+    RieglRDBBuffer* compress()
+    {
+        for( npy_uint8 i = 0; i < m_nRecords; i++ )
+        {
+            if( !m_pSet[i] )
+            {
+                shuffleDownOne(i);
+            }
+        }
+        return m_pRecords;
+    }
+
 private:
+    void shuffleDownOne(npy_uint8 clobberIdx)
+    {
+        for( npy_uint8 i = clobberIdx; i < (m_nRecords-1); i++ )
+        {
+            memcpy(&m_pRecords[i], &m_pRecords[i+1], sizeof(RieglRDBBuffer));
+        }
+        m_nRecords--;
+    }
+
     RieglRDBBuffer *m_pRecords;
     npy_uint8 m_nRecords;
     bool *m_pSet;
@@ -422,8 +446,31 @@ public:
         //fprintf(stderr, "removing %ld\n", startIdx);
     }
     
+    RieglRDBBuffer* getNextRemainderInTracker(npy_uint8 &nRecords)
+    {
+        auto itr = m_pulseTracker.begin();
+        if( itr == m_pulseTracker.end() )
+        {
+            return NULL;
+        }
+        
+        RieglRDBBuffer *pBuffer = itr->second.get()->compress();
+        nRecords = itr->second.get()->getNRecords();
+        return pBuffer;
+    }
+    
+    void removeRemainderFromTracker(npy_uint64 startIdx)
+    {
+        m_pulseTracker.erase(startIdx);
+    }
+    
+    size_t getCountOfRemaindersInTracker()
+    {
+        return m_pulseTracker.size();
+    }
+    
     // for debugging
-    void dumpRemainderinTracker()
+    void dumpRemainderInTracker()
     {
         npy_uint64 tot = 0;
         for(auto itr = m_pulseTracker.begin(); itr != m_pulseTracker.end(); itr++ )
@@ -514,17 +561,83 @@ public:
         m_nPulsesToIgnore = nPulsesToIgnore;
     }
     
+    void ConvertRecordsToPointsAndPulses(RieglRDBBuffer *pCurrEl, npy_uint8 target_count,
+                                            pylidar::CVector<SRieglRDBPulse> &pulses,
+                                            pylidar::CVector<SRieglRDBPoint> &points,
+                                            Py_ssize_t nCurrentPulse)
+    {
+        SRieglRDBPulse pulse;
+        SRieglRDBPoint point;
+    
+        // create pulse
+        pulse.pulse_ID = nCurrentPulse;
+        pulse.timestamp = (npy_uint64)round(pCurrEl->timestamp * 1e10); // time of first record in ns
+        // use first record for calculating azimuth etc (should be last record?)
+        double x = pCurrEl->xyz[0];
+        double y = pCurrEl->xyz[1];
+        double z = pCurrEl->xyz[2];
+        pulse.azimuth = (float)std::atan(x / y);
+        if( (x <= 0) && (y >= 0) )
+        {
+            pulse.azimuth += 180;
+        }
+        if( (x <= 0) && (y <= 0) )
+        {
+            pulse.azimuth -= 180;
+        }
+        if( pulse.azimuth < 0 )
+        {
+            pulse.azimuth += 360;
+        }
+        pulse.zenith = (float)std::atan(std::sqrt(std::pow(x, 2) + 
+                        std::pow(y, 2)) / z);
+        if( pulse.zenith < 0 )
+        {
+            pulse.zenith += 180;
+        }
+
+        pulse.scanline = pCurrEl->row;
+        pulse.scanline_Idx = pCurrEl->column;
+        pulse.x_Idx = x;
+        pulse.y_Idx = y;
+        pulse.pts_start_idx = (npy_uint32)points.getNumElems();
+        pulse.number_of_returns = target_count;
+        pulses.push(&pulse);
+
+        // now points
+        for( npy_uint8 i = 0; i < pulse.number_of_returns; i++ )
+        {
+            // convert to ns
+            point.timestamp = (npy_uint64)round(pCurrEl->timestamp * 1e10);
+            point.deviation_Return = (float)pCurrEl->deviation;
+            point.classification = (npy_uint8)pCurrEl->classification;
+            point.range = std::sqrt(std::pow(pCurrEl->xyz[0], 2) + 
+                            std::pow(pCurrEl->xyz[1], 2) + 
+                            std::pow(pCurrEl->xyz[2], 2));
+            point.rho_app = pCurrEl->reflectance;
+            point.amplitude_Return = pCurrEl->amplitude;
+            point.x = pCurrEl->xyz[0];
+            point.y = pCurrEl->xyz[1];
+            point.z = pCurrEl->xyz[2];
+            point.return_Number = i;
+
+            points.push(&point);
+            // next record
+            pCurrEl++;
+        }
+            
+    }                                            
+                                        
+    
     
     PyObject* readData(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, bool &bFinished)
     {
         pylidar::CVector<SRieglRDBPulse> pulses(nInitSize, nGrowBy);
-        SRieglRDBPulse pulse;
         pylidar::CVector<SRieglRDBPoint> points(nInitSize, nGrowBy);
-        SRieglRDBPoint point;
         
-        //fprintf(stderr, "Ignoring %ld\n", m_nPulsesToIgnore);
         while( m_nPulsesToIgnore > 0 )
         {
+            //fprintf(stderr, "Ignoring %ld\n", m_nPulsesToIgnore);
             // move first so we don't include the pulse we are currently on
             if( !m_pBuffer->move() )
             {
@@ -534,6 +647,7 @@ public:
 
             if( m_pBuffer->eof() )
             {
+                // TODO: skip remainder also
                 PyErr_SetString(GETSTATE_FC->error, "Got to EOF while ignoring pulses");
                 return NULL;
             }
@@ -566,67 +680,10 @@ public:
             RieglRDBBuffer *pRecordsStart = m_pBuffer->addCurrentToTracker();
             if( pRecordsStart != NULL )
             {
-                RieglRDBBuffer *pCurrEl = pRecordsStart;
+                // we have a complete pulse with pRecordsStart->target_count records
+                ConvertRecordsToPointsAndPulses(pRecordsStart, pRecordsStart->target_count, 
+                                    pulses, points, nCurrentPulse);
             
-                //fprintf(stderr, "Have full %d %ld\n", (int)pCurrEl->target_count, pCurrEl->id - (pCurrEl->target_index - 1));
-                // we have a complete pulse with pCurrEl->target_count records
-                // create pulse
-                pulse.pulse_ID = nCurrentPulse;
-                pulse.timestamp = (npy_uint64)round(pCurrEl->timestamp * 1e10); // time of first record in ns
-                // use first record for calculating azimuth etc (should be last record?)
-                double x = pCurrEl->xyz[0];
-                double y = pCurrEl->xyz[1];
-                double z = pCurrEl->xyz[2];
-                pulse.azimuth = (float)std::atan(x / y);
-                if( (x <= 0) && (y >= 0) )
-                {
-                    pulse.azimuth += 180;
-                }
-                if( (x <= 0) && (y <= 0) )
-                {
-                    pulse.azimuth -= 180;
-                }
-                if( pulse.azimuth < 0 )
-                {
-                    pulse.azimuth += 360;
-                }
-                pulse.zenith = (float)std::atan(std::sqrt(std::pow(x, 2) + 
-                                std::pow(y, 2)) / z);
-                if( pulse.zenith < 0 )
-                {
-                    pulse.zenith += 180;
-                }
-                    
-                pulse.scanline = pCurrEl->row;
-                pulse.scanline_Idx = pCurrEl->column;
-                pulse.x_Idx = x;
-                pulse.y_Idx = y;
-                pulse.pts_start_idx = (npy_uint32)points.getNumElems();
-                pulse.number_of_returns = pCurrEl->target_count;
-                pulses.push(&pulse);
-                
-                // now points
-                npy_uint8 target_count = pCurrEl->target_count; // do this here, as pCurrEl gets updated below
-                for( npy_uint8 i = 0; i < target_count; i++ )
-                {
-                    // convert to ns
-                    point.timestamp = (npy_uint64)round(pCurrEl->timestamp * 1e10);
-                    point.deviation_Return = (float)pCurrEl->deviation;
-                    point.classification = (npy_uint8)pCurrEl->classification;
-                    point.range = std::sqrt(std::pow(pCurrEl->xyz[0], 2) + 
-                                    std::pow(pCurrEl->xyz[1], 2) + 
-                                    std::pow(pCurrEl->xyz[2], 2));
-                    point.rho_app = pCurrEl->reflectance;
-                    point.amplitude_Return = pCurrEl->amplitude;
-                    point.x = pCurrEl->xyz[0];
-                    point.y = pCurrEl->xyz[1];
-                    point.z = pCurrEl->xyz[2];
-
-                    points.push(&point);
-                    // next record
-                    pCurrEl++;
-                }
-
                 nCurrentPulse++;
                 m_pBuffer->removeCurrentFromTracker();
             }            
@@ -638,7 +695,27 @@ public:
             }
         }
         
-        bFinished = m_pBuffer->eof();
+        // any remainder?
+        if( m_pBuffer->eof() && (pulses.getNumElems() < nPulses) && (m_pBuffer->getCountOfRemaindersInTracker() > 0))
+        {
+            while( pulses.getNumElems() < nPulses )
+            {
+                npy_uint8 target_count = 0;
+                RieglRDBBuffer *pRecordsStart = m_pBuffer->getNextRemainderInTracker(target_count);
+                //fprintf(stderr, "Got remainder of %d %ld\n", (int)target_count, nCurrentPulse);
+                if( pRecordsStart == NULL )
+                {
+                    // no more remainders
+                    break;
+                }
+                ConvertRecordsToPointsAndPulses(pRecordsStart, target_count, 
+                                    pulses, points, nCurrentPulse);
+                nCurrentPulse++;
+                m_pBuffer->removeRemainderFromTracker(pRecordsStart->id);
+            }
+        }
+        
+        bFinished = (m_pBuffer->eof() && (m_pBuffer->getCountOfRemaindersInTracker() == 0));
 
         // build tuple
         PyArrayObject *pPulses = pulses.getNumpyArray(RieglPulseFields);
