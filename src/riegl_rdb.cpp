@@ -605,7 +605,7 @@ public:
         pulses.push(&pulse);
 
         // now points
-        for( npy_uint8 i = 0; i < pulse.number_of_returns; i++ )
+        for( npy_uint8 i = 0; i < target_count; i++ )
         {
             // convert to ns
             point.timestamp = (npy_uint64)round(pCurrEl->timestamp * 1e10);
@@ -619,7 +619,7 @@ public:
             point.x = pCurrEl->xyz[0];
             point.y = pCurrEl->xyz[1];
             point.z = pCurrEl->xyz[2];
-            point.return_Number = i;
+            point.return_Number = i + 1;  // 1-based
 
             points.push(&point);
             // next record
@@ -647,9 +647,18 @@ public:
 
             if( m_pBuffer->eof() )
             {
-                // TODO: skip remainder also
-                PyErr_SetString(GETSTATE_FC->error, "Got to EOF while ignoring pulses");
-                return NULL;
+                // skip remainder also
+                if( m_pBuffer->getCountOfRemaindersInTracker() > 0 )
+                {
+                    npy_uint8 nrecords;
+                    RieglRDBBuffer *pEl = m_pBuffer->getNextRemainderInTracker(nrecords);
+                    m_pBuffer->removeRemainderFromTracker(pEl->id);
+                }
+                else
+                {
+                    PyErr_SetString(GETSTATE_FC->error, "Got to EOF while ignoring pulses");
+                    return NULL;
+                }
             }
 
             if( m_pBuffer->getCurrent() == NULL )
