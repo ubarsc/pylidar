@@ -1,5 +1,5 @@
 """
-Handles conversion between Riegl and SPDV4 formats
+Handles conversion between Riegl RXP and SPDV4 formats
 """
 
 # This file is part of PyLidar

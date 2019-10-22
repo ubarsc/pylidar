@@ -31,7 +31,7 @@ from pylidar import lidarprocessor
 # conversion modules
 from pylidar.toolbox.translate import las2spdv4
 from pylidar.toolbox.translate import spdv32spdv4
-from pylidar.toolbox.translate import riegl2spdv4
+from pylidar.toolbox.translate import rieglrxp2spdv4
 from pylidar.toolbox.translate import spdv42las
 from pylidar.toolbox.translate import ascii2spdv4
 from pylidar.toolbox.translate import lvisbin2spdv4
@@ -85,13 +85,13 @@ def getCmdargs():
     p.add_argument("--internalrotation", dest="internalrotation",
             default=False, action="store_true", help="Use internal rotation data" +
             " when processing .rxp files. Overrides --externalrotationfn " + 
-            "(only for RIEGL inputs)")
+            "(only for RIEGL RXP inputs)")
     p.add_argument("--externalrotationfn", dest="externalrotationfn",
             help="Input space delimited text file with external 4x4 rotation matrix" +
-            " (only for RIEGL inputs)")
+            " (only for RIEGL RXP inputs)")
     p.add_argument("--magneticdeclination", dest="magneticdeclination",
             default=0.0, type=float, help="Use given magnetic declination when" +
-            " processing .rxp files (only for RIEGL inputs)")
+            " processing .rxp files (only for RIEGL RXP inputs)")
     p.add_argument("--coltype", nargs=2, metavar=('varName', 'dtype'),
             action='append', help="Set column name and types. Can be given"+
             " multiple times. dtype should be UINT16 format. " +
@@ -164,8 +164,8 @@ def run():
                 cmdargs.range, cmdargs.spatial, cmdargs.extent, cmdargs.scaling,
                 cmdargs.null, cmdargs.constcol)
 
-    elif inFormat == 'riegl' and cmdargs.format == 'SPDV4':
-        riegl2spdv4.translate(info, cmdargs.input, cmdargs.output,
+    elif inFormat == 'riegl RXP' and cmdargs.format == 'SPDV4':
+        rieglrxp2spdv4.translate(info, cmdargs.input, cmdargs.output,
                 cmdargs.range, cmdargs.scaling, cmdargs.internalrotation, 
                 cmdargs.magneticdeclination, cmdargs.externalrotationfn,
                 cmdargs.null, cmdargs.constcol, epsg=cmdargs.epsg, wkt=wktStr)
