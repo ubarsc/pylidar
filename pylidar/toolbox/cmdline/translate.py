@@ -32,6 +32,7 @@ from pylidar import lidarprocessor
 from pylidar.toolbox.translate import las2spdv4
 from pylidar.toolbox.translate import spdv32spdv4
 from pylidar.toolbox.translate import rieglrxp2spdv4
+from pylidar.toolbox.translate import rieglrdb2spdv4
 from pylidar.toolbox.translate import spdv42las
 from pylidar.toolbox.translate import ascii2spdv4
 from pylidar.toolbox.translate import lvisbin2spdv4
@@ -169,6 +170,11 @@ def run():
                 cmdargs.range, cmdargs.scaling, cmdargs.internalrotation, 
                 cmdargs.magneticdeclination, cmdargs.externalrotationfn,
                 cmdargs.null, cmdargs.constcol, epsg=cmdargs.epsg, wkt=wktStr)
+
+    elif inFormat == 'riegl RDB' and cmdargs.format == 'SPDV4':
+        rieglrdb2spdv4.translate(info, cmdargs.input, cmdargs.output,
+                cmdargs.range, cmdargs.scaling, cmdargs.null, 
+                cmdargs.constcol, epsg=cmdargs.epsg, wkt=wktStr)
 
     elif inFormat == 'SPDV4' and cmdargs.format == 'LAS':
         spdv42las.translate(info, cmdargs.input, cmdargs.output, 

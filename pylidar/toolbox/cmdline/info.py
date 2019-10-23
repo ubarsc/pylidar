@@ -21,6 +21,7 @@ Does the printing out to terminal of file info
 from __future__ import print_function, division
 
 import sys
+import pprint
 import argparse
 from pylidar.lidarformats import generic
 # need to import lidarprocessor also so we have
@@ -44,6 +45,9 @@ def getCmdargs():
 
     return cmdargs
 
+def formatAsString(obj):
+    return pprint.pformat(obj, depth=1, compact=True)
+
 def run():
     """
     Main function. Looks at the command line arguments
@@ -55,10 +59,12 @@ def run():
     print('Driver Name:', info.getDriverName())
     print('')
 
-    for key,val in sorted(info.__dict__.items()):
+    for key, val in sorted(info.__dict__.items()):
         if isinstance(val, dict):
             print(key.upper()) # TODO: we need to be uppercase??
-            for hkey,hval in sorted(val.items()):
+            for hkey, hval in sorted(val.items()):
+                hval = formatAsString(hval)
                 print(" ", hkey.upper(), hval)
         else:
+            val = formatAsString(val)
             print(key.upper(), val)

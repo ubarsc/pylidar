@@ -268,15 +268,11 @@ class RieglRDBFile(generic.LiDARFile):
         """
         return self.getHeader()[name]
      
-# There is a lot of stuff in the header. Just pull out some fields
-# that look like they might be interesting
-INFO_KEYS = ('riegl.geo_tag', 'riegl.time_base', 'riegl.device')
-     
 class RieglRDBFileInfo(generic.LiDARFileInfo):
     """
     Class that gets information about a Riegl file
     and makes it available as fields.
-    The underlying C++ _riegl module does the hard work here
+    The underlying C++ _rieglrdb module does the hard work here
     """
     def __init__(self, fname):
         generic.LiDARFileInfo.__init__(self, fname)
@@ -285,11 +281,15 @@ class RieglRDBFileInfo(generic.LiDARFileInfo):
             msg = 'not a riegl RDB file'
             raise generic.LiDARFormatNotUnderstood(msg)
 
-        rdbFile = _rieglrdb.RDBFile(fname)
+        rdbFile = _rieglrdb.RDBFile(fname, {})
+        header = rdbFile.header
         self.header = {}
-        for name in INFO_KEYS:
-            if name in rdbFile.header:
-                self.header[name] = rdbFile.header[name]
+        for key in header:
+            try:
+                self.header[key] = json.loads(header[key])
+            except (json.decoder.JSONDecodeError, TypeError):
+                # just copy value across - not JSON
+                self.header[key] = header[key]
 
     @staticmethod        
     def getDriverName():
