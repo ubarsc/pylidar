@@ -206,8 +206,11 @@ public:
     
     void setRecord(npy_uint8 idx, RieglRDBBuffer *pRecord)
     {
-        memcpy(&m_pRecords[idx], pRecord, sizeof(RieglRDBBuffer));
-        m_pSet[idx] = true;
+        if( idx < m_nRecords )
+        {
+            memcpy(&m_pRecords[idx], pRecord, sizeof(RieglRDBBuffer));
+            m_pSet[idx] = true;
+        }
     }
     
     // returns m_pRecords if we have them all, otherwise NULL
