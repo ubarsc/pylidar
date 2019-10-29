@@ -82,8 +82,8 @@ typedef struct {
     npy_uint64 timestamp;
     float azimuth;
     float zenith;
-    npy_uint32 scanline;
-    npy_uint16 scanline_Idx;
+    npy_int32 scanline; // note: signed as riegl.row can be negative
+    npy_int32 scanline_Idx; // riegl.column is signed also
     double x_Idx;
     double y_Idx;
     npy_uint32 pts_start_idx;
@@ -96,8 +96,8 @@ static SpylidarFieldDefn RieglPulseFields[] = {
     CREATE_FIELD_DEFN(SRieglRDBPulse, timestamp, 'u'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, azimuth, 'f'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, zenith, 'f'),
-    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline, 'u'),
-    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline_Idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline, 'i'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline_Idx, 'i'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, y_Idx, 'f'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, x_Idx, 'f'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, pts_start_idx, 'u'),
@@ -148,8 +148,8 @@ typedef struct
     double xyz[3]; // riegl.xyz
     
     // pulses
-    npy_uint32 row;  // riegl.row
-    npy_uint16 column; // riegl.column
+    npy_int32 row;  // riegl.row - can be negative
+    npy_int32 column; // riegl.column ditto
     
     // info for attributing points to pulses
     npy_uint8 target_index; // riegl.target_index
@@ -318,8 +318,8 @@ public:
         CHECKBIND_READER(RDB_RIEGL_XYZ.name, RDBDataTypeDOUBLE, &m_buffer[0].xyz)
         
         // these 2 don't appear to be documented, but are in there
-        CHECKBIND_READER("riegl.row", RDBDataTypeUINT32, &m_buffer[0].row);
-        CHECKBIND_READER("riegl.column", RDBDataTypeUINT16, &m_buffer[0].column);
+        CHECKBIND_READER("riegl.row", RDBDataTypeINT32, &m_buffer[0].row);
+        CHECKBIND_READER("riegl.column", RDBDataTypeINT16, &m_buffer[0].column);
         
         CHECKBIND_READER(RDB_RIEGL_TARGET_INDEX.name, RDBDataTypeUINT8, &m_buffer[0].target_index)
         CHECKBIND_READER(RDB_RIEGL_TARGET_COUNT.name, RDBDataTypeUINT8, &m_buffer[0].target_count)
