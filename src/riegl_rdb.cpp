@@ -511,16 +511,16 @@ typedef struct
 
 } PyRieglRDBFile;
 
-/*static const char *SupportedDriverOptions[] = {"SORT_POINTS", NULL};
+static const char *SupportedDriverOptions[] = {"DUMP_FIELDS_ON_OPEN", NULL};
 static PyObject *rieglrdb_getSupportedOptions(PyObject *self, PyObject *args)
 {
     return pylidar_stringArrayToTuple(SupportedDriverOptions);
-}*/
+}
 
 // module methods
 static PyMethodDef module_methods[] = {
-    /*{"getSupportedOptions", (PyCFunction)rieglrdb_getSupportedOptions, METH_NOARGS,
-        "Get a tuple of supported driver options"},*/
+    {"getSupportedOptions", (PyCFunction)rieglrdb_getSupportedOptions, METH_NOARGS,
+        "Get a tuple of supported driver options"},
     {NULL}  /* Sentinel */
 };
 
@@ -807,7 +807,21 @@ PyObject *pOptionDict;
         return -1;
     }
     
-    // TODO: parse options
+    // parse options
+    bool bDumpFields = false;
+    PyObject *pDumpFieldsFlag = PyDict_GetItemString(pOptionDict, "DUMP_FIELDS_ON_OPEN");
+    if( pDumpFieldsFlag != NULL )
+    {
+        if( !PyBool_Check(pDumpFieldsFlag) )
+        {
+            PyErr_SetString(GETSTATE_FC->error, "DUMP_FIELDS_ON_OPEN must be True or False");
+            return -1;
+        }
+        if( pDumpFieldsFlag == Py_True )
+        {
+            bDumpFields = true;
+        }
+    }
 
     // get context
     // TODO: log level and log path as an option?
@@ -839,16 +853,32 @@ PyObject *pOptionDict;
     
     CHECKRESULT_FILE(rdb_pointcloud_open(self->pContext, self->pPointCloud,
                     pszFname, pSettings), -1)
-                    
-    /*uint32_t count;
-    RDBString list;
-    CHECKRESULT_FILE(rdb_pointcloud_point_attributes_list(self->pContext, self->pPointCloud,
+    
+    if( bDumpFields )
+    {                
+        uint32_t count;
+        RDBString list;
+        CHECKRESULT_FILE(rdb_pointcloud_point_attributes_list(self->pContext, self->pPointCloud,
                         &count, &list), -1)
-    for( uint32_t i = 0; i < count; i++ )
-    {
-        fprintf(stderr, "%d %s\n", i, list);
-        list = list + strlen(list) + 1;
-    }*/
+        const char *pszDataTypeNames[] = {"NONE", "UINT8", "INT8", "UINT16", "INT16", "UINT32", "INT32",
+                                "UINT64", "INT64", "SINGLE", "DOUBLE"};
+        RDBPointcloudPointAttribute *attr;
+        CHECKRESULT_FILE(rdb_pointcloud_point_attribute_new(self->pContext, &attr), -1)
+        
+        for( uint32_t i = 0; i < count; i++ )
+        {
+            CHECKRESULT_FILE(rdb_pointcloud_point_attributes_get(self->pContext,
+                        self->pPointCloud, list, attr), -1)      
+        
+            uint32_t type = 0;
+            CHECKRESULT_FILE(rdb_pointcloud_point_attribute_data_type(self->pContext, attr, &type), -1)
+        
+            fprintf(stderr, "%d %s %s\n", i, list, pszDataTypeNames[type]);
+            list = list + strlen(list) + 1;
+        }
+        CHECKRESULT_FILE(rdb_pointcloud_point_attribute_delete(self->pContext, &attr), -1)
+    }
+    
     // read in header ("metadata" in rdblib speak)
     self->pHeader = PyDict_New();
     uint32_t acount;
@@ -860,7 +890,7 @@ PyObject *pOptionDict;
     {
         CHECKRESULT_FILE(rdb_pointcloud_meta_data_get(self->pContext, self->pPointCloud,
                         alist, &value), -1)
-        // TODO: decode json?
+        // JSON decoding happens in Python
 #if PY_MAJOR_VERSION >= 3
         PyObject *pString = PyUnicode_FromString(value);
 #else

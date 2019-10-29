@@ -20,6 +20,9 @@ These are contained in the SUPPORTEDOPTIONS module level variable.
 +-----------------------+---------------------------------------+
 | Name                  | Use                                   |
 +=======================+=======================================+
+| DUMP_FIELDS_ON_OPEN   | Set to True to print a report of the  |
+|                       | available fields in the file when it  |
+|                       | opened.                               |
 +-----------------------+---------------------------------------+
 
 """
@@ -50,7 +53,7 @@ from . import generic
 # Fail slightly less drastically when running from ReadTheDocs
 if os.getenv('READTHEDOCS', default='False') != 'True':
     from . import _rieglrdb
-    SUPPORTEDOPTIONS = []
+    SUPPORTEDOPTIONS = _rieglrdb.getSupportedOptions()
 else:
     SUPPORTEDOPTIONS = []
 
