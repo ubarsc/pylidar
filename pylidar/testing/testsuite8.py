@@ -29,7 +29,7 @@ import shutil
 from . import utils
 from pylidar import lidarprocessor
 from pylidar.lidarformats import generic
-from pylidar.toolbox.translate.riegl2spdv4 import translate
+from pylidar.toolbox.translate.rieglrxp2spdv4 import translate
 from pylidar.toolbox.indexing.gridindex import createGridSpatialIndex
 from pylidar.toolbox.rasterization import rasterize
 from pylidar.toolbox.arrayutils import convertArgResultToIndexTuple

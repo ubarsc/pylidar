@@ -82,8 +82,8 @@ typedef struct {
     npy_uint64 timestamp;
     float azimuth;
     float zenith;
-    npy_int32 scanline; // note: signed as riegl.row can be negative
-    npy_int32 scanline_Idx; // riegl.column is signed also
+    npy_uint32 scanline; // abs() of riegl.row 
+    npy_uint16 scanline_Idx; // abs(0 of riegl.column
     double x_Idx;
     double y_Idx;
     npy_uint32 pts_start_idx;
@@ -96,8 +96,8 @@ static SpylidarFieldDefn RieglPulseFields[] = {
     CREATE_FIELD_DEFN(SRieglRDBPulse, timestamp, 'u'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, azimuth, 'f'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, zenith, 'f'),
-    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline, 'i'),
-    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline_Idx, 'i'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPulse, scanline_Idx, 'u'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, y_Idx, 'f'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, x_Idx, 'f'),
     CREATE_FIELD_DEFN(SRieglRDBPulse, pts_start_idx, 'u'),
@@ -599,8 +599,14 @@ public:
             pulse.zenith += 180;
         }
 
-        pulse.scanline = pCurrEl->row;
-        pulse.scanline_Idx = pCurrEl->column;
+        // both riegl.row and riegl.column can be positive or negative
+        // the SPDV4 spec has these unsigned and we get into trouble trying
+        // to import as negative values are outside the range. 
+        // Generally, we have found that these attributes are either 
+        // positive OR negative - not both for the same files. So we
+        // abs() here to keep everything happy...
+        pulse.scanline = std::abs(pCurrEl->row);
+        pulse.scanline_Idx = std::abs(pCurrEl->column);
         pulse.x_Idx = x;
         pulse.y_Idx = y;
         pulse.pts_start_idx = (npy_uint32)points.getNumElems();

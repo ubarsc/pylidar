@@ -223,6 +223,11 @@ from pylidar.testing import testsuite23b
 testsuite23b.run('.', '.')
 nameList.append('testsuite23b')
 
+# testsuite24
+from pylidar.testing import testsuite24
+testsuite24.run('.', '.')
+nameList.append('testsuite24')
+
 # add our list of tests
 versionInfo['tests'] = nameList
 
