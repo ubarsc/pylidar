@@ -53,18 +53,19 @@ and `h5py <http://h5py.org/>`_ are required dependencies. Additional formats req
 environment variables set to the root installation of other libraries
 before building as detailed in this table:
 
-+---------------+-----------------------------+----------------------------------------------------------+
-| Type of Files | Environment Variable(s)     | Link to Software                                         |
-+===============+=============================+==========================================================+
-| LAS/LAZ       | LASTOOLS_ROOT               | `lastools <https://github.com/LAStools/LAStools>`_       |
-+---------------+-----------------------------+----------------------------------------------------------+
-| Riegl         | RIVLIB_ROOT, RIWAVELIB_ROOT | `RiVLIB <http://www.riegl.com/index.php?id=224>`_        |
-|               |                             | `RiWaveLIB <http://www.riegl.com/index.php?id=322>`_     |
-+---------------+-----------------------------+----------------------------------------------------------+
-| ASCII .gz     | ZLIB_ROOT                   | `zlib <http://zlib.net/>`_                               |
-+---------------+-----------------------------+----------------------------------------------------------+
-| PulseWaves    | PULSEWAVES_ROOT             | `pulsewaves <https://github.com/PulseWaves/PulseWaves>`_ |
-+---------------+-----------------------------+----------------------------------------------------------+
++---------------+-----------------------------+-----------------------------------------------------------------------------+
+| Type of Files | Environment Variable(s)     | Link to Software                                                            |
++===============+=============================+=============================================================================+
+| LAS/LAZ       | LASTOOLS_ROOT               | `lastools <https://github.com/LAStools/LAStools>`_                          |
++---------------+-----------------------------+-----------------------------------------------------------------------------+
+| Riegl         | RIVLIB_ROOT                 | `RiVLIB <http://www.riegl.com/index.php?id=224>`_                           |
+|               | RIWAVELIB_ROOT              | `RiWaveLIB <http://www.riegl.com/index.php?id=322>`_                        |
+|               | RDBLIB_ROOT                 | `RDBLib <http://www.riegl.com/members-area/software-downloads/libraries/>`_ |
++---------------+-----------------------------+-----------------------------------------------------------------------------+
+| ASCII .gz     | ZLIB_ROOT                   | `zlib <http://zlib.net/>`_                                                  |
++---------------+-----------------------------+-----------------------------------------------------------------------------+
+| PulseWaves    | PULSEWAVES_ROOT             | `pulsewaves <https://github.com/PulseWaves/PulseWaves>`_                    |
++---------------+-----------------------------+-----------------------------------------------------------------------------+
 
 The related `pynninterp <https://bitbucket.org/petebunting/pynninterp>`_ module is used
 for some interpolation operations.
@@ -87,7 +88,7 @@ command line to install pylidar (dependencies are obtained automatically): ::
     conda config --add channels conda-forge 
     conda config --add channels rios 
     conda create -n myenv pylidar
-    source activate myenv # omit 'source' on Windows
+    conda activate myenv
 
 The related `pynninterp <https://bitbucket.org/petebunting/pynninterp>`_ module is used
 for some interpolation operations and can be installed via Conda also from the 'rios' channel::

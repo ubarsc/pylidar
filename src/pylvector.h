@@ -26,6 +26,7 @@
 #include "pylidar.h"
 #include <new>
 #include <algorithm>
+#include <cstdlib>
 
 namespace pylidar
 {
@@ -256,6 +257,18 @@ public:
         memcpy(getElem(m_nElems), other->m_pData, other->m_nElems * m_nElemSize);
 
         m_nElems = nNewElems;
+    }
+    
+    // wrappers around qsort()
+    // avoid std::sort as we need to specify m_nElemSize directly
+    void sort(int (*compar)(const void*,const void*))
+    {
+        qsort(m_pData, m_nElems, m_nElemSize, compar);
+    }
+    
+    void sort(npy_intp start, npy_intp num, int (*compar)(const void*,const void*))
+    {
+        qsort(getElem(start), num, m_nElemSize, compar);
     }
 
 private:

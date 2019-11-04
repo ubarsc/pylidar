@@ -1,5 +1,5 @@
 """
-Handles conversion between Riegl and SPDV4 formats
+Handles conversion between Riegl RDB and SPDV4 formats
 """
 
 # This file is part of PyLidar
@@ -37,8 +37,6 @@ def transFunc(data, otherArgs):
     """
     pulses = data.input1.getPulses()
     points = data.input1.getPointsByPulse()
-    waveformInfo = data.input1.getWaveformInfo()
-    recv = data.input1.getReceived()
     
     if points is not None:
         data.output1.translateFieldNames(data.input1, points, 
@@ -53,14 +51,19 @@ def transFunc(data, otherArgs):
         translatecommon.setOutputNull(otherArgs.nullVals, data.output1)
         rieglInfo = otherArgs.rieglInfo
 
+        # TODO: is there likely to be only one gemetry?
+        # We go for the first one
+        beamGeom = list(rieglInfo["riegl.scan_pattern"].keys())[0]
         data.output1.setHeaderValue("PULSE_ANGULAR_SPACING_SCANLINE", 
-                rieglInfo["PHI_INC"])
+                rieglInfo["riegl.scan_pattern"][beamGeom]['phi_increment'])
         data.output1.setHeaderValue("PULSE_ANGULAR_SPACING_SCANLINE_IDX",
-                rieglInfo["THETA_INC"])
+                rieglInfo["riegl.scan_pattern"][beamGeom]['theta_increment'])
         data.output1.setHeaderValue("SENSOR_BEAM_EXIT_DIAMETER",
-                rieglInfo["BEAM_EXIT_DIAMETER"])
+                rieglInfo["riegl.beam_geometry"]['beam_exit_diameter'])
         data.output1.setHeaderValue("SENSOR_BEAM_DIVERGENCE",
-                rieglInfo["BEAM_DIVERGENCE"])
+                rieglInfo["riegl.beam_geometry"]['beam_divergence'])
+                
+        data.output1.setHeaderValue("PULSE_INDEX_METHOD", 0) # first return
 
         if otherArgs.epsg is not None:
             sr = osr.SpatialReference()
@@ -69,38 +72,18 @@ def transFunc(data, otherArgs):
         elif otherArgs.wkt is not None:
             data.output1.setHeaderValue('SPATIAL_REFERENCE', otherArgs.wkt)
 
-        rotationMatrixList = None
-        if otherArgs.rotationMatrix is not None:
-            rotationMatrixList = otherArgs.rotationMatrix.tolist()
-
-        # Extra Info?? Not sure if this should be handled 
-        # as separate fields in the header
-        meta = {'Transform': rotationMatrixList,
-            'Longitude': rieglInfo['LONGITUDE'],
-            'Latitude': rieglInfo['LATITUDE'],
-            'Height': rieglInfo['HEIGHT'],
-            'HMSL': rieglInfo['HMSL']}
-        data.output1.setHeaderValue('USER_META_DATA', json.dumps(meta))
-
     # check the range
-    translatecommon.checkRange(otherArgs.expectRange, points, pulses, 
-            waveformInfo)
+    translatecommon.checkRange(otherArgs.expectRange, points, pulses)
     # any constant columns
     points, pulses, waveformInfo = translatecommon.addConstCols(otherArgs.constCols,
-            points, pulses, waveformInfo)
+            points, pulses)
 
     data.output1.setPulses(pulses)
     if points is not None:
         data.output1.setPoints(points)
-    if waveformInfo is not None:
-        data.output1.setWaveformInfo(waveformInfo)
-    if recv is not None:
-        data.output1.setReceived(recv)
 
 def translate(info, infile, outfile, expectRange=None, scalings=None, 
-        internalrotation=False, magneticdeclination=0.0, 
-        externalrotationfn=None, nullVals=None, constCols=None, 
-        epsg=None, wkt=None):
+        nullVals=None, constCols=None, epsg=None, wkt=None):
     """
     Main function which does the work.
 
@@ -108,11 +91,6 @@ def translate(info, infile, outfile, expectRange=None, scalings=None,
     * infile and outfile are paths to the input and output files respectively.
     * expectRange is a list of tuples with (type, varname, min, max).
     * scaling is a list of tuples with (type, varname, gain, offset).
-    * if internalrotation is True then the internal rotation will be applied
-        to data. Overrides externalrotationfn
-    * if externalrotationfn is not None then then the external rotation matrix
-        will be read from this file and applied to the data
-    * magneticdeclination. If not 0, then this will be applied to the data
     * nullVals is a list of tuples with (type, varname, value)
     * constCols is a list of tupes with (type, varname, dtype, value)
     """
@@ -122,32 +100,6 @@ def translate(info, infile, outfile, expectRange=None, scalings=None,
     dataFiles = lidarprocessor.DataFiles()
         
     dataFiles.input1 = lidarprocessor.LidarFile(infile, lidarprocessor.READ)
-
-    # first set the rotation matrix if asked for
-    if internalrotation and externalrotationfn:
-        msg = "Can't use both internal and external rotation"
-        raise generic.LiDARInvalidSetting(msg)
-
-    rotationMatrix = None
-    if internalrotation:
-        if "ROTATION_MATRIX" in info.header:
-            dataFiles.input1.setLiDARDriverOption("ROTATION_MATRIX", 
-                    info.header["ROTATION_MATRIX"])
-            rotationMatrix = info.header["ROTATION_MATRIX"]
-        else:
-            msg = "Internal Rotation requested but no information found in input file"
-            raise generic.LiDARInvalidSetting(msg)
-    elif externalrotationfn is not None:
-        externalrotation = numpy.loadtxt(externalrotationfn, ndmin=2, 
-                delimiter=" ", dtype=numpy.float32)            
-        dataFiles.input1.setLiDARDriverOption("ROTATION_MATRIX", 
-                externalrotation)
-        rotationMatrix = externalrotation
-            
-    # set the magnetic declination if not 0 (the default)
-    if magneticdeclination != 0:
-        dataFiles.input1.setLiDARDriverOption("MAGNETIC_DECLINATION", 
-                magneticdeclination)    
 
     controls = lidarprocessor.Controls()
     progress = cuiprogress.GDALProgressBar()
@@ -159,9 +111,6 @@ def translate(info, infile, outfile, expectRange=None, scalings=None,
     otherArgs.rieglInfo = info.header
     # also need the default/overriden scaling
     otherArgs.scaling = scalingsDict
-    # Add the rotation matrix to otherArgs 
-    # for updating the header
-    otherArgs.rotationMatrix = rotationMatrix
     # expected range of the data
     otherArgs.expectRange = expectRange
     # null values
