@@ -47,7 +47,7 @@ Downloads
 Source
 ^^^^^^
 
-Source code is available from `BitBucket <https://bitbucket.org/chchrsc/pylidar>`_. 
+Source code is available from `GitHub <https://github.com/ubarsc/pylidar>`_. 
 `RIOS <http://rioshome.org/>`_, `Numba <http://numba.pydata.org/>`_, `Numpy <http://www.numpy.org/>`_
 and `h5py <http://h5py.org/>`_ are required dependencies. Additional formats require 
 environment variables set to the root installation of other libraries
@@ -75,7 +75,7 @@ Test Suite
 
 After installation, run pylidar_test to run a number of tests to check that the install is OK. You will
 need the latest testdata_X.tar.gz file (with the highest 'X') from the 
-`downloads area <https://bitbucket.org/chchrsc/pylidar/downloads>`_. Pass the path to this file to 
+`downloads area <https://github.com/ubarsc/pylidar/releases>`_. Pass the path to this file to 
 pylidar_test with -i option.
 
 Conda
