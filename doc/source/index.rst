@@ -67,7 +67,7 @@ before building as detailed in this table:
 | PulseWaves    | PULSEWAVES_ROOT             | `pulsewaves <https://github.com/PulseWaves/PulseWaves>`_                    |
 +---------------+-----------------------------+-----------------------------------------------------------------------------+
 
-The related `pynninterp <https://bitbucket.org/petebunting/pynninterp>`_ module is used
+The related `pynninterp <https://github.com/ubarsc/pynninterp/>`_ module is used
 for some interpolation operations.
 
 Test Suite
@@ -76,7 +76,7 @@ Test Suite
 After installation, run pylidar_test to run a number of tests to check that the install is OK. You will
 need the latest testdata_X.tar.gz file (with the highest 'X') from the 
 `downloads area <https://github.com/ubarsc/pylidar/releases>`_. Pass the path to this file to 
-pylidar_test with -i option.
+pylidar_test with -i option. See `the wiki page <https://github.com/ubarsc/pylidar/wiki/Testdata>`_.
 
 Conda
 ^^^^^
@@ -90,7 +90,7 @@ command line to install pylidar (dependencies are obtained automatically): ::
     conda create -n myenv pylidar
     conda activate myenv
 
-The related `pynninterp <https://bitbucket.org/petebunting/pynninterp>`_ module is used
+The related `pynninterp <https://github.com/ubarsc/pynninterp/>`_ module is used
 for some interpolation operations and can be installed via Conda also from the 'rios' channel::
 
     conda install pynninterp
