@@ -1,4 +1,3 @@
-syntax: glob
 *.pyc
 *.o
 *.so
@@ -10,8 +9,6 @@ _build
 _templates
 _static
 MANIFEST
-
-syntax: regexp
-^build/
-^doc/build/
-^dist/
+build/
+doc/build/
+dist/
