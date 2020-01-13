@@ -74,9 +74,9 @@ Test Suite
 ^^^^^^^^^^
 
 After installation, run pylidar_test to run a number of tests to check that the install is OK. You will
-need the latest testdata_X.tar.gz file (with the highest 'X') from the 
-`downloads area <https://github.com/ubarsc/pylidar/releases>`_. Pass the path to this file to 
-pylidar_test with -i option. See `the wiki page <https://github.com/ubarsc/pylidar/wiki/Testdata>`_.
+need the latest testdata_X.tar.gz file (with the highest 'X') from the links in the
+`wiki page <https://github.com/ubarsc/pylidar/wiki/Testdata>`_. Pass the path to this file to 
+pylidar_test with the -i option. 
 
 Conda
 ^^^^^
