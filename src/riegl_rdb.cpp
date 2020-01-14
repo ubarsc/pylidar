@@ -83,7 +83,7 @@ typedef struct {
     float azimuth;
     float zenith;
     npy_uint32 scanline; // abs() of riegl.row 
-    npy_uint16 scanline_Idx; // abs(0 of riegl.column
+    npy_uint16 scanline_Idx; // abs() of riegl.column
     double x_Idx;
     double y_Idx;
     npy_uint32 pts_start_idx;
@@ -319,7 +319,7 @@ public:
         
         // these 2 don't appear to be documented, but are in there
         CHECKBIND_READER("riegl.row", RDBDataTypeINT32, &m_buffer[0].row);
-        CHECKBIND_READER("riegl.column", RDBDataTypeINT16, &m_buffer[0].column);
+        CHECKBIND_READER("riegl.column", RDBDataTypeINT32, &m_buffer[0].column);
         
         CHECKBIND_READER(RDB_RIEGL_TARGET_INDEX.name, RDBDataTypeUINT8, &m_buffer[0].target_index)
         CHECKBIND_READER(RDB_RIEGL_TARGET_COUNT.name, RDBDataTypeUINT8, &m_buffer[0].target_count)
