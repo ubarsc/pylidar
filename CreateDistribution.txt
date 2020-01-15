@@ -7,13 +7,18 @@ How to create a distribution of PyLidar.
 3. Push the changes to github with "git push". 
 4. Check out a clean copy of the repository into /tmp or
    somewhere similar and 'cd' into it.
-5. Create the distribution tarball, using
+5. Ensure your environment has all the extensions being built
+   (Important!!). In particular, RIVLIB_ROOT, RIWAVELIB_ROOT, RDBLIB_ROOT,
+   ZLIB_ROOT, LASTOOLS_ROOT and PULSEWAVES_ROOT environment vars should be
+   set to valid locations. If this is not done not all files will be included
+   in the zip.
+6. Create the distribution tarball, using
     python setup.py sdist --formats=gztar,zip
    This creates both a tar.gz and a zip, under a subdirectory called dist
-6. Create checksums of each of these, e.g.
+7. Create checksums of each of these, e.g.
        sha256sum pylidar-1.2.3.tar.gz > pylidar-1.2.3.tar.gz.sha256
        sha256sum pylidar-1.2.3.zip > pylidar-1.2.3.zip.sha256
-7. Go to the https://github.com/ubarsc/pylidar/releases page, and create a 
+8. Go to the https://github.com/ubarsc/pylidar/releases page, and create a 
    new release by pressing "Draft a new release". 
    You should fill in the following:
        Tag version: pylidar-A.B.C
