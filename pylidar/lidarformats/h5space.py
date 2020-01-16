@@ -24,6 +24,7 @@ import numpy
 import h5py
 from numba import jit
 import ctypes
+from rios.parallel.jobmanager import find_executable
 
 # Need to give ourselves access to H5Sselect_hyperslab()
 # within the HDF5 library so we can call it from numba
@@ -31,7 +32,12 @@ import ctypes
 # be able to build to documentation. Hence the elaborate try/except madness. 
 try:
     if sys.platform == 'win32':
-        HDF5_DLL = ctypes.CDLL('hdf5.dll')
+        # Under Python 3.8 and later we must need to know the path to the DLL
+        # For conda installs we could use $CONDA_PREFIX, but we want this
+        # to work for all cases and user may have hdf5.dll somewhere weird.
+        # This breaks the security of the change, but keeps things working.... 
+        dllPath = find_executable('hdf5.dll')
+        HDF5_DLL = ctypes.CDLL(dllPath)
     elif sys.platform == 'darwin':
         HDF5_DLL = ctypes.CDLL('libhdf5.dylib')
     else:
