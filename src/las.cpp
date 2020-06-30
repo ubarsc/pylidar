@@ -680,7 +680,7 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
                     typenum = NPY_FLOAT64;
                     break;
                 default:
-                    fprintf(stderr, "Unkown type for field %s. Assuming f64\n", pPoint->attributer->attributes[i].name);
+                    fprintf(stderr, "Unknown type for field %s. Assuming f64\n", pPoint->attributer->attributes[i].name);
                     typenum = NPY_FLOAT64;
                 }
                 self->pExtraPointNativeTypes->insert(std::pair<std::string, int>(pPoint->attributer->attributes[i].name, typenum));
@@ -721,12 +721,14 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
         {
             // use the 'extended' fields since they are bigger
             // I *think* there is no need for the un-extended fields in this case
-            pLasPoint->return_number = pPoint->get_extended_return_number() - 1; // 1-based for some reason
+            // NOTE: get_extended_return_number/get_return_number can't be relied on
+            // we deal with this below by re-writing.
+            //pLasPoint->return_number = pPoint->get_extended_return_number() - 1; // 1-based for some reason
             pLasPoint->classification = pPoint->get_extended_classification();
         }
         else
         {
-            pLasPoint->return_number = pPoint->get_return_number() - 1; // 1-based for some reason
+            //pLasPoint->return_number = pPoint->get_return_number() - 1; // 1-based for some reason
             pLasPoint->classification = pPoint->get_classification();
         }
         pLasPoint->synthetic_flag = pPoint->get_synthetic_flag();
@@ -917,6 +919,13 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
             {
                 pPulse->x_idx = p2->x;
                 pPulse->y_idx = p2->y;
+            }
+            
+            // now re-write the return_number as we can't trust the return from 
+            // get_return_number() (above)
+            for( npy_intp i = 0; i < pPulse->number_of_returns; i++ )
+            {
+                pPoints->getElem(pPulse->pts_start_idx + i)->return_number = i;
             }
         }
 
