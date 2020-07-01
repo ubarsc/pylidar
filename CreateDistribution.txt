@@ -27,7 +27,7 @@ How to create a distribution of PyLidar.
        Click "Publish release"
 
 Version Numbers.
-The TuiView number is structured as A.B.C. 
+The PyLidar number is structured as A.B.C. 
 - The A number should change for major alterations, most particularly those 
   which break backward compatability, or which involve major restructuring of 
   code or data structures. 
