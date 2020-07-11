@@ -44,7 +44,7 @@ try:
         HDF5_DLL = ctypes.CDLL('libhdf5.so')
     H5Sselect_hyperslab = HDF5_DLL.H5Sselect_hyperslab
     # checked on 64 and 32 bits
-    H5Sselect_hyperslab.argtypes = [ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p, 
+    H5Sselect_hyperslab.argtypes = [ctypes.c_int64, ctypes.c_int32, ctypes.c_void_p, 
                     ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
     H5Sselect_hyperslab.restype = ctypes.c_int32
 except Exception:
