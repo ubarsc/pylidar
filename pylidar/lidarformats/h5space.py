@@ -19,36 +19,32 @@ specifically the ability to quickly deal with multiple ranges.
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function, division
 
+import os
 import sys
 import numpy
 import h5py
 from numba import jit
 import ctypes
-from rios.parallel.jobmanager import find_executable
+from ctypes.util import find_library
 
 # Need to give ourselves access to H5Sselect_hyperslab()
 # within the HDF5 library so we can call it from numba
-# Sadly, we also need to cope with not accessing this, in order that ReadTheDocs will still 
-# be able to build to documentation. Hence the elaborate try/except madness. 
-try:
-    if sys.platform == 'win32':
-        # Under Python 3.8 and later we must need to know the path to the DLL
-        # For conda installs we could use $CONDA_PREFIX, but we want this
-        # to work for all cases and user may have hdf5.dll somewhere weird.
-        # This breaks the security of the change, but keeps things working.... 
-        dllPath = find_executable('hdf5.dll')
-        HDF5_DLL = ctypes.CDLL(dllPath)
-    elif sys.platform == 'darwin':
-        HDF5_DLL = ctypes.CDLL('libhdf5.dylib')
-    else:
-        HDF5_DLL = ctypes.CDLL('libhdf5.so')
+# Sadly, we also need to cope with not accessing this, in order that ReadTheDocs will still work
+H5Sselect_hyperslab = None
+if os.getenv('READTHEDOCS', default='False') != 'True':
+    for libname in ['hdf5', 'hdf5_serial']:
+        hdf5lib = find_library(libname)
+        if hdf5lib is not None:
+            break
+    if hdf5lib is None:
+        raise IOError('HDF5 Library not found')
+            
+    HDF5_DLL = ctypes.CDLL(hdf5lib)
     H5Sselect_hyperslab = HDF5_DLL.H5Sselect_hyperslab
     # checked on 64 and 32 bits
-    H5Sselect_hyperslab.argtypes = [ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p, 
+    H5Sselect_hyperslab.argtypes = [ctypes.c_int64, ctypes.c_int, ctypes.c_void_p, 
                     ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
-    H5Sselect_hyperslab.restype = ctypes.c_int32
-except Exception:
-    H5Sselect_hyperslab = None
+    H5Sselect_hyperslab.restype = ctypes.c_int
 
 @jit
 def convertBoolToHDF5Space(boolArray, boolStart, spaceid, start, count, 
