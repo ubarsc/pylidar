@@ -682,7 +682,7 @@ public:
                 {
                     npy_uint8 nrecords;
                     RieglRDBBuffer *pEl = m_pBuffer->getNextRemainderInTracker(nrecords);
-                    m_pBuffer->removeRemainderFromTracker(pEl->id - (pEl->target_index - 1)));
+                    m_pBuffer->removeRemainderFromTracker(pEl->id - (pEl->target_index - 1));
                 }
                 else
                 {
