@@ -250,14 +250,25 @@ public:
     // returns pointer to buffer
     RieglRDBBuffer* compress()
     {
-        for( npy_uint8 i = 0; i < m_nRecords; i++ )
+        while( allSet() == NULL )
         {
-            if( !m_pSet[i] )
+            for( npy_uint8 i = 0; i < m_nRecords; i++ )
             {
-                shuffleDownOne(i);
+                if( !m_pSet[i] )
+                {
+                    shuffleDownOne(i);
+                }
             }
         }
         return m_pRecords;
+    }
+    
+    void dump()
+    {
+        for( npy_uint8 i = 0; i < m_nRecords; i++ )
+        {
+            fprintf(stderr, "Dump %d %ld %d\n", (int)m_pSet[i], m_pRecords[i].id, (int)m_pRecords[i].target_count);
+        }
     }
 
 private:
@@ -266,6 +277,7 @@ private:
         for( npy_uint8 i = clobberIdx; i < (m_nRecords-1); i++ )
         {
             memcpy(&m_pRecords[i], &m_pRecords[i+1], sizeof(RieglRDBBuffer));
+            m_pSet[i] = m_pSet[i+1];
         }
         m_nRecords--;
     }
@@ -462,9 +474,13 @@ public:
         return pBuffer;
     }
     
-    void removeRemainderFromTracker(npy_uint64 startIdx)
+    bool removeRemainderFromTracker(npy_uint64 startIdx)
     {
-        m_pulseTracker.erase(startIdx);
+        if( m_pulseTracker.erase(startIdx) == 0 )
+        {
+            return false;
+        }
+        return true;
     }
     
     size_t getCountOfRemaindersInTracker()
@@ -483,6 +499,11 @@ public:
             fprintf(stderr, "Remainder id = %ld count = %d\n", itr->first, missing );
         }
         fprintf(stderr, "Total %ld\n", tot);
+    }
+    
+    size_t count(npy_uint64 startIdx)
+    {
+        return m_pulseTracker.count(startIdx);
     }
     
 private:
@@ -661,7 +682,7 @@ public:
                 {
                     npy_uint8 nrecords;
                     RieglRDBBuffer *pEl = m_pBuffer->getNextRemainderInTracker(nrecords);
-                    m_pBuffer->removeRemainderFromTracker(pEl->id);
+                    m_pBuffer->removeRemainderFromTracker(pEl->id - (pEl->target_index - 1)));
                 }
                 else
                 {
@@ -729,7 +750,7 @@ public:
                 ConvertRecordsToPointsAndPulses(pRecordsStart, target_count, 
                                     pulses, points, nCurrentPulse);
                 nCurrentPulse++;
-                m_pBuffer->removeRemainderFromTracker(pRecordsStart->id);
+                m_pBuffer->removeRemainderFromTracker(pRecordsStart->id - (pRecordsStart->target_index - 1));
             }
         }
         
