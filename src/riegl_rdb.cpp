@@ -117,6 +117,8 @@ typedef struct {
     double x;
     double y;
     double z;
+    npy_uint32 scanline; // abs() of riegl.row 
+    npy_uint16 scanline_Idx; // abs() of riegl.column
 } SRieglRDBPoint;
 
 /* field info for CVector::getNumpyArray */
@@ -131,6 +133,8 @@ static SpylidarFieldDefn RieglPointFields[] = {
     CREATE_FIELD_DEFN(SRieglRDBPoint, x, 'f'),
     CREATE_FIELD_DEFN(SRieglRDBPoint, y, 'f'),
     CREATE_FIELD_DEFN(SRieglRDBPoint, z, 'f'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, scanline, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, scanline_Idx, 'u'),
     {NULL} // Sentinel
 };
 
@@ -626,6 +630,9 @@ public:
         // Generally, we have found that these attributes are either 
         // positive OR negative - not both for the same files. So we
         // abs() here to keep everything happy...
+        // NOTE: this is for the first element (for the pulse), we have these
+        // fields for each point (below) in case they are different
+        // and to make the largelu point based processing easier.
         pulse.scanline = std::abs(pCurrEl->row);
         pulse.scanline_Idx = std::abs(pCurrEl->column);
         pulse.x_Idx = x;
@@ -649,6 +656,8 @@ public:
             point.x = pCurrEl->xyz[0];
             point.y = pCurrEl->xyz[1];
             point.z = pCurrEl->xyz[2];
+            point.scanline = std::abs(pCurrEl->row);
+            point.scanline_Idx = std::abs(pCurrEl->column);
             point.return_Number = i + 1;  // 1-based
 
             points.push(&point);
