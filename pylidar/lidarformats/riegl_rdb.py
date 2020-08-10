@@ -17,13 +17,19 @@ Driver Options
 
 These are contained in the SUPPORTEDOPTIONS module level variable.
 
-+-----------------------+---------------------------------------+
-| Name                  | Use                                   |
-+=======================+=======================================+
-| DUMP_FIELDS_ON_OPEN   | Set to True to print a report of the  |
-|                       | available fields in the file when it  |
-|                       | opened.                               |
-+-----------------------+---------------------------------------+
++-----------------------+-------------------------------------------+
+| Name                  | Use                                       |
++=======================+===========================================+
+| DUMP_FIELDS_ON_OPEN   | Set to True to print a report of the      |
+|                       | available fields in the file when it      |
+|                       | opened.                                   |
++-----------------------+-------------------------------------------+
+| BUILD_PULSES          | a boolean. If set to true (the default)   |
+|                       | pylidar attempts to build pulses assuming |
+|                       | that data is in time sequential order. If |
+|                       | false, a 'fake' pulse is created for each |
+|                       | point.                                    |
++-----------------------+-------------------------------------------+
 
 """
 

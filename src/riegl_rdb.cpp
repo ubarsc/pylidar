@@ -119,6 +119,7 @@ typedef struct {
     double z;
     npy_uint32 scanline; // abs() of riegl.row 
     npy_uint16 scanline_Idx; // abs() of riegl.column
+    npy_uint64 rieglId; // riegl.id
 } SRieglRDBPoint;
 
 /* field info for CVector::getNumpyArray */
@@ -135,6 +136,7 @@ static SpylidarFieldDefn RieglPointFields[] = {
     CREATE_FIELD_DEFN(SRieglRDBPoint, z, 'f'),
     CREATE_FIELD_DEFN(SRieglRDBPoint, scanline, 'u'),
     CREATE_FIELD_DEFN(SRieglRDBPoint, scanline_Idx, 'u'),
+    CREATE_FIELD_DEFN(SRieglRDBPoint, rieglId, 'u'),
     {NULL} // Sentinel
 };
 
@@ -213,7 +215,47 @@ public:
         if( idx < m_nRecords )
         {
             memcpy(&m_pRecords[idx], pRecord, sizeof(RieglRDBBuffer));
+            if( m_pSet[idx] )
+            {
+                fprintf(stderr, "Warning %d already set\n", (int)idx);
+            }
             m_pSet[idx] = true;
+        }
+        else
+        {
+            //fprintf(stderr, "Growing\n" );
+            // OK with the new processing, seems that the total_count can be
+            // wrong so realloc everything.
+            npy_uint8 nNewRecords = idx + 1;
+            RieglRDBBuffer *pNewRecords = new RieglRDBBuffer[nNewRecords];
+            bool *pNewSet = new bool[nNewRecords];
+            // copy over
+            for( npy_uint8 i = 0; i < nNewRecords; i++ )
+            {
+                if( i < m_nRecords )
+                {
+                    // have data from old
+                    memcpy(&pNewRecords[i], &m_pRecords[i], sizeof(RieglRDBBuffer));
+                    pNewSet[i] = m_pSet[i];
+                }
+                else
+                {
+                    pNewSet[i] = false;
+                }
+            }
+            
+            // set the new one
+            memcpy(&pNewRecords[idx], pRecord, sizeof(RieglRDBBuffer));
+            pNewSet[idx] = true;
+            
+            // delete old data
+            delete[] m_pRecords;
+            delete[] m_pSet;
+            
+            // replace
+            m_nRecords = nNewRecords;
+            m_pRecords = pNewRecords;
+            m_pSet = pNewSet;
         }
     }
     
@@ -300,7 +342,13 @@ public:
     {
         m_pContext = pContext;
         m_pQuerySelect = pQuerySelect;
+        m_nTotalProcessed = 0;
         reset();
+    }
+    
+    ~PyRieglRDBDataBuffer()
+    {
+        //fprintf(stderr, "Total processed %ld\n", m_nTotalProcessed);
     }
     
     void reset()
@@ -362,6 +410,7 @@ public:
         {
             m_bEOF = true;
         }
+        m_nTotalProcessed += processed;
         
         m_nElementsInBuffer = processed;
         
@@ -421,6 +470,7 @@ public:
         {
             return NULL;
         }
+        //fprintf(stderr, "Just read in %ld %f\n", pCurrEl->id, pCurrEl->timestamp);
         // target_index is 1-based.
         // find the id of the first record of this pulse
         // (should be in order)
@@ -429,7 +479,7 @@ public:
         
         if( got == m_pulseTracker.end() )
         {
-            if( pCurrEl->target_count == 1 )
+            if( pCurrEl->target_count <= 1 )
             {
                 // can short circuit the rest and return pCurrEl
                 //fprintf(stderr, "Just one el %ld\n", startIdx);
@@ -448,7 +498,7 @@ public:
         }
         else
         {
-            //fprintf(stderr, "Adding record for %ld\n", startIdx);
+            //fprintf(stderr, "Adding record for %ld %d %d\n", startIdx, (int)pCurrEl->target_count, (int)pCurrEl->target_index);
             got->second.get()->setRecord(pCurrEl->target_index - 1, pCurrEl);
             return got->second.get()->allSet();
         }
@@ -492,6 +542,16 @@ public:
         return m_pulseTracker.size();
     }
     
+    size_t getCountOfRemainderPointsInTracker()
+    {
+        size_t total = 0;
+        for( auto itr = m_pulseTracker.begin(); itr != m_pulseTracker.end(); itr++ )
+        {
+            total += itr->second.get()->getNFound();
+        }
+        return total;
+    }
+    
     // for debugging
     void dumpRemainderInTracker()
     {
@@ -510,6 +570,16 @@ public:
         return m_pulseTracker.count(startIdx);
     }
     
+    uint64_t getTotalProcessed()
+    {
+        return m_nTotalProcessed;
+    }
+    
+    uint64_t getTotalCurrent()
+    {
+        return getTotalProcessed() - m_nElementsInBuffer + m_nCurrentIdx;
+    }
+    
 private:
     RDBContext *m_pContext;
     RDBPointcloudQuerySelect *m_pQuerySelect;
@@ -517,6 +587,7 @@ private:
     uint32_t m_nElementsInBuffer;
     uint32_t m_nCurrentIdx;
     bool m_bEOF;
+    uint64_t m_nTotalProcessed;
     
     // link the start riegl.id for a pulse with the points for that pulse
     std::unordered_map<npy_uint64, std::unique_ptr<PyRieglRDBPulseTracker> > m_pulseTracker;
@@ -532,11 +603,12 @@ typedef struct
     PyRieglRDBDataBuffer *pBuffer; // object for buffering reads on pQuerySelect
     Py_ssize_t nCurrentPulse;  // if pQuerySelect != NULL this is the pulse number we are up to
     bool bFinishedReading;
+    bool bBuildPulses;
     PyObject *pHeader;  // dictionary with header info
 
 } PyRieglRDBFile;
 
-static const char *SupportedDriverOptions[] = {"DUMP_FIELDS_ON_OPEN", NULL};
+static const char *SupportedDriverOptions[] = {"DUMP_FIELDS_ON_OPEN", "BUILD_PULSES", NULL};
 static PyObject *rieglrdb_getSupportedOptions(PyObject *self, PyObject *args)
 {
     return pylidar_stringArrayToTuple(SupportedDriverOptions);
@@ -578,9 +650,10 @@ static struct PyModuleDef moduledef = {
 class RieglRDBReader
 {
 public:
-    RieglRDBReader(PyRieglRDBDataBuffer *pBuffer)
+    RieglRDBReader(PyRieglRDBDataBuffer *pBuffer, bool bBuildPulses)
     {
         m_pBuffer = pBuffer;
+        m_bBuildPulses = bBuildPulses;
         m_nPulsesToIgnore = 0;
     }
     
@@ -659,6 +732,7 @@ public:
             point.scanline = std::abs(pCurrEl->row);
             point.scanline_Idx = std::abs(pCurrEl->column);
             point.return_Number = i + 1;  // 1-based
+            point.rieglId = pCurrEl->id - (pCurrEl->target_index - 1);
 
             points.push(&point);
             // next record
@@ -667,13 +741,10 @@ public:
             
     }                                            
                                         
-    
-    
-    PyObject* readData(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, bool &bFinished)
+    PyObject* readDataBuildPulses(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, 
+                bool &bFinished, pylidar::CVector<SRieglRDBPulse> &pulses,
+                pylidar::CVector<SRieglRDBPoint> &points)
     {
-        pylidar::CVector<SRieglRDBPulse> pulses(nInitSize, nGrowBy);
-        pylidar::CVector<SRieglRDBPoint> points(nInitSize, nGrowBy);
-        
         while( m_nPulsesToIgnore > 0 )
         {
             //fprintf(stderr, "Ignoring %ld\n", m_nPulsesToIgnore);
@@ -728,24 +799,37 @@ public:
             RieglRDBBuffer *pRecordsStart = m_pBuffer->addCurrentToTracker();
             if( pRecordsStart != NULL )
             {
+                //fprintf(stderr, "Complete Pulse\n");
                 // we have a complete pulse with pRecordsStart->target_count records
                 ConvertRecordsToPointsAndPulses(pRecordsStart, pRecordsStart->target_count, 
                                     pulses, points, nCurrentPulse);
             
                 nCurrentPulse++;
                 m_pBuffer->removeCurrentFromTracker();
-            }            
+            }
             
             if( !m_pBuffer->move() )
             {
                 bFinished = true;
                 return NULL;
             }
+            /*if( (nCurrentPulse + m_pBuffer->getCountOfRemainderPointsInTracker()) != m_pBuffer->getTotalCurrent() )
+            {
+                fprintf(stderr, "Not equal %ld %ld %ld\n", nCurrentPulse, m_pBuffer->getCountOfRemainderPointsInTracker(), m_pBuffer->getTotalCurrent());
+                exit(1);
+            }
+            else
+            {
+                fprintf(stderr, "Equal %ld %ld %ld\n", nCurrentPulse, m_pBuffer->getCountOfRemainderPointsInTracker(), m_pBuffer->getTotalCurrent());
+            }*/
+
         }
         
         // any remainder?
         if( m_pBuffer->eof() && (pulses.getNumElems() < nPulses) && (m_pBuffer->getCountOfRemaindersInTracker() > 0))
         {
+            //fprintf(stderr, "remainder pts in tracker %ld %ld\n", m_pBuffer->getCountOfRemainderPointsInTracker(), nCurrentPulse);
+            //exit(1);
             while( pulses.getNumElems() < nPulses )
             {
                 npy_uint8 target_count = 0;
@@ -764,6 +848,86 @@ public:
         }
         
         bFinished = (m_pBuffer->eof() && (m_pBuffer->getCountOfRemaindersInTracker() == 0));
+        return Py_None; // ok
+    }
+    
+    // no tracker and just one point per pulse
+    PyObject* readDataNoPulses(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, 
+                bool &bFinished, pylidar::CVector<SRieglRDBPulse> &pulses,
+                pylidar::CVector<SRieglRDBPoint> &points)
+    {
+        while( m_nPulsesToIgnore > 0 )
+        {
+            //fprintf(stderr, "Ignoring %ld\n", m_nPulsesToIgnore);
+            // move first so we don't include the pulse we are currently on
+            if( !m_pBuffer->move() )
+            {
+                bFinished = true;
+                return NULL;
+            }
+
+            if( m_pBuffer->eof() )
+            {
+                PyErr_SetString(GETSTATE_FC->error, "Got to EOF while ignoring pulses");
+                return NULL;
+            }
+
+            if( m_pBuffer->getCurrent() == NULL )
+            {
+                // error whould be set
+                bFinished = true;
+                return NULL;
+            }
+            m_nPulsesToIgnore--;
+        }
+
+        // now do the actual reading
+        while( !m_pBuffer->eof() && (pulses.getNumElems() < nPulses))
+        {
+            RieglRDBBuffer *pRecordsStart = m_pBuffer->getCurrent();
+            if( pRecordsStart == NULL )
+            {
+                bFinished = true;
+                // error happened somewhere
+                return NULL;
+            }
+
+            // just convert this one record into one pulse and one point
+            ConvertRecordsToPointsAndPulses(pRecordsStart, 1, 
+                                    pulses, points, nCurrentPulse);
+            
+            nCurrentPulse++;
+            
+            if( !m_pBuffer->move() )
+            {
+                bFinished = true;
+                return NULL;
+            }
+        }
+        
+        bFinished = m_pBuffer->eof();
+        return Py_None; // ok
+    }
+    
+    PyObject* readData(Py_ssize_t nPulses, Py_ssize_t &nCurrentPulse, bool &bFinished)
+    {
+        pylidar::CVector<SRieglRDBPulse> pulses(nInitSize, nGrowBy);
+        pylidar::CVector<SRieglRDBPoint> points(nInitSize, nGrowBy);
+        
+        PyObject *pResult = NULL;
+        if( m_bBuildPulses )
+        {
+            pResult = readDataBuildPulses(nPulses, nCurrentPulse, bFinished, pulses, points);
+        }
+        else
+        {
+            pResult = readDataNoPulses(nPulses, nCurrentPulse, bFinished, pulses, points);
+        }
+        if( pResult == NULL )
+        {
+            // exception set. Py_None otherwise.
+            return NULL;
+        }
 
         // build tuple
         PyArrayObject *pPulses = pulses.getNumpyArray(RieglPulseFields);
@@ -777,6 +941,7 @@ public:
 
 private:
     PyRieglRDBDataBuffer *m_pBuffer;
+    bool m_bBuildPulses;
     Py_ssize_t m_nPulsesToIgnore;
 };
 
@@ -856,6 +1021,21 @@ PyObject *pOptionDict;
         if( pDumpFieldsFlag == Py_True )
         {
             bDumpFields = true;
+        }
+    }
+    
+    self->bBuildPulses = true;
+    PyObject *pBuildPulsesFlag = PyDict_GetItemString(pOptionDict, "BUILD_PULSES");
+    if( pBuildPulsesFlag != NULL )
+    {
+        if( !PyBool_Check(pBuildPulsesFlag) )
+        {
+            PyErr_SetString(GETSTATE_FC->error, "BUILD_PULSES must be True or False");
+            return -1;
+        }
+        if( pBuildPulsesFlag == Py_False )
+        {
+            self->bBuildPulses = false;
         }
     }
 
@@ -1004,7 +1184,7 @@ static PyObject *PyRieglRDBFile_readData(PyRieglRDBFile *self, PyObject *args)
         }
     }
     
-    RieglRDBReader reader(self->pBuffer);
+    RieglRDBReader reader(self->pBuffer, self->bBuildPulses);
     reader.setPulsesToIgnore(nPulsesToIgnore);
     
     // will be NULL on error
