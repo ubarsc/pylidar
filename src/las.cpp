@@ -778,7 +778,15 @@ static PyObject *PyLasFileRead_readData(PyLasFileRead *self, PyObject *args)
             lasPulse.pts_start_idx = pPoints->getNumElems() - 1;
             //fprintf(stderr, "expecting %d points\n", (int)pPoint->get_number_of_returns());
             if( self->bBuildPulses )
+            {
                 lasPulse.number_of_returns = pPoint->get_number_of_returns();
+                if( lasPulse.number_of_returns == 0 )
+                {
+                    // sometimes this happens. Because we have read a point this
+                    // must be an error. Make it 1. 
+                    lasPulse.number_of_returns = 1;
+                }
+            }
             else
                 lasPulse.number_of_returns = 1;
 
