@@ -1,5 +1,11 @@
 # PyLidar #
 
-PyLidar depends on Python, RIOS, GDAL, Numba and h5py.
+**Note: This project has moved**
 
-For full documentation see [www.pylidar.org](https://www.pylidar.org/).
+It is now found at [https://github.com/armstonj/pylidar](https://github.com/armstonj/pylidar).
+
+For point cloud processing, you may wish to consider these alternatives::
+
+* [Riegl Tools](https://gitlab.com/jrsrp/sys/lidar/riegl_tools)
+* [laspy](https://laspy.readthedocs.io/en/latest/)
+* [Cloud Compare](https://github.com/CloudCompare/CloudCompare)
